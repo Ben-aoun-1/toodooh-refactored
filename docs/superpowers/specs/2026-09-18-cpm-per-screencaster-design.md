@@ -21,6 +21,7 @@ When an admin changes a screencaster's CPM (standard, event, or both):
 | Campaign of that screencaster | CPM after the change |
 |---|---|
 | `draft` — classic or event positioning, in the cart or not | **the new CPM** (repriced in the same transaction as the change) |
+| `draft` that already has a frozen plan or event allocations (stranded after a cart confirm) | keeps its CPM (ruling A, 2026-09-19) |
 | created after the change (wizard, event positioning, **replay of a completed campaign**) | **the new CPM** (captured at INSERT) |
 | `pending` (confirmed from the cart, waiting for admin approval) | keeps its CPM |
 | `rejected` | keeps its CPM |
@@ -65,6 +66,10 @@ non-draft never loses.
    /api/campaigns`, `POST /api/events/:id/positionner`, `POST /api/campaigns/:id/replay`, the
    simulator's world writer, the test fixtures — is covered without touching it, the property
    CPM-1 chose a function default for.
+   The trigger's `SELECT … FROM users u WHERE u.id = NEW.advertiser_id` takes `FOR KEY SHARE`
+   (ruling A follow-up, 2026-09-19): the bulk PATCH locks the same row `FOR UPDATE` for its whole
+   transaction, so this makes a racing INSERT wait for it to commit and read the CPM it just
+   wrote, instead of slipping through with the pre-change rate.
 4. **Existing drafts are NOT repriced by the migration** (Q1, ruled).
 
 ## 4. API
@@ -72,7 +77,7 @@ non-draft never loses.
 | Endpoint | Guard | Behaviour |
 |---|---|---|
 | `GET /api/admin/screencasters/cpm` | admin | Every `advertiser` account: `id`, company / contact name, email, `business_type` (agence / annonceur), `status`, `cpm_standard_tnd`, `cpm_event_tnd`, `draft_count`, last change (`changed_at`, by whom). Sorted by name. The search is client-side (the list is small). |
-| `PATCH /api/admin/screencasters/cpm` | admin | Body `{ user_ids: uuid[] (1–500, all advertisers), standard_cpm_tnd?: number > 0, event_cpm_tnd?: number > 0 }`, at least one rate. **One transaction:** lock the users rows `FOR UPDATE` → write each audit row → update the users → `UPDATE campaigns SET standard_cpm_tnd/event_cpm_tnd … WHERE advertiser_id = ANY(ids) AND status = 'draft'` → reply `{ updated, drafts_repriced }`. A non-advertiser or unknown id → 400, nothing written. |
+| `PATCH /api/admin/screencasters/cpm` | admin | Body `{ user_ids: uuid[] (1–500, all advertisers), standard_cpm_tnd?: number > 0, event_cpm_tnd?: number > 0 }`, at least one rate. **One transaction:** lock the users rows `FOR UPDATE` (ordered by id) → write each audit row → update the users → `UPDATE campaigns SET standard_cpm_tnd/event_cpm_tnd … WHERE advertiser_id = ANY(ids) AND status = 'draft' AND NOT EXISTS(plan) AND NOT EXISTS(event_allocations)` (ruling A) → reply `{ updated, drafts_repriced }`. A non-advertiser or unknown id → 400, nothing written. |
 | `GET /api/campaigns/pricing-config` | auth | For an advertiser: **their own** `standard_cpm_tnd` / `event_cpm_tnd` (the wizard's estimate before the draft exists). Other roles: the global default. |
 | `GET /api/events/:id/cmax` | advertiser | Priced at the caller's `cpm_event_tnd` (was the global event CPM). |
 | `GET/PATCH /api/admin/dispatch-config` | admin | Unchanged wire; the two CPMs now mean « défaut des nouveaux screencasters ». |

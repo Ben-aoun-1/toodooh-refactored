@@ -127,4 +127,13 @@ describe('migration 0076 — the CPM per screencaster (scratch database)', () =>
       where table_name = 'screencaster_cpm_changes'`;
     expect(trail?.n).toBe(1);
   });
+
+  // Ruling A follow-up (2026-09-19) — the trigger's own read of the advertiser's CPM must lock
+  // FOR KEY SHARE: otherwise a campaign inserted mid-bulk-change (which locks the same row FOR
+  // UPDATE) would not wait and could escape the change by reading the pre-change CPM.
+  it('the trigger locks the advertiser row FOR KEY SHARE', async () => {
+    const [fn] = await client<{ def: string }[]>`
+      select pg_get_functiondef('public.campaigns_capture_screencaster_cpm()'::regprocedure) as def`;
+    expect(fn?.def).toContain('FOR KEY SHARE');
+  });
 });

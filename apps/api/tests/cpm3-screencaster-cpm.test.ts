@@ -7,7 +7,10 @@ import {
   campaignDispatchPlan,
   campaigns,
   cartItems,
+  eventAllocations,
+  events,
   screencasterCpmChanges,
+  screenhosts,
   users,
 } from '../src/db/schema.js';
 import {
@@ -40,12 +43,39 @@ const seedCampaign = async (
   advertiserId: string,
   status: 'draft' | 'pending' | 'upcoming' | 'active' | 'rejected' | 'completed',
   name: string,
+  eventId?: string,
 ): Promise<string> => {
   const [c] = await db
     .insert(campaigns)
-    .values({ advertiserId, name, campaignType: 'standard', status })
+    .values({
+      advertiserId,
+      name,
+      campaignType: eventId === undefined ? 'standard' : 'event',
+      status,
+      eventId,
+    })
     .returning({ id: campaigns.id });
   return c?.id ?? '';
+};
+const seedEvent = async (): Promise<string> => {
+  seq += 1;
+  const [e] = await db
+    .insert(events)
+    .values({
+      name: `CPM3 Match ${seq}`,
+      kickoffAt: new Date('2026-10-01T18:00:00Z'),
+      endsAt: new Date('2026-10-01T20:00:00Z'),
+    })
+    .returning({ id: events.id });
+  return e?.id ?? '';
+};
+const seedScreenhost = async (): Promise<string> => {
+  seq += 1;
+  const [sh] = await db
+    .insert(screenhosts)
+    .values({ name: `CPM3 Venue ${seq}` })
+    .returning({ id: screenhosts.id });
+  return sh?.id ?? '';
 };
 const ratesOf = async (id: string) => {
   const [row] = await db
@@ -217,5 +247,100 @@ describe('CPM-3 — the CPM per screencaster (real Postgres)', () => {
 
   it('screencasterCpmRates is null for a non-advertiser', async () => {
     expect(await screencasterCpmRates(await seedUser({ role: 'admin' }))).toBeNull();
+  });
+
+  // Operator ruling A (2026-09-19) — a `draft` stranded behind a frozen plan or event
+  // allocations (confirmed and paid at cart-confirm) must NOT move: repricing the campaign row
+  // alone would disagree with what a retried runDispatch/runEventDispatch sees.
+
+  it('a draft that already has a frozen plan keeps its price — draft_count excludes it (ruling A)', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const adv = await seedUser();
+    const stranded = await seedCampaign(adv, 'draft', 'Bloquée au panier');
+    await db.insert(campaignDispatchPlan).values({
+      campaignId: stranded,
+      iCible: 1000,
+      cpm: '15',
+      sSpotSeconds: 10,
+      tTierCoef: '0.6',
+      seuilDiffusable: 1334,
+      sMin: '20',
+      gJour: '3.33',
+      fMaxSeconds: 300,
+      rMinEfficace: 2,
+      couvert: 1000,
+      nMin: 1,
+      nMax: 20,
+      nRetenus: 1,
+    });
+
+    const result = await updateScreencasterCpm({
+      userIds: [adv],
+      standardCpmTnd: 12,
+      changedBy: admin,
+    });
+
+    expect(result).toEqual({ ok: true, updated: 1, draftsRepriced: 0 });
+    expect(await ratesOf(stranded)).toEqual({ standard: 15, event: 15 });
+    const [row] = await listScreencasterCpm();
+    expect(row?.draft_count).toBe(0);
+  });
+
+  it('a draft positioning that already has event allocations keeps its price — draft_count excludes it (ruling A)', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const adv = await seedUser();
+    const eventId = await seedEvent();
+    const stranded = await seedCampaign(adv, 'draft', 'Positionnement bloqué', eventId);
+    const screenhostId = await seedScreenhost();
+    await db.insert(eventAllocations).values({
+      campaignId: stranded,
+      screenhostId,
+      blocs: [],
+      impressionsTotal: 0,
+      montantTnd: '0.000',
+    });
+
+    const result = await updateScreencasterCpm({
+      userIds: [adv],
+      eventCpmTnd: 40,
+      changedBy: admin,
+    });
+
+    expect(result).toEqual({ ok: true, updated: 1, draftsRepriced: 0 });
+    expect(await ratesOf(stranded)).toEqual({ standard: 15, event: 15 });
+    const [row] = await listScreencasterCpm();
+    expect(row?.draft_count).toBe(0);
+  });
+
+  it('an event-positioning draft with no allocations yet is repriced like any other draft', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const adv = await seedUser();
+    const eventId = await seedEvent();
+    const positioning = await seedCampaign(adv, 'draft', 'Positionnement', eventId);
+
+    const result = await updateScreencasterCpm({
+      userIds: [adv],
+      standardCpmTnd: 14,
+      eventCpmTnd: 26,
+      changedBy: admin,
+    });
+
+    expect(result).toEqual({ ok: true, updated: 1, draftsRepriced: 1 });
+    expect(await ratesOf(positioning)).toEqual({ standard: 14, event: 26 });
+  });
+
+  it('a Q1-shaped draft (explicit 15/15 while its account is at 10/15) is fully realigned by an EVENT-only change', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const adv = await seedUser();
+    // The draft captures the account's CPM (15/15, this suite's pinned config) at INSERT, then the
+    // account is moved to 10/15 without going through updateScreencasterCpm — the exact shape
+    // CPM-1's 2026-09-17 restore left behind: draft still 15, account already at 10.
+    const q1Draft = await seedCampaign(adv, 'draft', 'Restaurée par CPM-1');
+    await db.update(users).set({ cpmStandardTnd: '10.000' }).where(eq(users.id, adv));
+
+    await updateScreencasterCpm({ userIds: [adv], eventCpmTnd: 30, changedBy: admin });
+
+    // A draft takes BOTH of its screencaster's rates on any change, not just the one that moved.
+    expect(await ratesOf(q1Draft)).toEqual({ standard: 10, event: 30 });
   });
 });

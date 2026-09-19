@@ -49,8 +49,14 @@ CREATE OR REPLACE FUNCTION public.campaigns_capture_screencaster_cpm() RETURNS t
     own_standard numeric(10, 3);
     own_event numeric(10, 3);
   BEGIN
+    -- FOR KEY SHARE (ruling A follow-up, 2026-09-19): the bulk admin change locks these same
+    -- rows FOR UPDATE for its whole transaction; without a lock here an INSERT racing it would
+    -- not wait and could read the pre-change CPM. FOR KEY SHARE is the weakest lock that still
+    -- conflicts with FOR UPDATE, so this SELECT blocks until the change commits, then reads the
+    -- CPM it just wrote — it never blocks another concurrent INSERT (FOR KEY SHARE vs FOR KEY
+    -- SHARE never conflicts).
     SELECT u.cpm_standard_tnd, u.cpm_event_tnd INTO own_standard, own_event
-      FROM public.users u WHERE u.id = NEW.advertiser_id;
+      FROM public.users u WHERE u.id = NEW.advertiser_id FOR KEY SHARE;
     NEW.standard_cpm_tnd := COALESCE(NEW.standard_cpm_tnd, own_standard, public.current_standard_cpm_tnd());
     NEW.event_cpm_tnd := COALESCE(NEW.event_cpm_tnd, own_event, public.current_event_cpm_tnd());
     RETURN NEW;

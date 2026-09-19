@@ -1,19 +1,45 @@
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, notExists, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import { db } from '../db/client.js';
-import { campaigns, screencasterCpmChanges, users } from '../db/schema.js';
+import {
+  campaignDispatchPlan,
+  campaigns,
+  eventAllocations,
+  screencasterCpmChanges,
+  users,
+} from '../db/schema.js';
 
 import type { CpmRates } from './dispatch/config.js';
 
 // CPM-3 (operator rulings 2026-09-18) — THE home of the CPM per screencaster. The price is a
 // property of the advertiser account (users.cpm_standard_tnd / cpm_event_tnd). When an admin
 // changes it:
-//   • the screencaster's DRAFTS take the new CPM (re-priced here, in the same transaction);
+//   • the screencaster's DRAFTS take the new CPM (re-priced here, in the same transaction) —
+//     EXCEPT a draft already locked in by a frozen plan or event allocations (ruling A below);
 //   • pending, rejected, upcoming, active and completed campaigns keep the CPM they carry — this
 //     file never touches them; activated ones price at the frozen plan.cpm anyway;
-//   • a campaign created afterwards captures the new CPM through the migration-0076 trigger.
+//   • a campaign created afterwards captures the new CPM through the migration-0076 trigger,
+//     which now locks the advertiser row FOR KEY SHARE so it waits out a bulk change in flight
+//     rather than reading the pre-change CPM underneath it.
 // Every change writes one screencaster_cpm_changes row per screencaster.
+
+// Operator ruling A (2026-09-19) — a `draft` that already has a frozen dispatch plan
+// (campaign_dispatch_plan) or event allocations (event_allocations) was confirmed and paid at
+// cart-confirm and is STRANDED in `draft` status; repricing the campaign row alone would disagree
+// with the frozen plan.cpm / allocations montant_tnd a retried runDispatch / runEventDispatch
+// would see (both return ALREADY_DISPATCHED and never re-read the campaign's CPM). ONE predicate
+// for both the repricing UPDATE and the draft_count the list shows, so draft_count always counts
+// exactly the drafts a change would actually reprice.
+const repriceableDraft = and(
+  eq(campaigns.status, 'draft'),
+  notExists(
+    db.select().from(campaignDispatchPlan).where(eq(campaignDispatchPlan.campaignId, campaigns.id)),
+  ),
+  notExists(
+    db.select().from(eventAllocations).where(eq(eventAllocations.campaignId, campaigns.id)),
+  ),
+);
 
 export interface ScreencasterCpmRow {
   id: string;
@@ -56,7 +82,7 @@ export const listScreencasterCpm = async (): Promise<ScreencasterCpmRow[]> => {
   const drafts = await db
     .select({ advertiserId: campaigns.advertiserId, n: count() })
     .from(campaigns)
-    .where(and(inArray(campaigns.advertiserId, ids), eq(campaigns.status, 'draft')))
+    .where(and(inArray(campaigns.advertiserId, ids), repriceableDraft))
     .groupBy(campaigns.advertiserId);
   const draftsBy = new Map(drafts.map((d) => [d.advertiserId, d.n]));
 
@@ -124,6 +150,7 @@ export const updateScreencasterCpm = async (input: {
       })
       .from(users)
       .where(inArray(users.id, ids))
+      .orderBy(users.id)
       .for('update');
     const bad = ids.filter((id) => rows.find((r) => r.id === id)?.role !== 'advertiser');
     if (bad.length > 0) return { ok: false as const, error: 'NOT_ADVERTISER' as const, ids: bad };
@@ -138,11 +165,12 @@ export const updateScreencasterCpm = async (input: {
         .update(users)
         .set({ cpmStandardTnd: newStandard, cpmEventTnd: newEvent })
         .where(eq(users.id, row.id));
-      // A draft follows its screencaster: BOTH rates are aligned on the account's.
+      // A draft follows its screencaster: BOTH rates are aligned on the account's — UNLESS it is
+      // already stranded behind a frozen plan or event allocations (ruling A: repriceableDraft).
       const repriced = await tx
         .update(campaigns)
         .set({ standardCpmTnd: newStandard, eventCpmTnd: newEvent })
-        .where(and(eq(campaigns.advertiserId, row.id), eq(campaigns.status, 'draft')))
+        .where(and(eq(campaigns.advertiserId, row.id), repriceableDraft))
         .returning({ id: campaigns.id });
       await tx.insert(screencasterCpmChanges).values({
         userId: row.id,
