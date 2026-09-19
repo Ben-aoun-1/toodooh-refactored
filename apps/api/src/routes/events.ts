@@ -13,6 +13,7 @@ import {
   fenetreDiffusion,
   statutEvenement,
 } from '../lib/fenetre-diffusion.js';
+import { screencasterCpmRates } from '../lib/screencaster-cpm.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -262,13 +263,14 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
         requestId: request.id,
       });
     }
-    // CPM-1 — this prices the MATCH, not a positioning (none exists yet for this caller): the
-    // live config is what a positioning created now would capture. An existing positioning's
-    // ceiling is GET /api/campaigns/:id/cmax, priced at its own CPM.
-    const cfg = await getDispatchConfig();
+    // CPM-3 — this prices the MATCH for THIS caller (no positioning exists yet): at the event CPM
+    // a positioning they create now would capture — their own. An existing positioning's ceiling
+    // is GET /api/campaigns/:id/cmax, priced at its own copy.
+    const own = request.user ? await screencasterCpmRates(request.user.id) : null;
+    const eventCpm = own?.eventCpmTnd ?? (await getDispatchConfig()).eventCpmTnd;
     const result = await computeEventCmax(
       { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
-      cfg.eventCpmTnd,
+      eventCpm,
     );
     return reply.status(200).send({
       c_max_evt_tnd: result.cMaxEvtTnd,

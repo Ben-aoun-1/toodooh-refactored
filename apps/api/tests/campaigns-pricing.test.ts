@@ -5,6 +5,7 @@ import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, dispatchConfig, users } from '../src/db/schema.js';
 import { isJourOuvre, premiereDateDisponible, tunisDateOf } from '../src/lib/campaign-dates.js';
+import { updateScreencasterCpm } from '../src/lib/screencaster-cpm.js';
 import { adminDispatchConfigRoutes } from '../src/routes/admin-dispatch-config.js';
 import { campaignsPricingRoutes } from '../src/routes/campaigns-pricing.js';
 
@@ -154,5 +155,30 @@ describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real 
     const body = res.json() as { standard_cpm_tnd: number; event_cpm_tnd: number };
     expect(body.standard_cpm_tnd).toBe(22);
     expect(body.event_cpm_tnd).toBe(15);
+  });
+
+  it('CPM-3 — an advertiser reads THEIR OWN CPM: their change shows, a later default change does not', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const adv = await seedUser({ role: 'advertiser' }); // starts at the default 15 / 15
+    await updateScreencasterCpm({
+      userIds: [adv],
+      standardCpmTnd: 11,
+      eventCpmTnd: 21,
+      changedBy: admin,
+    });
+    await db.update(dispatchConfig).set({ standardCpmTnd: '30.000', eventCpmTnd: '40.000' });
+
+    mockSession(adv, 'advertiser');
+    const body = (await getPricing()).json() as { standard_cpm_tnd: number; event_cpm_tnd: number };
+    expect(body.standard_cpm_tnd).toBe(11);
+    expect(body.event_cpm_tnd).toBe(21);
+  });
+
+  it('CPM-3 — a non-advertiser reads the global default', async () => {
+    await db.update(dispatchConfig).set({ standardCpmTnd: '30.000', eventCpmTnd: '40.000' });
+    mockSession(await seedUser({ role: 'admin' }), 'admin');
+    const body = (await getPricing()).json() as { standard_cpm_tnd: number; event_cpm_tnd: number };
+    expect(body.standard_cpm_tnd).toBe(30);
+    expect(body.event_cpm_tnd).toBe(40);
   });
 });
