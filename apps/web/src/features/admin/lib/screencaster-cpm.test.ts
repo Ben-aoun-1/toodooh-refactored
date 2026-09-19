@@ -5,6 +5,7 @@ import type { ScreencasterCpmRow } from '@/features/admin/services/admin-screenc
 import {
   allFilteredSelected,
   composeScreencasterCpmPatch,
+  confirmationSummary,
   draftsAffected,
   filterScreencasters,
   screencasterName,
@@ -124,5 +125,37 @@ describe('composeScreencasterCpmPatch', () => {
       ok: true,
       body: { user_ids: ['a'], standard_cpm_tnd: 1000000 },
     });
+  });
+});
+
+describe('confirmationSummary — the confirmation text, built from a FROZEN patch body', () => {
+  it('both rates set: names each rate with 3 decimals and a French comma', () => {
+    expect(
+      confirmationSummary(
+        { user_ids: ['a', 'b', 'c'], standard_cpm_tnd: 12.5, event_cpm_tnd: 20 },
+        4,
+      ),
+    ).toBe(
+      'Appliquer à 3 screencasters : CPM standard → 12,500 TND / 1000 · ' +
+        'CPM événement → 20,000 TND / 1000. Les brouillons de ces screencasters (4) passent au ' +
+        'nouveau CPM, ainsi que leurs prochaines campagnes. Les campagnes en attente, refusées, ' +
+        'programmées, actives et terminées gardent leur prix.',
+    );
+  });
+  it('one rate set: the untouched rate reads « inchangé »', () => {
+    expect(confirmationSummary({ user_ids: ['a', 'b'], standard_cpm_tnd: 12.5 }, 4)).toBe(
+      'Appliquer à 2 screencasters : CPM standard → 12,500 TND / 1000 · CPM événement inchangé. ' +
+        'Les brouillons de ces screencasters (4) passent au nouveau CPM, ainsi que leurs ' +
+        'prochaines campagnes. Les campagnes en attente, refusées, programmées, actives et ' +
+        'terminées gardent leur prix.',
+    );
+  });
+  it('singular: 1 screencaster, 1 brouillon', () => {
+    expect(confirmationSummary({ user_ids: ['a'], standard_cpm_tnd: 12.5 }, 1)).toBe(
+      'Appliquer à 1 screencaster : CPM standard → 12,500 TND / 1000 · CPM événement inchangé. ' +
+        'Le brouillon de ce screencaster (1) passe au nouveau CPM, ainsi que leurs prochaines ' +
+        'campagnes. Les campagnes en attente, refusées, programmées, actives et terminées ' +
+        'gardent leur prix.',
+    );
   });
 });

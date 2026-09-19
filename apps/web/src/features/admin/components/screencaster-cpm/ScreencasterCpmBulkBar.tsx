@@ -1,18 +1,29 @@
 import { Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { useUpdateScreencasterCpm } from '@/features/admin/hooks/useScreencasterCpm';
-import { composeScreencasterCpmPatch } from '@/features/admin/lib/screencaster-cpm';
+import {
+  composeScreencasterCpmPatch,
+  confirmationSummary,
+} from '@/features/admin/lib/screencaster-cpm';
+import type { ScreencasterCpmPatch } from '@/features/admin/services/admin-screencaster-cpm.service';
 import { getErrorMessage } from '@/lib/errors';
 
 // CPM-3 — appears once ≥ 1 screencaster is selected: two optional rates, then a confirmation that
-// states the rule before anything is written (no browser dialog: an inline step).
+// FREEZES what it will send (a snapshot of the composed patch, taken once on « Appliquer ») and
+// states it in French, so a later edit to the selection or the rates can never silently change
+// what « Confirmer » applies — it just clears the snapshot and asks the admin to compose again.
 
 interface Props {
   selectedIds: string[];
   draftCount: number;
   onDone: () => void;
+}
+
+interface Snapshot {
+  body: ScreencasterCpmPatch;
+  draftCount: number;
 }
 
 const inputClass =
@@ -22,8 +33,15 @@ export function ScreencasterCpmBulkBar({ selectedIds, draftCount, onDone }: Prop
   const mutation = useUpdateScreencasterCpm();
   const [standard, setStandard] = useState('');
   const [event, setEvent] = useState('');
-  const [confirming, setConfirming] = useState(false);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const n = selectedIds.length;
+  const selectionKey = [...selectedIds].sort().join(',');
+
+  // The selection or either rate changed while a confirmation was pending — it no longer matches
+  // what the panel showed, so the snapshot is dropped and the admin must press « Appliquer » again.
+  useEffect(() => {
+    setSnapshot(null);
+  }, [selectionKey, standard, event]);
 
   const ask = () => {
     const composed = composeScreencasterCpmPatch(selectedIds, standard, event);
@@ -31,20 +49,19 @@ export function ScreencasterCpmBulkBar({ selectedIds, draftCount, onDone }: Prop
       toast.error(composed.error);
       return;
     }
-    setConfirming(true);
+    setSnapshot({ body: composed.body, draftCount });
   };
 
   const apply = async () => {
-    const composed = composeScreencasterCpmPatch(selectedIds, standard, event);
-    if (!composed.ok) return;
+    if (snapshot === null) return;
     try {
-      const result = await mutation.mutateAsync(composed.body);
+      const result = await mutation.mutateAsync(snapshot.body);
       toast.success(
         `CPM mis à jour pour ${result.updated} screencaster${result.updated > 1 ? 's' : ''} — ${result.drafts_repriced} brouillon${result.drafts_repriced > 1 ? 's' : ''} re-tarifé${result.drafts_repriced > 1 ? 's' : ''}`,
       );
       setStandard('');
       setEvent('');
-      setConfirming(false);
+      setSnapshot(null);
       onDone();
     } catch (e: unknown) {
       toast.error(getErrorMessage(e) || 'Mise à jour impossible');
@@ -77,7 +94,7 @@ export function ScreencasterCpmBulkBar({ selectedIds, draftCount, onDone }: Prop
             placeholder="inchangé"
           />
         </label>
-        {!confirming && (
+        {snapshot === null && (
           <button
             type="button"
             onClick={ask}
@@ -87,13 +104,9 @@ export function ScreencasterCpmBulkBar({ selectedIds, draftCount, onDone }: Prop
           </button>
         )}
       </div>
-      {confirming && (
+      {snapshot !== null && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
-          <p>
-            Les brouillons de ces screencasters ({draftCount}) passent au nouveau CPM, ainsi que
-            leurs prochaines campagnes. Les campagnes en attente, refusées, programmées, actives et
-            terminées gardent leur prix.
-          </p>
+          <p>{confirmationSummary(snapshot.body, snapshot.draftCount)}</p>
           <div className="flex gap-2">
             <button
               type="button"
@@ -106,7 +119,7 @@ export function ScreencasterCpmBulkBar({ selectedIds, draftCount, onDone }: Prop
             </button>
             <button
               type="button"
-              onClick={() => setConfirming(false)}
+              onClick={() => setSnapshot(null)}
               className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm"
             >
               Annuler

@@ -111,3 +111,33 @@ export const composeScreencasterCpmPatch = (
     },
   };
 };
+
+/** Renders a rate with 3 decimals and a French decimal comma, e.g. `12,500 TND / 1000`. */
+const formatRateTnd = (n: number): string => `${n.toFixed(3).replace('.', ',')} TND / 1000`;
+
+/**
+ * CPM-3 (fix round 1) — the confirmation text, built ONCE from the FROZEN patch `body` a snapshot
+ * carries, so what the admin reads is exactly what « Confirmer » sends — never a re-composition of
+ * the live inputs the admin could still be editing underneath the confirmation.
+ */
+export const confirmationSummary = (body: ScreencasterCpmPatch, draftCount: number): string => {
+  const n = body.user_ids.length;
+  const standardPart =
+    body.standard_cpm_tnd === undefined
+      ? 'CPM standard inchangé'
+      : `CPM standard → ${formatRateTnd(body.standard_cpm_tnd)}`;
+  const eventPart =
+    body.event_cpm_tnd === undefined
+      ? 'CPM événement inchangé'
+      : `CPM événement → ${formatRateTnd(body.event_cpm_tnd)}`;
+  const article = draftCount > 1 ? 'Les' : 'Le';
+  const draftWord = draftCount > 1 ? 'brouillons' : 'brouillon';
+  const screencasterDemonstrative = n > 1 ? 'ces screencasters' : 'ce screencaster';
+  const verb = draftCount > 1 ? 'passent' : 'passe';
+  return (
+    `Appliquer à ${n} screencaster${n > 1 ? 's' : ''} : ${standardPart} · ${eventPart}. ` +
+    `${article} ${draftWord} de ${screencasterDemonstrative} (${draftCount}) ${verb} au nouveau ` +
+    `CPM, ainsi que leurs prochaines campagnes. Les campagnes en attente, refusées, programmées, ` +
+    `actives et terminées gardent leur prix.`
+  );
+};
