@@ -17,6 +17,7 @@ import type { TestingReport } from '@/features/admin/services/admin-testing.serv
 // the creation day and first sensor reading replace the estimation floor (ruling B); the
 // unavailable days read as a count and ranges (item 3); the audience statistics are over HOURS
 // (item 4); A_max joins the audience KPIs and the dispatch inputs leave the page (items 7–8).
+// ADM-OBS2 (Mejri 19/09, R3) — a half-hour entered by hand is « manuelle », not « de la grille ».
 
 export function TestingReportView({ r }: { r: TestingReport }) {
   const a = r.audience;
@@ -63,11 +64,11 @@ export function TestingReportView({ r }: { r: TestingReport }) {
           ['jours (Σ des valeurs horaires du jour)', a.days],
           ['heures, toutes', a.hours],
           ['heures entièrement mesurées', a.measured_hours],
-          ['heures avec ≥ 1 demi-heure de la grille', a.estimated_hours],
+          ['heures avec ≥ 1 demi-heure manuelle', a.estimated_hours],
         ]}
       />
 
-      <SpsSection sps={r.sps} />
+      <SpsSection sps={r.sps} periode={p} />
       <HourStatusSection r={r} />
       <CampaignsOnVenueSection r={r} />
       <DayRowsSection audience={a} />

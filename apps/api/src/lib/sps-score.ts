@@ -12,6 +12,7 @@ import {
   screenhostUnavailability,
 } from '../db/schema.js';
 
+import { plusCalendarDays } from './campaign-dates.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
@@ -150,15 +151,21 @@ export const weightedSps = (
  */
 export const SPS_NEUTRAL = 50;
 
-/** Compute the venue's SPS breakdown at `now` (live — nothing is written). */
-export const computeSps = async (screenhostId: string, now = new Date()): Promise<SpsResult> => {
-  const cfg = await getDispatchConfig();
+/**
+ * A created_at window: [since, until). `until` is absent for the score's TRAILING windows (as
+ * before); ADM-OBS2's période sets it — the same predicate, closed on the right.
+ */
+interface CreatedWindow {
+  since: Date;
+  until?: Date;
+}
 
-  // ── acceptation: decided allocations in the trailing 90 d ──────────────────
-  // EV4 — EVENT decisions count too (a decision is a decision, whichever engine proposed it):
-  // the union keeps ONE rule, anchored on created_at both sides (the E4 ruling — decided_at
-  // exists on the event rows and waits for the EV5-era re-anchor).
-  const decidedSince = new Date(now.getTime() - ACCEPTATION_WINDOW_DAYS * DAY_MS);
+/**
+ * The venue's DECIDED allocations created in `w`. EV4 — EVENT decisions count too (a decision is
+ * a decision, whichever engine proposed it): the union keeps ONE rule, anchored on created_at both
+ * sides (the E4 ruling — decided_at exists on the event rows and waits for the EV5-era re-anchor).
+ */
+const loadDecided = async (screenhostId: string, w: CreatedWindow) => {
   const decided = await db
     .select({ statut: campaignDispatchAllocation.statutAcceptation })
     .from(campaignDispatchAllocation)
@@ -166,7 +173,8 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
       and(
         eq(campaignDispatchAllocation.screenhostId, screenhostId),
         ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
-        gte(campaignDispatchAllocation.createdAt, decidedSince),
+        gte(campaignDispatchAllocation.createdAt, w.since),
+        w.until === undefined ? undefined : lt(campaignDispatchAllocation.createdAt, w.until),
       ),
     );
   const decidedEvent = await db
@@ -176,15 +184,16 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
       and(
         eq(eventAllocations.screenhostId, screenhostId),
         ne(eventAllocations.statut, 'EN_ATTENTE'),
-        gte(eventAllocations.createdAt, decidedSince),
+        gte(eventAllocations.createdAt, w.since),
+        w.until === undefined ? undefined : lt(eventAllocations.createdAt, w.until),
       ),
     );
-  const allDecided = [...decided, ...decidedEvent.map((d) => ({ statut: d.statut }))];
-  const accepted = allDecided.filter((d) => d.statut === 'ACCEPTE').length;
-  const acceptation = allDecided.length === 0 ? 100 : round2((accepted / allDecided.length) * 100);
+  return [...decided, ...decidedEvent.map((d) => ({ statut: d.statut }))];
+};
 
-  // ── the venue's ACCEPTE allocations + their plans (activité + remplissage) ──
-  const allocations = await db
+/** The venue's ACCEPTE allocations + their plans (activité + remplissage). */
+const loadAcceptedAllocations = (screenhostId: string) =>
+  db
     .select({
       creneaux: campaignDispatchAllocation.creneaux,
       campaignId: campaignDispatchPlan.campaignId,
@@ -198,6 +207,32 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
         eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
       ),
     );
+
+/** The venue's event attestations created in `w` (EV5), anchored on created_at. */
+const loadAttested = (screenhostId: string, w: CreatedWindow) =>
+  db
+    .select({ respecte: eventAttestations.respecte })
+    .from(eventAttestations)
+    .where(
+      and(
+        eq(eventAttestations.screenhostId, screenhostId),
+        gte(eventAttestations.createdAt, w.since),
+        w.until === undefined ? undefined : lt(eventAttestations.createdAt, w.until),
+      ),
+    );
+
+/** Compute the venue's SPS breakdown at `now` (live — nothing is written). */
+export const computeSps = async (screenhostId: string, now = new Date()): Promise<SpsResult> => {
+  const cfg = await getDispatchConfig();
+
+  // ── acceptation: decided allocations (campaign + event) in the trailing 90 d ──
+  const decidedSince = new Date(now.getTime() - ACCEPTATION_WINDOW_DAYS * DAY_MS);
+  const allDecided = await loadDecided(screenhostId, { since: decidedSince });
+  const accepted = allDecided.filter((d) => d.statut === 'ACCEPTE').length;
+  const acceptation = allDecided.length === 0 ? 100 : round2((accepted / allDecided.length) * 100);
+
+  // ── the venue's ACCEPTE allocations + their plans (activité + remplissage) ──
+  const allocations = await loadAcceptedAllocations(screenhostId);
 
   // ── activité: proven ÷ scheduled elapsed créneaux, trailing 30 d ───────────
   const nowSlot = tunisNowSlot(now);
@@ -281,15 +316,7 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
   // uninspected venue is never sanctioned — EVENT_RESPECT_DEFAULT is now the empty-set value
   // instead of a constant). A respecte=false attestation is the only thing that can lower it.
   const attestedSince = new Date(now.getTime() - RESPECT_WINDOW_DAYS * DAY_MS);
-  const attested = await db
-    .select({ respecte: eventAttestations.respecte })
-    .from(eventAttestations)
-    .where(
-      and(
-        eq(eventAttestations.screenhostId, screenhostId),
-        gte(eventAttestations.createdAt, attestedSince),
-      ),
-    );
+  const attested = await loadAttested(screenhostId, { since: attestedSince });
   const respected = attested.filter((a) => a.respecte).length;
   const respect_evenements =
     attested.length === 0 ? EVENT_RESPECT_DEFAULT : round2((respected / attested.length) * 100);
@@ -309,6 +336,47 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
     engagedSeconds,
   };
   return { sps: weightedSps(variables, cfg), variables, observations };
+};
+
+/** 00:00 of a Tunis calendar day, as an instant (UTC+1, no DST since 2008 — tunisWeekStart). */
+const tunisDayStart = (isoDay: string): Date => new Date(`${isoDay}T00:00:00+01:00`);
+
+/**
+ * ADM-OBS2 (Mejri 19/09, ruling R10) — the four `observations` over a CALENDAR période [from, to]
+ * (Tunis days, both inclusive) instead of the score's trailing windows: the admin « Tests » page
+ * shows the evidence of the période it is filtered on. The SCORE never reads this — computeSps and
+ * its fixed windows stay what dispatch uses (R9).
+ *
+ * Same sources and predicates as computeSps, only the window moves: decisions and attestations by
+ * the Tunis day of their created_at; elapsed créneaux (isElapsed at `now`) and reserved air time
+ * (reps × the plan's S) of the ACCEPTE allocations by the créneau's date.
+ */
+export const spsObservationsInRange = async (
+  screenhostId: string,
+  from: string,
+  to: string,
+  now = new Date(),
+): Promise<SpsObservations> => {
+  const window: CreatedWindow = {
+    since: tunisDayStart(from),
+    until: tunisDayStart(plusCalendarDays(to, 1)),
+  };
+  const [decided, attested, allocations] = await Promise.all([
+    loadDecided(screenhostId, window),
+    loadAttested(screenhostId, window),
+    loadAcceptedAllocations(screenhostId),
+  ]);
+  const nowSlot = tunisNowSlot(now);
+  let scheduledElapsed = 0;
+  let engagedSeconds = 0;
+  for (const a of allocations) {
+    for (const c of a.creneaux) {
+      if (c.date < from || c.date > to) continue;
+      if (isElapsed(c, nowSlot)) scheduledElapsed += 1;
+      engagedSeconds += c.reps * a.sSpotSeconds;
+    }
+  }
+  return { decided: decided.length, attested: attested.length, scheduledElapsed, engagedSeconds };
 };
 
 /**

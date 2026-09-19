@@ -81,7 +81,10 @@ export interface TestingReport {
     computable: boolean;
     neutral: number;
     variables: Record<string, number>;
+    /** The evidence over the score's trailing windows — what `computable` rests on. */
     observations: Record<string, number>;
+    /** ADM-OBS2 (Mejri 19/09, R10) — the same four counts over the Du/Au période, as shown. */
+    observations_period: Record<string, number>;
     weights: Record<string, number>;
     windows_days: Record<string, number>;
   };

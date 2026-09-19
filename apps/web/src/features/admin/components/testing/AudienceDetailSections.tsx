@@ -1,9 +1,10 @@
-import { DAY_SOURCE_LABEL, fmt } from '@/features/admin/lib/testing-labels';
+import { DAY_SOURCE_LABEL, fmt, halfHourSourceLabel } from '@/features/admin/lib/testing-labels';
 import type { TestingReport } from '@/features/admin/services/admin-testing.service';
 
 // ADM-OBS1 — the day rows, the PEAK-MAX1 grid and the raw half-hour cells of the période, moved
 // out of TestingReportView (ADM-OBS2). The day rows now say how many of their half-hours were
 // measured and how many came from the grid, so an « estimé » day shows why (item 5).
+// ADM-OBS2 (Mejri 19/09, R3) — the page calls a half-hour from the admin's grid « manuelle ».
 
 const SLOT_LABEL = (slot: number): string =>
   `${String(Math.floor(slot / 2)).padStart(2, '0')}h${slot % 2 ? '30' : '00'}`;
@@ -14,9 +15,10 @@ export function DayRowsSection({ audience }: { audience: TestingReport['audience
     <section className="rounded-xl border bg-white p-4">
       <h2 className="mb-1 text-sm font-semibold text-gray-700">Jours de la période</h2>
       <p className="mb-2 text-xs text-gray-500">
-        Un jour est « estimé » dès qu’UNE seule de ses demi-heures vient de la grille : une
-        demi-heure sans relevé du capteur, ou un 0 alors que le capteur n’est pas signalé en ligne,
-        est remplacée par la grille saisie par l’admin. Les colonnes demi-heures disent combien.
+        Un jour est « estimé » dès qu’UNE seule de ses demi-heures est manuelle : une demi-heure
+        sans relevé du capteur, ou un 0 alors que le capteur n’est pas signalé en ligne, est
+        remplacée par la valeur saisie manuellement par l’admin. Les colonnes demi-heures disent
+        combien.
       </p>
       <div className="max-h-72 overflow-auto">
         <table className="text-sm">
@@ -26,7 +28,7 @@ export function DayRowsSection({ audience }: { audience: TestingReport['audience
               <th className="pr-4">affluence (pers.)</th>
               <th className="pr-4">source</th>
               <th className="pr-4">demi-heures mesurées</th>
-              <th className="pr-4">demi-heures de la grille</th>
+              <th className="pr-4">demi-heures manuelles</th>
               <th className="pr-4">≥ 1 demi-heure mesurée</th>
             </tr>
           </thead>
@@ -91,7 +93,7 @@ export function PeakHoursSection({ week }: { week: TestingReport['audience']['we
         </table>
       </div>
       <p className="mt-1 text-xs text-gray-500">
-        vert = mesuré · ambre = grille (estimation) · point = aucune donnée
+        vert = mesuré · ambre = manuelle (estimation) · point = aucune donnée
       </p>
     </section>
   );
@@ -119,7 +121,7 @@ export function RawCellsSection({ cells }: { cells: TestingReport['audience']['c
                 <td className="py-0.5 pr-4 font-mono">{c.date}</td>
                 <td className="py-0.5 pr-4 font-mono">{SLOT_LABEL(c.slot)}</td>
                 <td className="py-0.5 pr-4 tabular-nums">{c.value}</td>
-                <td className="py-0.5 pr-4">{c.source === 'backup' ? 'grille' : 'mesuré'}</td>
+                <td className="py-0.5 pr-4">{halfHourSourceLabel(c.source)}</td>
               </tr>
             ))}
           </tbody>

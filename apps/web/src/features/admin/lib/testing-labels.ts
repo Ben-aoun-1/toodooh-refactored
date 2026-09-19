@@ -24,38 +24,45 @@ export const SPS_VARIABLE_LABEL: Record<string, string> = {
   remplissage: 'Taux de remplissage de la semaine (%)',
 };
 
-/** Which window (in `windows_days`) each piece of evidence is counted over. */
-const OBSERVATION_WINDOW: Record<string, string> = {
-  decided: 'acceptation',
-  attested: 'respect_evenements',
-  scheduledElapsed: 'activite',
+/**
+ * ADM-OBS2 (Mejri 19/09, R5) — « <variable> — poids W % (fenêtre N j) ». The score keeps its
+ * fixed windows (R9), so each variable names its own, read from the api's `windows_days` (never
+ * hard-coded); remplissage is the current week, « (hebdomadaire) ».
+ */
+export const spsVariableLabel = (
+  key: string,
+  weights: Record<string, number>,
+  windowsDays: Record<string, number>,
+): string => {
+  const days = windowsDays[key];
+  const window =
+    key === 'remplissage' ? ' (hebdomadaire)' : days === undefined ? '' : ` (fenêtre ${days} j)`;
+  return `${SPS_VARIABLE_LABEL[key] ?? key} — poids ${weights[key] ?? '?'} %${window}`;
 };
 
-/** The evidence behind the variables, named for what it counts and over which window. */
-export const spsObservationLabel = (key: string, windowsDays: Record<string, number>): string => {
-  const window = OBSERVATION_WINDOW[key];
-  const days = window === undefined ? undefined : windowsDays[window];
-  const over = days === undefined ? '' : `, ${days} derniers jours`;
+/**
+ * The evidence behind the variables (R4, R7). The page shows it over the Du/Au période
+ * (`observations_period`, R10), so no label names a fixed window — it would be false.
+ */
+export const spsObservationLabel = (key: string): string => {
   switch (key) {
     case 'decided':
-      return `Décisions prises (acceptées + refusées)${over}`;
+      return 'Décisions prises (acceptées + refusées)';
     case 'attested':
-      return `Contrôles d’événements reçus${over}`;
+      // An attestation IS the admin's respecté / non-respecté decision on an event received.
+      return 'Décisions prises pour les événements reçus';
     case 'scheduledElapsed':
-      return `Heures programmées déjà passées${over}`;
+      return 'Heures programmées déjà passées';
     case 'engagedSeconds':
-      return 'Temps d’antenne réservé cette semaine (s)';
+      return 'Temps d’antenne réservé (s)';
     default:
       return key;
   }
 };
 
-/** « Période de calcul » of each windowed variable. */
-export const SPS_WINDOW_LABEL: Record<string, string> = {
-  acceptation: 'Période de calcul — taux d’acceptation',
-  activite: 'Période de calcul — activité de l’écran',
-  respect_evenements: 'Période de calcul — respect des événements',
-};
+/** The SPS block's title: the evidence rows follow the période the page is filtered on. */
+export const spsSectionTitle = (from: string, to: string): string =>
+  `SPS — score, variables, poids ; preuves du ${from} au ${to}`;
 
 /** Ruling A — the stored score is the last daily computation, NOT an average. */
 export const SPS_LIVE_LABEL = 'SPS actuel';
@@ -130,6 +137,30 @@ export const DAY_SOURCE_LABEL: Record<string, string> = {
   measured: 'mesuré',
   estimated: 'estimé',
 };
+
+/**
+ * ADM-OBS2 (Mejri 19/09, R3) — a half-hour's source: the sensor's reading, or the value the admin entered
+ * by hand (the `backup` grid), called « manuelle » wherever the page names it.
+ */
+export const halfHourSourceLabel = (source: string | null): string =>
+  source === 'backup' ? 'manuelle' : 'mesuré';
+
+// ── Campagnes sur cet établissement ──────────────────────────────────────────────────────────────
+
+/** ADM-OBS2 (Mejri 19/09, R1, R2, R6) — the campaigns table's renamed headers. */
+export const CAMPAIGN_HEADER = {
+  elapsed: 'Heures allouées',
+  delivered: 'Heures diffusées',
+  missed: 'Heures manquées',
+  missedImpressions: 'Impressions non diffusées (nombre)',
+  hostLoss: 'Perte financière du Host (DT)',
+} as const;
+
+/** R2 — what « Perte financière du Host » is; the host's share (pctSh) when the config has it. */
+export const hostLossDefinition = (pctSh: number | null): string =>
+  `la part${pctSh === null ? '' : ` (${pctSh} %)`} de la valeur des impressions non diffusées ` +
+  '(impressions × CPM / 1000, règle du 12/09) qui serait revenue à cet établissement, arrondie ' +
+  'au millime inférieur comme au règlement.';
 
 /** A number read out of the raw config JSON, or null when absent or not a number. */
 export const configNumber = (config: Record<string, unknown>, key: string): number | null => {

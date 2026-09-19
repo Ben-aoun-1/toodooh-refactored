@@ -31,6 +31,7 @@ import {
   SPS_NEUTRAL,
   computeSps,
   spsComputable,
+  spsObservationsInRange,
 } from './sps-score.js';
 
 // ADM-OBS1 — the « Tests » report, extracted VERBATIM from routes/admin-testing.ts (SIM-5,
@@ -51,6 +52,8 @@ import {
 //    (items 7 and 8) — the full config stays in the raw JSON;
 //  - the per-hour status is split into the elapsed hours of the période and the hours still to
 //    come on this venue, whatever « Au » says (ruling E); see admin-testing-status for ruling D.
+// ADM-OBS2 (Mejri 19/09, R10) — the four SPS evidence counts the page SHOWS follow the période
+// (`sps.observations_period`); the score, its variables and `computable` keep the fixed windows.
 
 /** The next ISO calendar day. */
 const nextDay = (iso: string): string => {
@@ -139,7 +142,7 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
   // Unavailable days and event reservations are read from the earlier of « Du » and today with no
   // upper bound: the « À venir » table runs past « Au » (ruling E).
   const readFrom = from < todayIso ? from : todayIso;
-  const [input, floor, firstReading, sps, aMax, config, unavailable, reservations] =
+  const [input, floor, firstReading, sps, spsPeriod, aMax, config, unavailable, reservations] =
     await Promise.all([
       loadPeriodAudienceInput({
         venueId: id,
@@ -150,6 +153,7 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
       estimationFloor(id),
       firstMeasuredDay(id),
       computeSps(id, now),
+      spsObservationsInRange(id, from, to, now),
       computeAmax(id),
       getDispatchConfig(),
       db
@@ -304,7 +308,9 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
       computable: spsComputable(sps.observations),
       neutral: SPS_NEUTRAL,
       variables: sps.variables,
+      // `observations` (trailing windows) drives `computable`; the page shows the période's (R10).
       observations: sps.observations,
+      observations_period: spsPeriod,
       weights: {
         acceptation: config.spsWeightAcceptation,
         respect_evenements: config.spsWeightRespectEvenements,
