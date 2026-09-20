@@ -75,28 +75,39 @@ export const loadBackupGrid = async (venueId: string): Promise<BackupGrid> => {
  * everywhere », so its grid applies from creation — the same reading of the world as OFF-1.
  */
 export const estimationFloor = async (venueId: string): Promise<string | null> => {
-  const [[venue], [firstReading]] = await Promise.all([
+  const [[venue], firstReading] = await Promise.all([
     db
       .select({ createdAt: screenhosts.createdAt })
       .from(screenhosts)
       .where(eq(screenhosts.id, venueId))
       .limit(1),
-    db
-      .select({ date: screenhostAffluenceHourly.date })
-      .from(screenhostAffluenceHourly)
-      .where(
-        and(
-          eq(screenhostAffluenceHourly.screenhostId, venueId),
-          isNotNull(screenhostAffluenceHourly.value),
-        ),
-      )
-      .orderBy(asc(screenhostAffluenceHourly.date))
-      .limit(1),
+    firstMeasuredDay(venueId),
   ]);
   if (!venue) return null;
   const createdIso = tunisDateOf(venue.createdAt);
   // ISO dates compare lexicographically, so `max` is a string comparison.
-  return firstReading && firstReading.date > createdIso ? firstReading.date : createdIso;
+  return firstReading !== null && firstReading > createdIso ? firstReading : createdIso;
+};
+
+/**
+ * The first Tunis day the sensor produced a READING for this venue (`value IS NOT NULL` — a
+ * record of silence is not an observation, see `estimationFloor`), or null when it never has.
+ * ONE query, shared by the floor and by the admin « Tests » page's « Première mesure du capteur »
+ * (ADM-OBS2), so the two can never name different days.
+ */
+export const firstMeasuredDay = async (venueId: string): Promise<string | null> => {
+  const [first] = await db
+    .select({ date: screenhostAffluenceHourly.date })
+    .from(screenhostAffluenceHourly)
+    .where(
+      and(
+        eq(screenhostAffluenceHourly.screenhostId, venueId),
+        isNotNull(screenhostAffluenceHourly.value),
+      ),
+    )
+    .orderBy(asc(screenhostAffluenceHourly.date))
+    .limit(1);
+  return first?.date ?? null;
 };
 
 export interface PeriodSourceParams {

@@ -5,6 +5,12 @@ import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
+  campaignDispatchAllocation,
+  campaignDispatchPlan,
+  campaigns,
+  creatives,
+  events,
+  hourReservations,
   screenhostAffluenceHourly,
   screenhostUnavailability,
   screenhosts,
@@ -47,15 +53,58 @@ const shiftDays = (iso: string, days: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** The current Tunis hour — the boundary between « Historique » and « À venir ». */
+const tunisHourNow = (): number =>
+  Number(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Tunis',
+      hour: '2-digit',
+      hour12: false,
+    }).format(new Date()),
+  );
+
+interface HourRow {
+  date: string;
+  hour: number;
+  state: string;
+  engaged_seconds: number;
+  pending_seconds: number;
+  seconds_free: number | null;
+  reps: number;
+  campaigns: number;
+}
+
 interface Report {
-  screenhost: { id: string; name: string; opening_hour: number | null; sps_stored: number };
-  periode: { from: string; to: string; today: string; estimation_floor: string | null };
+  screenhost: {
+    id: string;
+    name: string;
+    opening_hour: number | null;
+    sps_stored: number;
+    broadcastable_hours: number[];
+  };
+  periode: {
+    from: string;
+    to: string;
+    today: string;
+    created_date: string;
+    first_reading: string | null;
+    estimation_floor: string | null;
+    unavailable_days: string[];
+  };
   audience: {
     total: number;
+    a_max: number;
     days: { n: number; min: number | null; max: number | null; median: number | null };
-    cells: { n: number; min: number | null; max: number | null; median: number | null };
-    measured_cells: { n: number };
-    day_rows: { date: string; audience: number; source: string }[];
+    hours: { n: number; min: number | null; max: number | null; median: number | null };
+    measured_hours: { n: number };
+    estimated_hours: { n: number };
+    day_rows: {
+      date: string;
+      audience: number;
+      source: string;
+      measured_cells: number;
+      backup_cells: number;
+    }[];
     cell_rows: { date: string; slot: number; value: number; source: string }[];
     week: unknown[][];
     mean_per_hour: number | null;
@@ -67,14 +116,8 @@ interface Report {
     neutral: number;
     weights: Record<string, number>;
   };
-  pricing: {
-    a_max: number;
-    broadcastable_hours: number[];
-    unavailable_days: string[];
-    cpm_standard_tnd: number;
-  };
   config: Record<string, unknown>;
-  status_hours: { date: string; hour: number; state: string; minutes_free: number | null }[];
+  status_hours: { past: HourRow[]; future: HourRow[] };
   campaigns: unknown[];
 }
 
@@ -85,6 +128,7 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
   const today = tunisDateOf(new Date());
   const d1 = shiftDays(today, -2);
   const d2 = shiftDays(today, -1);
+  const created = shiftDays(today, -10);
 
   beforeEach(async () => {
     await resetAuthTables();
@@ -102,7 +146,7 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
         closingHour: 20,
         // Created before the first reading, so the estimation floor (max(created_at, first
         // observed day)) is the first observed day — the MEJ-7b rule, visible on the page.
-        createdAt: new Date(`${shiftDays(today, -10)}T10:00:00Z`),
+        createdAt: new Date(`${created}T10:00:00Z`),
       })
       .returning();
     venueId = s?.id ?? '';
@@ -131,9 +175,13 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
     mockSession(adminId);
     const res = await app.inject({ method: 'GET', url: '/api/admin/testing/screenhosts' });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ screenhosts: { id: string; name: string; opening_hour: number }[] }>();
+    const body = res.json<{
+      screenhosts: { id: string; name: string; opening_hour: number; created_date: string }[];
+    }>();
     expect(body.screenhosts.map((s) => s.name)).toContain('Café Tests');
     expect(body.screenhosts.find((s) => s.id === venueId)?.opening_hour).toBe(8);
+    // ADM-OBS2 — the Tunis creation day, where « Tout l'historique » starts.
+    expect(body.screenhosts.find((s) => s.id === venueId)?.created_date).toBe(created);
   });
 
   it('non-admin → 403', async () => {
@@ -146,7 +194,7 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
     expect(res.statusCode).toBe(403);
   });
 
-  it('exposes the engine outputs for the période: audience (min/median/max over days AND cells), SPS evidence, pricing inputs', async () => {
+  it('exposes the engine outputs for the période: audience (min/median/max over days AND hours), SPS evidence, status', async () => {
     mockSession(adminId);
     const res = await app.inject({
       method: 'GET',
@@ -155,7 +203,17 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
     expect(res.statusCode).toBe(200);
     const r = res.json<Report>();
     expect(r.screenhost.name).toBe('Café Tests');
-    expect(r.periode).toMatchObject({ from: d1, to: d2, today, estimation_floor: d1 });
+    // ADM-OBS2 ruling B — the creation day and the first sensor reading, side by side; the floor
+    // (the later of the two) stays in the JSON only.
+    expect(r.periode).toMatchObject({
+      from: d1,
+      to: d2,
+      today,
+      created_date: created,
+      first_reading: d1,
+      estimation_floor: d1,
+      unavailable_days: [d2],
+    });
 
     // FLOW-4: a day is the SUM of its HOUR values → d1's 10h is the mean of 10 and 20 (15), d2's
     // 11h is a lone 30 (30), so the total is 45 where FLOW-1 read 60. A day is legitimately
@@ -166,9 +224,19 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
       [d2, 30],
     ]);
     expect(r.audience.days).toMatchObject({ n: 2, min: 15, max: 30, median: 22.5 });
-    // The raw cells, so a median over any window is answerable without sketches.
-    expect(r.audience.cells).toMatchObject({ n: 3, min: 10, max: 30, median: 20 });
-    expect(r.audience.measured_cells.n).toBe(3);
+    // ADM-OBS2 item 4 — the statistics are over HOURS (the mean of the halves each hour has), the
+    // same values the day sums: d1 10h = 15, d2 11h = a lone 30. Not over the three half-hours.
+    expect(r.audience.hours).toMatchObject({ n: 2, min: 15, max: 30, median: 22.5 });
+    expect(r.audience.measured_hours.n).toBe(2);
+    expect(r.audience.estimated_hours.n).toBe(0);
+    // Item 5 — every day row says how many of its half-hours were measured vs from the grid.
+    expect(
+      r.audience.day_rows.map((d) => [d.date, d.source, d.measured_cells, d.backup_cells]),
+    ).toEqual([
+      [d1, 'measured', 2, 0],
+      [d2, 'measured', 1, 0],
+    ]);
+    // The raw cells stay raw half-hours.
     expect(r.audience.cell_rows).toEqual([
       { date: d1, slot: 20, value: 10, source: 'measured' },
       { date: d1, slot: 21, value: 20, source: 'measured' },
@@ -192,24 +260,126 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
       'respect_evenements',
     ]);
 
-    // Pricing inputs: A_max is a number, the broadcastable hours follow opening/closing, the
-    // owner's unavailable day in the période is listed, the CPM in force is the config's.
-    expect(typeof r.pricing.a_max).toBe('number');
-    expect(r.pricing.broadcastable_hours).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
-    expect(r.pricing.unavailable_days).toEqual([d2]);
-    expect(r.pricing.cpm_standard_tnd).toBeGreaterThan(0);
+    // Items 7 and 8 — A_max sits with the audience; the dispatch inputs (CPM, T, lead) left the
+    // page's blocks. The resolved config stays in the raw JSON.
+    expect(typeof r.audience.a_max).toBe('number');
+    expect(r).not.toHaveProperty('pricing');
+    expect(r.screenhost.broadcastable_hours).toEqual([
+      8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+    ]);
     expect(r.config).toHaveProperty('spsWeightAcceptation');
 
-    // Slice B: one status row per (day, open hour); the unavailable day is « indisponible », a day
-    // without any accepted share is « libre » with the full F free; no campaign → no rows.
-    expect(r.status_hours).toHaveLength(2 * 12);
+    // « Historique »: one row per (elapsed day, open hour) of the période; the unavailable day is
+    // « indisponible », a day without any share is « libre » with the full F (in SECONDS) free.
+    expect(r.status_hours.past).toHaveLength(2 * 12);
     expect(
-      r.status_hours.filter((h) => h.date === d2).every((h) => h.state === 'indisponible'),
+      r.status_hours.past.filter((h) => h.date === d2).every((h) => h.state === 'indisponible'),
     ).toBe(true);
-    expect(r.status_hours.find((h) => h.date === d1 && h.hour === 8)).toMatchObject({
+    expect(r.status_hours.past.find((h) => h.date === d1 && h.hour === 8)).toMatchObject({
       state: 'libre',
-      minutes_free: 5,
+      seconds_free: r.config['fMaxSeconds'],
+      reps: 0,
     });
+    // « À venir » with nothing planned: only today's hours that have not started yet.
+    const hourNow = tunisHourNow();
+    expect(r.status_hours.future.every((h) => h.date === today && h.hour >= hourNow)).toBe(true);
+    expect(r.campaigns).toEqual([]);
+  });
+
+  it('« À venir » runs past « Au » to the last planned day; a pending share engages; an event-held hour is réservée', async () => {
+    const advertiserId = await seedUser({ role: 'advertiser' });
+    const [creative] = await db
+      .insert(creatives)
+      .values({
+        advertiserId,
+        creativeType: 'video',
+        storageKey: `creatives/${advertiserId}/c`,
+        durationSeconds: 10,
+        validationStatus: 'approved',
+      })
+      .returning();
+    const inThree = shiftDays(today, 3);
+    const inFive = shiftDays(today, 5);
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId,
+        name: 'À venir',
+        campaignType: 'standard',
+        status: 'upcoming',
+        startDate: inThree,
+        endDate: inThree,
+        creativeId: creative?.id,
+      })
+      .returning();
+    const [plan] = await db
+      .insert(campaignDispatchPlan)
+      .values({
+        campaignId: campaign?.id ?? '',
+        iCible: 600,
+        cpm: '10',
+        sSpotSeconds: 10,
+        tTierCoef: '0.6',
+        seuilDiffusable: 1000,
+        sMin: '10',
+        gJour: '3.33',
+        fMaxSeconds: 300,
+        rMinEfficace: 2,
+        couvert: 600,
+        nMin: 1,
+        nMax: 20,
+        nRetenus: 1,
+      })
+      .returning();
+    await db.insert(campaignDispatchAllocation).values({
+      planId: plan?.id ?? '',
+      screenhostId: venueId,
+      iiPotentiel: 600,
+      rI: 6,
+      revenuPrevisionnel: '6',
+      statutAcceptation: 'EN_ATTENTE',
+      creneaux: [{ date: inThree, hour: 9, reps: 6, impressions: 600 }],
+    });
+    const [event] = await db
+      .insert(events)
+      .values({
+        name: 'Match à venir',
+        type: 'sport',
+        kickoffAt: new Date(`${inFive}T10:00:00Z`),
+        endsAt: new Date(`${inFive}T12:00:00Z`),
+        source: 'official',
+      })
+      .returning();
+    await db
+      .insert(hourReservations)
+      .values({ screenhostId: venueId, day: inFive, hour: 10, eventId: event?.id ?? '' });
+
+    mockSession(adminId);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/admin/testing/screenhosts/${venueId}?from=${d1}&to=${d2}`,
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json<Report>();
+    const future = r.status_hours.future;
+    // Ruling E — the table ignores « Au » (d2) and runs to the last planned day (the reservation).
+    expect(future.at(-1)?.date).toBe(inFive);
+    expect(future.some((h) => h.date <= d2)).toBe(false);
+    // Ruling D — the EN_ATTENTE share holds 6 × 10 s, shown as pending; the event holds 10h.
+    expect(future.find((h) => h.date === inThree && h.hour === 9)).toMatchObject({
+      state: 'partiel',
+      engaged_seconds: 60,
+      pending_seconds: 60,
+      seconds_free: 240,
+      reps: 6,
+      campaigns: 1,
+    });
+    expect(future.find((h) => h.date === inFive && h.hour === 10)).toMatchObject({
+      state: 'reservee_evenement',
+      seconds_free: null,
+    });
+    // The past table and the campaign list stay on the période: nothing planned there.
+    expect(r.status_hours.past.every((h) => h.date >= d1 && h.date <= d2)).toBe(true);
     expect(r.campaigns).toEqual([]);
   });
 

@@ -16,7 +16,8 @@ import { ownerApprovedSql } from '../approved-owner.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
-import { SPS_NEUTRAL, spsComputable, spsObservationsFor } from '../sps-score.js';
+import { spsObservationsFor } from '../sps-observations.js';
+import { SPS_NEUTRAL, spsComputable } from '../sps-score.js';
 
 import {
   broadcastableHours,

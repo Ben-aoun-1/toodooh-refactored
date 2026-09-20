@@ -21,6 +21,7 @@ import {
 import type { EligibleScreenhost } from '../src/lib/dispatch/selection.js';
 import { orderedQueue } from '../src/lib/dispatch/selection.js';
 import { DISPATCH_CONFIG_DEFAULTS } from '../src/lib/dispatch/thresholds.js';
+import { spsObservationsFor, tunisWeekStart } from '../src/lib/sps-observations.js';
 import {
   EVENT_RESPECT_DEFAULT,
   computeSps,
@@ -28,8 +29,6 @@ import {
   SPS_NEUTRAL,
   runSpsRecomputeTick,
   spsComputable,
-  spsObservationsFor,
-  tunisWeekStart,
   weightedSps,
 } from '../src/lib/sps-score.js';
 import { adminDispatchConfigRoutes } from '../src/routes/admin-dispatch-config.js';

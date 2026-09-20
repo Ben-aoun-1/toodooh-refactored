@@ -293,12 +293,19 @@ describe('SIM-1 world endpoints', () => {
     const body = report.json<{
       periode: { today: string };
       audience: { measured_days: number };
-      sps: { live: number };
+      sps: { live: number; observations_period: Record<string, number> };
     }>();
     // The simulation clock sits on 2026-03-02 — the wall clock is months away.
     expect(body.periode.today).toBe('2026-03-02');
     expect(body.audience.measured_days).toBeGreaterThan(0);
     expect(typeof body.sps.live).toBe('number');
+    // ADM-OBS2 R10 — the période's SPS evidence rides the same report, on the same virtual clock.
+    expect(Object.keys(body.sps.observations_period).sort()).toEqual([
+      'attested',
+      'decided',
+      'engagedSeconds',
+      'scheduledElapsed',
+    ]);
 
     const eligible = await app.inject({
       method: 'GET',

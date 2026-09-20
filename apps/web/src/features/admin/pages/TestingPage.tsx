@@ -2,6 +2,7 @@ import { FlaskConical, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import { AllHistoryButton } from '@/features/admin/components/testing/AllHistoryButton';
 import { TestingReportView } from '@/features/admin/components/TestingReportView';
 import { useTestingReport, useTestingScreenhosts } from '@/features/admin/hooks/useAdminTesting';
 
@@ -22,6 +23,8 @@ export default function TestingPage() {
   const [to, setTo] = useState(isoDaysAgo(0));
   const report = useTestingReport(venueId, from, to);
   const venues = useMemo(() => list.data?.screenhosts ?? [], [list.data]);
+  const venue = venues.find((v) => v.id === venueId) ?? null;
+  const today = isoDaysAgo(0);
 
   return (
     <AdminLayout title="Tests">
@@ -71,6 +74,16 @@ export default function TestingPage() {
               onChange={(e) => setTo(e.target.value)}
             />
           </label>
+          <AllHistoryButton
+            createdDate={venue?.created_date ?? null}
+            today={today}
+            from={from}
+            to={to}
+            onPick={(f, t) => {
+              setFrom(f);
+              setTo(t);
+            }}
+          />
           {from > to && <span className="text-sm text-red-600">« Du » doit précéder « Au »</span>}
           {report.isFetching && <Loader2 className="h-5 w-5 animate-spin text-gray-400" />}
         </div>

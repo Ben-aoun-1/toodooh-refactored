@@ -2,6 +2,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { Loader2, X } from 'lucide-react';
 import { useState } from 'react';
 
+import { AllHistoryButton } from '@/features/admin/components/testing/AllHistoryButton';
 import { TestingReportView } from '@/features/admin/components/TestingReportView';
 import { useSimulationVenueReport } from '@/features/admin/hooks/useAdminSimulator';
 
@@ -71,6 +72,16 @@ export function SimulationVenueInspector({
             onChange={(e) => setTo(e.target.value)}
           />
         </label>
+        <AllHistoryButton
+          createdDate={report.data?.periode.created_date ?? null}
+          today={virtualToday}
+          from={from}
+          to={to}
+          onPick={(f, t) => {
+            setFrom(f);
+            setTo(t);
+          }}
+        />
         {from > to && <span className="text-sm text-red-600">« Du » doit précéder « Au »</span>}
         {report.isFetching && <Loader2 className="h-5 w-5 animate-spin text-gray-400" />}
       </div>

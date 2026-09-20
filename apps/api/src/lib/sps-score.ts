@@ -1,22 +1,26 @@
-import { and, eq, gte, inArray, lt, ne } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
-import {
-  campaignDispatchAllocation,
-  campaignDispatchPlan,
-  eventAllocations,
-  eventAttestations,
-  proofOfPlay,
-  screenhosts,
-  screenhostUnavailability,
-} from '../db/schema.js';
+import { proofOfPlay, screenhosts, screenhostUnavailability } from '../db/schema.js';
 
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
-import { PLAYOUT_TZ, proofSlotKey } from './reconcile/delivered-slots.js';
+import { proofSlotKey } from './reconcile/delivered-slots.js';
 import { slotKey } from './reconcile/valuation.js';
+import {
+  ACCEPTATION_WINDOW_DAYS,
+  ACTIVITE_WINDOW_DAYS,
+  DAY_MS,
+  RESPECT_WINDOW_DAYS,
+  type SpsObservations,
+  loadAcceptedAllocations,
+  loadAttested,
+  loadDecided,
+  tunisDateOf,
+  tunisWeekStart,
+} from './sps-observations.js';
 
 // E4 — the SPS score engine (Mejri 2026-07-27, Kais-validated): 40 % taux d'acceptation des
 // campagnes + 30 % respect des événements acceptés + 20 % activité de l'écran + 10 % taux de
@@ -38,9 +42,9 @@ import { slotKey } from './reconcile/valuation.js';
 //                     available F-seconds (fMax × broadcastable hours × the week's NON-DECLARED
 //                     days — an honest E2 declaration never dents the score; ratification
 //                     amendment), current Tunis week. Zero engagement → 0.
+//
+// The windows, the loaders and the evidence counts (SpsObservations) live in sps-observations.ts.
 
-export const ACCEPTATION_WINDOW_DAYS = 90;
-export const ACTIVITE_WINDOW_DAYS = 30;
 /**
  * The respect variable's EMPTY-SET value: a venue with NO attestation in the window scores 100.
  * EV5 turned the variable real (attested-true ÷ attested); this stayed the ruled default because
@@ -48,47 +52,13 @@ export const ACTIVITE_WINDOW_DAYS = 30;
  */
 export const EVENT_RESPECT_DEFAULT = 100;
 
-/** The attestation window — the acceptation variable's 90 d, mirrored. */
-export const RESPECT_WINDOW_DAYS = 90;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 const round2 = (n: number): number => Math.round(n * 100) / 100;
-
-/** The Tunis calendar date (YYYY-MM-DD) of `instant`. */
-const tunisDateOf = (instant: Date): string =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: PLAYOUT_TZ }).format(instant);
-
-/** The Monday (YYYY-MM-DD, Tunis) of the week containing `now`. */
-export const tunisWeekStart = (now: Date): string => {
-  // Tunis is UTC+1 (no DST since 2008): shift, then walk back to Monday in UTC space.
-  const shifted = new Date(now.getTime() + 60 * 60 * 1000);
-  const dow = shifted.getUTCDay(); // 0 = Sunday
-  const back = (dow + 6) % 7; // days since Monday
-  const monday = new Date(shifted.getTime() - back * DAY_MS);
-  return monday.toISOString().slice(0, 10);
-};
 
 export interface SpsVariables {
   acceptation: number;
   respect_evenements: number;
   activite: number;
   remplissage: number;
-}
-
-/**
- * MEJ-14b / SPS-D1 — what each variable actually RESTS ON, so a caller can tell a measured score
- * from a score made of defaults. Counts only; nothing here feeds the score itself.
- */
-export interface SpsObservations {
-  /** Decided allocations (campaign + event) in the acceptation window. */
-  decided: number;
-  /** Event attestations in the respect window. */
-  attested: number;
-  /** Elapsed scheduled créneaux in the activité window. */
-  scheduledElapsed: number;
-  /** Engaged broadcast seconds in the current Tunis week. */
-  engagedSeconds: number;
 }
 
 export interface SpsResult {
@@ -154,50 +124,14 @@ export const SPS_NEUTRAL = 50;
 export const computeSps = async (screenhostId: string, now = new Date()): Promise<SpsResult> => {
   const cfg = await getDispatchConfig();
 
-  // ── acceptation: decided allocations in the trailing 90 d ──────────────────
-  // EV4 — EVENT decisions count too (a decision is a decision, whichever engine proposed it):
-  // the union keeps ONE rule, anchored on created_at both sides (the E4 ruling — decided_at
-  // exists on the event rows and waits for the EV5-era re-anchor).
+  // ── acceptation: decided allocations (campaign + event) in the trailing 90 d ──
   const decidedSince = new Date(now.getTime() - ACCEPTATION_WINDOW_DAYS * DAY_MS);
-  const decided = await db
-    .select({ statut: campaignDispatchAllocation.statutAcceptation })
-    .from(campaignDispatchAllocation)
-    .where(
-      and(
-        eq(campaignDispatchAllocation.screenhostId, screenhostId),
-        ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
-        gte(campaignDispatchAllocation.createdAt, decidedSince),
-      ),
-    );
-  const decidedEvent = await db
-    .select({ statut: eventAllocations.statut })
-    .from(eventAllocations)
-    .where(
-      and(
-        eq(eventAllocations.screenhostId, screenhostId),
-        ne(eventAllocations.statut, 'EN_ATTENTE'),
-        gte(eventAllocations.createdAt, decidedSince),
-      ),
-    );
-  const allDecided = [...decided, ...decidedEvent.map((d) => ({ statut: d.statut }))];
+  const allDecided = await loadDecided(screenhostId, { since: decidedSince });
   const accepted = allDecided.filter((d) => d.statut === 'ACCEPTE').length;
   const acceptation = allDecided.length === 0 ? 100 : round2((accepted / allDecided.length) * 100);
 
   // ── the venue's ACCEPTE allocations + their plans (activité + remplissage) ──
-  const allocations = await db
-    .select({
-      creneaux: campaignDispatchAllocation.creneaux,
-      campaignId: campaignDispatchPlan.campaignId,
-      sSpotSeconds: campaignDispatchPlan.sSpotSeconds,
-    })
-    .from(campaignDispatchAllocation)
-    .innerJoin(campaignDispatchPlan, eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id))
-    .where(
-      and(
-        eq(campaignDispatchAllocation.screenhostId, screenhostId),
-        eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
-      ),
-    );
+  const allocations = await loadAcceptedAllocations(screenhostId);
 
   // ── activité: proven ÷ scheduled elapsed créneaux, trailing 30 d ───────────
   const nowSlot = tunisNowSlot(now);
@@ -281,15 +215,7 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
   // uninspected venue is never sanctioned — EVENT_RESPECT_DEFAULT is now the empty-set value
   // instead of a constant). A respecte=false attestation is the only thing that can lower it.
   const attestedSince = new Date(now.getTime() - RESPECT_WINDOW_DAYS * DAY_MS);
-  const attested = await db
-    .select({ respecte: eventAttestations.respecte })
-    .from(eventAttestations)
-    .where(
-      and(
-        eq(eventAttestations.screenhostId, screenhostId),
-        gte(eventAttestations.createdAt, attestedSince),
-      ),
-    );
+  const attested = await loadAttested(screenhostId, { since: attestedSince });
   const respected = attested.filter((a) => a.respecte).length;
   const respect_evenements =
     attested.length === 0 ? EVENT_RESPECT_DEFAULT : round2((respected / attested.length) * 100);
@@ -309,107 +235,6 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
     engagedSeconds,
   };
   return { sps: weightedSps(variables, cfg), variables, observations };
-};
-
-/**
- * SPS-DISPATCH1 — `observations` for MANY venues in a fixed number of queries.
- *
- * Dispatch needs to know which candidates have a computable score, and calling `computeSps` per
- * candidate would be six queries per venue on the hot path. This reads the same four sources over
- * the whole set instead.
- *
- * IT MUST AGREE WITH `computeSps` EXACTLY — a venue that reads « À venir » to its owner and ranks
- * on its defaults-90 in dispatch (or the reverse) is the divergence this whole lane exists to
- * remove. `e4-sps.test.ts` pins the agreement venue by venue against `computeSps` itself, across
- * every observation kind, so a change to one window that misses the other fails loudly.
- */
-export const spsObservationsFor = async (
-  screenhostIds: readonly string[],
-  now = new Date(),
-): Promise<Map<string, SpsObservations>> => {
-  const result = new Map<string, SpsObservations>();
-  if (screenhostIds.length === 0) return result;
-  const ids = [...screenhostIds];
-  for (const id of ids) {
-    result.set(id, { decided: 0, attested: 0, scheduledElapsed: 0, engagedSeconds: 0 });
-  }
-  const decidedSince = new Date(now.getTime() - ACCEPTATION_WINDOW_DAYS * DAY_MS);
-  const attestedSince = new Date(now.getTime() - RESPECT_WINDOW_DAYS * DAY_MS);
-
-  const [campaignDecisions, eventDecisions, attestations, allocations] = await Promise.all([
-    db
-      .select({ screenhostId: campaignDispatchAllocation.screenhostId })
-      .from(campaignDispatchAllocation)
-      .where(
-        and(
-          inArray(campaignDispatchAllocation.screenhostId, ids),
-          ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
-          gte(campaignDispatchAllocation.createdAt, decidedSince),
-        ),
-      ),
-    db
-      .select({ screenhostId: eventAllocations.screenhostId })
-      .from(eventAllocations)
-      .where(
-        and(
-          inArray(eventAllocations.screenhostId, ids),
-          ne(eventAllocations.statut, 'EN_ATTENTE'),
-          gte(eventAllocations.createdAt, decidedSince),
-        ),
-      ),
-    db
-      .select({ screenhostId: eventAttestations.screenhostId })
-      .from(eventAttestations)
-      .where(
-        and(
-          inArray(eventAttestations.screenhostId, ids),
-          gte(eventAttestations.createdAt, attestedSince),
-        ),
-      ),
-    db
-      .select({
-        screenhostId: campaignDispatchAllocation.screenhostId,
-        creneaux: campaignDispatchAllocation.creneaux,
-        sSpotSeconds: campaignDispatchPlan.sSpotSeconds,
-      })
-      .from(campaignDispatchAllocation)
-      .innerJoin(
-        campaignDispatchPlan,
-        eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
-      )
-      .where(
-        and(
-          inArray(campaignDispatchAllocation.screenhostId, ids),
-          eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
-        ),
-      ),
-  ]);
-
-  for (const row of [...campaignDecisions, ...eventDecisions]) {
-    const o = result.get(row.screenhostId);
-    if (o) o.decided += 1;
-  }
-  for (const row of attestations) {
-    const o = result.get(row.screenhostId);
-    if (o) o.attested += 1;
-  }
-
-  // activité + remplissage share the ACCEPTE allocations, exactly as computeSps does.
-  const nowSlot = tunisNowSlot(now);
-  const activiteSinceDate = tunisDateOf(new Date(now.getTime() - ACTIVITE_WINDOW_DAYS * DAY_MS));
-  const weekStart = tunisWeekStart(now);
-  const weekEnd = new Date(new Date(`${weekStart}T00:00:00Z`).getTime() + 7 * DAY_MS)
-    .toISOString()
-    .slice(0, 10);
-  for (const a of allocations) {
-    const o = result.get(a.screenhostId);
-    if (!o) continue;
-    for (const c of a.creneaux) {
-      if (c.date >= activiteSinceDate && isElapsed(c, nowSlot)) o.scheduledElapsed += 1;
-      if (c.date >= weekStart && c.date < weekEnd) o.engagedSeconds += c.reps * a.sSpotSeconds;
-    }
-  }
-  return result;
 };
 
 /** Compute + persist one venue's score (the on-decision hook; failures are the caller's warn). */
