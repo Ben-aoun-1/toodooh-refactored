@@ -51,7 +51,7 @@ const seedVenue = async (values: {
 interface ScreenView {
   id: string;
   name: string;
-  status: 'active' | 'inactive';
+  installed: boolean;
   connected: boolean;
   last_seen_at: string | null;
   paired_at: string | null;
@@ -61,11 +61,12 @@ interface LocationView {
   name: string;
   address: string | null;
   city: string | null;
-  status: 'active' | 'inactive' | 'no_screens';
+  status: 'active' | 'inactive' | 'never_installed' | 'no_screens';
   owner_id: string | null;
   owner_business_name: string | null;
   screens_count: number;
   active_screens_count: number;
+  installed_screens_count: number;
   online_screens_count: number;
   created_at: string;
   screens: ScreenView[];
@@ -100,8 +101,13 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
 
   const list = (qs = '') => app.inject({ method: 'GET', url: `/api/admin/screenhosts${qs}` });
 
-  // Three venues, oldest → newest: Alpha (owner A; 1 active+online screen, 1 inactive screen),
-  // Beta (owner B; venue toggled OFF, 1 active screen → 'inactive'), Gamma (owner A; no screens).
+  // Four venues, oldest → newest:
+  //   Alpha (owner A) — 2 screens, both INSTALLED (one online now, one stale) → 'active'
+  //   Beta  (owner B) — venue toggled OFF, 1 paired-but-never-seen screen → 'inactive'
+  //   Gamma (owner A) — no screens row at all                             → 'no_screens'
+  //   Delta (owner B) — 1 screens ROW, never paired, never seen           → 'never_installed'
+  // Delta is the ADM-FIX1 case: `screens.is_active` defaults true and nothing ever writes it, so
+  // before the fix a declared-only venue read « Active » exactly like Alpha.
   const seedParc = async () => {
     const adminId = await seedUser({ role: 'admin' });
     mockSession(adminId);
@@ -127,6 +133,11 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
       ownerId: ownerA,
       createdAt: new Date(t0.getTime() + 2000),
     });
+    const delta = await seedVenue({
+      name: 'Delta',
+      ownerId: ownerB,
+      createdAt: new Date(t0.getTime() + 3000),
+    });
     await db.insert(screens).values([
       { screenhostId: alpha, name: 'Écran 1', isActive: true, lastSeenAt: new Date() },
       {
@@ -135,9 +146,11 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
         isActive: false,
         lastSeenAt: new Date(Date.now() - REDISPATCH_HEARTBEAT_TOLERANCE_MS - 60_000),
       },
-      { screenhostId: beta, name: 'Écran B', isActive: true },
+      { screenhostId: beta, name: 'Écran B', isActive: true, pairedAt: t0 },
+      // Declared and nothing else — is_active says true, no device ever answered.
+      { screenhostId: delta, name: 'Écran D', isActive: true },
     ]);
-    return { ownerA, ownerB, alpha, beta, gamma };
+    return { ownerA, ownerB, alpha, beta, gamma, delta };
   };
 
   it('403 for a non-admin', async () => {
@@ -152,16 +165,16 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
   });
 
   it('derives status, counts and liveness per venue, newest first, screens folded in', async () => {
-    const { ownerA, ownerB, alpha, beta, gamma } = await seedParc();
+    const { ownerA, ownerB, alpha, beta, gamma, delta } = await seedParc();
     const res = await list();
     expect(res.statusCode, res.body).toBe(200);
     const body = res.json() as ListBody;
-    expect(body.total).toBe(3);
+    expect(body.total).toBe(4);
     expect(body.page).toBe(1);
     expect(body.per_page).toBe(20);
-    expect(body.locations.map((l) => l.id)).toEqual([gamma, beta, alpha]);
+    expect(body.locations.map((l) => l.id)).toEqual([delta, gamma, beta, alpha]);
 
-    const [g, b, a] = body.locations;
+    const [d, g, b, a] = body.locations;
     expect(g).toMatchObject({
       name: 'Gamma',
       status: 'no_screens',
@@ -169,6 +182,7 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
       owner_business_name: 'Café Alpha SARL',
       screens_count: 0,
       active_screens_count: 0,
+      installed_screens_count: 0,
       online_screens_count: 0,
       screens: [],
     });
@@ -180,6 +194,7 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
       city: 'Sfax',
       screens_count: 1,
       active_screens_count: 1,
+      installed_screens_count: 1,
       online_screens_count: 0,
     });
     expect(b?.owner_business_name).toMatch(/^User \d+$/);
@@ -189,11 +204,30 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
       address: '12 rue de Marseille',
       screens_count: 2,
       active_screens_count: 1,
+      installed_screens_count: 2,
       online_screens_count: 1,
     });
-    expect(a?.screens.map((s) => [s.name, s.status, s.connected])).toEqual([
-      ['Écran 1', 'active', true],
-      ['Écran 2', 'inactive', false],
+    expect(a?.screens.map((s) => [s.name, s.installed, s.connected])).toEqual([
+      ['Écran 1', true, true],
+      ['Écran 2', true, false],
+    ]);
+
+    // THE regression: a declared-only venue is NOT « active » — is_active is true on its row and
+    // the count that used to decide the status still says 1.
+    expect(d).toMatchObject({
+      name: 'Delta',
+      status: 'never_installed',
+      screens_count: 1,
+      active_screens_count: 1,
+      installed_screens_count: 0,
+      online_screens_count: 0,
+    });
+    expect(d?.screens.map((s) => [s.name, s.installed, s.connected, s.paired_at])).toEqual([
+      ['Écran D', false, false, null],
+    ]);
+    // A paired screen that never reported is INSTALLED but not connected.
+    expect(b?.screens.map((s) => [s.installed, s.connected, s.last_seen_at])).toEqual([
+      [true, false, null],
     ]);
   });
 
@@ -207,6 +241,9 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
     expect(none.locations.map((l) => l.name)).toEqual(['Gamma']);
     const inactive = (await list('?status=inactive')).json() as ListBody;
     expect(inactive.locations.map((l) => l.name)).toEqual(['Beta']);
+    const never = (await list('?status=never_installed')).json() as ListBody;
+    expect(never.total).toBe(1);
+    expect(never.locations.map((l) => l.name)).toEqual(['Delta']);
   });
 
   it('filters by owner and by a literal search over name / address / city', async () => {
@@ -228,11 +265,11 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
   it('paginates with an exact total', async () => {
     await seedParc();
     const p1 = (await list('?per_page=2&page=1')).json() as ListBody;
-    expect(p1.total).toBe(3);
-    expect(p1.locations.map((l) => l.name)).toEqual(['Gamma', 'Beta']);
+    expect(p1.total).toBe(4);
+    expect(p1.locations.map((l) => l.name)).toEqual(['Delta', 'Gamma']);
     const p2 = (await list('?per_page=2&page=2')).json() as ListBody;
-    expect(p2.total).toBe(3);
-    expect(p2.locations.map((l) => l.name)).toEqual(['Alpha']);
+    expect(p2.total).toBe(4);
+    expect(p2.locations.map((l) => l.name)).toEqual(['Beta', 'Alpha']);
     expect(p2.per_page).toBe(2);
   });
 });

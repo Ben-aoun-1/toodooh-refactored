@@ -6,6 +6,14 @@ import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminLocationsPagination from '@/features/admin/components/AdminLocationsPagination';
 import { useAdminLocations, useScreenOwners } from '@/features/admin/hooks/useAdminScreens';
 import { formatAdminDateTime } from '@/features/admin/lib/admin-dates';
+import {
+  LOCATION_STATUS_BADGE,
+  LOCATION_STATUS_FILTER_OPTIONS,
+  SCREEN_STATUS_BADGE,
+  screenInstallNote,
+  screenStatusOf,
+  screensCountLabel,
+} from '@/features/admin/lib/venue-screens';
 import type {
   AdminLocationStatus,
   AdminScreenRow,
@@ -16,32 +24,17 @@ import type {
 // AffluenceModal edited a Supabase table nothing reads any more — the action now links to the hub.
 const HUB_URL = 'https://hub.too-dooh.com';
 
-const LOCATION_STATUS_BADGE: Record<AdminLocationStatus, { classes: string; label: string }> = {
-  active: { classes: 'bg-green-100 text-green-800', label: 'Active' },
-  inactive: { classes: 'bg-gray-100 text-gray-800', label: 'Inactive' },
-  no_screens: { classes: 'bg-slate-100 text-slate-700', label: 'Sans écran' },
-};
+const BADGE_CLASSES = 'inline-flex rounded-full px-2 py-1 text-xs font-semibold';
 
 function LocationStatusBadge({ status }: { status: AdminLocationStatus }) {
   const badge = LOCATION_STATUS_BADGE[status];
-  return (
-    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${badge.classes}`}>
-      {badge.label}
-    </span>
-  );
+  return <span className={`${BADGE_CLASSES} ${badge.classes}`}>{badge.label}</span>;
 }
 
-function ScreenStatusBadge({ status }: { status: AdminScreenRow['status'] }) {
-  const active = status === 'active';
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-        active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-      }`}
-    >
-      {active ? 'Actif' : 'Inactif'}
-    </span>
-  );
+/** ADM-FIX1 — connected / offline / never, the vocabulary the rest of the product already uses. */
+function ScreenStatusBadge({ screen }: { screen: AdminScreenRow }) {
+  const badge = SCREEN_STATUS_BADGE[screenStatusOf(screen)];
+  return <span className={`${BADGE_CLASSES} ${badge.classes}`}>{badge.label}</span>;
 }
 
 function ScreensTable({ screens }: { screens: AdminScreenRow[] }) {
@@ -60,29 +53,29 @@ function ScreensTable({ screens }: { screens: AdminScreenRow[] }) {
           <tr>
             <th className={th}>Écran</th>
             <th className={th}>Statut</th>
-            <th className={th}>Connexion</th>
             <th className={th}>Dernier signal</th>
             <th className={th}>Appairé le</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {screens.map((screen) => (
-            <tr key={screen.id}>
-              <td className="px-4 py-2 text-sm text-gray-900">{screen.name}</td>
-              <td className="px-4 py-2 text-sm">
-                <ScreenStatusBadge status={screen.status} />
-              </td>
-              <td className="px-4 py-2 text-sm text-gray-700">
-                {screen.connected ? 'En ligne' : 'Hors ligne'}
-              </td>
-              <td className="px-4 py-2 text-sm text-gray-700">
-                {screen.last_seen_at ? formatAdminDateTime(screen.last_seen_at) : '—'}
-              </td>
-              <td className="px-4 py-2 text-sm text-gray-700">
-                {screen.paired_at ? formatAdminDateTime(screen.paired_at) : 'Jamais'}
-              </td>
-            </tr>
-          ))}
+          {screens.map((screen) => {
+            const installNote = screenInstallNote(screen);
+            return (
+              <tr key={screen.id}>
+                <td className="px-4 py-2 text-sm text-gray-900">{screen.name}</td>
+                <td className="px-4 py-2 text-sm">
+                  <ScreenStatusBadge screen={screen} />
+                  {installNote && <div className="mt-1 text-xs text-gray-500">{installNote}</div>}
+                </td>
+                <td className="px-4 py-2 text-sm text-gray-700">
+                  {screen.last_seen_at ? formatAdminDateTime(screen.last_seen_at) : '—'}
+                </td>
+                <td className="px-4 py-2 text-sm text-gray-700">
+                  {screen.paired_at ? formatAdminDateTime(screen.paired_at) : 'Jamais'}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -145,10 +138,11 @@ export default function ScreenManagement() {
               }}
               className={selectClasses}
             >
-              <option value="all">Tous les statuts</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="no_screens">Sans écran</option>
+              {LOCATION_STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
 
             <select
@@ -270,8 +264,14 @@ export default function ScreenManagement() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <LocationStatusBadge status={location.status} />
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {location.screens_count}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{location.screens_count}</div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              {screensCountLabel(
+                                location.screens_count,
+                                location.installed_screens_count,
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span

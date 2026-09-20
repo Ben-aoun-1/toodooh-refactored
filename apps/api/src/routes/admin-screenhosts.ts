@@ -14,18 +14,26 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 //
 // The venue STATUS is DERIVED — there is no stored status column on screenhosts. The vocabulary is
 // what the new model can honestly say (the legacy maintenance/unavailable states have no source):
-//   no_screens — the venue has no screens row at all
-//   active     — screenhosts.is_active AND at least one screens.is_active
-//   inactive   — everything else (venue toggled off, or every screen inactive)
+//   no_screens      — the venue has no screens row at all
+//   never_installed — it has screens ROWS but not one of them was ever a real device
+//   active          — screenhosts.is_active AND at least one screens.is_active
+//   inactive        — everything else (venue toggled off, or every screen inactive)
 // It is computed IN SQL (a CASE over a per-venue screens aggregate) so the status FILTER applies
 // before pagination and `total` stays exact — the legacy service filtered the page in memory and
 // reported the unfiltered count.
+//
+// ADM-FIX1 — a screens ROW is a declaration, not an installation: the admin creates it, and
+// `screens.is_active` defaults to true and is written by NO code, so a venue whose device never
+// existed still read « Active ». INSTALLED is the operator ruling — `paired_at IS NOT NULL OR
+// last_seen_at IS NOT NULL`, i.e. either proof that a real device once ran. Declared-but-never-
+// installed venues get their own value instead of borrowing « Active ». DISPLAY-ONLY: no row is
+// created, deleted or migrated, and dispatch/pricing never read these columns.
 //
 // `connected` / online_screens_count use THE ONE liveness truth (E6's heartbeat tolerance on
 // last_seen_at — the same predicate as /api/admin/screenhosts/:id/devices and the owner reads).
 // Revenue is NOT served: the legacy monthly_revenue column has no new-engine twin, and a payout
 // aggregate is money-adjacent (which month, gross/net) — a product ruling, not a listing default.
-const LOCATION_STATUSES = ['active', 'inactive', 'no_screens'] as const;
+const LOCATION_STATUSES = ['active', 'inactive', 'never_installed', 'no_screens'] as const;
 export type AdminLocationStatus = (typeof LOCATION_STATUSES)[number];
 
 const listQuerySchema = z.object({
@@ -40,11 +48,14 @@ const listQuerySchema = z.object({
 // character, not a wildcard). Postgres' default LIKE escape is backslash.
 const escapeLike = (term: string): string => term.replace(/[\\%_]/g, '\\$&');
 
+// Per-screen wire. The old `status` (screens.is_active, never written → 'active' forever) is GONE:
+// the web reads the connected / offline / never vocabulary off `connected` + `last_seen_at`, and
+// `installed` carries the ruling's predicate so a paired-but-silent device is told apart from a
+// row that no device ever answered.
 const toScreenView = (
   row: {
     id: string;
     name: string;
-    isActive: boolean;
     lastSeenAt: Date | null;
     pairedAt: Date | null;
   },
@@ -52,7 +63,7 @@ const toScreenView = (
 ) => ({
   id: row.id,
   name: row.name,
-  status: row.isActive ? ('active' as const) : ('inactive' as const),
+  installed: row.pairedAt !== null || row.lastSeenAt !== null,
   connected:
     row.lastSeenAt !== null && now - row.lastSeenAt.getTime() <= REDISPATCH_HEARTBEAT_TOLERANCE_MS,
   last_seen_at: row.lastSeenAt,
@@ -90,6 +101,11 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
         activeCount: sql<number>`count(*) filter (where ${screens.isActive})`
           .mapWith(Number)
           .as('active_count'),
+        // INSTALLED — either proof that a real device once ran against this row (operator ruling).
+        installedCount:
+          sql<number>`count(*) filter (where ${screens.pairedAt} is not null or ${screens.lastSeenAt} is not null)`
+            .mapWith(Number)
+            .as('installed_count'),
         onlineCount:
           sql<number>`count(*) filter (where ${gte(screens.lastSeenAt, heartbeatCutoff)})`
             .mapWith(Number)
@@ -101,9 +117,11 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     const screensCount = sql<number>`coalesce(${agg.screensCount}, 0)`.mapWith(Number);
     const activeCount = sql<number>`coalesce(${agg.activeCount}, 0)`.mapWith(Number);
+    const installedCount = sql<number>`coalesce(${agg.installedCount}, 0)`.mapWith(Number);
     const onlineCount = sql<number>`coalesce(${agg.onlineCount}, 0)`.mapWith(Number);
     const statusExpr = sql<AdminLocationStatus>`case
       when ${screensCount} = 0 then 'no_screens'
+      when ${installedCount} = 0 then 'never_installed'
       when ${screenhosts.isActive} and ${activeCount} > 0 then 'active'
       else 'inactive'
     end`;
@@ -142,6 +160,7 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
           status: statusExpr,
           screensCount,
           activeCount,
+          installedCount,
           onlineCount,
         })
         .from(screenhosts)
@@ -161,7 +180,6 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
               id: screens.id,
               screenhostId: screens.screenhostId,
               name: screens.name,
-              isActive: screens.isActive,
               lastSeenAt: screens.lastSeenAt,
               pairedAt: screens.pairedAt,
             })
@@ -187,6 +205,7 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
         owner_business_name: r.ownerBusinessName ?? r.ownerContactName ?? null,
         screens_count: r.screensCount,
         active_screens_count: r.activeCount,
+        installed_screens_count: r.installedCount,
         online_screens_count: r.onlineCount,
         created_at: r.createdAt,
         screens: screensByVenue.get(r.id) ?? [],
