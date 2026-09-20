@@ -27,7 +27,7 @@ const agentCodePrefix = (role: string): AgentCodePrefix | null => {
   return null;
 };
 
-// Superadmin-only creation of INTERNAL accounts (staff admins + agents). These are NOT public
+// Creation of INTERNAL accounts (staff admins + agents). These are NOT public
 // signups: we deliberately do NOT use better-auth's signUpEmail (it sends a verification email —
 // Ruling 9). The account is created verified + approved directly. The password is hashed with
 // better-auth's DEFAULT hashPassword (better-auth/crypto), the same scheme auth.ts's
@@ -40,6 +40,12 @@ const agentCodePrefix = (role: string): AgentCodePrefix | null => {
 // reset link). The staff ADMIN role keeps the admin-typed password and gets NO email — Ruling 9
 // still stands for staff (credentials delivered out-of-band).
 const superadminGuard = { preHandler: [requireAuth, requireRole('superadmin')] };
+
+// ADM-FIX1 (operator ruling) — the whole plugin used to be superadmin-only. An ADMIN now also
+// SEES the agents and CREATES the two agent roles (the « Créer rôle » surface). Creating an
+// `admin` account stays superadmin-only — an admin minting peers is privilege escalation — and so
+// do the staff listing (GET /api/admin/admins) and the unban route. Per-route guard, same idiom.
+const staffGuard = { preHandler: [requireAuth, requireRole('admin', 'superadmin')] };
 
 // role is constrained to the admin-creatable INTERNAL roles. superadmin is intentionally NOT
 // creatable here (bootstrap-only, via scripts/create-admin.ts); end-user roles
@@ -156,7 +162,7 @@ const sendAgentWelcomeEmail = async (params: {
 };
 
 export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
-  app.post('/api/admin/accounts', superadminGuard, async (request, reply) => {
+  app.post('/api/admin/accounts', staffGuard, async (request, reply) => {
     const parsed = createAccountSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -180,7 +186,18 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
 
-    // Superadmin-only → an explicit 409 on duplicate is acceptable (no anti-enumeration concern; the
+    // ADM-FIX1 — privilege BEFORE state (mirrors the ban route's staff check): an admin may mint
+    // the two AGENT roles but never another `admin`. Only a superadmin creates staff admins.
+    if (!isAgent && request.user?.role !== 'superadmin') {
+      return reply.status(403).send({
+        error: 'FORBIDDEN',
+        message: 'Seul le Super Administrateur peut créer un compte administrateur.',
+        statusCode: 403,
+        requestId: request.id,
+      });
+    }
+
+    // Trusted actor → an explicit 409 on duplicate is acceptable (no anti-enumeration concern; the
     // actor is trusted, unlike public signup which returns a generic 201).
     const [existing] = await db
       .select({ id: users.id })
@@ -305,28 +322,42 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  // Superadmin-only read of every issued agent + its hub-provisioning status (FX3). This is the
-  // tested "read returns the status" layer for operator monitoring (a hub-down at create-time stamps
-  // export_status='failed' instead of silently stranding). The agent-listing UI that consumes this
-  // is the deferred 2.7 admin repoint — out of this commit. innerJoin agents = agent-only by
-  // construction (admin/owner users have no agents row).
-  app.get('/api/admin/agents', superadminGuard, async (_request, reply) => {
+  // Every issued agent + its hub-provisioning status (FX3): the tested "read returns the status"
+  // layer for operator monitoring (a hub-down at create-time stamps export_status='failed' instead
+  // of silently stranding). innerJoin agents = agent-only by construction (admin/owner users have
+  // no agents row).
+  //
+  // ADM-FIX1 — readable by an ADMIN too, and widened to the SAME account view the staff listing
+  // serves (id / name split / is_active / created_at) so /admin-management can render agents in the
+  // same table as the admins instead of a second, half-shaped row type. The FX3 fields
+  // (code, export_status) ride along unchanged.
+  app.get('/api/admin/agents', staffGuard, async (_request, reply) => {
     const rows = await db
       .select({
+        id: users.id,
         email: users.email,
-        contact_name: users.contactName,
+        contactName: users.contactName,
         role: users.role,
+        status: users.status,
+        createdAt: users.createdAt,
         code: agents.code,
-        export_status: agents.exportStatus,
+        exportStatus: agents.exportStatus,
       })
       .from(agents)
       .innerJoin(users, eq(users.id, agents.userId))
       .orderBy(desc(agents.createdAt));
-    return reply.status(200).send({ agents: rows });
+    return reply.status(200).send({
+      agents: rows.map((row) => ({
+        ...toAdminAccountView(row),
+        code: row.code,
+        export_status: row.exportStatus,
+      })),
+    });
   });
 
   // GET /api/admin/admins — ADM-ADM1: every staff account (admin + superadmin), newest first, for
-  // the superadmin-only /admin-management page. Replaces the dead Supabase `admin_profiles` read.
+  // the /admin-management page. Replaces the dead Supabase `admin_profiles` read. Stays
+  // SUPERADMIN-ONLY (ADM-FIX1): an admin reaching that page sees the agents, not its peers.
   app.get('/api/admin/admins', superadminGuard, async (_request, reply) => {
     const rows = await db
       .select({
@@ -347,7 +378,7 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
   // reuses the existing ban route (status→'banned' + sessions revoked); this is its inverse for
   // admin-role targets ONLY. End-user bans stay TERMINAL (N3 Scenario 2 ruling — fraud evidence,
   // no recovery path): a non-admin target is refused, whatever its status. Superadmin-only, like
-  // account creation. Restores 'approved' (staff accounts are created approved — there is no
+  // staff-admin creation (ADM-FIX1 leaves this route's guard untouched). Restores 'approved' (staff accounts are created approved — there is no
   // moderation state to return to) and stamps the actor on the validation trio; the ban reason is
   // cleared with it. 409 if the target is not banned.
   app.post('/api/admin/users/:id/unban', superadminGuard, async (request, reply) => {

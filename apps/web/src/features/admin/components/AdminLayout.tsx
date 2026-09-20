@@ -287,7 +287,9 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 </button>
               )}
 
-              {role === 'superadmin' && (
+              {/* ADM-FIX1 — un administrateur y accède aussi : il y voit et y crée les agents
+                  (la création d'un compte « Administrateur » reste superadmin-only côté serveur). */}
+              {(role === 'superadmin' || role === 'admin') && (
                 <>
                   <button
                     onClick={() => navigate('/admin-management')}
@@ -310,7 +312,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     }`}
                   >
                     <UserPlus className="mr-3 h-5 w-5" />
-                    Créer Admin
+                    Créer rôle
                   </button>
                 </>
               )}

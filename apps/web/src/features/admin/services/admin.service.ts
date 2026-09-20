@@ -1,5 +1,6 @@
 import {
   AdminAccount,
+  AgentAccount,
   CreateInternalAccountInput,
   InternalAccount,
 } from '@/features/admin/types/admin';
@@ -26,6 +27,16 @@ export const adminService = {
   async getAdmins(): Promise<AdminAccount[]> {
     const { admins } = await apiClient.get<{ admins: AdminAccount[] }>('/admin/admins');
     return admins;
+  },
+
+  /**
+   * ADM-FIX1 — the agent half of the Administrateurs listing (GET /api/admin/agents). Readable by
+   * an ADMIN as well as a superadmin, and served in the SAME account view as getAdmins plus the
+   * FX3 hub fields (code, export_status).
+   */
+  async getAgents(): Promise<AgentAccount[]> {
+    const { agents } = await apiClient.get<{ agents: AgentAccount[] }>('/admin/agents');
+    return agents;
   },
 
   /** Deactivate = ban: the server requires a reason (kept as the validation note). */

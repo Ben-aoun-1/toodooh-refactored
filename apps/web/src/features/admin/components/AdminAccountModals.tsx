@@ -1,18 +1,25 @@
 import { AlertCircle, Calendar, CheckCircle, User, XCircle } from 'lucide-react';
 import { useState } from 'react';
 
-import type { AdminAccount } from '@/features/admin/types/admin';
+import { STAFF_ROLE_LABELS } from '@/features/admin/lib/staff-accounts';
+import type { AdminAccount, StaffRole } from '@/features/admin/types/admin';
+
+// ADM-FIX1 — the chip now spans the four internal roles the page lists (the two agent types
+// joined the two staff ones). Colours: purple = superadmin, blue = admin, teal/amber = agents.
+const ROLE_CHIP: Record<StaffRole, string> = {
+  superadmin: 'bg-purple-100 text-purple-800',
+  admin: 'bg-blue-100 text-blue-800',
+  screenhost_agent: 'bg-teal-100 text-teal-800',
+  screencast_agent: 'bg-amber-100 text-amber-800',
+};
 
 /** Role chip shared by the AdminManagement table and its details modal. */
 export function AdminRoleBadge({ role }: { role: AdminAccount['role'] }) {
-  const superadmin = role === 'superadmin';
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        superadmin ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-      }`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${ROLE_CHIP[role]}`}
     >
-      {superadmin ? 'Super Admin' : 'Administrateur'}
+      {STAFF_ROLE_LABELS[role]}
     </span>
   );
 }
@@ -43,7 +50,7 @@ export function AdminAccountDetailsModal({ account, formatDate, onClose }: Detai
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-900">Détails de l'Administrateur</h3>
+          <h3 className="text-xl font-bold text-gray-900">Détails du compte</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <XCircle className="h-6 w-6" />
           </button>

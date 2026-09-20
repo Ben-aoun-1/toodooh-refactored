@@ -96,6 +96,8 @@ export const adminKeys = {
   userDocuments: (id: string) => [...adminKeys.all, 'userDocuments', id] as const,
   /** Admin-account list for AdminManagement (`adminService.getAdmins`). */
   admins: () => [...adminKeys.all, 'admins'] as const,
+  /** ADM-FIX1 — the agent half of that same listing (`adminService.getAgents`). */
+  agents: () => [...adminKeys.all, 'agents'] as const,
 
   /** EV1 — the full event list for EventManagement (`adminEventsService.list`). */
   events: () => [...adminKeys.all, 'events'] as const,

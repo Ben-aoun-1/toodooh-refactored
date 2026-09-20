@@ -574,7 +574,9 @@ export default function App() {
             <Route
               path="/admin-create"
               element={
-                <AdminRoute requiredRoles={['superadmin']}>
+                /* ADM-FIX1 — « Créer rôle » : un admin y crée les deux rôles AGENT (le serveur
+                   refuse la création d'un « admin » par un admin). Le chemin reste /admin-create. */
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <CreateAdmin />
                 </AdminRoute>
               }
@@ -582,7 +584,8 @@ export default function App() {
             <Route
               path="/admin-management"
               element={
-                <AdminRoute requiredRoles={['superadmin']}>
+                /* ADM-FIX1 — un admin y voit les agents (la liste du personnel reste superadmin). */
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <AdminManagement />
                 </AdminRoute>
               }

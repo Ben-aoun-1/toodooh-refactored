@@ -76,13 +76,17 @@ export default function CreateAdmin() {
   const navigate = useNavigate();
   const { createAdmin } = useAdminMutations();
   const [loading, setLoading] = useState(false);
+  // ADM-FIX1 — only a SUPERADMIN mints another « Administrateur » (POST /api/admin/accounts 403s an
+  // admin doing so). An admin lands on the first agent role and never sees the admin card.
+  const canCreateAdminRole = role === 'superadmin';
+  const defaultRole: InternalAccountRole = canCreateAdminRole ? 'admin' : 'screenhost_agent';
   const [formData, setFormData] = useState<AdminFormData>({
     email: '',
     password: '',
     confirmPassword: '',
     first_name: '',
     last_name: '',
-    role: 'admin',
+    role: defaultRole,
   });
   // The created account surfaced after a successful POST — holds the issued agent code (agent
   // roles only; null for admin) so the superadmin can relay it. Its role label is kept because
@@ -166,7 +170,7 @@ export default function CreateAdmin() {
         confirmPassword: '',
         first_name: '',
         last_name: '',
-        role: 'admin',
+        role: defaultRole,
       });
     } catch (error) {
       // EMAIL-AG1 (2026-09-12): a duplicate address is a 409 EMAIL_TAKEN — say so in French
@@ -190,15 +194,16 @@ export default function CreateAdmin() {
     }
   };
 
-  // Vérifier que l'utilisateur est super admin
-  if (!user || role !== 'superadmin') {
+  // ADM-FIX1 — un administrateur crée les rôles AGENT ; seul le superadmin crée un « Administrateur »
+  // (élévation de privilège, refusée par le serveur avec un 403).
+  if (!user || (role !== 'superadmin' && role !== 'admin')) {
     return (
-      <AdminLayout title="Créer un Admin" subtitle="Accès réservé au Super Administrateur">
+      <AdminLayout title="Créer rôle" subtitle="Accès réservé à l'équipe TOODOOH">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Accès Refusé</h3>
           <p className="text-gray-600 mb-6">
-            Seul le Super Administrateur peut créer des comptes internes.
+            Seule l'équipe TOODOOH peut créer des comptes internes.
           </p>
           <button
             onClick={() => navigate('/admin-dashboard')}
@@ -214,9 +219,12 @@ export default function CreateAdmin() {
   const createdCode = created?.account.code ?? null;
   const createdPassword = created?.account.temp_password ?? null;
   const isAgentRole = formData.role !== 'admin';
+  const createSubtitle = canCreateAdminRole
+    ? 'Ajouter un administrateur ou un agent'
+    : 'Ajouter un agent ScreenHost ou ScreenCast';
 
   return (
-    <AdminLayout title="Créer un compte" subtitle="Ajouter un administrateur ou un agent">
+    <AdminLayout title="Créer rôle" subtitle={createSubtitle}>
       <div className="max-w-3xl mx-auto">
         {/* Confirmation post-création — surface le code agent (rôles agent) à relayer */}
         {created && (
@@ -263,9 +271,13 @@ export default function CreateAdmin() {
                 Création de compte interne
               </h4>
               <p className="text-sm text-blue-700">
-                <strong>Administrateur :</strong> Accès complet à toutes les fonctionnalités (sauf
-                création d'autres comptes internes)
-                <br />
+                {canCreateAdminRole && (
+                  <>
+                    <strong>Administrateur :</strong> Accès complet à toutes les fonctionnalités
+                    (sauf création d'autres administrateurs)
+                    <br />
+                  </>
+                )}
                 <strong>Agent ScreenHost :</strong> Inscription des établissements / inventaire
                 <br />
                 <strong>Agent ScreenCast :</strong> Acquisition des annonceurs
@@ -280,7 +292,7 @@ export default function CreateAdmin() {
             {/* Type de compte */}
             <div>
               <span className="block text-sm font-medium text-gray-700 mb-2">Type de compte *</span>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {(
                   [
                     {
@@ -302,31 +314,34 @@ export default function CreateAdmin() {
                       Icon: Cast,
                     },
                   ] as const
-                ).map(({ value, label, desc, Icon }) => {
-                  const selected = formData.role === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, role: value })}
-                      className={`p-4 border-2 rounded-lg transition-all ${
-                        selected
-                          ? 'border-brand-primary bg-brand-primary bg-opacity-10'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      <Icon
-                        className={`h-8 w-8 mx-auto mb-2 ${selected ? 'text-brand-primary' : 'text-gray-400'}`}
-                      />
-                      <p
-                        className={`font-semibold ${selected ? 'text-brand-primary' : 'text-gray-700'}`}
+                )
+                  // ADM-FIX1 — la carte « Administrateur » n'est offerte qu'au superadmin.
+                  .filter(({ value }) => value !== 'admin' || canCreateAdminRole)
+                  .map(({ value, label, desc, Icon }) => {
+                    const selected = formData.role === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, role: value })}
+                        className={`p-4 border-2 rounded-lg transition-all ${
+                          selected
+                            ? 'border-brand-primary bg-brand-primary bg-opacity-10'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
                       >
-                        {label}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">{desc}</p>
-                    </button>
-                  );
-                })}
+                        <Icon
+                          className={`h-8 w-8 mx-auto mb-2 ${selected ? 'text-brand-primary' : 'text-gray-400'}`}
+                        />
+                        <p
+                          className={`font-semibold ${selected ? 'text-brand-primary' : 'text-gray-700'}`}
+                        >
+                          {label}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{desc}</p>
+                      </button>
+                    );
+                  })}
               </div>
             </div>
 

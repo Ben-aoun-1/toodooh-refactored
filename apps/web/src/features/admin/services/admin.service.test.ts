@@ -62,6 +62,19 @@ describe('adminService staff-account lifecycle', () => {
     expect(getMock).toHaveBeenCalledWith('/admin/admins');
   });
 
+  // ADM-FIX1 — the agent half of the Administrateurs listing.
+  it('getAgents GETs /admin/agents and unwraps the list', async () => {
+    const agent = {
+      ...ACCOUNT,
+      role: 'screenhost_agent',
+      code: 'SH123456',
+      export_status: 'synced',
+    };
+    getMock.mockResolvedValue({ agents: [agent] });
+    await expect(adminService.getAgents()).resolves.toEqual([agent]);
+    expect(getMock).toHaveBeenCalledWith('/admin/agents');
+  });
+
   it('deactivateAdmin POSTs the EXISTING ban route with the motif', async () => {
     postMock.mockResolvedValue({ user: {} });
     await adminService.deactivateAdmin('u1', 'Départ de la société');
