@@ -3,15 +3,28 @@
 // model (moderator is not a user_role value — slice-2 A ruling 2). users carries ONE contact_name;
 // first_name/last_name are a server-side split on the first space (display sugar for initials).
 // is_active = status !== 'banned' (deactivation IS the ban route; unban restores).
+// ADM-FIX1 — the /admin-management page lists the AGENTS alongside the admins, so one account
+// shape spans all four internal roles (GET /api/admin/admins serves the two staff ones,
+// GET /api/admin/agents the two agent ones — both in this same view).
+export type StaffRole = 'superadmin' | 'admin' | 'screenhost_agent' | 'screencast_agent';
+
 export interface AdminAccount {
   id: string;
   email: string;
   contact_name: string;
   first_name: string;
   last_name: string;
-  role: 'superadmin' | 'admin';
+  role: StaffRole;
   is_active: boolean;
   created_at: string;
+}
+
+// One agent row: the account view above plus the FX3 hub fields GET /api/admin/agents adds.
+export interface AgentAccount extends AdminAccount {
+  /** The agent's OWN issued referral code (agents.code) — « SH123456 » / « SC123456 ». */
+  code: string;
+  /** Hub provisioning state: 'pending' | 'synced' | 'failed'. */
+  export_status: string;
 }
 
 // Slice-2 A — internal-account creation via the apps/api endpoint POST /api/admin/accounts

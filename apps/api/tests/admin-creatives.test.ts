@@ -113,6 +113,62 @@ describe('admin creative moderation (real Postgres)', () => {
     expect((pending.json() as unknown[]).length).toBe(2);
   });
 
+  // ADM-FIX1 — the « Annonceur » column was a raw uuid. Every row now carries the NAME beside it
+  // (business_name, else contact_name); the id survives as the muted support line.
+  it('names the advertiser on every queue row (business_name, else contact_name)', async () => {
+    const withBusiness = await seedUser({ contactName: 'Amine', businessName: 'Société Mejri' });
+    const withoutBusiness = await seedUser({ contactName: 'Salma Trabelsi' });
+    const cr1 = await seedCreative(withBusiness, { status: 'pending' });
+    const cr2 = await seedCreative(withoutBusiness, { status: 'pending' });
+    for (const [advertiserId, cr] of [
+      [withBusiness, cr1],
+      [withoutBusiness, cr2],
+    ] as const) {
+      await db.insert(campaigns).values({
+        advertiserId,
+        name: `Queue ${cr.id.slice(0, 8)}`,
+        campaignType: 'standard',
+        status: 'pending',
+        creativeId: cr.id,
+      });
+    }
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/creatives' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as { id: string; advertiser_id: string; advertiser_label: string }[];
+    const row1 = rows.find((r) => r.id === cr1.id);
+    expect(row1?.advertiser_label).toBe('Société Mejri');
+    expect(row1?.advertiser_id).toBe(withBusiness);
+    expect(rows.find((r) => r.id === cr2.id)?.advertiser_label).toBe('Salma Trabelsi');
+    // The join must not drop rows: both creatives are still listed.
+    expect(rows).toHaveLength(2);
+  });
+
+  it('the approve/reject responses carry the advertiser label too', async () => {
+    const adv = await seedUser({ contactName: 'Nizar', businessName: 'ACME Média' });
+    const creative = await seedCreative(adv, { status: 'pending' });
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+
+    const approved = await app.inject({
+      method: 'POST',
+      url: `/api/admin/creatives/${creative.id}/approve`,
+      payload: {},
+    });
+    expect(approved.statusCode).toBe(200);
+    expect((approved.json() as { advertiser_label: string }).advertiser_label).toBe('ACME Média');
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/api/admin/creatives/${creative.id}/reject`,
+      payload: { notes: 'hors charte' },
+    });
+    expect(rejected.statusCode).toBe(200);
+    expect((rejected.json() as { advertiser_label: string }).advertiser_label).toBe('ACME Média');
+  });
+
   it('approves a creative → approved + stamps the audit trio (200)', async () => {
     const adv = await seedUser();
     const creative = await seedCreative(adv);

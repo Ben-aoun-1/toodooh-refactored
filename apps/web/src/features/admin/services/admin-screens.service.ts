@@ -8,13 +8,19 @@ import { apiClient } from '@/lib/api-client';
  * from screenhosts.is_active + the screens rows; liveness is the E6 heartbeat truth.
  */
 
-/** The venue vocabulary the new model can honestly say (no maintenance/unavailable source). */
-export type AdminLocationStatus = 'active' | 'inactive' | 'no_screens';
+/**
+ * The venue vocabulary the new model can honestly say (no maintenance/unavailable source).
+ * ADM-FIX1 — `never_installed`: the venue HAS screens rows but not one of them was ever a real
+ * device (`paired_at`/`last_seen_at` both null everywhere). It used to read « Active », because
+ * the derivation counted `screens.is_active` — a column no code writes, true on every row forever.
+ */
+export type AdminLocationStatus = 'active' | 'inactive' | 'never_installed' | 'no_screens';
 
 export interface AdminScreenRow {
   id: string;
   name: string;
-  status: 'active' | 'inactive';
+  /** Operator ruling: a real device once ran — `paired_at` or `last_seen_at` is set. */
+  installed: boolean;
   connected: boolean;
   last_seen_at: string | null;
   paired_at: string | null;
@@ -28,8 +34,11 @@ export interface AdminLocation {
   status: AdminLocationStatus;
   owner_id: string | null;
   owner_business_name: string | null;
+  /** DECLARED — the screens rows an admin created, installed or not. */
   screens_count: number;
   active_screens_count: number;
+  /** INSTALLED — the subset that ever paired or ever reported. */
+  installed_screens_count: number;
   online_screens_count: number;
   created_at: string;
   screens: AdminScreenRow[];

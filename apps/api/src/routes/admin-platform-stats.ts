@@ -98,7 +98,17 @@ export const adminPlatformStatsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // campaigns — per-status counts + budget aggregates.
-    const campaignByStatus = { draft: 0, pending: 0, active: 0, rejected: 0 };
+    // ADM-FIX1 — the buckets used to stop at four while `total` counted every row, so an 'upcoming'
+    // or 'completed' campaign was invisible on the dashboard yet inflated the total. All SIX stored
+    // statuses (schema campaign_status) have a bucket now.
+    const campaignByStatus = {
+      draft: 0,
+      pending: 0,
+      upcoming: 0,
+      active: 0,
+      rejected: 0,
+      completed: 0,
+    };
     let campaignsTotal = 0;
     for (const row of campaignRows) {
       campaignsTotal += row.c;
@@ -134,8 +144,10 @@ export const adminPlatformStatsRoutes: FastifyPluginAsync = async (app) => {
         total: campaignsTotal,
         draft: campaignByStatus.draft,
         pending: campaignByStatus.pending,
+        upcoming: campaignByStatus.upcoming,
         active: campaignByStatus.active,
         rejected: campaignByStatus.rejected,
+        completed: campaignByStatus.completed,
         total_budget_tnd: Number(campaignBudgetRow[0]?.total ?? 0),
         average_budget_tnd: Number(campaignBudgetRow[0]?.avg ?? 0),
       },

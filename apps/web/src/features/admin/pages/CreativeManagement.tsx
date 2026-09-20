@@ -210,8 +210,11 @@ export default function CreativeManagement() {
                         </div>
                       </div>
                     </td>
+                    {/* ADM-FIX1 — the NAME is the primary text; the uuid stays as the muted
+                        support line (the column used to be the raw uuid alone). */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-xs font-mono text-gray-700">
+                      <div className="text-sm text-gray-900">{creative.advertiser_label}</div>
+                      <div className="text-xs font-mono text-gray-400">
                         {creative.advertiser_id}
                       </div>
                     </td>
@@ -293,8 +296,9 @@ export default function CreativeManagement() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Annonceur (id):</p>
-                    <p className="text-sm font-mono text-gray-900">{selected.advertiser_id}</p>
+                    <p className="text-sm font-medium text-gray-700">Annonceur:</p>
+                    <p className="text-sm text-gray-900">{selected.advertiser_label}</p>
+                    <p className="text-xs font-mono text-gray-400">{selected.advertiser_id}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700">Statut:</p>

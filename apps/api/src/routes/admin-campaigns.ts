@@ -10,6 +10,7 @@ import {
   creatives,
   eventAllocations,
   screenhosts,
+  users,
 } from '../db/schema.js';
 import { activateCampaign } from '../lib/activation-service.js';
 import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
@@ -17,6 +18,7 @@ import { campaignCpmRates, cpmForCampaign } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
 import { walletSpendable } from '../lib/recharges.js';
+import { userLabel } from '../lib/user-label.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 import { planView } from './campaign-dispatch.js';
@@ -83,9 +85,17 @@ const sendNotPending = (
     currentStatus: status,
   });
 
-const adminCampaignView = (row: Campaign, contentValidationStatus: string | null) => ({
+// ADM-FIX1 — every payload that carries `advertiser_id` now carries the NAME beside it
+// (lib/user-label: business_name, else contact_name). The admin queue printed a truncated uuid
+// where the operator expects an annonceur; the id stays for support, as a secondary line.
+const adminCampaignView = (
+  row: Campaign,
+  contentValidationStatus: string | null,
+  advertiserLabel: string,
+) => ({
   id: row.id,
   advertiser_id: row.advertiserId,
+  advertiser_label: advertiserLabel,
   name: row.name,
   campaign_type: row.campaignType,
   status: row.status,
@@ -125,10 +135,19 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       );
     }
     const { status } = parsedQuery.data;
+    // The users join is INNER on purpose and cannot drop a row: campaigns.advertiser_id is NOT NULL
+    // and references users.id, so every campaign has exactly one advertiser.
     const rows = await db
-      .select({ campaign: campaigns, contentValidationStatus: creatives.validationStatus })
+      .select({
+        campaign: campaigns,
+        contentValidationStatus: creatives.validationStatus,
+        advertiserBusinessName: users.businessName,
+        advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
+      })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .innerJoin(users, eq(campaigns.advertiserId, users.id))
       .where(status ? eq(campaigns.status, status) : undefined)
       .orderBy(desc(campaigns.createdAt));
     const out = await Promise.all(
@@ -139,7 +158,16 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         const requestedBudget =
           r.campaign.requestedBudget === null ? null : Number(r.campaign.requestedBudget);
         return {
-          ...adminCampaignView(r.campaign, r.contentValidationStatus),
+          ...adminCampaignView(
+            r.campaign,
+            r.contentValidationStatus,
+            userLabel({
+              id: r.campaign.advertiserId,
+              businessName: r.advertiserBusinessName,
+              contactName: r.advertiserContactName,
+              email: r.advertiserEmail,
+            }),
+          ),
           // FIX2 amendment — the queue shows THE FIGURE THE ACTIVATION GATE ENFORCES: spendable
           // excluding this campaign's own engagement. Total balance invited approving campaigns
           // the gate then rejects.
@@ -173,14 +201,25 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         campaign: campaigns,
         contentValidationStatus: creatives.validationStatus,
         creativeDurationSeconds: creatives.durationSeconds,
+        // ADM-FIX1 — the advertiser's name rides the read the route already does (no extra query).
+        advertiserBusinessName: users.businessName,
+        advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
       })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .innerJoin(users, eq(campaigns.advertiserId, users.id))
       .where(eq(campaigns.id, id))
       .limit(1);
     if (!row)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     const { campaign, contentValidationStatus, creativeDurationSeconds } = row;
+    const advertiserLabel = userLabel({
+      id: campaign.advertiserId,
+      businessName: row.advertiserBusinessName,
+      contactName: row.advertiserContactName,
+      email: row.advertiserEmail,
+    });
 
     // CF-SK1 — the gate chain, dispatch and the date-routed flip now live in the shared
     // activation core (lib/activation-service); this route keeps its HTTP shell and maps the
@@ -318,7 +357,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       request.log.warn({ err, campaignId: activated.id }, 'playlist re-push on activate failed');
     }
     return reply.status(200).send({
-      campaign: adminCampaignView(activated, contentValidationStatus),
+      campaign: adminCampaignView(activated, contentValidationStatus, advertiserLabel),
       // EV3 — an event positioning activates with NO plan (the phasing boundary: bloc dispatch
       // is EV4); classic campaigns keep the byte-identical planView spread.
       ...(outcome.plan === null
@@ -441,14 +480,28 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     const { id } = parsedParams.data;
     const [existing] = await db
-      .select({ status: campaigns.status })
+      .select({
+        status: campaigns.status,
+        advertiserId: campaigns.advertiserId,
+        // ADM-FIX1 — rides the pre-check read the route already does (no extra query).
+        advertiserBusinessName: users.businessName,
+        advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
+      })
       .from(campaigns)
+      .innerJoin(users, eq(campaigns.advertiserId, users.id))
       .where(eq(campaigns.id, id))
       .limit(1);
     if (!existing)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     if (existing.status !== 'pending')
       return sendNotPending(reply, request, existing.status, 'rejetée');
+    const advertiserLabel = userLabel({
+      id: existing.advertiserId,
+      businessName: existing.advertiserBusinessName,
+      contactName: existing.advertiserContactName,
+      email: existing.advertiserEmail,
+    });
 
     const [updated] = await db
       .update(campaigns)
@@ -463,6 +516,6 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         .limit(1);
       return sendNotPending(reply, request, current?.status ?? existing.status, 'rejetée');
     }
-    return reply.status(200).send(adminCampaignView(updated, null));
+    return reply.status(200).send(adminCampaignView(updated, null, advertiserLabel));
   });
 };

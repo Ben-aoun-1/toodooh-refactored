@@ -310,9 +310,19 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(u?.id).toBeTruthy();
   });
 
-  it('non-superadmin (admin) → 403 FORBIDDEN', async () => {
-    const adminId = await seedUser({ role: 'admin', status: 'approved' });
-    mockSession(adminId, 'admin');
+  // ADM-FIX1 — an ADMIN now passes the route guard (they create agents; see the admin cases
+  // below). A NON-STAFF actor still never reaches the handler.
+  it('non-staff actor (advertiser) → 403 FORBIDDEN', async () => {
+    const advertiserId = await seedUser({ role: 'advertiser', status: 'approved' });
+    mockSession(advertiserId, 'advertiser');
+    const res = await create(VALID);
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
+  });
+
+  it('non-staff actor (owner) → 403 FORBIDDEN', async () => {
+    const ownerId = await seedUser({ role: 'individual_owner', status: 'approved' });
+    mockSession(ownerId, 'individual_owner');
     const res = await create(VALID);
     expect(res.statusCode).toBe(403);
     expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
@@ -397,10 +407,93 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(list.some((a) => a.email === 'admin8@example.com')).toBe(false);
   });
 
-  it('GET /api/admin/agents requires superadmin → 403 for a plain admin', async () => {
+  // A NON-STAFF actor never reaches this route either — the admin widening (below) only moves
+  // the floor from superadmin to admin, it does not open the route to advertisers/owners.
+  it('GET /api/admin/agents refuses a non-staff actor (advertiser) → 403 FORBIDDEN', async () => {
+    const advertiserId = await seedUser({ role: 'advertiser', status: 'approved' });
+    mockSession(advertiserId, 'advertiser');
+    const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
+  });
+
+  it('GET /api/admin/agents refuses a non-staff actor (owner) → 403 FORBIDDEN', async () => {
+    const ownerId = await seedUser({ role: 'individual_owner', status: 'approved' });
+    mockSession(ownerId, 'individual_owner');
+    const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
+  });
+
+  // ADM-FIX1 (operator ruling) — an ADMIN, not only a superadmin, SEES and CREATES the agents.
+  // The two escalation paths (creating an `admin`, the staff listing) stay superadmin-only.
+  it('GET /api/admin/agents is readable by a plain ADMIN → 200 with the account view', async () => {
+    mockSession(superId);
+    await create(VALID);
     const adminId = await seedUser({ role: 'admin', status: 'approved' });
     mockSession(adminId, 'admin');
     const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(200);
+    const { agents: list } = res.json<{
+      agents: Array<{
+        id: string;
+        email: string;
+        first_name: string;
+        last_name: string;
+        is_active: boolean;
+        created_at: string;
+        code: string;
+      }>;
+    }>();
+    const row = list.find((a) => a.email === 'agent1@example.com');
+    expect(row).toBeDefined();
+    // The widened view /admin-management renders the row from (same shape as GET /admin/admins).
+    expect(row?.id).toBeTruthy();
+    expect(row?.first_name).toBe('Agent');
+    expect(row?.last_name).toBe('One');
+    expect(row?.is_active).toBe(true);
+    expect(row?.created_at).toBeTruthy();
+    expect(row?.code).toMatch(/^SH\d{6}$/);
+  });
+
+  it('a plain ADMIN creates an agent → 201', async () => {
+    const adminId = await seedUser({ role: 'admin', status: 'approved' });
+    mockSession(adminId, 'admin');
+    const res = await create({ ...VALID, email: 'agent-by-admin@example.com' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ account: { role: string } }>().account.role).toBe('screenhost_agent');
+  });
+
+  it('a plain ADMIN creating an `admin` → 403 (privilege escalation), in French', async () => {
+    const adminId = await seedUser({ role: 'admin', status: 'approved' });
+    mockSession(adminId, 'admin');
+    const res = await create({
+      email: 'admin-by-admin@example.com',
+      contact_name: 'Peer Admin',
+      role: 'admin',
+      password: 'a-strong-pass-12',
+    });
     expect(res.statusCode).toBe(403);
+    expect(res.json<{ message: string }>().message).toBe(
+      'Seul le Super Administrateur peut créer un compte administrateur.',
+    );
+    // The escalation never reached the DB.
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, 'admin-by-admin@example.com'));
+    expect(row).toBeUndefined();
+  });
+
+  it('a superadmin still creates an `admin` → 201', async () => {
+    mockSession(superId);
+    const res = await create({
+      email: 'admin-by-super@example.com',
+      contact_name: 'Staff Admin',
+      role: 'admin',
+      password: 'a-strong-pass-12',
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ account: { role: string } }>().account.role).toBe('admin');
   });
 });

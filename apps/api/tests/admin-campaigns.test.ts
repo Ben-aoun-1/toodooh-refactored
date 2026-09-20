@@ -443,16 +443,23 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
 
   it('rejects a pending campaign with a reason (→ rejected + reject_reason); re-reject 409s', async () => {
     const admin = await seedUser({ role: 'admin' });
-    const advertiser = await seedUser({ role: 'advertiser' });
+    const advertiser = await seedUser({ role: 'advertiser', businessName: 'Studio Nord' });
     const campaignId = await seedCampaign(advertiser, { status: 'pending' });
     mockSession(admin);
 
     const res = await reject(campaignId, { reason: 'Creative violates guidelines' });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { status: string; reject_reason: string; rejected_at: string };
+    const body = res.json() as {
+      status: string;
+      reject_reason: string;
+      rejected_at: string;
+      advertiser_label: string;
+    };
     expect(body.status).toBe('rejected');
     expect(body.reject_reason).toBe('Creative violates guidelines');
     expect(body.rejected_at).not.toBeNull();
+    // ADM-FIX1 — the moderation responses carry the label too, not just the list.
+    expect(body.advertiser_label).toBe('Studio Nord');
 
     const re = await reject(campaignId, { reason: 'again' });
     expect(re.statusCode).toBe(409);
@@ -511,6 +518,76 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     const rows = res.json() as { id: string; wallet_balance_tnd: number }[];
     // 300 funded − 120 engaged elsewhere = 180; the row's own 450 ask is EXCLUDED.
     expect(rows.find((r) => r.id === campaignId)?.wallet_balance_tnd).toBe(180);
+  });
+
+  // ADM-FIX1 — the queue printed a TRUNCATED uuid where the operator expects an annonceur. Every
+  // row now carries the NAME beside the id: business_name, else contact_name.
+  it('the review queue names the advertiser (business_name) beside the id', async () => {
+    const { admin, advertiser, campaignId } = await seedActivatable({ fundTnd: 300 });
+    await db
+      .update(users)
+      .set({ businessName: 'Société Mejri SARL' })
+      .where(eq(users.id, advertiser));
+    mockSession(admin);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as { id: string; advertiser_id: string; advertiser_label: string }[];
+    const mine = rows.find((r) => r.id === campaignId);
+    expect(mine?.advertiser_label).toBe('Société Mejri SARL');
+    // The id is NOT dropped — it stays for support (the web renders it as the muted line).
+    expect(mine?.advertiser_id).toBe(advertiser);
+  });
+
+  it('the review queue falls back to contact_name when the advertiser has no business_name', async () => {
+    const { admin, advertiser, campaignId } = await seedActivatable({ fundTnd: 300 });
+    // Both the NULL case and the blank-string case resolve to the contact name.
+    await db
+      .update(users)
+      .set({ businessName: '   ', contactName: 'Amine Ben Aoun' })
+      .where(eq(users.id, advertiser));
+    mockSession(admin);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
+    const rows = res.json() as { id: string; advertiser_label: string }[];
+    expect(rows.find((r) => r.id === campaignId)?.advertiser_label).toBe('Amine Ben Aoun');
+
+    await db.update(users).set({ businessName: null }).where(eq(users.id, advertiser));
+    const again = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
+    const rows2 = again.json() as { id: string; advertiser_label: string }[];
+    expect(rows2.find((r) => r.id === campaignId)?.advertiser_label).toBe('Amine Ben Aoun');
+  });
+
+  // The queue must not LOSE a row to the advertiser join (it is INNER over a NOT NULL FK).
+  it('the unfiltered queue returns every status, each one labelled', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser', businessName: 'ACME' });
+    const ids: string[] = [];
+    for (const status of ['draft', 'pending', 'upcoming', 'active', 'rejected', 'completed']) {
+      const [c] = await db
+        .insert(campaigns)
+        .values({
+          advertiserId: advertiser,
+          name: `C-${status}`,
+          campaignType: 'standard',
+          status: status as never,
+        })
+        .returning();
+      ids.push(c?.id ?? '');
+    }
+    mockSession(admin);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as { id: string; status: string; advertiser_label: string }[];
+    for (const id of ids) {
+      const row = rows.find((r) => r.id === id);
+      expect(row).toBeDefined();
+      expect(row?.advertiser_label).toBe('ACME');
+    }
+    expect(
+      rows
+        .filter((r) => ids.includes(r.id))
+        .map((r) => r.status)
+        .sort(),
+    ).toEqual(['active', 'completed', 'draft', 'pending', 'rejected', 'upcoming']);
   });
 
   it('the review queue surfaces a null derived_i_cible for a budget-less campaign', async () => {

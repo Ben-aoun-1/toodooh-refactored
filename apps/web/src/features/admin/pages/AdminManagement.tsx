@@ -11,22 +11,38 @@ import {
   AdminStatusBadge,
 } from '@/features/admin/components/AdminAccountModals';
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import { useAdminMutations, useAdmins } from '@/features/admin/hooks/useAdmins';
+import { useAdminMutations, useAdmins, useAgents } from '@/features/admin/hooks/useAdmins';
 import { formatAdminDate } from '@/features/admin/lib/admin-dates';
-import { AdminAccount } from '@/features/admin/types/admin';
+import {
+  canDeactivate,
+  canReactivate,
+  filterStaffAccounts,
+  isAgentRole,
+  mergeStaffAccounts,
+  STAFF_ROLE_LABELS,
+  visibleStaffRoles,
+} from '@/features/admin/lib/staff-accounts';
+import { AdminAccount, StaffRole } from '@/features/admin/types/admin';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
-type RoleFilter = 'all' | AdminAccount['role'];
+type RoleFilter = 'all' | StaffRole;
 
-// ADM-ADM1 — the staff-account list (GET /api/admin/admins, superadmin). Deactivate = the EXISTING
-// ban route (motif required, sessions revoked); reactivate = unban. `moderator`, permissions and
-// « dernière connexion » are gone — none exists in the users model.
+// ADM-ADM1 — the internal-account list. Deactivate = the EXISTING ban route (motif required,
+// sessions revoked); reactivate = unban. `moderator`, permissions and « dernière connexion » are
+// gone — none exists in the users model.
+//
+// ADM-FIX1 (operator ruling) — an ADMIN reaches this page too, and the AGENTS are listed alongside
+// the admins: GET /api/admin/admins (superadmin-only, skipped for an admin actor) + GET
+// /api/admin/agents (admin OR superadmin). The merge / filter / permission rules are pure
+// functions in lib/staff-accounts (apps/web has no render harness).
 export default function AdminManagement() {
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
   const navigate = useNavigate();
-  const { admins, loading, isError: adminsError } = useAdmins();
+  const isSuperadmin = role === 'superadmin';
+  const { admins, loading: adminsLoading, isError: adminsError } = useAdmins(isSuperadmin);
+  const { agents, loading: agentsLoading, isError: agentsError } = useAgents();
   const { deactivateAdmin, reactivateAdmin } = useAdminMutations();
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
@@ -34,19 +50,17 @@ export default function AdminManagement() {
   const [adminToDeactivate, setAdminToDeactivate] = useState<AdminAccount | null>(null);
   const [adminToReactivate, setAdminToReactivate] = useState<AdminAccount | null>(null);
 
-  useEffect(() => {
-    if (adminsError) {
-      toast.error('Erreur lors du chargement des administrateurs');
-    }
-  }, [adminsError]);
+  const loading = adminsLoading || agentsLoading;
+  const listError = adminsError || agentsError;
 
-  const needle = searchTerm.toLowerCase();
-  const filteredAdmins = admins.filter((a) => {
-    const matchesSearch =
-      a.contact_name.toLowerCase().includes(needle) || a.email.toLowerCase().includes(needle);
-    const matchesRole = roleFilter === 'all' || a.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
+  useEffect(() => {
+    if (listError) {
+      toast.error('Erreur lors du chargement des comptes internes');
+    }
+  }, [listError]);
+
+  const accounts = mergeStaffAccounts(admins, agents);
+  const filteredAdmins = filterStaffAccounts(accounts, { search: searchTerm, role: roleFilter });
 
   const confirmDeactivate = async (notes: string) => {
     if (!adminToDeactivate) return;
@@ -73,15 +87,15 @@ export default function AdminManagement() {
   const initials = (a: AdminAccount) =>
     `${a.first_name.charAt(0)}${a.last_name.charAt(0)}`.toUpperCase();
 
-  // Vérifier que l'utilisateur est super admin
-  if (!user || role !== 'superadmin') {
+  // ADM-FIX1 — un administrateur y a désormais accès (il y voit et y crée les agents).
+  if (!user || (role !== 'superadmin' && role !== 'admin')) {
     return (
-      <AdminLayout title="Gestion des Admins" subtitle="Accès réservé au Super Administrateur">
+      <AdminLayout title="Gestion des Admins" subtitle="Accès réservé à l'équipe TOODOOH">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Accès Refusé</h3>
           <p className="text-gray-600 mb-6">
-            Seul le Super Administrateur peut gérer les administrateurs.
+            Seule l'équipe TOODOOH peut gérer les comptes internes.
           </p>
           <button
             onClick={() => navigate('/admin-dashboard')}
@@ -94,9 +108,11 @@ export default function AdminManagement() {
     );
   }
 
+  const subtitle = isSuperadmin ? 'Administrateurs et agents' : 'Agents ScreenHost et ScreenCast';
+
   if (loading) {
     return (
-      <AdminLayout title="Gestion des Admins" subtitle="Liste des administrateurs">
+      <AdminLayout title="Gestion des Admins" subtitle={subtitle}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary"></div>
         </div>
@@ -104,25 +120,36 @@ export default function AdminManagement() {
     );
   }
 
+  // Les cartes « Super Admins » / « Administrateurs » n'ont de sens que pour un superadmin : la
+  // liste du personnel reste superadmin-only côté serveur, un admin n'en voit aucune ligne.
   const stats: { label: string; value: number; color: string }[] = [
-    { label: 'Total', value: admins.length, color: 'text-gray-900' },
+    { label: 'Total', value: accounts.length, color: 'text-gray-900' },
+    ...(isSuperadmin
+      ? [
+          {
+            label: 'Super Admins',
+            value: accounts.filter((a) => a.role === 'superadmin').length,
+            color: 'text-purple-600',
+          },
+          {
+            label: 'Administrateurs',
+            value: accounts.filter((a) => a.role === 'admin').length,
+            color: 'text-blue-600',
+          },
+        ]
+      : []),
     {
-      label: 'Super Admins',
-      value: admins.filter((a) => a.role === 'superadmin').length,
-      color: 'text-purple-600',
+      label: 'Agents',
+      value: accounts.filter((a) => isAgentRole(a.role)).length,
+      color: 'text-teal-600',
     },
-    {
-      label: 'Administrateurs',
-      value: admins.filter((a) => a.role === 'admin').length,
-      color: 'text-blue-600',
-    },
-    { label: 'Actifs', value: admins.filter((a) => a.is_active).length, color: 'text-green-600' },
+    { label: 'Actifs', value: accounts.filter((a) => a.is_active).length, color: 'text-green-600' },
   ];
   const th = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
 
   return (
-    <AdminLayout title="Gestion des Admins" subtitle="Liste des administrateurs">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <AdminLayout title="Gestion des Admins" subtitle={subtitle}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-6">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -146,7 +173,7 @@ export default function AdminManagement() {
             />
             <input
               type="text"
-              placeholder="Rechercher un administrateur..."
+              placeholder="Rechercher un compte interne..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
@@ -160,8 +187,11 @@ export default function AdminManagement() {
               className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
             >
               <option value="all">Tous les rôles</option>
-              <option value="superadmin">Super Admin</option>
-              <option value="admin">Administrateur</option>
+              {visibleStaffRoles(role).map((r) => (
+                <option key={r} value={r}>
+                  {STAFF_ROLE_LABELS[r]}
+                </option>
+              ))}
             </select>
 
             <button
@@ -169,7 +199,7 @@ export default function AdminManagement() {
               className="px-4 py-2 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 transition-colors flex items-center"
             >
               <UserPlus className="h-5 w-5 mr-2" />
-              Créer Admin
+              Créer rôle
             </button>
           </div>
         </div>
@@ -180,7 +210,7 @@ export default function AdminManagement() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className={th}>Administrateur</th>
+                <th className={th}>Compte</th>
                 <th className={th}>Email</th>
                 <th className={th}>Rôle</th>
                 <th className={th}>Statut</th>
@@ -194,7 +224,7 @@ export default function AdminManagement() {
               {filteredAdmins.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
-                    {adminsError ? 'Chargement impossible' : 'Aucun administrateur trouvé'}
+                    {listError ? 'Chargement impossible' : 'Aucun compte trouvé'}
                   </td>
                 </tr>
               )}
@@ -230,24 +260,24 @@ export default function AdminManagement() {
                     >
                       <Eye className="h-5 w-5" />
                     </button>
-                    {account.role !== 'superadmin' &&
-                      (account.is_active ? (
-                        <button
-                          onClick={() => setAdminToDeactivate(account)}
-                          className="text-red-600 hover:text-red-800"
-                          title="Désactiver"
-                        >
-                          <XCircle className="h-5 w-5" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setAdminToReactivate(account)}
-                          className="text-green-600 hover:text-green-800"
-                          title="Réactiver"
-                        >
-                          <CheckCircle className="h-5 w-5" />
-                        </button>
-                      ))}
+                    {account.is_active && canDeactivate(account, role) && (
+                      <button
+                        onClick={() => setAdminToDeactivate(account)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Désactiver"
+                      >
+                        <XCircle className="h-5 w-5" />
+                      </button>
+                    )}
+                    {!account.is_active && canReactivate(account, role) && (
+                      <button
+                        onClick={() => setAdminToReactivate(account)}
+                        className="text-green-600 hover:text-green-800"
+                        title="Réactiver"
+                      >
+                        <CheckCircle className="h-5 w-5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

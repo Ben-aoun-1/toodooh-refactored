@@ -23,8 +23,11 @@ export interface PlatformStats {
     total: number;
     draft: number;
     pending: number;
+    /** ADM-FIX1 — the two stored statuses the buckets used to skip while `total` counted them. */
+    upcoming: number;
     active: number;
     rejected: number;
+    completed: number;
     total_budget_tnd: number;
     average_budget_tnd: number;
   };

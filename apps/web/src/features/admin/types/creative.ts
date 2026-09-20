@@ -8,6 +8,11 @@ import type { CreativeView } from '@/features/campaigns/services/creatives.api';
 // coalesce in the service.
 export interface AdminCreativeView extends CreativeView {
   advertiser_id: string;
+  /**
+   * ADM-FIX1 — the advertiser's NAME (api lib/user-label: business_name, else contact_name). The
+   * moderation queue and the examen modal show this; the uuid stays as a muted support line.
+   */
+  advertiser_label: string;
   validated_by: string | null;
 }
 
