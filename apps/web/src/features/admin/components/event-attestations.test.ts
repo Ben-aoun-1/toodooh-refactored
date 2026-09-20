@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { CAMPAIGN_QUEUE_OPTIONS } from '@/features/admin/lib/campaign-queue';
+
 import {
   RESPECT_DEFAULT_HINT,
   RESPECT_NO_LABEL,
@@ -70,10 +72,13 @@ describe('the settlement summary + the queue-filter rider', () => {
   });
 
   it('THE RIDER: the admin queue filter reaches À venir and Terminées', () => {
-    const queue = read('../pages/CampaignReviewQueue.tsx');
-    expect(queue).toContain('<option value="upcoming">À venir</option>');
-    expect(queue).toContain('<option value="completed">Terminées</option>');
+    // ADM-FIX1 — the options moved out of the JSX into the tested lib (admin/lib/campaign-queue),
+    // so the RIDER is asserted on the options themselves instead of on the page's source text.
+    const options = new Map(CAMPAIGN_QUEUE_OPTIONS.map((o) => [o.value, o.label]));
+    expect(options.get('upcoming')).toBe('À venir');
+    expect(options.get('completed')).toBe('Terminées');
     // …and the examen shows the settlement columns.
+    const queue = read('../pages/CampaignReviewQueue.tsx');
     expect(queue).toContain('Diffusé');
     expect(queue).toContain('Règlement :');
   });

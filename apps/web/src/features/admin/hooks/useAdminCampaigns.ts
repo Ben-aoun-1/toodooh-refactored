@@ -9,14 +9,17 @@ import type {
 
 import { adminKeys } from './queryKeys';
 
-/** The admin campaign-review list, filtered by status. */
-export function useAdminCampaigns(status: CampaignStatusFilter): {
+/**
+ * The admin campaign-review list, filtered by status. ADM-FIX1 — `undefined` is the queue's
+ * « Toutes »: the `?status=` param is omitted and the api returns every campaign.
+ */
+export function useAdminCampaigns(status: CampaignStatusFilter | undefined): {
   campaigns: AdminCampaignRow[];
   loading: boolean;
   isError: boolean;
 } {
   const query = useQuery({
-    queryKey: adminKeys.campaigns(status),
+    queryKey: adminKeys.campaigns(status ?? 'all'),
     queryFn: () => adminCampaignsService.list(status),
   });
   return {

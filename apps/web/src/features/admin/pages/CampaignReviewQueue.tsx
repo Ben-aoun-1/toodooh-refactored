@@ -1,7 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { Check, Clock, Eye, Filter, Megaphone, X } from 'lucide-react';
+import {
+  CalendarClock,
+  CalendarX,
+  Check,
+  CheckCheck,
+  Clock,
+  Eye,
+  FileText,
+  Filter,
+  Megaphone,
+  X,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { useSearchParams } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
@@ -13,6 +25,18 @@ import {
   useCampaignReversements,
 } from '@/features/admin/hooks/useAdminCampaigns';
 import {
+  campaignTypeLabel,
+  eventAllocationStatutLabel,
+} from '@/features/admin/lib/campaign-labels';
+import {
+  CAMPAIGN_QUEUE_OPTIONS,
+  PERIODE_DEPASSEE_LABEL,
+  PERIODE_DEPASSEE_REASON,
+  isPeriodeDepassee,
+  parseCampaignQueueFilter,
+  queueFilterStatus,
+} from '@/features/admin/lib/campaign-queue';
+import {
   ENGINE_JOURNAL_EMPTY_STATE,
   PHASE_LABELS,
   eventDetail,
@@ -23,11 +47,14 @@ import {
 } from '@/features/admin/lib/engine-journal';
 import { REVERSEMENT_ROW_LABELS, reversementDisplayRows } from '@/features/admin/lib/reversements';
 import { adminCreativesService } from '@/features/admin/services/admin-creatives.service';
-import type {
-  AdminCampaignRow,
-  CampaignStatusFilter,
-} from '@/features/admin/types/campaign-review';
+import type { AdminCampaignRow } from '@/features/admin/types/campaign-review';
 import type { AdminCreativeView } from '@/features/admin/types/creative';
+import {
+  campaignStatusUi,
+  isCampaignStatusId,
+  type CampaignStatusId,
+} from '@/features/campaigns/lib/campaign-status';
+import { tunisTodayIso } from '@/features/screenhost/lib/performance-period';
 import { apiClient } from '@/lib/api-client';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -78,29 +105,55 @@ const contentBadge = (status: string | null) => {
   );
 };
 
+// ADM-FIX1 — the badge consumes the CANONICAL map (campaigns/lib/campaign-status), which covers all
+// six stored statuses. The local four-entry map it replaces fell back to `pending` for anything it
+// did not know, so every 'upcoming' and 'completed' row in the queue read « En attente ».
+// Only the icon is this page's own, one per status.
+const STATUS_ICONS: Record<CampaignStatusId, typeof Clock> = {
+  draft: FileText,
+  pending: Clock,
+  upcoming: CalendarClock,
+  active: Check,
+  rejected: X,
+  completed: CheckCheck,
+};
+
 const statusBadge = (status: string) => {
-  const map: Record<string, { color: string; icon: typeof Clock; text: string }> = {
-    draft: { color: 'bg-gray-100 text-gray-700', icon: Clock, text: 'Brouillon' },
-    pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock, text: 'En attente' },
-    active: { color: 'bg-green-100 text-green-800', icon: Check, text: 'Active' },
-    rejected: { color: 'bg-red-100 text-red-800', icon: X, text: 'Rejetée' },
-  };
-  const cfg = map[status] ?? map.pending;
-  const Icon = cfg.icon;
+  const ui = campaignStatusUi(status);
+  const Icon = isCampaignStatusId(status) ? STATUS_ICONS[status] : FileText;
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.color}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ui.bg} ${ui.text}`}
     >
       <Icon className="mr-1 h-3 w-3" />
-      {cfg.text}
+      {ui.label}
     </span>
   );
 };
 
+// CONTROLLER RULING (display-only, reversible): a still-'pending' campaign whose période has ended
+// cannot be delivered. The queue SAYS so and disables « Approuver (activer) »; nothing is written —
+// no lifecycle pass, no status change. Reverting = deleting this badge and the disabled flag.
+const periodeDepasseeBadge = () => (
+  <span
+    className="ml-2 inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-800"
+    title={PERIODE_DEPASSEE_REASON}
+  >
+    <CalendarX className="mr-1 h-3 w-3" />
+    {PERIODE_DEPASSEE_LABEL}
+  </span>
+);
+
 export default function CampaignReviewQueue() {
-  const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>('pending');
-  const { campaigns, loading, isError } = useAdminCampaigns(statusFilter);
+  // ADM-FIX1 — the filter IS the URL: the dashboard deep-links `/admin-campaigns?status=active`,
+  // which a plain useState('pending') silently ignored. An unknown/absent param falls back to
+  // « En attente », and every change writes itself back so the view is shareable and back-navigable.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFilter = parseCampaignQueueFilter(searchParams.get('status'));
+  const { campaigns, loading, isError } = useAdminCampaigns(queueFilterStatus(statusFilter));
   const { activate, reject } = useAdminCampaignMutations();
+  // The Tunis calendar day, read ONCE per render and passed into the pure predicate.
+  const todayIso = tunisTodayIso();
 
   // Linked-creative metadata (mime/type/title) for the preview — reuses the existing admin creatives
   // list (all statuses), cached; the campaign row only carries creative_id.
@@ -149,6 +202,11 @@ export default function CampaignReviewQueue() {
   const selectedCreative = selected?.creative_id
     ? (creativeById.get(selected.creative_id) ?? null)
     : null;
+
+  // CONTROLLER RULING — display-only: the examen explains why Approuver is off. Nothing is written.
+  const selectedPeriodeDepassee =
+    selected !== null &&
+    isPeriodeDepassee({ status: selected.status, endDate: selected.end_date, todayIso });
 
   const openReview = async (campaign: AdminCampaignRow) => {
     setSelected(campaign);
@@ -220,14 +278,19 @@ export default function CampaignReviewQueue() {
             <select
               className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:border-transparent focus:ring-2 focus:ring-brand-primary"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as CampaignStatusFilter)}
+              aria-label="Filtrer par statut"
+              onChange={(e) =>
+                setSearchParams(
+                  { status: parseCampaignQueueFilter(e.target.value) },
+                  { replace: true },
+                )
+              }
             >
-              <option value="pending">En attente</option>
-              <option value="upcoming">À venir</option>
-              <option value="active">Actives</option>
-              <option value="completed">Terminées</option>
-              <option value="rejected">Rejetées</option>
-              <option value="draft">Brouillons</option>
+              {CAMPAIGN_QUEUE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -282,12 +345,14 @@ export default function CampaignReviewQueue() {
                         <div className="flex h-10 w-10 items-center justify-center rounded bg-brand-primary">
                           <Megaphone className="h-5 w-5 text-white" />
                         </div>
+                        {/* ADM-FIX1 — the NAME is the primary text; the uuid survives only as the
+                            muted support line, and the raw campaign_type gets a French label. */}
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">{c.name}</div>
                           <div className="text-xs text-gray-500">
-                            {c.campaign_type} • annonceur{' '}
-                            <span className="font-mono">{c.advertiser_id.slice(0, 8)}</span>
+                            {campaignTypeLabel(c)} • {c.advertiser_label}
                           </div>
+                          <div className="font-mono text-xs text-gray-400">{c.advertiser_id}</div>
                         </div>
                       </div>
                     </td>
@@ -302,7 +367,16 @@ export default function CampaignReviewQueue() {
                     <td className="px-6 py-4 text-right text-sm text-gray-900">
                       {TND(c.wallet_balance_tnd)}
                     </td>
-                    <td className="px-6 py-4">{statusBadge(c.status)}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap items-center">
+                        {statusBadge(c.status)}
+                        {isPeriodeDepassee({
+                          status: c.status,
+                          endDate: c.end_date,
+                          todayIso,
+                        }) && periodeDepasseeBadge()}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-right text-sm font-medium">
                       <button
                         onClick={() => void openReview(c)}
@@ -363,6 +437,16 @@ export default function CampaignReviewQueue() {
 
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
+                    {/* ADM-FIX1 — the examen names the annonceur; the uuid is the muted line. */}
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Annonceur:</p>
+                      <p className="text-sm text-gray-900">{selected.advertiser_label}</p>
+                      <p className="font-mono text-xs text-gray-400">{selected.advertiser_id}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Type:</p>
+                      <p className="text-sm text-gray-900">{campaignTypeLabel(selected)}</p>
+                    </div>
                     <div>
                       <p className="text-sm font-medium text-gray-700">Budget indicatif:</p>
                       <p className="text-sm text-gray-900">{TND(selected.requested_budget)}</p>
@@ -421,7 +505,9 @@ export default function CampaignReviewQueue() {
                                         : ''
                                     }`}
                               </td>
-                              <td className="py-1">{a.statut}</td>
+                              {/* ADM-FIX1 — the raw CHECK value (EN_ATTENTE/ACCEPTE/REFUSE) had
+                                  been printed as-is in a French table. */}
+                              <td className="py-1">{eventAllocationStatutLabel(a.statut)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -453,6 +539,9 @@ export default function CampaignReviewQueue() {
                     <p className="text-sm text-gray-900">
                       {formatDate(selected.start_date)} → {formatDate(selected.end_date)}
                     </p>
+                    {selectedPeriodeDepassee && (
+                      <p className="mt-1 text-sm text-orange-700">{PERIODE_DEPASSEE_REASON}</p>
+                    )}
                   </div>
                   {/* ELIG-1 — the venues this campaign can reach, at any status. */}
                   <CampaignEligibleHosts campaignId={selected.id} />
@@ -618,7 +707,8 @@ export default function CampaignReviewQueue() {
                 {selected.status === 'pending' && (
                   <button
                     onClick={() => void handleApprove()}
-                    disabled={submitting}
+                    disabled={submitting || selectedPeriodeDepassee}
+                    title={selectedPeriodeDepassee ? PERIODE_DEPASSEE_REASON : undefined}
                     className="inline-flex w-full items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:text-sm"
                   >
                     <Check className="mr-2 h-4 w-4" />

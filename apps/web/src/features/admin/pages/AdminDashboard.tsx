@@ -6,6 +6,8 @@ import {
   Banknote,
   Activity,
   AlertCircle,
+  CalendarClock,
+  CheckCheck,
   CheckCircle,
   Clock,
   BarChart3,
@@ -236,6 +238,36 @@ export default function AdminDashboard() {
                 <Clock className="h-8 w-8 text-yellow-500" />
               </div>
             </button>
+            {/* ADM-FIX1 — « À venir » and « Terminées » are STORED statuses (CF-S1) the dashboard
+                never surfaced, although `total` counted them. Both deep-link into the queue. */}
+            <button
+              onClick={() => navigate('/admin-campaigns?status=upcoming')}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-blue-400 transition-all cursor-pointer text-left w-full"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">À venir</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {campaignsStats?.upcoming ?? 0}
+                  </p>
+                </div>
+                <CalendarClock className="h-8 w-8 text-blue-500" />
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/admin-campaigns?status=completed')}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-gray-400 transition-all cursor-pointer text-left w-full"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Terminées</p>
+                  <p className="text-2xl font-bold text-gray-700">
+                    {campaignsStats?.completed ?? 0}
+                  </p>
+                </div>
+                <CheckCheck className="h-8 w-8 text-gray-500" />
+              </div>
+            </button>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -317,8 +349,16 @@ export default function AdminDashboard() {
               <span className="font-semibold text-gray-900">{campaignsStats?.draft ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">À venir</span>
+              <span className="font-semibold text-blue-600">{campaignsStats?.upcoming ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Actives</span>
               <span className="font-semibold text-green-600">{campaignsStats?.active ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Terminées</span>
+              <span className="font-semibold text-gray-900">{campaignsStats?.completed ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Rejetées</span>

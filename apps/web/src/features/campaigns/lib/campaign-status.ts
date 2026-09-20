@@ -3,13 +3,25 @@
 // (no date-derived pseudo-statuses), and the old grid/list label collision (draft rendered as
 // « Non validé » in the grid, « Terminée » vs « Passée » for completed) is dead.
 
-export type CampaignStatusId =
-  | 'draft'
-  | 'pending'
-  | 'upcoming'
-  | 'active'
-  | 'rejected'
-  | 'completed';
+// ADM-FIX1 — the ids as an ORDERED runtime list, with the union DERIVED from it. The admin queue
+// validates a `?status=` URL param against these, so a hand-written union that drifted from the
+// stored enum (the admin types carried a 4-valued one) can no longer exist.
+export const CAMPAIGN_STATUS_IDS = [
+  'draft',
+  'pending',
+  'upcoming',
+  'active',
+  'rejected',
+  'completed',
+] as const;
+
+export type CampaignStatusId = (typeof CAMPAIGN_STATUS_IDS)[number];
+
+/** Narrowing guard for untrusted strings (URL params, wire payloads) — never a cast. */
+export const isCampaignStatusId = (value: string | null | undefined): value is CampaignStatusId =>
+  value !== null &&
+  value !== undefined &&
+  (CAMPAIGN_STATUS_IDS as readonly string[]).includes(value);
 
 export interface CampaignStatusUi {
   label: string;

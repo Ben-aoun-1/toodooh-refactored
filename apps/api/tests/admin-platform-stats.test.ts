@@ -60,8 +60,10 @@ interface StatsBody {
     total: number;
     draft: number;
     pending: number;
+    upcoming: number;
     active: number;
     rejected: number;
+    completed: number;
     total_budget_tnd: number;
     average_budget_tnd: number;
   };
@@ -256,5 +258,35 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
     expect(body.campaigns.average_budget_tnd).toBe(150); // avg over the 2 non-null budgets
     expect(body.creatives).toEqual({ total: 2, pending: 1, approved: 1 }); // the uncarted upload is NOT counted
     expect(body.revenue).toEqual({ total_tnd: 100, monthly_tnd: 100 });
+  });
+
+  // ADM-FIX1 — the buckets stopped at draft/pending/active/rejected while `total` counted every
+  // row, so an 'upcoming' or 'completed' campaign was invisible on the dashboard yet inflated the
+  // total. All six stored statuses have a bucket, and they must SUM to the total.
+  it('buckets all SIX stored campaign statuses, and they sum to the total', async () => {
+    const adminId = await seedUser({ role: 'admin' });
+    const advertiserId = await seedUser({ role: 'advertiser' });
+    mockSession(adminId);
+    await db.insert(campaigns).values([
+      { advertiserId, name: 'C-draft', campaignType: 'standard', status: 'draft' },
+      { advertiserId, name: 'C-pending', campaignType: 'standard', status: 'pending' },
+      { advertiserId, name: 'C-upcoming', campaignType: 'standard', status: 'upcoming' },
+      { advertiserId, name: 'C-upcoming-2', campaignType: 'standard', status: 'upcoming' },
+      { advertiserId, name: 'C-active', campaignType: 'standard', status: 'active' },
+      { advertiserId, name: 'C-rejected', campaignType: 'standard', status: 'rejected' },
+      { advertiserId, name: 'C-completed', campaignType: 'standard', status: 'completed' },
+    ]);
+
+    const res = await get();
+    expect(res.statusCode).toBe(200);
+    const { campaigns: c } = res.json() as StatsBody;
+    expect(c.draft).toBe(1);
+    expect(c.pending).toBe(1);
+    expect(c.upcoming).toBe(2);
+    expect(c.active).toBe(1);
+    expect(c.rejected).toBe(1);
+    expect(c.completed).toBe(1);
+    expect(c.total).toBe(7);
+    expect(c.draft + c.pending + c.upcoming + c.active + c.rejected + c.completed).toBe(c.total);
   });
 });

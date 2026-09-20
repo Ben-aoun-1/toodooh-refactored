@@ -3,8 +3,9 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type Creative, creatives } from '../db/schema.js';
+import { type Creative, creatives, users } from '../db/schema.js';
 import { creativeView, submittedCreativeGate } from '../lib/creatives.js';
+import { userLabel, userLabelById } from '../lib/user-label.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
@@ -25,9 +26,12 @@ const approveBodySchema = z.object({ notes: z.string().max(2000).optional() });
 const rejectBodySchema = z.object({ notes: z.string().min(1).max(2000) });
 
 // Admin view = the advertiser projection + the owner id and the moderating admin id (audit).
-const adminCreativeView = (row: Creative) => ({
+// ADM-FIX1 — plus the advertiser's NAME (lib/user-label): the moderation queue printed the raw
+// uuid as the « Annonceur » column and again in the examen modal.
+const adminCreativeView = (row: Creative, advertiserLabel: string) => ({
   ...creativeView(row),
   advertiser_id: row.advertiserId,
+  advertiser_label: advertiserLabel,
   validated_by: row.validatedBy,
 });
 
@@ -48,12 +52,29 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     // CF-HF4 — the « submitted » gate lives in lib/creatives.ts (ADM-DSH2: the dashboard tile
     // counts through the SAME predicate, so it can never read 4 over an empty queue).
     const submittedGate = submittedCreativeGate;
+    // The users join is INNER on purpose and cannot drop a row: creatives.advertiser_id is NOT NULL
+    // and references users.id, so every creative has exactly one advertiser.
     const rows = await db
-      .select()
+      .select({
+        creative: creatives,
+        advertiserBusinessName: users.businessName,
+        advertiserContactName: users.contactName,
+      })
       .from(creatives)
+      .innerJoin(users, eq(creatives.advertiserId, users.id))
       .where(status ? and(eq(creatives.validationStatus, status), submittedGate) : submittedGate)
       .orderBy(desc(creatives.createdAt));
-    return reply.status(200).send(rows.map(adminCreativeView));
+    return reply.status(200).send(
+      rows.map((r) =>
+        adminCreativeView(
+          r.creative,
+          userLabel({
+            businessName: r.advertiserBusinessName,
+            contactName: r.advertiserContactName,
+          }),
+        ),
+      ),
+    );
   });
 
   // GET /api/admin/creatives/:id/url — presign the object so the admin can review it (404 if absent).
@@ -122,7 +143,9 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
       .returning();
     if (!updated)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
-    return reply.status(200).send(adminCreativeView(updated));
+    return reply
+      .status(200)
+      .send(adminCreativeView(updated, await userLabelById(updated.advertiserId)));
   });
 
   // POST /api/admin/creatives/:id/reject — flip to rejected; a reason is REQUIRED (validation_notes).
@@ -164,6 +187,8 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
       .returning();
     if (!updated)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
-    return reply.status(200).send(adminCreativeView(updated));
+    return reply
+      .status(200)
+      .send(adminCreativeView(updated, await userLabelById(updated.advertiserId)));
   });
 };
