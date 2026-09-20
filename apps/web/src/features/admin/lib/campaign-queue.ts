@@ -19,15 +19,17 @@ export type CampaignQueueFilter = CampaignStatusId | typeof CAMPAIGN_QUEUE_ALL;
 export const CAMPAIGN_QUEUE_DEFAULT: CampaignQueueFilter = 'pending';
 
 /**
- * The <select> options, in operator order. The labels are the QUEUE's plural vocabulary
- * (« Actives », « Terminées »), not the canonical badge labels — the badge keeps those.
+ * The <select> options, in operator order. CONTROLLER RULING — one vocabulary: the canonical
+ * badge map (campaign-status.ts) wins, so these labels share its stem, pluralized where a set
+ * of options reads naturally as a plural (« Actives », « Non validés », « Passées »). See the
+ * `campaign-queue-labels.test.ts` pin: every filter label and its badge label share a stem.
  */
 export const CAMPAIGN_QUEUE_OPTIONS: readonly { value: CampaignQueueFilter; label: string }[] = [
   { value: 'pending', label: 'En attente' },
   { value: 'upcoming', label: 'À venir' },
   { value: 'active', label: 'Actives' },
-  { value: 'completed', label: 'Terminées' },
-  { value: 'rejected', label: 'Rejetées' },
+  { value: 'completed', label: 'Passées' },
+  { value: 'rejected', label: 'Non validés' },
   { value: 'draft', label: 'Brouillons' },
   { value: CAMPAIGN_QUEUE_ALL, label: 'Toutes' },
 ];

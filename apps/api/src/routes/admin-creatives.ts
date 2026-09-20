@@ -59,6 +59,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
         creative: creatives,
         advertiserBusinessName: users.businessName,
         advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
       })
       .from(creatives)
       .innerJoin(users, eq(creatives.advertiserId, users.id))
@@ -69,8 +70,10 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
         adminCreativeView(
           r.creative,
           userLabel({
+            id: r.creative.advertiserId,
             businessName: r.advertiserBusinessName,
             contactName: r.advertiserContactName,
+            email: r.advertiserEmail,
           }),
         ),
       ),

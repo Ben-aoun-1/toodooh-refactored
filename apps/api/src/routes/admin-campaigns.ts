@@ -143,6 +143,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         contentValidationStatus: creatives.validationStatus,
         advertiserBusinessName: users.businessName,
         advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
       })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
@@ -161,8 +162,10 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
             r.campaign,
             r.contentValidationStatus,
             userLabel({
+              id: r.campaign.advertiserId,
               businessName: r.advertiserBusinessName,
               contactName: r.advertiserContactName,
+              email: r.advertiserEmail,
             }),
           ),
           // FIX2 amendment — the queue shows THE FIGURE THE ACTIVATION GATE ENFORCES: spendable
@@ -201,6 +204,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         // ADM-FIX1 — the advertiser's name rides the read the route already does (no extra query).
         advertiserBusinessName: users.businessName,
         advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
       })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
@@ -211,8 +215,10 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     const { campaign, contentValidationStatus, creativeDurationSeconds } = row;
     const advertiserLabel = userLabel({
+      id: campaign.advertiserId,
       businessName: row.advertiserBusinessName,
       contactName: row.advertiserContactName,
+      email: row.advertiserEmail,
     });
 
     // CF-SK1 — the gate chain, dispatch and the date-routed flip now live in the shared
@@ -476,9 +482,11 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     const [existing] = await db
       .select({
         status: campaigns.status,
+        advertiserId: campaigns.advertiserId,
         // ADM-FIX1 — rides the pre-check read the route already does (no extra query).
         advertiserBusinessName: users.businessName,
         advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
       })
       .from(campaigns)
       .innerJoin(users, eq(campaigns.advertiserId, users.id))
@@ -489,8 +497,10 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     if (existing.status !== 'pending')
       return sendNotPending(reply, request, existing.status, 'rejetée');
     const advertiserLabel = userLabel({
+      id: existing.advertiserId,
       businessName: existing.advertiserBusinessName,
       contactName: existing.advertiserContactName,
+      email: existing.advertiserEmail,
     });
 
     const [updated] = await db

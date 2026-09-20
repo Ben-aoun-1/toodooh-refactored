@@ -71,14 +71,18 @@ describe('the settlement summary + the queue-filter rider', () => {
     expect(summary).toContain('non respecté');
   });
 
-  it('THE RIDER: the admin queue filter reaches À venir and Terminées', () => {
-    // ADM-FIX1 — the options moved out of the JSX into the tested lib (admin/lib/campaign-queue),
-    // so the RIDER is asserted on the options themselves instead of on the page's source text.
+  it('THE RIDER: the admin queue filter reaches À venir and Passées, rendered from the lib', () => {
+    // ADM-FIX1 — the options live in the tested lib (admin/lib/campaign-queue); the rider still
+    // has to assert the PAGE actually renders them (not just that the lib has the right values —
+    // that drifted once already, when the page moved on but the test kept asserting the constant).
     const options = new Map(CAMPAIGN_QUEUE_OPTIONS.map((o) => [o.value, o.label]));
     expect(options.get('upcoming')).toBe('À venir');
-    expect(options.get('completed')).toBe('Terminées');
-    // …and the examen shows the settlement columns.
+    expect(options.get('completed')).toBe('Passées');
     const queue = read('../pages/CampaignReviewQueue.tsx');
+    // The page imports and MAPS OVER the shared options — fails again if it stops using them.
+    expect(queue).toContain('CAMPAIGN_QUEUE_OPTIONS');
+    expect(queue).toContain('CAMPAIGN_QUEUE_OPTIONS.map((option)');
+    // …and the examen shows the settlement columns.
     expect(queue).toContain('Diffusé');
     expect(queue).toContain('Règlement :');
   });

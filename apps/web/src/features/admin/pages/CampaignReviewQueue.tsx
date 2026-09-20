@@ -147,7 +147,10 @@ const periodeDepasseeBadge = () => (
 export default function CampaignReviewQueue() {
   // ADM-FIX1 — the filter IS the URL: the dashboard deep-links `/admin-campaigns?status=active`,
   // which a plain useState('pending') silently ignored. An unknown/absent param falls back to
-  // « En attente », and every change writes itself back so the view is shareable and back-navigable.
+  // « En attente », and every change writes itself back so the view is shareable. The write uses
+  // `{ replace: true }` (review round) — a filter change is not a navigation step, so it does not
+  // push a history entry — and updates only the `status` key on the EXISTING params, so any other
+  // param on the URL survives the change instead of being dropped.
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = parseCampaignQueueFilter(searchParams.get('status'));
   const { campaigns, loading, isError } = useAdminCampaigns(queueFilterStatus(statusFilter));
@@ -279,12 +282,17 @@ export default function CampaignReviewQueue() {
               className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:border-transparent focus:ring-2 focus:ring-brand-primary"
               value={statusFilter}
               aria-label="Filtrer par statut"
-              onChange={(e) =>
+              onChange={(e) => {
+                const nextStatus = parseCampaignQueueFilter(e.target.value);
                 setSearchParams(
-                  { status: parseCampaignQueueFilter(e.target.value) },
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set('status', nextStatus);
+                    return next;
+                  },
                   { replace: true },
-                )
-              }
+                );
+              }}
             >
               {CAMPAIGN_QUEUE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>

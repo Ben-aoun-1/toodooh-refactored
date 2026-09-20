@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CAMPAIGN_STATUS_IDS } from '@/features/campaigns/lib/campaign-status';
+import { CAMPAIGN_STATUS_IDS, CAMPAIGN_STATUS_UI } from '@/features/campaigns/lib/campaign-status';
 
 import {
   CAMPAIGN_QUEUE_ALL,
@@ -46,6 +46,19 @@ describe('the queue filter', () => {
   it('« Toutes » omits the api param; every other filter is sent verbatim', () => {
     expect(queueFilterStatus(CAMPAIGN_QUEUE_ALL)).toBeUndefined();
     for (const id of CAMPAIGN_STATUS_IDS) expect(queueFilterStatus(id)).toBe(id);
+  });
+
+  // CONTROLLER RULING (review round) — one vocabulary: the canonical badge map wins, so a
+  // filter's label may only pluralize the badge's, never rename it (the badge said « Non
+  // validé » while the filter said « Rejetées »; « Passée » vs « Terminées »). This strips at
+  // most one trailing plural « s » and requires what's left to match verbatim.
+  it('every filter label shares its stem with the canonical badge label', () => {
+    const stem = (label: string): string => (label.endsWith('s') ? label.slice(0, -1) : label);
+    for (const id of CAMPAIGN_STATUS_IDS) {
+      const option = CAMPAIGN_QUEUE_OPTIONS.find((o) => o.value === id);
+      expect(option).toBeDefined();
+      expect(stem(option?.label ?? '')).toBe(stem(CAMPAIGN_STATUS_UI[id].label));
+    }
   });
 });
 

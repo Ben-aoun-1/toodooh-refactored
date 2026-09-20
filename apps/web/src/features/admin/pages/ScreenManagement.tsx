@@ -265,8 +265,7 @@ export default function ScreenManagement() {
                             <LocationStatusBadge status={location.status} />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{location.screens_count}</div>
-                            <div className="mt-1 text-xs text-gray-500">
+                            <div className="text-sm text-gray-900">
                               {screensCountLabel(
                                 location.screens_count,
                                 location.installed_screens_count,

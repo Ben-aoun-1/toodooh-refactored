@@ -246,6 +246,35 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
     expect(never.locations.map((l) => l.name)).toEqual(['Delta']);
   });
 
+  // The precedence the CASE expression encodes (admin-screenhosts.ts): 'never_installed' is
+  // checked BEFORE the is_active branch, so a venue toggled OFF gates on installation first, not
+  // on its own is_active flag. Isolated from seedParc — a 5th venue there would shift every
+  // total/order/pagination assertion above for an unrelated reason.
+  it('a venue toggled OFF with a NEVER-installed screen reads never_installed, not inactive', async () => {
+    const adminId = await seedUser({ role: 'admin' });
+    mockSession(adminId);
+    const owner = await seedUser({ role: 'individual_owner', businessName: 'Epsilon Co' });
+    const epsilon = await seedVenue({ name: 'Epsilon', ownerId: owner, isActive: false });
+    // Declared and nothing else — same as Delta's screen, but the VENUE is also off.
+    await db.insert(screens).values([{ screenhostId: epsilon, name: 'Écran E', isActive: true }]);
+
+    const res = await list();
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json() as ListBody;
+    const row = body.locations.find((l) => l.id === epsilon);
+    expect(row).toMatchObject({
+      name: 'Epsilon',
+      status: 'never_installed',
+      screens_count: 1,
+      installed_screens_count: 0,
+    });
+
+    const never = (await list('?status=never_installed')).json() as ListBody;
+    expect(never.locations.map((l) => l.name)).toEqual(['Epsilon']);
+    const inactive = (await list('?status=inactive')).json() as ListBody;
+    expect(inactive.locations.some((l) => l.name === 'Epsilon')).toBe(false);
+  });
+
   it('filters by owner and by a literal search over name / address / city', async () => {
     const { ownerA } = await seedParc();
     const byOwner = (await list(`?owner_id=${ownerA}`)).json() as ListBody;

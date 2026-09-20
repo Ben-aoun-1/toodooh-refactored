@@ -7,18 +7,28 @@ import { users } from '../db/schema.js';
 // creative moderation) used to print a raw uuid where an operator expects a name; every payload
 // that carries a user id now carries this label beside it.
 //
-// The rule is `coalesce(business_name, contact_name)` with one refinement: an EMPTY business_name
-// (the signup keeps the column nullable, and a blank string survives a trimmed-away input) would
-// render as nothing, so it falls through to the contact name the same way NULL does.
+// The rule is `coalesce(business_name, contact_name, email, id)`. business_name and contact_name
+// are both trimmed before the check (the signup keeps business_name nullable, and either column
+// can survive as a blank string) so a blank one falls through the same way NULL does. Review round
+// fix — the guard used to be one-sided: a NULL business_name with a blank contact_name fell all the
+// way through to an EMPTY label. email (NOT NULL + unique) and finally the caller's own id close
+// every remaining gap — this never returns an empty string.
 
 export interface UserLabelSource {
+  id: string;
   businessName: string | null;
   contactName: string;
+  email: string;
 }
 
 export const userLabel = (user: UserLabelSource): string => {
   const business = user.businessName?.trim() ?? '';
-  return business.length > 0 ? business : user.contactName;
+  if (business.length > 0) return business;
+  const contact = user.contactName.trim();
+  if (contact.length > 0) return contact;
+  const email = user.email.trim();
+  if (email.length > 0) return email;
+  return user.id;
 };
 
 /**
@@ -27,9 +37,13 @@ export const userLabel = (user: UserLabelSource): string => {
  */
 export const userLabelById = async (userId: string): Promise<string> => {
   const [row] = await db
-    .select({ businessName: users.businessName, contactName: users.contactName })
+    .select({
+      businessName: users.businessName,
+      contactName: users.contactName,
+      email: users.email,
+    })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
-  return row ? userLabel(row) : userId;
+  return row ? userLabel({ id: userId, ...row }) : userId;
 };

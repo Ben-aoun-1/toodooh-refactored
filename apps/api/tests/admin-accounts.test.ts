@@ -320,6 +320,14 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
   });
 
+  it('non-staff actor (owner) → 403 FORBIDDEN', async () => {
+    const ownerId = await seedUser({ role: 'individual_owner', status: 'approved' });
+    mockSession(ownerId, 'individual_owner');
+    const res = await create(VALID);
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
+  });
+
   it('no session → 401', async () => {
     vi.spyOn(auth.api, 'getSession').mockResolvedValue(null);
     expect((await create(VALID)).statusCode).toBe(401);
@@ -397,6 +405,24 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(res.statusCode).toBe(200);
     const { agents: list } = res.json<{ agents: Array<{ email: string }> }>();
     expect(list.some((a) => a.email === 'admin8@example.com')).toBe(false);
+  });
+
+  // A NON-STAFF actor never reaches this route either — the admin widening (below) only moves
+  // the floor from superadmin to admin, it does not open the route to advertisers/owners.
+  it('GET /api/admin/agents refuses a non-staff actor (advertiser) → 403 FORBIDDEN', async () => {
+    const advertiserId = await seedUser({ role: 'advertiser', status: 'approved' });
+    mockSession(advertiserId, 'advertiser');
+    const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
+  });
+
+  it('GET /api/admin/agents refuses a non-staff actor (owner) → 403 FORBIDDEN', async () => {
+    const ownerId = await seedUser({ role: 'individual_owner', status: 'approved' });
+    mockSession(ownerId, 'individual_owner');
+    const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('FORBIDDEN');
   });
 
   // ADM-FIX1 (operator ruling) — an ADMIN, not only a superadmin, SEES and CREATES the agents.
