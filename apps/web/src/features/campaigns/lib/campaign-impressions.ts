@@ -9,10 +9,11 @@ import { estimateImpressions } from '@/features/campaigns/lib/impressions';
 // surface (the delivered/reconciled numbers remain a HOST-side read — the owner surfaces are
 // untouched). The CPM picks by campaign type (event campaigns price at the event CPM — the
 // estimate must not overstate 2×).
-// CPM-1 (user rule, 2026-09-17) — a campaign keeps the CPM in effect when it was CREATED: the
-// estimate prices at the ROW's own rates (standard_cpm_tnd / event_cpm_tnd on the campaign wire).
-// The live pricing-config is what a campaign created NOW would capture — only the fallback for a
-// row that does not carry its rates (not created yet, not loaded yet).
+// CPM-1 (user rule, 2026-09-17) — the estimate prices at the ROW's own rates (standard_cpm_tnd /
+// event_cpm_tnd on the campaign wire). CPM-3: a campaign carries its screencaster's CPM — an admin
+// change realigns a draft not yet frozen; every other campaign keeps its copy. The live
+// pricing-config is what a campaign created NOW would capture (the caller's own CPM) — only the
+// fallback for a row that does not carry its rates (not created yet, not loaded yet).
 
 export const PREVUES_LABEL = 'Impressions prévues';
 
@@ -41,7 +42,7 @@ export const cpmForCampaignType = (
   (campaignType === 'event' ? pricing?.event_cpm_tnd : pricing?.standard_cpm_tnd) ?? null;
 
 /**
- * CPM-1 — the CPM a campaign prices at: its OWN rate for its type (captured when it was created);
+ * CPM-1 — the CPM a campaign prices at: its OWN rate for its type (CPM-3: its screencaster's);
  * the live pricing-config only when the row does not carry one (a campaign not created or not
  * loaded yet). null when neither is known — the estimate then renders « — ».
  */

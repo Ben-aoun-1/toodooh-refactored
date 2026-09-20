@@ -10,6 +10,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
+import type { CpmFreezeCheck } from '../cpm-freeze-guard.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
 import { type TTiers, getDispatchConfig } from './config.js';
@@ -38,6 +39,9 @@ export type DispatchResult =
   | { status: 'ALREADY_DISPATCHED' }
   | { status: 'TOO_THIN'; nMin: number; nMax: number }
   | { status: 'NO_ELIGIBLE'; saturated: boolean }
+  // CPM-3 — the opt-in freeze check found the campaign's CPM moved since the caller read it
+  // (lib/cpm-freeze-guard.ts): nothing frozen; the caller retries at the new CPM.
+  | { status: 'CPM_CHANGED' }
   | { status: 'OK'; plan: CampaignDispatchPlan; allocationCount: number };
 
 // Assemble the eligible pool from the DB, run the pure pipeline, and persist the frozen plan
@@ -48,6 +52,10 @@ export const runDispatch = async (
   // LOG1 — observe-only journal (default no-op: behavior byte-unchanged). Events buffer in
   // memory during the tx; the flush happens BELOW, after the tx + catch chain resolves.
   trace: EngineTrace = NOOP_TRACE,
+  // CPM-3 — OPT-IN (the activation paths): re-checks inputs.cpm under the advertiser's lock as the
+  // freeze transaction's FIRST statements. The admin POST /api/campaigns/:id/dispatch omits it —
+  // it freezes at an explicit body CPM on purpose.
+  cpmCheck?: CpmFreezeCheck,
 ): Promise<DispatchResult> => {
   if (!campaign.startDate || !campaign.endDate) return { status: 'NO_WINDOW' };
   // Captured as non-null consts: the guard's narrowing does not flow into the tx closure below.
@@ -79,6 +87,9 @@ export const runDispatch = async (
   // check-then-insert race on the SAME campaign.
   const outcome = await db
     .transaction(async (tx): Promise<DispatchResult> => {
+      // CPM-3 — before any lock or read of the engine: a CPM changed since the caller read it
+      // refuses here (the empty transaction commits; no engine work, so no journal run).
+      if (cpmCheck && !(await cpmCheck(tx, inputs.cpm))) return { status: 'CPM_CHANGED' };
       // E3 — the pool assembly + occupancy netting live in assemblePool (shared with the refusal
       // cascade and later redispatch); dispatch runs it with no exclusions.
       const { windowDays, pool, candidateCount } = await assemblePool(

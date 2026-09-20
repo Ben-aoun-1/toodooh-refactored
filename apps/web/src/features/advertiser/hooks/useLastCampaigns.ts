@@ -21,7 +21,7 @@ export interface LastCampaign {
   /** NULL until the advertiser sets it (renders « — » — no phantom defaults). */
   budget: number | null;
   requested_budget: number | null;
-  /** CPM-1 — the campaign's own CPMs (captured at creation) — the « prévues » estimate's price. */
+  /** CPM-1 — the campaign's own CPMs (CPM-3: its screencaster's) — the « prévues » price. */
   standard_cpm_tnd: number;
   event_cpm_tnd: number;
   category: string | null;

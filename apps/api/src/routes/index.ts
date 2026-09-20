@@ -12,6 +12,7 @@ import { adminFacturesRoutes } from './admin-factures.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
+import { adminScreencasterCpmRoutes } from './admin-screencaster-cpm.js';
 import { adminScreenhostsRoutes } from './admin-screenhosts.js';
 import { adminSimulationsRoutes } from './admin-simulations.js';
 import { adminSupportRoutes } from './admin-support.js';
@@ -130,6 +131,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // CPM CONFIG — admin-editable dispatch CPM (standard/event TND-per-1000). The activation
   // derivation reads it to compute I_cible = ⌊budget·1000/cpm⌋; editable without a migration.
   await app.register(adminDispatchConfigRoutes);
+  await app.register(adminScreencasterCpmRoutes); // CPM-3 — the CPM per screencaster
   // ADMIN DASHBOARD STATS — headline platform numbers derived from the new-engine tables
   // (de-Supabase of the dead platform-stats RPCs). Read-only aggregation.
   await app.register(adminPlatformStatsRoutes);

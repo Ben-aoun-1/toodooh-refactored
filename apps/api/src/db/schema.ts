@@ -133,6 +133,15 @@ export const users = pgTable(
     // signup. No terms_version (the wizard captures none — inventing one would be fake data); never
     // store a client-supplied timestamp (the server stamps the time).
     termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+    // CPM-3 (operator rulings 2026-09-18) — the screencaster's OWN CPMs (TND / 1000). An account
+    // starts at the global default in force when it is created (the 0074 functions); an admin
+    // changes them per screencaster (lib/screencaster-cpm.ts). Only advertisers' are read.
+    cpmStandardTnd: numeric('cpm_standard_tnd', { precision: 10, scale: 3 })
+      .notNull()
+      .default(sql`current_standard_cpm_tnd()`),
+    cpmEventTnd: numeric('cpm_event_tnd', { precision: 10, scale: 3 })
+      .notNull()
+      .default(sql`current_event_cpm_tnd()`),
     // timestamps
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -922,19 +931,15 @@ export const campaigns = pgTable(
     // admin sees it in the review queue and derives i_cible/cpm/s/t at activation (the activation
     // endpoint is unchanged). Nullable; L-price replaces the manual cart with the real cursor.
     requestedBudget: numeric('requested_budget', { precision: 12, scale: 2 }),
-    // CPM-1 (user rule, 2026-09-17) — the CPMs (TND/1000) in effect WHEN THIS CAMPAIGN WAS
-    // CREATED. An admin CPM change prices only campaigns created after it; this row keeps these
-    // whatever its status and however its draft is edited (the PATCH contract never carries them).
-    // BOTH are kept because a draft's type is editable — read them through campaignCpmRates +
-    // cpmForCampaign (lib/dispatch/config.ts). The capture is the DATABASE default (migration
-    // 0074: current_*_cpm_tnd() reads the dispatch_config singleton at INSERT, 15 when none) —
-    // the ONE home for it: insert paths never pass these, so none of them can forget it.
+    // CPM-3 — no database default any more: the BEFORE INSERT trigger of migration 0076 copies the
+    // screencaster's CPMs (users.cpm_standard_tnd / cpm_event_tnd). `.default(sql\`NULL\`)` only
+    // keeps the column insert-optional for Drizzle; an explicit value still wins in the trigger.
     standardCpmTnd: numeric('standard_cpm_tnd', { precision: 10, scale: 3 })
       .notNull()
-      .default(sql`current_standard_cpm_tnd()`),
+      .default(sql`NULL`),
     eventCpmTnd: numeric('event_cpm_tnd', { precision: 10, scale: 3 })
       .notNull()
-      .default(sql`current_event_cpm_tnd()`),
+      .default(sql`NULL`),
     // CPM-2 (ruling 4A, 2026-09-17) — the attention index T tiers in effect WHEN THIS CAMPAIGN WAS
     // CREATED, frozen like the CPMs above: an admin T change prices only campaigns created after
     // it, and the draft PATCH contract never carries these. All three are kept because a draft's
@@ -1555,6 +1560,31 @@ export const userBankDetailsAudit = pgTable(
 );
 
 export type UserBankDetailsAudit = typeof userBankDetailsAudit.$inferSelect;
+
+// CPM-3 (operator rulings 2026-09-18) — the append-only trail of every per-screencaster CPM change:
+// who, when, old → new for BOTH rates (an unchanged one is written old = new), and how many of the
+// screencaster's drafts the change re-priced. restrict: a trail row never loses its subject.
+export const screencasterCpmChanges = pgTable(
+  'screencaster_cpm_changes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    changedBy: uuid('changed_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    oldStandardCpmTnd: numeric('old_standard_cpm_tnd', { precision: 10, scale: 3 }).notNull(),
+    newStandardCpmTnd: numeric('new_standard_cpm_tnd', { precision: 10, scale: 3 }).notNull(),
+    oldEventCpmTnd: numeric('old_event_cpm_tnd', { precision: 10, scale: 3 }).notNull(),
+    newEventCpmTnd: numeric('new_event_cpm_tnd', { precision: 10, scale: 3 }).notNull(),
+    draftsRepriced: integer('drafts_repriced').notNull(),
+    changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('screencaster_cpm_changes_user_id_idx').on(table.userId, table.changedAt)],
+);
+
+export type ScreencasterCpmChange = typeof screencasterCpmChanges.$inferSelect;
 
 // ── monthly invoices (FCT2 / US-FCT-11..12 — the ONE real invoice per screencaster per month) ────
 // Consolidated on REAL consumption: proof-verified facturable impressions delivered that month

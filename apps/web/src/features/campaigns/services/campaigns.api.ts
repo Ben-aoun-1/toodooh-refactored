@@ -14,8 +14,8 @@ export interface CampaignView {
   description: string | null;
   requested_budget: number | null;
   /**
-   * CPM-1 — the campaign's OWN CPMs (TND/1000), captured when it was created; an admin CPM change
-   * never reaches them. Its type picks one (lib/campaign-impressions campaignCpm).
+   * CPM-1 — the campaign's OWN CPMs (TND/1000). CPM-3: its screencaster's — realigned by an admin
+   * change while a draft not yet frozen, kept otherwise. Its type picks one (campaignCpm).
    */
   standard_cpm_tnd: number;
   event_cpm_tnd: number;

@@ -130,33 +130,27 @@ describe('migration 0074 — the campaign CPM backfill (scratch database)', () =
     expect(await ratesOf('positionedZero')).toEqual({ standard: '20.000', event: '25.000' });
   });
 
-  it('both columns end NOT NULL with a function default that captures the config at insert', async () => {
+  it('after 0076 the columns stay NOT NULL, lose their default, and a new row takes its screencaster’s CPM', async () => {
     const cols = await client<
-      { column_name: string; is_nullable: string; column_default: string }[]
+      { column_name: string; is_nullable: string; column_default: string | null }[]
     >`
       select column_name, is_nullable, column_default from information_schema.columns
       where table_name = 'campaigns' and column_name in ('standard_cpm_tnd', 'event_cpm_tnd')
       order by column_name`;
     expect(cols).toEqual([
-      {
-        column_name: 'event_cpm_tnd',
-        is_nullable: 'NO',
-        column_default: 'current_event_cpm_tnd()',
-      },
-      {
-        column_name: 'standard_cpm_tnd',
-        is_nullable: 'NO',
-        column_default: 'current_standard_cpm_tnd()',
-      },
+      { column_name: 'event_cpm_tnd', is_nullable: 'NO', column_default: null },
+      { column_name: 'standard_cpm_tnd', is_nullable: 'NO', column_default: null },
     ]);
     const volatility = await client<{ proname: string; provolatile: string }[]>`
       select proname, provolatile from pg_proc
       where proname in ('current_standard_cpm_tnd', 'current_event_cpm_tnd') order by proname`;
-    expect(volatility.map((f) => f.provolatile)).toEqual(['s', 's']); // STABLE
+    expect(volatility.map((f) => f.provolatile)).toEqual(['s', 's']); // STABLE, still the default of new accounts
 
+    // CPM-3 — the advertiser was backfilled at 0076 with the config then in force (20 / 25); a later
+    // config change is only the default of NEW accounts, so the new row keeps 20 / 25.
     await client`update dispatch_config set standard_cpm_tnd = '21.000', event_cpm_tnd = '31.000'`;
     await insertCampaign('afterMigration', 'standard', null);
-    expect(await ratesOf('afterMigration')).toEqual({ standard: '21.000', event: '31.000' });
+    expect(await ratesOf('afterMigration')).toEqual({ standard: '20.000', event: '25.000' });
     expect(await ratesOf('classic')).toEqual({ standard: '15.000', event: '25.000' });
   });
 });

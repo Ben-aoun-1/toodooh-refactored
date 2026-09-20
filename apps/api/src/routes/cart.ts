@@ -70,7 +70,8 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
   if (isEvent && c.eventId !== null) {
     // EV3 — the event ceiling (EV2 pricing, CPM_evt): the classic C_max never prices a
     // positioning (the engine boundary — computeCampaignCmax REFUSES bound rows outright).
-    // CPM-1 — priced at the positioning's OWN event CPM (in effect when it was created).
+    // CPM-1 — priced at the positioning's OWN event CPM (CPM-3: its screencaster's, realigned
+    // while it is a draft not yet frozen).
     const [ev] = await db.select().from(events).where(eq(events.id, c.eventId)).limit(1);
     if (!ev || ev.annule) return 'EVENT_ANNULE';
     const evCmax = await computeEventCmax(
@@ -324,7 +325,8 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         fromStatus: 'draft',
       });
       if (prepared.status !== 'READY') {
-        // EV4 — the event dispatch's refusals ride the same per-item vocabulary.
+        // EV4 — the event dispatch's refusals ride the same per-item vocabulary; so does CPM-3's
+        // retryable CPM_CHANGED (a CPM change raced this freeze — nothing frozen, re-confirm).
         const reason =
           prepared.status === 'NOT_DELIVERABLE'
             ? prepared.reason === 'too_thin'

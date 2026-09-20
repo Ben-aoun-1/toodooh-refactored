@@ -15,6 +15,8 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 // CPM-1 ruling 1A — the one-off restore: never-dispatched classic campaigns created before the
 // cutoff get the operator-confirmed standard CPM back; nothing else moves. The config is pinned at
 // the NEW rate (10) so every fixture captures 10 at insert, exactly like prod after 0074.
+// CPM-3 — drafts are out of scope: a draft carries its screencaster's CPM, which every admin
+// change realigns; a (re-)run of this script must never pin one back to a creation rate.
 
 const CUTOFF = new Date('2026-09-17T11:08:46Z');
 const BEFORE = new Date('2026-09-10T09:00:00Z');
@@ -101,7 +103,7 @@ describe('CPM-1 restore — the creation-time standard CPM for never-dispatched 
       campaignType: 'event',
       eventId: ev?.id ?? null,
     });
-    await seedCampaign('alreadyAt15', { status: 'draft', standardCpmTnd: '15.000' });
+    await seedCampaign('alreadyAt15', { status: 'pending', standardCpmTnd: '15.000' });
   });
 
   afterEach(async () => {
@@ -113,37 +115,45 @@ describe('CPM-1 restore — the creation-time standard CPM for never-dispatched 
     await sql.end();
   });
 
-  it('the dry-run lists exactly the never-dispatched classic campaigns created before the cutoff, and writes nothing', async () => {
+  it('the dry-run lists exactly the never-dispatched classic non-drafts created before the cutoff, and writes nothing', async () => {
     const inventory = await collectCpmRestoreInventory(CUTOFF, '15.000');
     expect(inventory.rows.map((row) => row.name).sort()).toEqual([
-      'draftBefore',
       'pendingBefore',
       'rejectedBefore',
     ]);
     expect(inventory.rows.every((row) => row.currentStandardCpmTnd === '10.000')).toBe(true);
     expect(inventory.alreadyAtTarget).toBe(1);
+    expect((await rowOf('pendingBefore'))?.standard).toBe('10.000');
+  });
+
+  it('CPM-3 — a draft is out of scope: never listed, never written, whatever its rate', async () => {
+    await seedCampaign('draftAt12', { status: 'draft', standardCpmTnd: '12.000' });
+    const inventory = await collectCpmRestoreInventory(CUTOFF, '15.000');
+    expect(inventory.rows.map((row) => row.name)).not.toContain('draftBefore');
+    expect(inventory.rows.map((row) => row.name)).not.toContain('draftAt12');
+    await applyCpmRestore(inventory);
     expect((await rowOf('draftBefore'))?.standard).toBe('10.000');
+    expect((await rowOf('draftAt12'))?.standard).toBe('12.000');
   });
 
   it('--execute sets the standard CPM on those rows only, keeps updated_at and the event rate, and a re-run changes nothing', async () => {
     const changed = await applyCpmRestore(await collectCpmRestoreInventory(CUTOFF, '15.000'));
-    expect(changed.sort()).toEqual(
-      [ids['draftBefore'], ids['pendingBefore'], ids['rejectedBefore']].sort(),
-    );
-    for (const key of ['draftBefore', 'pendingBefore', 'rejectedBefore']) {
+    expect(changed.sort()).toEqual([ids['pendingBefore'], ids['rejectedBefore']].sort());
+    for (const key of ['pendingBefore', 'rejectedBefore']) {
       const row = await rowOf(key);
       expect(row?.standard).toBe('15.000');
       expect(row?.event).toBe('15.000');
       expect(row?.updatedAt.toISOString()).toBe(UPDATED.toISOString());
     }
-    // Out of scope: created after the change, already dispatched, an event positioning.
+    // Out of scope: a draft (CPM-3), created after the change, already dispatched, a positioning.
+    expect((await rowOf('draftBefore'))?.standard).toBe('10.000');
     expect((await rowOf('draftAfter'))?.standard).toBe('10.000');
     expect((await rowOf('dispatchedBefore'))?.standard).toBe('10.000');
     expect((await rowOf('positioningBefore'))?.standard).toBe('10.000');
 
     const again = await collectCpmRestoreInventory(CUTOFF, '15.000');
     expect(again.rows).toEqual([]);
-    expect(again.alreadyAtTarget).toBe(4);
+    expect(again.alreadyAtTarget).toBe(3);
     expect(await applyCpmRestore(again)).toEqual([]);
   });
 
@@ -151,7 +161,7 @@ describe('CPM-1 restore — the creation-time standard CPM for never-dispatched 
     const inventory = await collectCpmRestoreInventory(CUTOFF, '15.000');
     await seedPlan('pendingBefore');
     const changed = await applyCpmRestore(inventory);
-    expect(changed.sort()).toEqual([ids['draftBefore'], ids['rejectedBefore']].sort());
+    expect(changed).toEqual([ids['rejectedBefore']]);
     expect((await rowOf('pendingBefore'))?.standard).toBe('10.000');
   });
 

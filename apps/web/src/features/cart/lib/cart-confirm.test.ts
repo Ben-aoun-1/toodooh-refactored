@@ -66,6 +66,12 @@ describe('cartReasonFr — every api gate code speaks French', () => {
     expect(cartReasonFr(code)).not.toBe(cartReasonFr('SOMETHING_UNKNOWN'));
   });
 
+  it('CPM-3 — a confirm that raced a CPM change asks to confirm again', () => {
+    expect(cartReasonFr('CPM_CHANGED')).toBe(
+      'Le CPM de cette campagne vient de changer — confirmez de nouveau.',
+    );
+  });
+
   it('unknown codes get the generic fallback', () => {
     expect(cartReasonFr('???')).toBe('Cette campagne n’est plus lançable.');
   });

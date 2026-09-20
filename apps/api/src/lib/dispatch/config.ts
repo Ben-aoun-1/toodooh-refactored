@@ -9,8 +9,9 @@ export interface ResolvedDispatchConfig {
   joursActifs: number;
   rMinEfficace: number;
   fMaxSeconds: number;
-  // Admin-editable CPM (TND/1000) — prices campaigns CREATED from now on (CPM-1): a new campaign
-  // row captures both at insert; an existing one reads its own copy (campaignCpmRates).
+  // Admin-editable CPM (TND/1000) — CPM-3: the DEFAULT of new screencaster accounts only (a new
+  // users row starts at it); a campaign prices at its screencaster's CPM, read from its own copy
+  // (campaignCpmRates).
   standardCpmTnd: number;
   eventCpmTnd: number;
   // E1 (VF) — the attention index T by spot-duration bucket. CPM-2 — prices campaigns CREATED
@@ -48,14 +49,16 @@ export interface CpmRates {
 // standard_cpm_tnd (operator ruling 15/30). ONE home (E5) — the activation derivation
 // (lib/activation-service.ts) and the C_max ceiling (lib/campaign-cmax.ts) must price identically.
 // CPM-1 — for a campaign that EXISTS, `cfg` is campaignCpmRates(row), never getDispatchConfig():
-// the live config only prices what has not been created yet.
+// CPM-3 — the live config is only the default CPM of new screencaster accounts.
 export const cpmForCampaign = (campaignType: string, cfg: CpmRates): number =>
   campaignType === 'event' ? cfg.eventCpmTnd : cfg.standardCpmTnd;
 
-// CPM-1 (user rule, 2026-09-17) — THE read home for an existing campaign's CPMs: the rates in
-// effect when the row was created (campaigns.standard_cpm_tnd / event_cpm_tnd, captured by the
-// migration-0074 column default). An admin CPM change never reaches them. Numeric columns arrive
-// as strings; a query that prices a campaign must SELECT both columns.
+// CPM-1 (user rule, 2026-09-17) — THE read home for an existing campaign's CPMs: its own copy
+// (campaigns.standard_cpm_tnd / event_cpm_tnd). CPM-3 (migration 0076): a campaign carries its
+// screencaster's CPM, captured at insert; an admin change realigns the screencaster's drafts
+// (unless already frozen by a plan or event allocations — lib/screencaster-cpm.ts), and every
+// other campaign keeps its copy. Numeric columns arrive as strings; a query that prices a
+// campaign must SELECT both columns.
 export const campaignCpmRates = (row: {
   standardCpmTnd: string;
   eventCpmTnd: string;

@@ -16,6 +16,7 @@ import { plusCalendarDays } from '../../lib/campaign-dates.js';
 import { getDispatchConfig } from '../../lib/dispatch/config.js';
 import { computeEventCmax } from '../../lib/event-pricing/pricing.js';
 import { walletSpendable } from '../../lib/recharges.js';
+import { screencasterCpmRates } from '../../lib/screencaster-cpm.js';
 import { createRng } from '../world/rng.js';
 
 import { type VirtualMoment } from './clock.js';
@@ -280,10 +281,12 @@ export const launchEvent = async (
     advertiserId = best.id;
   }
 
-  // The ceiling is read BEFORE the positioning exists (the wizard's pre-creation cursor), so the
-  // live config is the right CPM here (CPM-1); the row inserted below captures the same value.
-  const config = await getDispatchConfig();
-  const ceiling = await computeEventCmax({ id: event.id, kickoffAt, endsAt }, config.eventCpmTnd);
+  // The ceiling is read BEFORE the positioning exists (the wizard's pre-creation cursor). CPM-3 —
+  // at the event CPM the positioning inserted below will capture: the screencaster's own (as GET
+  // /api/events/:id/cmax prices it), the global default only for a non-advertiser account.
+  const own = await screencasterCpmRates(advertiserId);
+  const eventCpm = own?.eventCpmTnd ?? (await getDispatchConfig()).eventCpmTnd;
+  const ceiling = await computeEventCmax({ id: event.id, kickoffAt, endsAt }, eventCpm);
   const wallet = await walletSpendable(advertiserId);
   const wanted =
     input.budgetTnd ?? Math.floor(ceiling.cMaxEvtTnd * (input.budgetShare ?? rng.float(0.3, 0.7)));

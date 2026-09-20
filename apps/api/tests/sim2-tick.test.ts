@@ -16,6 +16,7 @@ import {
   users,
 } from '../src/db/schema.js';
 import { env } from '../src/env.js';
+import { computeEventCmax } from '../src/lib/event-pricing/pricing.js';
 import { runInSandbox } from '../src/simulator/context.js';
 import { mainDatabaseName, sandboxDatabaseName, sandboxUrl } from '../src/simulator/naming.js';
 import { closeAllSandboxes, sandboxHandleFor } from '../src/simulator/pools.js';
@@ -316,6 +317,39 @@ describe('SIM-2 the tick (real engines on virtual time)', () => {
     expect(decided.length).toBeGreaterThan(0);
     expect(decided.some((a) => a.statut !== 'EN_ATTENTE')).toBe(true);
   }, 600_000);
+
+  it('CPM-3 — an event booking is ceilinged at the screencaster’s OWN event CPM, the one its positioning captures', async () => {
+    const sim = await simulation();
+    await inSandbox(() =>
+      db.update(users).set({ cpmEventTnd: '31.000' }).where(eq(users.role, 'advertiser')),
+    );
+    const booked = await inSandbox(() =>
+      launchEvent({
+        moment: momentOf(sim.virtualNow),
+        seed: SEED,
+        name: 'Match CPM-3',
+        inDays: 4,
+        durationHours: 2,
+        spotSeconds: 10,
+        budgetShare: 0.3,
+      }),
+    );
+    if ('error' in booked) throw new Error(booked.error);
+    const window = {
+      id: booked.event_id,
+      kickoffAt: new Date(booked.kickoff_at),
+      endsAt: new Date(booked.ends_at),
+    };
+    const atOwn = await inSandbox(() => computeEventCmax(window, 31));
+    expect(booked.c_max_tnd).toBe(atOwn.cMaxEvtTnd);
+    const [row] = await inSandbox(() =>
+      db
+        .select({ cpm: campaigns.eventCpmTnd })
+        .from(campaigns)
+        .where(eq(campaigns.id, booked.campaign_id)),
+    );
+    expect(row?.cpm).toBe('31.000');
+  }, 120_000);
 
   it('SPS moved off its seeded value for at least one venue (the real score, on real evidence)', async () => {
     const venues = await inSandbox(() =>

@@ -58,7 +58,7 @@ export default function EventRecapStep({
 }: EventRecapStepProps) {
   const cmax = useCampaignCmax(campaignId);
   const pricing = usePricingConfig();
-  // CPM-1 — the positioning already exists here: it carries the event CPM it captured at creation.
+  // CPM-1 — the positioning already exists here: it carries its own event CPM (its screencaster's).
   const positioning = useCampaign(campaignId);
   const [pullbackNotice, setPullbackNotice] = useState(false);
 

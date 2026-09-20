@@ -395,6 +395,19 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       vi.restoreAllMocks();
     });
 
+    it('CPM-3 — GET /api/events/:id/cmax prices the match at the CALLER’s own event CPM', async () => {
+      const sectors = await ownerSectors();
+      await seedVenue({ sector: sectors[0] ?? '', affluence: [120] });
+      const eventId = await seedEvent();
+      const advId = await seedUser({ role: 'advertiser' });
+      await db.update(users).set({ cpmEventTnd: '30.000' }).where(eq(users.id, advId));
+      mockSession(advId, 'advertiser');
+
+      const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().c_max_evt_tnd).toBe(Math.floor((30 * 120 * 20 * 6) / 1000)); // 432, not 216
+    });
+
     it('GET /api/admin/events/:id/tarification — per-venue detail, admin-gated', async () => {
       const sectors = await ownerSectors();
       const shId = await seedVenue({ sector: sectors[0] ?? '', affluence: [120] });
