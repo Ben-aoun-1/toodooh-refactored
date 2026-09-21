@@ -36,7 +36,7 @@ import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { decideEventAllocation } from '../lib/event-allocation-decision.js';
-import { SLOTS_PER_DAY } from '../lib/half-hour-slots.js';
+import { SLOTS_PER_DAY, inEffectSql } from '../lib/half-hour-slots.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { ownerSensorStatuses } from '../lib/owner-sensors.js';
@@ -989,7 +989,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
           source: screenhostAffluence.source,
         })
         .from(screenhostAffluence)
-        .where(eq(screenhostAffluence.screenhostId, owned.id));
+        // LEARN-1 / OFF-1 — a withdrawn or suspended key is ABSENT here, as it is for every
+        // money-path reader: the hub's full-grid write sends in_effect:false for every key the
+        // learned rule does not produce, and that must never read as « Estimation 0 ».
+        .where(
+          and(
+            eq(screenhostAffluence.screenhostId, owned.id),
+            inEffectSql(screenhostAffluence.inEffect),
+          ),
+        );
       for (const cell of slots) {
         const row = grid[cell.dayOfWeek - 1];
         const sourceRow = sources[cell.dayOfWeek - 1];

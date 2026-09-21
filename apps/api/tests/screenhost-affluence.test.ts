@@ -409,6 +409,31 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
     mockSession(me, 'individual_owner', 'rejected');
     expect((await get(sh)).statusCode).toBe(403);
   });
+
+  it('LEARN-1 — a withdrawn (in_effect: false) slot is absent, never « Estimation 0 »', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    await seedAffluence(sh, [{ day: 1, hour: 9, value: 100, source: 'measured' }]);
+    // What the hub's full-grid write sends for a key the rule no longer produces (Sunday 23h).
+    await db.insert(screenhostAffluence).values(
+      bothHalves({
+        screenhostId: sh,
+        dayOfWeek: 7,
+        hour: 23,
+        estimatedImpressions: 0,
+        source: 'backup' as const,
+        inEffect: false,
+      }),
+    );
+    mockSession(me);
+
+    const body = (await get(sh)).json() as AffluenceResponse;
+    expect(body.grid[6]?.[46]).toBeNull();
+    expect(body.grid[6]?.[47]).toBeNull();
+    expect(body.sources[6]?.[46]).toBeNull();
+    expect(body.grid[0]?.[18]).toBe(100);
+    expect(body.counts).toEqual({ measured: 2, backup: 0 });
+  });
 });
 
 describe('screenhost monthly-report download (STORED artifact, owner-scoped, real Postgres)', () => {
