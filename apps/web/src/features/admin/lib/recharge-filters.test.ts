@@ -7,9 +7,11 @@ import {
   computeRechargeStats,
   type AdminRecharge,
 } from '@/features/admin/services/admin-recharges.service';
+import { RECHARGE_TYPE_LABELS, methodLabel } from '@/features/wallet/lib/recharge-methods';
 
 import {
   DEFAULT_RECHARGE_FILTERS,
+  adminRechargeTypeLabel,
   filterRecharges,
   parseRechargeTypeFilter,
   screencasterOptions,
@@ -211,6 +213,22 @@ describe('screencasterOptions (T3 — the screencasters PRESENT in the list)', (
   });
 });
 
+describe('adminRechargeTypeLabel (the admin Type column — table + details modal)', () => {
+  it('a legacy row (method NULL) says « Ancien format (FCT) » — the type filter’s own word', () => {
+    expect(adminRechargeTypeLabel(null)).toBe('Ancien format (FCT)');
+    expect(adminRechargeTypeLabel(null)).toBe(RECHARGE_TYPE_LABELS.FCT);
+  });
+
+  it('a method row keeps its method label', () => {
+    expect(adminRechargeTypeLabel('virement')).toBe('Virement bancaire');
+    expect(adminRechargeTypeLabel('bon_de_commande')).toBe('Bon de commande');
+  });
+
+  it('the screencaster’s shared methodLabel is untouched (MyRecharges still renders « — »)', () => {
+    expect(methodLabel(null)).toBe('—');
+  });
+});
+
 describe('T4 — the stat cards follow the active filters', () => {
   it('one screencaster’s totals, not the platform’s', () => {
     const stats = computeRechargeStats(
@@ -241,5 +259,32 @@ describe('RechargeManagement wiring (source pins — apps/web has no render harn
     expect(page).not.toContain('useAdvertiserIdentities');
     expect(page).toContain('advertiser_label');
     expect(page).toContain('advertiser_email');
+  });
+
+  it('the Type column names legacy rows like the filter does (adminRechargeTypeLabel)', () => {
+    expect(page).toContain('adminRechargeTypeLabel(recharge.method)');
+    expect(page).not.toContain('methodLabel(');
+  });
+
+  it('the person is a « Screencaster », as in the filter — never « Annonceur »', () => {
+    expect(page).toMatch(/>\s*Screencaster\s*</);
+    expect(page).not.toContain('Annonceur');
+  });
+});
+
+describe('RechargeDetailsModal wiring (source pins)', () => {
+  const modal = readFileSync(
+    fileURLToPath(new URL('../components/RechargeDetailsModal.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  it('the Type line names legacy rows like the table and the filter', () => {
+    expect(modal).toContain('adminRechargeTypeLabel(recharge.method)');
+    expect(modal).not.toContain('methodLabel(');
+  });
+
+  it('the person is a « Screencaster » here too', () => {
+    expect(modal).toMatch(/>\s*Screencaster\s*</);
+    expect(modal).not.toContain('Annonceur');
   });
 });

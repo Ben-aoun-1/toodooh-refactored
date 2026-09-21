@@ -33,7 +33,7 @@ export const METHOD_LABELS: Record<RechargeMethod, string> = {
   bon_de_commande: 'Bon de commande',
 };
 
-/** The admin Type column — legacy rows (method NULL) render « — », as-found. */
+/** The screencaster's Type column — legacy rows (method NULL) render « — », as-found. */
 export const methodLabel = (method: RechargeMethod | null): string =>
   method === null ? '—' : METHOD_LABELS[method];
 

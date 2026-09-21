@@ -1,9 +1,12 @@
 import type { AdminRecharge } from '@/features/admin/services/admin-recharges.service';
 import {
   RECHARGE_TYPES,
+  RECHARGE_TYPE_LABELS,
   adminStatusFilterLabels,
+  methodLabel,
   rechargeTypeOf,
   statusLabel,
+  type RechargeMethod,
   type RechargeType,
 } from '@/features/wallet/lib/recharge-methods';
 
@@ -65,6 +68,15 @@ export const withRechargeType = (
       ? filters.status
       : 'all',
 });
+
+/**
+ * The admin Type column (the table and the details modal). A legacy row (method NULL) is named with
+ * the type filter's own word, « Ancien format (FCT) », so the column and the filter agree; a method
+ * row keeps its method label. Admin-side on purpose: the screencaster's MyRecharges shares
+ * methodLabel and keeps its « — ».
+ */
+export const adminRechargeTypeLabel = (method: RechargeMethod | null): string =>
+  method === null ? RECHARGE_TYPE_LABELS.FCT : methodLabel(method);
 
 /** The type <select> value, narrowed without a cast; an unknown value reads as « Tous les types ». */
 export const parseRechargeTypeFilter = (value: string): RechargeTypeFilter =>

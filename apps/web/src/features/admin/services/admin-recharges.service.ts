@@ -40,7 +40,7 @@ export interface AdminRecharge {
   has_document: boolean;
   document_uploaded_at: string | null;
   document_mime: string | null;
-  /** FCT1 — null = legacy row (renders as-found: « — » type, as-found status labels). */
+  /** FCT1 — null = legacy row (type « Ancien format (FCT) » here, as-found status labels). */
   method: RechargeMethod | null;
   has_bon: boolean;
   has_signed_bon: boolean;

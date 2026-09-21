@@ -6,13 +6,14 @@ import {
   useRechargeSignedBonUrl,
   useWalletAdjustments,
 } from '@/features/admin/hooks/useRecharges';
+import { adminRechargeTypeLabel } from '@/features/admin/lib/recharge-filters';
 import { signedAmountLabel } from '@/features/admin/lib/wallet-adjustment';
 import {
   adminRechargesService,
   documentDisplayMode,
   type AdminRecharge,
 } from '@/features/admin/services/admin-recharges.service';
-import { methodLabel, statusChipClass, statusLabel } from '@/features/wallet/lib/recharge-methods';
+import { statusChipClass, statusLabel } from '@/features/wallet/lib/recharge-methods';
 
 interface RechargeDetailsModalProps {
   recharge: AdminRecharge;
@@ -68,10 +69,12 @@ export default function RechargeDetailsModal({
             </div>
             <div>
               <span className="text-sm font-medium text-gray-600">Type</span>
-              <p className="text-sm font-semibold text-gray-900">{methodLabel(recharge.method)}</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {adminRechargeTypeLabel(recharge.method)}
+              </p>
             </div>
             <div>
-              <span className="text-sm font-medium text-gray-600">Annonceur</span>
+              <span className="text-sm font-medium text-gray-600">Screencaster</span>
               <p className="text-lg font-semibold text-gray-900">{advertiserName}</p>
               <p className="text-sm text-gray-500">{advertiserEmail}</p>
             </div>

@@ -130,8 +130,8 @@ describe('the recharge type (VIR / BC / FCT) and its status labels', () => {
   });
 });
 
-describe('methodLabel (the admin Type column)', () => {
-  it('labels the two methods and renders legacy as « — »', () => {
+describe('methodLabel (the screencaster Type column — MyRecharges)', () => {
+  it('labels the two methods and renders legacy as « — » (the admin names it via adminRechargeTypeLabel)', () => {
     expect(methodLabel('virement')).toBe('Virement bancaire');
     expect(methodLabel('bon_de_commande')).toBe('Bon de commande');
     expect(methodLabel(null)).toBe('—');

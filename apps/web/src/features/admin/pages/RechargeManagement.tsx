@@ -9,6 +9,7 @@ import RechargeFiltersPanel from '@/features/admin/components/RechargeFiltersPan
 import { useAdminRecharges, useRechargeMutations } from '@/features/admin/hooks/useRecharges';
 import {
   DEFAULT_RECHARGE_FILTERS,
+  adminRechargeTypeLabel,
   filterRecharges,
   screencasterOptions,
   type RechargeFilters,
@@ -20,20 +21,17 @@ import {
 } from '@/features/admin/services/admin-recharges.service';
 import {
   isAdminDecidable,
-  methodLabel,
   statusChipClass,
   statusLabel,
 } from '@/features/wallet/lib/recharge-methods';
 import { getErrorMessage } from '@/lib/errors';
 
-// The recharge moderation queue over /api/admin/recharges. FCT1: the table gains the Type column
-// (Virement / Bon de commande / « — » legacy) and the PER-METHOD status labels from the shared
-// wallet lib; Valider/Annuler show on the DECIDABLE rows (virement + legacy while pending, bon once
-// « Bon retourné signé » — « Bon émis » rows are visible read-only, GREEN2). Annuler requires a
-// reason (surfaced to the screencaster). CF-M2: documented recharges badge « Justificatif ✓ »; the
-// details modal shows the file(s). RECH-ADM1: type / status-by-type / screencaster filters + the
-// reference search (admin/lib/recharge-filters), all client-side over the one list; the stat
-// cards follow the filters; names come from the api's advertiser_label (any account status).
+// The recharge moderation queue over /api/admin/recharges. Type column: Virement / Bon de
+// commande / « Ancien format (FCT) » (legacy, the filter's word); per-method status chips from the
+// wallet lib. Valider/Annuler only on DECIDABLE rows (« Bon émis » is read-only, GREEN2); Annuler
+// needs a reason, shown to the screencaster. CF-M2: « Justificatif ✓ ». RECH-ADM1: type / status /
+// screencaster filters + reference search (admin/lib/recharge-filters), client-side; the stat cards
+// follow the filters; the Screencaster column is the api's advertiser_label (any account status).
 
 const PER_PAGE = 20;
 
@@ -184,7 +182,7 @@ export default function RechargeManagement() {
                   Référence
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Annonceur
+                  Screencaster
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Montant
@@ -221,7 +219,9 @@ export default function RechargeManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-600">{methodLabel(recharge.method)}</div>
+                    <div className="text-sm text-gray-600">
+                      {adminRechargeTypeLabel(recharge.method)}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -372,7 +372,7 @@ export default function RechargeManagement() {
                     Montant: {adminRechargesService.formatAmount(selectedRecharge.amount_tnd)}
                   </p>
                   <p className="text-sm text-green-700">
-                    Annonceur: {selectedRecharge.advertiser_label}
+                    Screencaster: {selectedRecharge.advertiser_label}
                   </p>
                 </div>
               </div>
