@@ -81,10 +81,11 @@ export interface RechargeStats {
   rejected_amount: number;
 }
 
-// Counters for the stat cards, DERIVED client-side from the full list (the endpoint returns every
-// row when unfiltered, so this mirrors the old Supabase select-then-reduce — no stats endpoint
-// needed). FCT1: « En attente » counts the ACTIONABLE rows — pending AND bon_returned (a returned
-// signed bon awaits the same Valider).
+// Counters for the stat cards, DERIVED client-side (no stats endpoint needed). RECH-ADM1 (T4): the
+// page passes the rows its filters KEEP, so the cards describe that selection (e.g. one
+// screencaster's totals); with no filter active that is the whole list, i.e. the platform totals.
+// FCT1: « En attente » counts the ACTIONABLE rows — pending AND bon_returned (a returned signed bon
+// awaits the same Valider).
 // ADM-RCH1 (Mejri/Kais QA) — « Montant Total » summed EVERY row, rejected ones included, so an
 // admin who cancelled a 4 000 TND recharge still saw it in the total. A rejected (« Annulée »)
 // recharge never credited anything: it is excluded from total_amount and carried separately as

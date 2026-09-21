@@ -88,7 +88,8 @@ export const signedBonKey = (rechargeId: string, mime: string): string =>
 
 // FCT1 — the admin-actionable predicate, ONE home so confirm/reject can't drift: a virement (and a
 // legacy method-less row) is decidable while 'pending'; a bon only once the signed bon is deposited
-// ('bon_returned'). 'bon_issued' is NOT decidable — it is invisible to the admin queue by design.
+// ('bon_returned'). 'bon_issued' is NOT decidable — GREEN2 (ruled) shows those rows in the admin
+// queue READ-ONLY (« Bon émis »), and this predicate is what keeps confirm/reject off them.
 export const isAdminDecidable = (row: Pick<Recharge, 'method' | 'status'>): boolean =>
   row.method === 'bon_de_commande' ? row.status === 'bon_returned' : row.status === 'pending';
 
@@ -156,7 +157,7 @@ export const rechargeAdvertiserById = async (
 
 // Admin view = the advertiser projection + the owner id and the confirming admin id (audit), plus
 // the document mimes so the review modal can pick its render mode (image inline vs PDF open-in-tab).
-// RECH-ADM1 — plus the owner's label + email (the « Annonceur » column and the Screencaster filter).
+// RECH-ADM1 — plus the owner's label + email (the « Screencaster » column and filter).
 export const adminRechargeView = (row: Recharge, advertiser: RechargeAdvertiser) => ({
   ...rechargeView(row),
   advertiser_id: row.advertiserId,
