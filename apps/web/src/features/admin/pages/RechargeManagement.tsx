@@ -1,31 +1,24 @@
-import {
-  Banknote,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Search,
-  Eye,
-  TrendingUp,
-  Filter,
-} from 'lucide-react';
+import { Banknote, CheckCircle, XCircle, Clock, Eye, TrendingUp } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdjustWalletModal from '@/features/admin/components/AdjustWalletModal';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import RechargeDetailsModal from '@/features/admin/components/RechargeDetailsModal';
+import RechargeFiltersPanel from '@/features/admin/components/RechargeFiltersPanel';
+import { useAdminRecharges, useRechargeMutations } from '@/features/admin/hooks/useRecharges';
 import {
-  useAdminRecharges,
-  useAdvertiserIdentities,
-  useRechargeMutations,
-} from '@/features/admin/hooks/useRecharges';
+  DEFAULT_RECHARGE_FILTERS,
+  filterRecharges,
+  screencasterOptions,
+  type RechargeFilters,
+} from '@/features/admin/lib/recharge-filters';
 import {
   adminRechargesService,
   computeRechargeStats,
   type AdminRecharge,
 } from '@/features/admin/services/admin-recharges.service';
 import {
-  ADMIN_STATUS_FILTER_LABELS,
   isAdminDecidable,
   methodLabel,
   statusChipClass,
@@ -35,17 +28,17 @@ import { getErrorMessage } from '@/lib/errors';
 
 // The recharge moderation queue over /api/admin/recharges. FCT1: the table gains the Type column
 // (Virement / Bon de commande / « — » legacy) and the PER-METHOD status labels from the shared
-// wallet lib; the status filter offers the display labels; Valider/Annuler show on the DECIDABLE
-// rows (virement + legacy while pending, bon once « Bon retourné signé » — « Bon émis » rows are
-// server-excluded and never reach this page). Annuler requires a reason (surfaced to the
-// screencaster). Filter/search/pagination + the stat cards stay client-side over the one list.
-// CF-M2: documented recharges badge « Justificatif ✓ »; the details modal shows the file(s).
+// wallet lib; Valider/Annuler show on the DECIDABLE rows (virement + legacy while pending, bon once
+// « Bon retourné signé » — « Bon émis » rows are visible read-only, GREEN2). Annuler requires a
+// reason (surfaced to the screencaster). CF-M2: documented recharges badge « Justificatif ✓ »; the
+// details modal shows the file(s). RECH-ADM1: type / status-by-type / screencaster filters + the
+// reference search (admin/lib/recharge-filters), all client-side over the one list; the stat
+// cards follow the filters; names come from the api's advertiser_label (any account status).
 
 const PER_PAGE = 20;
 
 export default function RechargeManagement() {
   const { recharges, loading, isError } = useAdminRecharges();
-  const advertisers = useAdvertiserIdentities();
   const { confirmRecharge, rejectRecharge } = useRechargeMutations();
 
   const [selectedRecharge, setSelectedRecharge] = useState<AdminRecharge | null>(null);
@@ -55,35 +48,21 @@ export default function RechargeManagement() {
   // FCT2 (US-FCT-9) — the « $ » solde adjustment, targeting the row's advertiser.
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  // FCT1 — filtered by DISPLAY label (the per-method labels are the admin's vocabulary).
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState<RechargeFilters>(DEFAULT_RECHARGE_FILTERS);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     if (isError) toast.error('Erreur lors du chargement des recharges');
   }, [isError]);
 
-  const stats = useMemo(() => computeRechargeStats(recharges), [recharges]);
-
-  // Client-side filter (per-method status label) + search (reference) over the full list.
-  const filtered = useMemo(() => {
-    const needle = searchTerm.trim().toLowerCase();
-    return recharges.filter((r) => {
-      const matchesStatus =
-        statusFilter === 'all' || statusLabel(r.method, r.status) === statusFilter;
-      const matchesSearch = needle === '' || r.reference.toLowerCase().includes(needle);
-      return matchesStatus && matchesSearch;
-    });
-  }, [recharges, statusFilter, searchTerm]);
+  const screencasters = useMemo(() => screencasterOptions(recharges), [recharges]);
+  const filtered = useMemo(() => filterRecharges(recharges, filters), [recharges, filters]);
+  // T4 — the cards describe the rows the filters keep (e.g. one screencaster's totals).
+  const stats = useMemo(() => computeRechargeStats(filtered), [filtered]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const page = Math.min(currentPage, totalPages);
   const pageRows = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  const advertiserName = (r: AdminRecharge) =>
-    advertisers.get(r.advertiser_id)?.business_name ?? r.advertiser_id;
-  const advertiserEmail = (r: AdminRecharge) => advertisers.get(r.advertiser_id)?.email ?? '';
 
   const handleConfirm = async () => {
     if (!selectedRecharge) return;
@@ -186,50 +165,14 @@ export default function RechargeManagement() {
         </div>
       </div>
 
-      {/* Filtres */}
-      <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="status-filter">
-              <Filter className="inline h-4 w-4 mr-1" />
-              Statut
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-              id="status-filter"
-            >
-              <option value="all">Tous les statuts</option>
-              {ADMIN_STATUS_FILTER_LABELS.map((label) => (
-                <option key={label} value={label}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="search-term">
-              <Search className="inline h-4 w-4 mr-1" />
-              Rechercher par référence
-            </label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Rechercher une référence..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-              id="search-term"
-            />
-          </div>
-        </div>
-      </div>
+      <RechargeFiltersPanel
+        filters={filters}
+        screencasters={screencasters}
+        onChange={(next) => {
+          setFilters(next);
+          setCurrentPage(1);
+        }}
+      />
 
       {/* Table des recharges */}
       <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -268,9 +211,9 @@ export default function RechargeManagement() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">
-                      {advertiserName(recharge)}
+                      {recharge.advertiser_label}
                     </div>
-                    <div className="text-xs text-gray-500">{advertiserEmail(recharge)}</div>
+                    <div className="text-xs text-gray-500">{recharge.advertiser_email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-brand-primary">
@@ -392,8 +335,8 @@ export default function RechargeManagement() {
       {showDetailsModal && selectedRecharge && (
         <RechargeDetailsModal
           recharge={selectedRecharge}
-          advertiserName={advertiserName(selectedRecharge)}
-          advertiserEmail={advertiserEmail(selectedRecharge)}
+          advertiserName={selectedRecharge.advertiser_label}
+          advertiserEmail={selectedRecharge.advertiser_email}
           onClose={() => {
             setShowDetailsModal(false);
             setSelectedRecharge(null);
@@ -405,7 +348,7 @@ export default function RechargeManagement() {
       {showAdjustModal && selectedRecharge && (
         <AdjustWalletModal
           advertiserId={selectedRecharge.advertiser_id}
-          advertiserName={advertiserName(selectedRecharge)}
+          advertiserName={selectedRecharge.advertiser_label}
           onClose={() => {
             setShowAdjustModal(false);
             setSelectedRecharge(null);
@@ -429,7 +372,7 @@ export default function RechargeManagement() {
                     Montant: {adminRechargesService.formatAmount(selectedRecharge.amount_tnd)}
                   </p>
                   <p className="text-sm text-green-700">
-                    Annonceur: {advertiserName(selectedRecharge)}
+                    Annonceur: {selectedRecharge.advertiser_label}
                   </p>
                 </div>
               </div>

@@ -4,7 +4,6 @@ import {
   adminRechargesService,
   type AdminRecharge,
 } from '@/features/admin/services/admin-recharges.service';
-import { adminUserService } from '@/features/admin/services/admin-user.service';
 import { advertiserKeys } from '@/features/advertiser/hooks/queryKeys';
 import { walletKeys } from '@/features/wallet/hooks/queryKeys';
 
@@ -76,33 +75,6 @@ export function useRechargeSignedBonUrl(rechargeId: string | undefined, enabled:
     () => adminRechargesService.signedBonUrl(rechargeId ?? ''),
     enabled && !!rechargeId,
   );
-}
-
-export interface AdvertiserIdentity {
-  business_name: string;
-  email: string;
-}
-
-/**
- * Advertiser-identity map for enriching recharge rows (the view carries only
- * advertiser_id). Sourced from the EXISTING admin users endpoint
- * (GET /api/admin/users?status=approved), filtered to advertisers.
- */
-export function useAdvertiserIdentities(): Map<string, AdvertiserIdentity> {
-  const query = useQuery({
-    queryKey: [...adminKeys.all, 'advertiserIdentities'] as const,
-    queryFn: async () => {
-      const users = await adminUserService.getUsersByStatus('approved');
-      const map = new Map<string, AdvertiserIdentity>();
-      for (const u of users) {
-        if (u.profile_type === 'advertiser') {
-          map.set(u.id, { business_name: u.business_name, email: u.email });
-        }
-      }
-      return map;
-    },
-  });
-  return query.data ?? new Map<string, AdvertiserIdentity>();
 }
 
 /**
