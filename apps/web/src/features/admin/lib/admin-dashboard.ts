@@ -79,3 +79,42 @@ export function revenueMonthLabel(month: string | undefined): string {
   const d = parseISO(`${month}-01`);
   return isValid(d) ? format(d, 'MMMM yyyy', { locale: fr }) : '—';
 }
+
+/** What the « Revenus » block renders — each part a finished string, « — » when absent. */
+export interface RevenueFigures {
+  toodooh: string;
+  total: string;
+  monthLabel: string;
+  monthlyTotal: string;
+  monthlyToodooh: string;
+}
+
+const MISSING = '—';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const htOrMissing = (value: unknown): string =>
+  typeof value === 'number' && Number.isFinite(value) ? formatHt(value) : MISSING;
+
+/**
+ * DASH-1 deploy-window guard (day log §5 decision 3). The payload is read as `unknown` on purpose:
+ * during a deploy a new web can meet an OLD api, whose revenue block was
+ * `{ total_tnd, monthly_tnd }` — no `monthly` object (reading `monthly.month` crashed the whole
+ * dashboard) and a `total_tnd` that summed confirmed RECHARGES (prepayments, not « Revenu total »).
+ * Every part the payload does not carry — or carries with the old meaning — renders « — »;
+ * nothing here throws.
+ */
+export function revenueFigures(revenue: unknown): RevenueFigures {
+  const block = isRecord(revenue) ? revenue : {};
+  const monthly = isRecord(block.monthly) ? block.monthly : {};
+  // The pre-DASH-1 marker: that api's total_tnd is Σ confirmed recharges, never shown as revenue.
+  const legacy = 'monthly_tnd' in block;
+  return {
+    toodooh: htOrMissing(block.toodooh_tnd),
+    total: legacy ? MISSING : htOrMissing(block.total_tnd),
+    monthLabel: revenueMonthLabel(typeof monthly.month === 'string' ? monthly.month : undefined),
+    monthlyTotal: htOrMissing(monthly.total_tnd),
+    monthlyToodooh: htOrMissing(monthly.toodooh_tnd),
+  };
+}

@@ -11,6 +11,7 @@ import {
   campaignFilterLabel,
   campaignQueueHref,
   formatHt,
+  revenueFigures,
   revenueMonthLabel,
 } from './admin-dashboard';
 import {
@@ -118,6 +119,77 @@ describe('« Revenu mensuel » names its Tunis month', () => {
   });
 });
 
+// DASH-1 fix round (day log §5 decision 3) — the deploy window: a new web can meet an OLD api for a
+// few minutes. The old payload was { total_tnd: Σ confirmed RECHARGES, monthly_tnd } — no
+// `monthly` object, so `revenue?.monthly.month` threw and the whole dashboard crashed. Every
+// revenue part now renders « — » when the payload does not carry it, and nothing throws.
+describe('revenue figures survive an older api (deploy window)', () => {
+  const current: PlatformStats['revenue'] = {
+    total_tnd: 155.5,
+    toodooh_tnd: 71.22,
+    monthly: { month: '2026-10', total_tnd: 30, toodooh_tnd: 15.88 },
+  };
+  const DASHES = {
+    toodooh: '—',
+    total: '—',
+    monthLabel: '—',
+    monthlyTotal: '—',
+    monthlyToodooh: '—',
+  };
+  const plainFigures = (f: ReturnType<typeof revenueFigures>): Record<string, string> =>
+    Object.fromEntries(Object.entries(f).map(([k, v]) => [k, plain(v)]));
+
+  it('renders the current payload, every amount HT', () => {
+    expect(plainFigures(revenueFigures(current))).toEqual({
+      toodooh: '71,22 TND HT',
+      total: '155,50 TND HT',
+      monthLabel: 'octobre 2026',
+      monthlyTotal: '30,00 TND HT',
+      monthlyToodooh: '15,88 TND HT',
+    });
+  });
+
+  it('the pre-DASH-1 payload does not throw and shows « — » everywhere', () => {
+    const legacy: unknown = { total_tnd: 1234.5, monthly_tnd: 200 };
+    expect(() => revenueFigures(legacy)).not.toThrow();
+    // Its total_tnd is Σ confirmed recharges — prepayments, not « Revenu total »: never shown
+    // under that label.
+    expect(revenueFigures(legacy)).toEqual(DASHES);
+  });
+
+  it('no revenue block at all (older api, failed read) → « — », never a fake 0', () => {
+    expect(revenueFigures(undefined)).toEqual(DASHES);
+    expect(revenueFigures(null)).toEqual(DASHES);
+    expect(revenueFigures({})).toEqual(DASHES);
+  });
+
+  it('each missing part is « — » on its own; the parts present still render', () => {
+    const partial: unknown = { total_tnd: 10, monthly: { total_tnd: 4 } };
+    expect(plainFigures(revenueFigures(partial))).toEqual({
+      toodooh: '—',
+      total: '10,00 TND HT',
+      monthLabel: '—',
+      monthlyTotal: '4,00 TND HT',
+      monthlyToodooh: '—',
+    });
+  });
+
+  it('a non-number or non-finite amount is missing, a real zero is not', () => {
+    const odd: unknown = {
+      total_tnd: '155.5',
+      toodooh_tnd: Number.NaN,
+      monthly: { month: '2026-10', total_tnd: 0, toodooh_tnd: Number.POSITIVE_INFINITY },
+    };
+    expect(plainFigures(revenueFigures(odd))).toEqual({
+      toodooh: '—',
+      total: '—',
+      monthLabel: 'octobre 2026',
+      monthlyTotal: '0,00 TND HT',
+      monthlyToodooh: '—',
+    });
+  });
+});
+
 // The page is pinned by source (no render harness): the retired labels and the recharge-era
 // fields cannot come back, and the lib above is what it renders. Comments are stripped first —
 // they may name a retired label to explain what replaced it.
@@ -156,15 +228,22 @@ describe('AdminDashboard wiring', () => {
       'Revenu Toodooh',
       'Revenu mensuel',
       'Revenu total',
-      'revenue?.toodooh_tnd',
-      'revenue?.total_tnd',
-      'revenue?.monthly.total_tnd',
-      'revenue?.monthly.toodooh_tnd',
-      'revenueMonthLabel(revenue?.monthly.month)',
+      'revenueFigures(revenue)',
+      '{figures.toodooh}',
+      '{figures.total}',
+      '{figures.monthLabel}',
+      '{figures.monthlyTotal}',
+      '{figures.monthlyToodooh}',
     ]) {
       expect(revenue).toContain(wired);
     }
-    expect(revenue).not.toMatch(/\{revenue\?\.[a-z_.]+ \?\? 0\}/); // every amount goes through formatHt
+  });
+
+  it('reads the revenue payload ONLY through revenueFigures (the deploy-window guard)', () => {
+    // No direct field read can come back: `revenue?.monthly.month` is what crashed on an old api.
+    expect(revenue).not.toMatch(/revenue\?\.|revenue\.[a-z]/);
+    expect(revenue).not.toContain('formatHt(');
+    expect(revenue).not.toContain('revenueMonthLabel(');
   });
 
   it('renders the ruled screens, campaigns and activity through the lib', () => {

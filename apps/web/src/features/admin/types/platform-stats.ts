@@ -43,11 +43,19 @@ export interface PlatformStats {
     pending: number;
     approved: number;
   };
-  /** DASH-1 (operator rulings R1–R3, 2026-09-21). Every amount is HT. */
+  /**
+   * DASH-1 (operator rulings R1–R3, 2026-09-21). Every amount is HT. The CURRENT api's shape: a
+   * pre-DASH-1 api sent `{ total_tnd, monthly_tnd }`, so the view reads this block only through
+   * lib/admin-dashboard.ts `revenueFigures` (the deploy-window guard).
+   */
   revenue: {
     /** R1 « Revenu total » — Σ settled advertiser spend (campaign_reconciliation.spend_tnd). */
     total_tnd: number;
-    /** R2 « Revenu Toodooh » — Σ Toodooh's share (reversement_lines.toodooh_amount_tnd). */
+    /**
+     * R2 (amended) « Revenu Toodooh » — Σ reversement_lines.toodooh_amount_tnd + each settled
+     * campaign's unsplit remainder (spend_tnd − Σ its lines' base_value_tnd). Pre-E7 settlements
+     * are left out.
+     */
     toodooh_tnd: number;
     /** R3 « Revenu mensuel » — both figures over the current Tunis calendar month. */
     monthly: {
