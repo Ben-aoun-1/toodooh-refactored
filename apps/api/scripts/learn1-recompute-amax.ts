@@ -36,6 +36,17 @@ export interface AmaxRecomputeRow {
 
 export const isChange = (row: AmaxRecomputeRow): boolean => row.before !== row.after;
 
+/**
+ * What the venue's event PRICE does, not its stored row: a missing row prices at the unpersisted
+ * fallback, so compare `before ?? 50` with `after ?? 50` (a stored 30 reset to no row RAISES the
+ * price to 50; no row → a measured 40 LOWERS it from 50). The operator reviews the dry-run by this.
+ */
+export const priceMove = (row: AmaxRecomputeRow): 'LOWER' | 'RAISE' | 'SAME' => {
+  const before = row.before ?? AMAX_FALLBACK_PPH;
+  const after = row.after ?? AMAX_FALLBACK_PPH;
+  return after < before ? 'LOWER' : after > before ? 'RAISE' : 'SAME';
+};
+
 /** Every screenhost, by name, with its stored and recomputed A_max. Reads only. */
 export const collectAmaxRecompute = async (): Promise<AmaxRecomputeRow[]> => {
   const venues = await db
@@ -46,7 +57,7 @@ export const collectAmaxRecompute = async (): Promise<AmaxRecomputeRow[]> => {
     })
     .from(screenhosts)
     .leftJoin(screenhostAmax, eq(screenhostAmax.screenhostId, screenhosts.id))
-    .orderBy(asc(screenhosts.name));
+    .orderBy(asc(screenhosts.name), asc(screenhosts.id));
   const rows: AmaxRecomputeRow[] = [];
   for (const venue of venues) {
     const peak = await measuredAmaxPph(venue.screenhostId);
@@ -92,12 +103,20 @@ export const executeRefusal = (learnedAffluence: boolean): string | null =>
 const show = (value: number | null): string =>
   value === null ? `— (fallback ${AMAX_FALLBACK_PPH}, not stored)` : String(value);
 
+const tag = (row: AmaxRecomputeRow): string => {
+  if (!isChange(row)) return '';
+  const move = priceMove(row);
+  return move === 'SAME' ? '  CHANGE (same price)' : `  ${move}`;
+};
+
 const printInventory = (rows: readonly AmaxRecomputeRow[]): void => {
   console.info('LEARN-1 F1 — A_max = the highest hour ever MEASURED inside opening hours');
+  console.info(
+    `LEARNED_AFFLUENCE_ENABLED is ${env.LEARNED_AFFLUENCE_ENABLED ? 'ON' : 'OFF — --execute will be refused'}`,
+  );
   for (const row of rows) {
-    const lower = row.before !== null && (row.after === null || row.after < row.before);
     console.info(
-      `  ${row.screenhostId}  ${show(row.before)} → ${show(row.after)}${isChange(row) ? (lower ? '  LOWER' : '  CHANGE') : ''}  ${row.name}`,
+      `  ${row.screenhostId}  ${show(row.before)} → ${show(row.after)}${tag(row)}  ${row.name}`,
     );
   }
   console.info(

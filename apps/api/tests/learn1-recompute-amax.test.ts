@@ -6,6 +6,7 @@ import {
   collectAmaxRecompute,
   executeRefusal,
   isChange,
+  priceMove,
 } from '../scripts/learn1-recompute-amax.js';
 import { db, sql } from '../src/db/client.js';
 import { screenhostAffluenceHourly, screenhostAmax, screenhosts } from '../src/db/schema.js';
@@ -77,6 +78,9 @@ describe('LEARN-1 F1 — the A_max recompute (real Postgres)', () => {
       { screenhostId: nothing, name: 'D nothing', before: null, after: null },
       { screenhostId: same, name: 'E same', before: 70, after: 70 },
     ]);
+    // Collecting only READS: no ratchet ran (computeAmax would have stored B's 120).
+    expect(await storedOf(first)).toBeNull();
+    expect(await storedOf(lowered)).toBe(300);
     expect(rows.filter(isChange).map((r) => r.name)).toEqual([
       'A lowered',
       'B first',
@@ -96,6 +100,22 @@ describe('LEARN-1 F1 — the A_max recompute (real Postgres)', () => {
     expect(await computeAmax(unmeasured, { learnedAffluence: true })).toBe(AMAX_FALLBACK_PPH);
     expect(await storedOf(unmeasured)).toBeNull();
     expect(await computeAmax(lowered, { learnedAffluence: true })).toBe(90);
+  });
+
+  it('priceMove tags what the PRICE does — a missing row prices at the fallback 50', () => {
+    const row = (before: number | null, after: number | null) => ({
+      screenhostId: 'x',
+      name: 'x',
+      before,
+      after,
+    });
+    expect(priceMove(row(300, 90))).toBe('LOWER');
+    expect(priceMove(row(200, null))).toBe('LOWER'); // 200 → fallback 50
+    expect(priceMove(row(null, 40))).toBe('LOWER'); // fallback 50 → 40
+    expect(priceMove(row(30, null))).toBe('RAISE'); // 30 → fallback 50
+    expect(priceMove(row(null, 120))).toBe('RAISE');
+    expect(priceMove(row(50, null))).toBe('SAME'); // the row goes, the price stays 50
+    expect(priceMove(row(70, 70))).toBe('SAME');
   });
 
   it('--execute is refused while LEARNED_AFFLUENCE_ENABLED is off', () => {
