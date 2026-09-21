@@ -100,6 +100,53 @@ export const ADMIN_STATUS_FILTER_LABELS: readonly string[] = [
   'Annulée',
 ];
 
+// ── RECH-ADM1 — the recharge TYPE (VIR / BC / FCT) and its status vocabulary ─────
+// The type is DERIVED from the method, never stored: it is the reference prefix (lib/recharges.ts
+// makeMethodReference / makeReference). FCT is the pre-FCT1 legacy FORMAT (method NULL), not a
+// third payment method (T1 A). The three types do not share their statuses (VIR 3, BC 4, FCT 3 —
+// only « Annulée » is common), so the admin status filter offers the CHOSEN type's labels only (T2 A).
+
+export type RechargeType = 'VIR' | 'BC' | 'FCT';
+
+export const RECHARGE_TYPES: readonly RechargeType[] = ['VIR', 'BC', 'FCT'];
+
+export const rechargeTypeOf = (method: RechargeMethod | null): RechargeType => {
+  if (method === 'virement') return 'VIR';
+  if (method === 'bon_de_commande') return 'BC';
+  return 'FCT';
+};
+
+/** The admin type filter's option labels. */
+export const RECHARGE_TYPE_LABELS: Record<RechargeType, string> = {
+  VIR: 'Virement (VIR)',
+  BC: 'Bon de commande (BC)',
+  FCT: 'Ancien format (FCT)',
+};
+
+const TYPE_METHOD: Record<RechargeType, RechargeMethod | null> = {
+  VIR: 'virement',
+  BC: 'bon_de_commande',
+  FCT: null,
+};
+
+// The raw statuses a row of each type can hold (US-FCT-8; legacy rows never reach the bon states).
+const TYPE_STATUSES: Record<RechargeType, readonly RechargeStatus[]> = {
+  VIR: ['pending', 'confirmed', 'rejected'],
+  BC: ['bon_issued', 'bon_returned', 'confirmed', 'rejected'],
+  FCT: ['pending', 'confirmed', 'rejected'],
+};
+
+/**
+ * The status labels the admin filter offers for a type (T2 A): that type's own chip words, read
+ * through statusLabel (never a second copy), in ADMIN_STATUS_FILTER_LABELS order. « Tous les
+ * types » ('all') offers the whole flat list.
+ */
+export const adminStatusFilterLabels = (type: RechargeType | 'all'): readonly string[] => {
+  if (type === 'all') return ADMIN_STATUS_FILTER_LABELS;
+  const offered = new Set(TYPE_STATUSES[type].map((s) => statusLabel(TYPE_METHOD[type], s)));
+  return ADMIN_STATUS_FILTER_LABELS.filter((label) => offered.has(label));
+};
+
 /**
  * The admin-decidable mirror (lib/recharges.ts isAdminDecidable): Valider/Annuler show on a
  * virement (or legacy) row while pending, on a bon row only once the signed bon is back.
