@@ -7,6 +7,7 @@ import {
   screenhostMonthlyStats,
   screenhosts,
 } from '../db/schema.js';
+import { env } from '../env.js';
 
 import { tunisDateOf } from './campaign-dates.js';
 import { SLOTS_PER_DAY, inEffectSql, tunisSlotOf } from './half-hour-slots.js';
@@ -121,14 +122,20 @@ export interface PeriodSourceParams {
    * what « not yet » means.
    */
   nowSlot?: number;
+  /**
+   * LEARN-1 T3 — which merge to run. Defaults to env.LEARNED_AFFLUENCE_ENABLED, THE switch; every
+   * production surface takes the default. Tests pass it to pin either side without the environment.
+   */
+  learnedAffluence?: boolean;
 }
 
 export async function loadPeriodAudienceInput(
   params: PeriodSourceParams,
 ): Promise<PeriodAudienceInput> {
   const { venueId, range, todayIso } = params;
+  const learnedAffluence = params.learnedAffluence ?? env.LEARNED_AFFLUENCE_ENABLED;
 
-  const [months, hourlyRows, grid, onboardedIso] = await Promise.all([
+  const [months, hourlyRows, grid, onboardedIso, venueRows] = await Promise.all([
     // Month rows overlapping the range — the day-granularity history older than the hourly window.
     db
       .select({ month: screenhostMonthlyStats.month, daily: screenhostMonthlyStats.daily })
@@ -143,11 +150,13 @@ export async function loadPeriodAudienceInput(
     // The MEASURED hourly cells. The (screenhost_id, date, hour) unique index serves this range
     // read on its leading prefix — the reason slice A shipped one index rather than two.
     // Slice C — periodAudience keys its cells on (date, SLOT); no collapse on this path.
+    // LEARN-1 — `estimate` rides along; periodAudience reads it only under the flag.
     db
       .select({
         date: screenhostAffluenceHourly.date,
         slot: screenhostAffluenceHourly.slot,
         value: screenhostAffluenceHourly.value,
+        estimate: screenhostAffluenceHourly.estimate,
         deviceOnline: screenhostAffluenceHourly.deviceOnline,
       })
       .from(screenhostAffluenceHourly)
@@ -160,7 +169,15 @@ export async function loadPeriodAudienceInput(
       ),
     loadBackupGrid(venueId),
     estimationFloor(venueId),
+    // LEARN-1 T3 — the venue's CURRENT hours: under the flag every slot outside them is ignored,
+    // across the whole history (spec §3, « the venue's current hours apply to all of its history »).
+    db
+      .select({ openingHour: screenhosts.openingHour, closingHour: screenhosts.closingHour })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, venueId))
+      .limit(1),
   ]);
+  const venue = venueRows[0];
 
   return {
     months,
@@ -170,6 +187,8 @@ export async function loadPeriodAudienceInput(
     todayIso,
     nowSlot: params.nowSlot ?? tunisSlotOf(new Date()),
     onboardedIso,
-    learned: null, // LEARN-1 — wired to the switch and the venue's hours in the next commit
+    learned: learnedAffluence
+      ? { openingHour: venue?.openingHour ?? null, closingHour: venue?.closingHour ?? null }
+      : null,
   };
 }
