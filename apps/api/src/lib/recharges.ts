@@ -13,6 +13,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
+import type { DbExecutor } from './dispatch/pool.js';
 import { type UserLabelSource, userLabel } from './user-label.js';
 
 // Recharge/wallet helpers (L-wallet) shared by the advertiser routes (routes/recharges.ts) and the
@@ -130,11 +131,16 @@ export const rechargeAdvertiser = (user: UserLabelSource): RechargeAdvertiser =>
 
 /**
  * The same identity for ONE advertiser id — for the confirm/reject responses, which
- * update-and-return a row and have no join to ride on. A missing user (impossible: advertiser_id
- * is a NOT NULL FK) falls back to the id, never an empty label.
+ * update-and-return a row and have no join to ride on. They pass their transaction as `executor`:
+ * the read belongs to the decision, so a failed read rolls the decision back instead of turning an
+ * already-committed credit/cancellation into a 500. A missing user (impossible: advertiser_id is a
+ * NOT NULL FK) falls back to the id, never an empty label.
  */
-export const rechargeAdvertiserById = async (advertiserId: string): Promise<RechargeAdvertiser> => {
-  const [row] = await db
+export const rechargeAdvertiserById = async (
+  advertiserId: string,
+  executor: DbExecutor = db,
+): Promise<RechargeAdvertiser> => {
+  const [row] = await executor
     .select({
       businessName: users.businessName,
       contactName: users.contactName,

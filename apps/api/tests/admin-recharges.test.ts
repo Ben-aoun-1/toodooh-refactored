@@ -4,12 +4,25 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, recharges, users } from '../src/db/schema.js';
+import { type NewUser, notifications, recharges, users } from '../src/db/schema.js';
 import { adminRechargesRoutes } from '../src/routes/admin-recharges.js';
 import { apiRoutes } from '../src/routes/index.js';
 import { rechargesRoutes } from '../src/routes/recharges.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+
+// RECH-ADM1 — atomicity probe: arming the bomb makes the confirm/reject label read throw. The read
+// belongs to the decision's transaction, so a failed read rolls the decision back — a 500 can
+// never stand on an already-committed (credited/cancelled) recharge.
+const labelBomb = vi.hoisted(() => ({ armed: false }));
+vi.mock('../src/lib/recharges.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/recharges.js')>();
+  const rechargeAdvertiserById: typeof actual.rechargeAdvertiserById = async (...args) => {
+    if (labelBomb.armed) throw new Error('label read bomb');
+    return actual.rechargeAdvertiserById(...args);
+  };
+  return { ...actual, rechargeAdvertiserById };
+});
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -63,6 +76,7 @@ describe('admin recharge moderation + crediting (real Postgres)', () => {
   });
 
   afterEach(async () => {
+    labelBomb.armed = false;
     await app.close();
     vi.restoreAllMocks();
   });
@@ -166,6 +180,61 @@ describe('admin recharge moderation + crediting (real Postgres)', () => {
     expect(rejected.json()).toMatchObject({
       advertiser_label: 'Pharmacie Nour',
       advertiser_email: 'nour@example.com',
+    });
+  });
+
+  // RECH-ADM1 — the label read can no longer 500 an already-committed decision: it runs inside
+  // the decision's transaction, so when it fails NOTHING is committed (no credit, no notice) and
+  // the admin's retry succeeds.
+  it('a failed label read on confirm rolls the decision back — a 500 never stands on a credited recharge', async () => {
+    const adv = await seedUser({ businessName: 'Café Atomique' });
+    const id = await seedRecharge(adv, '90.00', 'FCT-A0000001');
+    const admin = await seedUser({ role: 'admin', email: 'atomadmin@example.com' });
+    mockSession(admin);
+    labelBomb.armed = true;
+    const failed = await app.inject({ method: 'POST', url: `/api/admin/recharges/${id}/confirm` });
+    expect(failed.statusCode).toBe(500);
+    const [row] = await db.select().from(recharges).where(eq(recharges.id, id));
+    expect(row).toMatchObject({ status: 'pending', confirmedAt: null, confirmedBy: null });
+    expect(await db.select().from(notifications).where(eq(notifications.userId, adv))).toEqual([]);
+    labelBomb.armed = false;
+    const retried = await app.inject({ method: 'POST', url: `/api/admin/recharges/${id}/confirm` });
+    expect(retried.statusCode).toBe(200);
+    expect(retried.json()).toMatchObject({
+      status: 'confirmed',
+      advertiser_label: 'Café Atomique',
+    });
+    mockSession(adv, 'advertiser');
+    expect((await app.inject({ method: 'GET', url: '/api/wallet/balance' })).json()).toMatchObject({
+      balance_tnd: 90,
+    });
+  });
+
+  it('a failed label read on reject rolls the decision back — the recharge stays decidable', async () => {
+    const adv = await seedUser({ businessName: 'Pharmacie Atomique' });
+    const id = await seedRecharge(adv, '70.00', 'FCT-A0000002');
+    const admin = await seedUser({ role: 'admin', email: 'atomadmin2@example.com' });
+    mockSession(admin);
+    labelBomb.armed = true;
+    const failed = await app.inject({
+      method: 'POST',
+      url: `/api/admin/recharges/${id}/reject`,
+      payload: { reason: 'virement introuvable' },
+    });
+    expect(failed.statusCode).toBe(500);
+    const [row] = await db.select().from(recharges).where(eq(recharges.id, id));
+    expect(row).toMatchObject({ status: 'pending', rejectReason: null, cancelledAt: null });
+    expect(await db.select().from(notifications).where(eq(notifications.userId, adv))).toEqual([]);
+    labelBomb.armed = false;
+    const retried = await app.inject({
+      method: 'POST',
+      url: `/api/admin/recharges/${id}/reject`,
+      payload: { reason: 'virement introuvable' },
+    });
+    expect(retried.statusCode).toBe(200);
+    expect(retried.json()).toMatchObject({
+      status: 'rejected',
+      advertiser_label: 'Pharmacie Atomique',
     });
   });
 
