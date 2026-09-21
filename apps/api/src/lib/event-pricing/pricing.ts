@@ -1,18 +1,20 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import {
   businessSectors,
   hourReservations,
   screenhostAffluence,
+  screenhostAffluenceHourly,
   screenhostAmax,
   screenhostUnavailability,
   screenhosts,
 } from '../../db/schema.js';
+import { env } from '../../env.js';
 import { ownerApprovedSql } from '../approved-owner.js';
 import { type BlocDiffusion, fenetreDiffusion } from '../fenetre-diffusion.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
-import { isOpenAt } from '../opening-hours.js';
+import { isOpenAt, isOpenSlot } from '../opening-hours.js';
 
 // EV2 — the EVENT pricing engine (D51: its OWN module). The campaign engine is untouched and
 // UNIMPORTED — no lib/dispatch, no campaign-* libs (boundary-pinned like E7's rail). The event
@@ -64,11 +66,8 @@ export const blocCells = (start: Date, end: Date): TunisCell[] => {
   return [first, last];
 };
 
-/**
- * The A_max ratchet, per venue: MAX(grid, stored) — growth persists, shrinkage never writes.
- * Returns the effective A_max, or the 50 fallback (UNPERSISTED) when nothing is known.
- */
-export const computeAmax = async (screenhostId: string): Promise<number> => {
+/** The typical-week candidate (flag OFF — today's A_max, unchanged): the grid's busiest hour. */
+const gridAmaxPph = async (screenhostId: string): Promise<number> => {
   // ⚠️ THIS COLLAPSE IS PERMANENT — do NOT "finish the half-hour migration" by deleting it.
   //
   // You are looking at a GROUP BY on `hour` over a table keyed by `slot`, and it looks like a
@@ -90,23 +89,79 @@ export const computeAmax = async (screenhostId: string): Promise<number> => {
       ),
     )
     .groupBy(screenhostAffluence.dayOfWeek, screenhostAffluence.hour);
-  const gridMax = grid.reduce((m, r) => Math.max(m, r.v), 0);
+  return grid.reduce((m, r) => Math.max(m, r.v), 0);
+};
+
+/**
+ * LEARN-1 F1 (spec §9, operator-approved) — the venue's busiest HOUR ever MEASURED inside its
+ * opening hours: « le plus haut niveau de fréquentation (personnes/heure) jamais mesuré pour ce
+ * lieu, tous événements confondus ». An hour is the mean of the measured half-hours it has, rounded
+ * — `collapseHalvesSql`, the SAME rule as the grid path (a lone half IS the hour; the permanent-
+ * collapse note on gridAmaxPph applies here too). Only `value` counts: an estimate, a typed cell or
+ * the typical week never does. All history; the venue's CURRENT hours apply to all of it
+ * (`isOpenSlot` — no hours = open all day). 0 = nothing measured (the caller falls back to 50).
+ */
+export const measuredAmaxPph = async (screenhostId: string): Promise<number> => {
+  const [venue] = await db
+    .select({ openingHour: screenhosts.openingHour, closingHour: screenhosts.closingHour })
+    .from(screenhosts)
+    .where(eq(screenhosts.id, screenhostId))
+    .limit(1);
+  if (!venue) return 0;
+  const openHours = Array.from({ length: 24 }, (_, hour) => hour).filter((hour) =>
+    isOpenSlot(hour * 2, venue.openingHour, venue.closingHour),
+  );
+  if (openHours.length === 0) return 0; // a zero-width window (refused by every writer)
+  const hourValue = collapseHalvesSql(screenhostAffluenceHourly.value);
+  const [peak] = await db
+    .select({ v: hourValue })
+    .from(screenhostAffluenceHourly)
+    .where(
+      and(
+        eq(screenhostAffluenceHourly.screenhostId, screenhostId),
+        isNotNull(screenhostAffluenceHourly.value),
+        inArray(screenhostAffluenceHourly.hour, openHours),
+      ),
+    )
+    .groupBy(screenhostAffluenceHourly.date, screenhostAffluenceHourly.hour)
+    .orderBy(desc(hourValue))
+    .limit(1);
+  return peak?.v ?? 0;
+};
+
+export interface AmaxOptions {
+  /** LEARN-1 F1 — defaults to env.LEARNED_AFFLUENCE_ENABLED, THE switch; tests pin either side. */
+  learnedAffluence?: boolean;
+}
+
+/**
+ * The A_max ratchet, per venue: MAX(candidate, stored) — growth persists, shrinkage never writes.
+ * The candidate is the typical-week grid's busiest hour (flag OFF, unchanged) or, under
+ * LEARNED_AFFLUENCE_ENABLED (F1), the busiest hour ever MEASURED inside opening hours.
+ * Returns the effective A_max, or the 50 fallback (UNPERSISTED) when nothing is known.
+ */
+export const computeAmax = async (
+  screenhostId: string,
+  opts: AmaxOptions = {},
+): Promise<number> => {
+  const learned = opts.learnedAffluence ?? env.LEARNED_AFFLUENCE_ENABLED;
+  const candidate = learned ? await measuredAmaxPph(screenhostId) : await gridAmaxPph(screenhostId);
   const [stored] = await db
     .select({ amaxPph: screenhostAmax.amaxPph })
     .from(screenhostAmax)
     .where(eq(screenhostAmax.screenhostId, screenhostId))
     .limit(1);
   const storedMax = stored?.amaxPph ?? 0;
-  if (gridMax > storedMax) {
+  if (candidate > storedMax) {
     await db
       .insert(screenhostAmax)
-      .values({ screenhostId, amaxPph: gridMax })
+      .values({ screenhostId, amaxPph: candidate })
       .onConflictDoUpdate({
         target: screenhostAmax.screenhostId,
-        set: { amaxPph: gridMax, updatedAt: new Date() },
+        set: { amaxPph: candidate, updatedAt: new Date() },
       });
   }
-  const effective = Math.max(gridMax, storedMax);
+  const effective = Math.max(candidate, storedMax);
   return effective > 0 ? effective : AMAX_FALLBACK_PPH;
 };
 
