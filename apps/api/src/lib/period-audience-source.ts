@@ -131,8 +131,10 @@ export const firstOpenMeasuredDay = async (
     openingHour === null || closingHour === null
       ? sql`true`
       : openingHour < closingHour
-        ? sql`${hour} >= ${openingHour} AND ${hour} < ${closingHour}`
-        : sql`${hour} >= ${openingHour} OR ${hour} < ${closingHour}`;
+        ? sql`(${hour} >= ${openingHour} AND ${hour} < ${closingHour})`
+        : // Parenthesised: drizzle's and() does not wrap its operands, and a bare OR would escape
+          // the venue filter (any venue's 00h row, measured or not, would set this floor).
+          sql`(${hour} >= ${openingHour} OR ${hour} < ${closingHour})`;
   const [first] = await db
     .select({ date: screenhostAffluenceHourly.date })
     .from(screenhostAffluenceHourly)
@@ -217,7 +219,8 @@ export async function loadPeriodAudienceInput(
         ),
       ),
     loadBackupGrid(venueId),
-    estimationFloor(venueId),
+    // Under the flag the floor is learnedFloor's (below) — skip the flag-off derivation's 2 queries.
+    learnedAffluence ? Promise.resolve(null) : estimationFloor(venueId),
     // LEARN-1 T3 — the venue's CURRENT hours: under the flag every slot outside them is ignored,
     // across the whole history (spec §3, « the venue's current hours apply to all of its history »).
     db
@@ -236,7 +239,8 @@ export async function loadPeriodAudienceInput(
     : null;
   // LEARN-1 T3 amendment — under the flag the floor is max(creation day, first OPEN measured day):
   // estimationFloor's shape, but a closed-hour reading stored before the flag cannot drag it earlier.
-  // Never measured inside the hours → the creation day (rule 6: typed from creation), never null.
+  // Never measured inside the hours → the creation day (rule 6: typed from creation); null only
+  // for a missing venue, which every caller has already answered with a 404.
   const onboardedIso =
     learned !== null ? await learnedFloor(venueId, learned, venue) : defaultFloor;
 

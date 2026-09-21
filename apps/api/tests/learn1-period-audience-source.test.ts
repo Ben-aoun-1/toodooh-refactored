@@ -157,6 +157,21 @@ describe('LEARN-1 T3 amendment — under the flag the floor is the first OPEN me
     expect((await load(onlyClosed, true)).onboardedIso).toBe('2026-09-01');
   });
 
+  it("wrap-around (08 → 01): only this venue's OPEN measured rows count — 00h30 open, 03h not", async () => {
+    const other = await seedVenue(null, null);
+    const venue = await seedVenue(8, 1);
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: other, date: '2026-09-02', hour: 0, slot: 0, value: 7 }, // another venue
+      { screenhostId: venue, date: '2026-09-05', hour: 0, slot: 0, value: null }, // silence
+      { screenhostId: venue, date: '2026-09-06', hour: 3, slot: 6, value: 4 }, // closed
+      { screenhostId: venue, date: '2026-09-09', hour: 0, slot: 1, value: 6 }, // 00h30, open
+    ]);
+    await expect(firstOpenMeasuredDay(venue, { openingHour: 8, closingHour: 1 })).resolves.toBe(
+      '2026-09-09',
+    );
+    expect((await load(venue, true)).onboardedIso).toBe('2026-09-09');
+  });
+
   it('firstOpenMeasuredDay: opening === closing is zero-width — null even with a measured row', async () => {
     const venue = await seedVenue(9, 9);
     await db
