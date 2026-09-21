@@ -220,6 +220,38 @@ describe('LEARN-1 T3 — a hub date under the flag takes the hub cells as they a
       source: 'backup',
     });
   });
+
+  // LEARN-1 T3 fix round — pins of FLOW-4 (hour = mean of the halves present; a lone half is its
+  // own hour), on hour 9h (slots 18/19), open under the default OPEN_8_22.
+
+  it('a mixed hour: one measured half and one backup half average into the hour', () => {
+    const result = periodAudience(
+      input({ hourly: [cell(TODAY, 18, 10), cell(TODAY, 19, null, 30)] }),
+    );
+    // 9h = (10 + 30) / 2 = 20; one backup half makes the day an estimation.
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 20, source: 'estimated', hasMeasured: true },
+    ]);
+    // 30 of the hour's 40 (10 + 30) comes from the estimate: 30 / 40 = 75 %.
+    expect(result.estimatedPct).toBe(75);
+  });
+
+  it('a lone half, with no estimate on the other, is its own hour', () => {
+    const result = periodAudience(input({ hourly: [cell(TODAY, 18, 10), cell(TODAY, 19, null)] }));
+    // 19 carries no estimate, so it is not a data point; 9h is the lone half, 10, and measured.
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 10, source: 'measured', hasMeasured: true },
+    ]);
+  });
+
+  it('a learned zero is a real data point — (10 + 0) / 2 = 5, not a lone 10', () => {
+    const result = periodAudience(
+      input({ hourly: [cell(TODAY, 18, 10), cell(TODAY, 19, null, 0)] }),
+    );
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 5, source: 'estimated', hasMeasured: true },
+    ]);
+  });
 });
 
 describe('LEARN-1 T3 — flag OFF is today, byte for byte', () => {
