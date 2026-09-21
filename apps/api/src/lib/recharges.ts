@@ -8,10 +8,12 @@ import {
   campaignReconciliation,
   campaigns,
   recharges,
+  users,
   walletAdjustments,
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
+import { type UserLabelSource, userLabel } from './user-label.js';
 
 // Recharge/wallet helpers (L-wallet) shared by the advertiser routes (routes/recharges.ts) and the
 // admin moderation surface (routes/admin-recharges.ts) — single source of truth so the two can't drift.
@@ -113,11 +115,47 @@ export const rechargeView = (row: Recharge) => ({
 
 export type RechargeView = ReturnType<typeof rechargeView>;
 
+// RECH-ADM1 (T3) — who a recharge belongs to, as the admin sees it: ADM-FIX1's ONE label
+// (lib/user-label) + the email. The admin page used to name screencasters from the APPROVED users
+// only, so a pending/rejected/banned screencaster's recharge printed a raw uuid.
+export interface RechargeAdvertiser {
+  label: string;
+  email: string;
+}
+
+export const rechargeAdvertiser = (user: UserLabelSource): RechargeAdvertiser => ({
+  label: userLabel(user),
+  email: user.email,
+});
+
+/**
+ * The same identity for ONE advertiser id — for the confirm/reject responses, which
+ * update-and-return a row and have no join to ride on. A missing user (impossible: advertiser_id
+ * is a NOT NULL FK) falls back to the id, never an empty label.
+ */
+export const rechargeAdvertiserById = async (advertiserId: string): Promise<RechargeAdvertiser> => {
+  const [row] = await db
+    .select({
+      businessName: users.businessName,
+      contactName: users.contactName,
+      email: users.email,
+    })
+    .from(users)
+    .where(eq(users.id, advertiserId))
+    .limit(1);
+  return row
+    ? rechargeAdvertiser({ id: advertiserId, ...row })
+    : { label: advertiserId, email: '' };
+};
+
 // Admin view = the advertiser projection + the owner id and the confirming admin id (audit), plus
 // the document mimes so the review modal can pick its render mode (image inline vs PDF open-in-tab).
-export const adminRechargeView = (row: Recharge) => ({
+// RECH-ADM1 — plus the owner's label + email (the « Annonceur » column and the Screencaster filter).
+export const adminRechargeView = (row: Recharge, advertiser: RechargeAdvertiser) => ({
   ...rechargeView(row),
   advertiser_id: row.advertiserId,
+  advertiser_label: advertiser.label,
+  advertiser_email: advertiser.email,
   confirmed_by: row.confirmedBy,
   document_mime: row.documentMime,
   signed_bon_mime: row.signedBonMime,

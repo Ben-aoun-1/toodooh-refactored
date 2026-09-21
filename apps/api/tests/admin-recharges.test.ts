@@ -87,6 +87,88 @@ describe('admin recharge moderation + crediting (real Postgres)', () => {
     ]);
   });
 
+  // RECH-ADM1 (T3) — every row carries ADM-FIX1's ONE label + the email, whatever the
+  // screencaster's account status. The page used to name advertisers from the APPROVED users
+  // only, so a pending/rejected/banned screencaster's recharge printed a raw uuid.
+  it('names every row with the ADM-FIX1 label + email — non-approved screencasters included', async () => {
+    const approved = await seedUser({ businessName: 'Café Central', email: 'central@example.com' });
+    const pendingAcc = await seedUser({
+      status: 'pending',
+      businessName: '  ',
+      contactName: 'Salma Ben Ali',
+      email: 'salma@example.com',
+    });
+    const banned = await seedUser({
+      status: 'banned',
+      businessName: null,
+      contactName: ' ',
+      email: 'banned@example.com',
+    });
+    await seedRecharge(approved, '10.00', 'FCT-N0000001');
+    await seedRecharge(pendingAcc, '20.00', 'FCT-N0000002');
+    await seedRecharge(banned, '30.00', 'FCT-N0000003');
+    const admin = await seedUser({ role: 'admin', email: 'namesadmin@example.com' });
+    mockSession(admin);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/recharges' });
+    expect(res.statusCode).toBe(200);
+    const byRef = new Map(
+      (
+        res.json() as {
+          reference: string;
+          advertiser_id: string;
+          advertiser_label: string;
+          advertiser_email: string;
+        }[]
+      ).map((r) => [r.reference, r]),
+    );
+    expect(byRef.get('FCT-N0000001')).toMatchObject({
+      advertiser_id: approved,
+      advertiser_label: 'Café Central',
+      advertiser_email: 'central@example.com',
+    });
+    expect(byRef.get('FCT-N0000002')).toMatchObject({
+      advertiser_id: pendingAcc,
+      advertiser_label: 'Salma Ben Ali',
+      advertiser_email: 'salma@example.com',
+    });
+    expect(byRef.get('FCT-N0000003')).toMatchObject({
+      advertiser_id: banned,
+      advertiser_label: 'banned@example.com',
+      advertiser_email: 'banned@example.com',
+    });
+  });
+
+  it('the confirm and reject responses carry the same label + email', async () => {
+    const adv = await seedUser({
+      status: 'rejected',
+      businessName: 'Pharmacie Nour',
+      email: 'nour@example.com',
+    });
+    const toConfirm = await seedRecharge(adv, '40.00', 'FCT-N0000004');
+    const toReject = await seedRecharge(adv, '50.00', 'FCT-N0000005');
+    const admin = await seedUser({ role: 'admin', email: 'namesadmin2@example.com' });
+    mockSession(admin);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: `/api/admin/recharges/${toConfirm}/confirm`,
+    });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json()).toMatchObject({
+      advertiser_label: 'Pharmacie Nour',
+      advertiser_email: 'nour@example.com',
+    });
+    const rejected = await app.inject({
+      method: 'POST',
+      url: `/api/admin/recharges/${toReject}/reject`,
+      payload: { reason: 'virement introuvable' },
+    });
+    expect(rejected.statusCode).toBe(200);
+    expect(rejected.json()).toMatchObject({
+      advertiser_label: 'Pharmacie Nour',
+      advertiser_email: 'nour@example.com',
+    });
+  });
+
   // ── confirm ──────────────────────────────────────────────────────────────────
   it('confirm credits the wallet balance (pending → confirmed, audit stamped)', async () => {
     const adv = await seedUser();

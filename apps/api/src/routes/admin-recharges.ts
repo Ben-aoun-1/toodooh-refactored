@@ -3,9 +3,14 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type Recharge, notifications, recharges } from '../db/schema.js';
+import { type Recharge, notifications, recharges, users } from '../db/schema.js';
 import { advertiserRechargeNotification } from '../lib/recharge-notifications.js';
-import { adminRechargeView, isAdminDecidable } from '../lib/recharges.js';
+import {
+  adminRechargeView,
+  isAdminDecidable,
+  rechargeAdvertiser,
+  rechargeAdvertiserById,
+} from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
@@ -67,12 +72,32 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       );
     }
     const { status } = parsedQuery.data;
+    // RECH-ADM1 — the owner's name rides the list read (ADM-FIX1's ONE label, any account
+    // status). INNER on purpose and cannot drop a row: advertiser_id is a NOT NULL FK to users.
     const rows = await db
-      .select()
+      .select({
+        recharge: recharges,
+        advertiserBusinessName: users.businessName,
+        advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
+      })
       .from(recharges)
+      .innerJoin(users, eq(recharges.advertiserId, users.id))
       .where(status ? eq(recharges.status, status) : undefined)
       .orderBy(desc(recharges.createdAt));
-    return reply.status(200).send(rows.map(adminRechargeView));
+    return reply.status(200).send(
+      rows.map((r) =>
+        adminRechargeView(
+          r.recharge,
+          rechargeAdvertiser({
+            id: r.recharge.advertiserId,
+            businessName: r.advertiserBusinessName,
+            contactName: r.advertiserContactName,
+            email: r.advertiserEmail,
+          }),
+        ),
+      ),
+    );
   });
 
   // POST /api/admin/recharges/:id/confirm — decidable → confirmed; credits the balance (the SUM
@@ -118,7 +143,9 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       const [current] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
       return sendNotPending(reply, request, current ?? existing);
     }
-    return reply.status(200).send(adminRechargeView(updated));
+    return reply
+      .status(200)
+      .send(adminRechargeView(updated, await rechargeAdvertiserById(updated.advertiserId)));
   });
 
   // POST /api/admin/recharges/:id/reject {reason} — decidable → rejected («Annulée» for method
@@ -164,7 +191,9 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       const [current] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
       return sendNotPending(reply, request, current ?? existing);
     }
-    return reply.status(200).send(adminRechargeView(updated));
+    return reply
+      .status(200)
+      .send(adminRechargeView(updated, await rechargeAdvertiserById(updated.advertiserId)));
   });
 
   // GET /api/admin/recharges/:id/document-url — short-TTL presigned view of a recharge's
