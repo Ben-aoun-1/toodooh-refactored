@@ -170,5 +170,6 @@ export async function loadPeriodAudienceInput(
     todayIso,
     nowSlot: params.nowSlot ?? tunisSlotOf(new Date()),
     onboardedIso,
+    learned: null, // LEARN-1 — wired to the switch and the venue's hours in the next commit
   };
 }

@@ -4,6 +4,7 @@ import type { MonthlyStatsDaily } from '../db/schema.js';
 
 import { SLOTS_PER_DAY, hourOfSlot } from './half-hour-slots.js';
 import { isMeasuredDay } from './monthly-audience.js';
+import { isOpenSlot } from './opening-hours.js';
 import type { DateRange } from './report/derive.js';
 
 /**
@@ -49,6 +50,13 @@ import type { DateRange } from './report/derive.js';
  * AFF1 (the « Votre audience » day tiles), reused so the two surfaces keep saying the same thing,
  * and it is the conservative side — a day whose total contains an estimate never claims to be a
  * measurement, and therefore never becomes the « Pic d'audience » (MEJ-R1).
+ *
+ * ── LEARN-1 T3 (spec 2026-09-21, behind LEARNED_AFFLUENCE_ENABLED) ─────────────────────────────
+ * With `input.learned` set, the HUB has computed everything (approach A) and a date that holds hub
+ * cells takes them as they are: a slot outside the venue's CURRENT hours is ignored (rows stored
+ * before the flag included); `value !== null` → measured (a 0 is a 0); else `estimate` → backup;
+ * else not a data point. No grid, no device_online, no monthly_stats on such a date. A date with no
+ * open hub cell keeps the path above. `learned === null` (flag off) runs the code above untouched.
  */
 
 /** One half-hour cell as `screenhost_affluence_hourly` holds it (Tunis, verbatim). */
@@ -62,6 +70,22 @@ export interface HourlyCell {
   value: number | null;
   /** OFF-1 — was the device up during this slot, per the hub? `null`/absent = unknown. */
   deviceOnline?: boolean | null;
+  /**
+   * LEARN-1 T2 — the hub's ready-made value for a slot it did NOT measure (its learned average, else
+   * the typed seed), only ever beside `value: null`. Read only under the flag (`learned`); absent or
+   * null = the hub had nothing to offer.
+   */
+  estimate?: number | null;
+}
+
+/**
+ * LEARN-1 T3 — the one venue fact the learned merge needs. `PeriodAudienceInput.learned === null`
+ * means the flag is OFF and the merge is today's, byte for byte.
+ */
+export interface LearnedMerge {
+  /** The venue's CURRENT hours (screenhosts.opening_hour / closing_hour); either null = open all day. */
+  openingHour: number | null;
+  closingHour: number | null;
 }
 
 /**
@@ -163,6 +187,12 @@ export interface PeriodAudienceInput {
    * unbounded behaviour by omission.
    */
   onboardedIso: string | null;
+  /**
+   * LEARN-1 T3 — `null` = LEARNED_AFFLUENCE_ENABLED is off (today's merge). Required, like
+   * `nowSlot` and `onboardedIso`: every caller states which merge it runs rather than inheriting one
+   * by omission. Set by `loadPeriodAudienceInput` from the ONE switch and the venue's hours.
+   */
+  learned: LearnedMerge | null;
 }
 
 /** A zero-filled 7×48 Monday-first grid with nothing marked as filled. */
@@ -231,8 +261,38 @@ const hourValue = (hourCells: readonly PeriodCell[]): number =>
 /** date-fns getDay: 0 = Sunday → the grid's Monday-first row index. */
 const rowOf = (dateIso: string): number => (getDay(parseISO(dateIso)) + 6) % 7;
 
+/** A day built from half-hour cells — AFF1's dayProvenance and MEJ-R2's peak flag, as the slot path states them. */
+const slotDay = (date: string, dayCells: readonly PeriodCell[]): PeriodDay => ({
+  date,
+  audience: dayAudience(dayCells),
+  source: dayCells.every((c) => c.source === 'measured') ? 'measured' : 'estimated',
+  hasMeasured: dayCells.some((c) => c.source === 'measured'),
+});
+
+/**
+ * LEARN-1 T3 — one hub date under the flag. The hub computed everything (approach A), so its cells
+ * are taken as they are: a reading is `measured` (a 0 is a 0 — no device_online, no grid), an
+ * unmeasured slot the hub could fill carries `estimate` and is `backup`, anything else is not a data
+ * point. The hub already applied its own floor (the first reading) and sends ended slots only, so
+ * neither `onboardedIso` nor the S02-FUT1 boundary is re-applied here. Closed slots never reach this
+ * function (they are dropped when the hub dates are indexed).
+ */
+const learnedDayCells = (date: string, hubSlots: ReadonlyMap<number, HourlyCell>): PeriodCell[] => {
+  const dayCells: PeriodCell[] = [];
+  for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
+    const hubCell = hubSlots.get(slot);
+    if (hubCell === undefined) continue;
+    if (hubCell.value !== null) {
+      dayCells.push({ date, slot, value: hubCell.value, source: 'measured' });
+    } else if (hubCell.estimate !== undefined && hubCell.estimate !== null) {
+      dayCells.push({ date, slot, value: hubCell.estimate, source: 'backup' });
+    }
+  }
+  return dayCells;
+};
+
 export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
-  const { months, hourly, grid, range, todayIso, nowSlot, onboardedIso } = input;
+  const { months, hourly, grid, range, todayIso, nowSlot, onboardedIso, learned } = input;
 
   const measuredDayByDate = new Map<string, MonthlyStatsDaily>();
   for (const month of months) {
@@ -243,6 +303,26 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   // and "the sensor counted nobody" stay distinguishable right up to this merge.
   const hourlyByDate = new Map<string, Map<number, HourlyCell>>();
   for (const cell of hourly) {
+    // LEARN-1 T3 — under the flag a slot outside the venue's CURRENT hours is not a data point and
+    // does not make its date a hub date: rows stored before the flag (the old pushes sent night
+    // slots) are dropped here, before anything reads them. Off (`learned === null`): nothing is.
+    if (learned !== null && !isOpenSlot(cell.slot, learned.openingHour, learned.closingHour)) {
+      continue;
+    }
+    // LEARN-1 T3 — a legacy OFF-1 « record of silence » (value null, no estimate, device_online
+    // set) predates the flag: the flagged hub rewrites every open row since the venue's first
+    // reading WITHOUT device_online, so a row still carrying it is either before that first
+    // reading or belongs to a venue never measured. Neither is a hub cell under the flag, so its
+    // date keeps today's path (the typed grid from the floor) instead of going blank.
+    if (
+      learned !== null &&
+      cell.value === null &&
+      (cell.estimate === undefined || cell.estimate === null) &&
+      cell.deviceOnline !== undefined &&
+      cell.deviceOnline !== null
+    ) {
+      continue;
+    }
     const forDate = hourlyByDate.get(cell.date) ?? new Map<number, HourlyCell>();
     forDate.set(cell.slot, cell);
     hourlyByDate.set(cell.date, forDate);
@@ -278,6 +358,16 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       const elapsed = (slot: number): boolean => date < todayIso || slot < nowSlot;
       const row = rowOf(date);
       const measuredSlots = hourlyByDate.get(date);
+
+      if (measuredSlots !== undefined && learned !== null) {
+        // ── LEARN-1 T3: a hub date under the flag — the hub's cells as they are, nothing else ──
+        const dayCells = learnedDayCells(date, measuredSlots);
+        if (dayCells.length > 0) {
+          cells.push(...dayCells);
+          days.push(slotDay(date, dayCells));
+        }
+        continue;
+      }
 
       if (measuredSlots !== undefined) {
         // ── the slot path: monthly_stats is NEVER added on top (double counting) ──

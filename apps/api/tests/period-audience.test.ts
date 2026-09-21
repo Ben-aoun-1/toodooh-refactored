@@ -73,6 +73,8 @@ const input = (over: Partial<PeriodAudienceInput> = {}): PeriodAudienceInput => 
   // rule's own tests pass a real boundary.
   nowSlot: 48,
   onboardedIso: null,
+  // LEARN-1 — every assertion in this file is the FLAG-OFF merge; they must hold byte for byte.
+  learned: null,
   ...over,
 });
 
