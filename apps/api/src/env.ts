@@ -90,6 +90,13 @@ const EnvSchema = z.object({
   // DATABASES on the server (each holds a small pool; see simulator/pools.ts).
   SIMULATOR_ENABLED: z.stringbool().default(false),
   SIMULATOR_MAX_SANDBOXES: z.coerce.number().int().min(1).max(20).default(5),
+  // LEARN-1 (spec 2026-09-21, hub + toodooh) — the learned half-hour average. OFF by default, and
+  // off is today's behaviour byte for byte. ON ('true'): periodAudience takes the hub's per-date
+  // cells as they are (T3 — measured, else the hub's estimate, nothing outside the venue's hours)
+  // and computeAmax prices events on the highest hour ever MEASURED (F1). THE one switch: every
+  // reader resolves it from here (each accepts a per-call override for tests). Flip it only after
+  // the hub's own flag is on AND its full-history push has landed (spec §6, steps 5 → 6).
+  LEARNED_AFFLUENCE_ENABLED: z.stringbool().default(false),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {
