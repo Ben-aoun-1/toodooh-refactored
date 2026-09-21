@@ -4,6 +4,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
 import { screenhostAffluenceHourly, screenhosts } from '../src/db/schema.js';
+import { firstMeasuredDay, loadBackupGrid } from '../src/lib/period-audience-source.js';
+import { venueHasAffluenceSql } from '../src/lib/venue-has-affluence.js';
 import { internalRoutes } from '../src/routes/internal.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -165,5 +167,99 @@ describe('LEARN-1 T2 — C1h stores the estimate (receiver contract)', () => {
       { slot: 20, value: null, estimate: 30, deviceOnline: null },
       { slot: 21, value: null, estimate: 30, deviceOnline: null },
     ]);
+  });
+});
+
+describe('LEARN-1 T2 — the measured-only readers never see an estimate (pins)', () => {
+  beforeEach(async () => {
+    await resetAuthTables();
+  });
+
+  it('firstMeasuredDay skips a date that holds only estimates', async () => {
+    const venue = await seedVenue();
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: venue, date: '2026-09-07', hour: 10, slot: 20, value: null, estimate: 30 },
+      { screenhostId: venue, date: '2026-09-14', hour: 9, slot: 18, value: 12 },
+    ]);
+    expect(await firstMeasuredDay(venue)).toBe('2026-09-14');
+  });
+
+  it('venueHasAffluenceSql is FALSE for a venue whose only hub cells are estimates', async () => {
+    const venue = await seedVenue();
+    await db.insert(screenhostAffluenceHourly).values({
+      screenhostId: venue,
+      date: '2026-09-07',
+      hour: 10,
+      slot: 20,
+      value: null,
+      estimate: 30,
+    });
+    const [row] = await db
+      .select({ has: venueHasAffluenceSql() })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, venue));
+    expect(row?.has).toBe(false);
+  });
+});
+
+describe('LEARN-1 T4 — the full-grid typical week needs no receiver change (contract pin)', () => {
+  let app: ReturnType<typeof buildApp> | undefined;
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.ready();
+  });
+  afterEach(async () => {
+    if (app) await app.close();
+    app = undefined;
+  });
+
+  it('336 keys in ONE request are accepted; the withdrawn ones read as ABSENT in the backup grid', async () => {
+    const venue = await seedVenue();
+    const learned = new Set([20, 21, 22, 23]); // Monday 10h00–11h30 — the only cells the rule produces
+    const slots: {
+      location_id: string;
+      day_of_week: number;
+      slot: number;
+      estimated_impressions: number;
+      source: 'measured' | 'backup';
+      in_effect: boolean;
+    }[] = [];
+    for (let day = 1; day <= 7; day += 1) {
+      for (let slot = 0; slot < 48; slot += 1) {
+        const present = day === 1 && learned.has(slot);
+        slots.push({
+          location_id: venue,
+          day_of_week: day,
+          slot,
+          estimated_impressions: present ? 40 : 0,
+          source: present ? 'measured' : 'backup',
+          in_effect: present,
+        });
+      }
+    }
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/affluence',
+      headers: auth,
+      payload: { slots },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ upserted: 336, slot_rows: 336, unknown_locations: [] });
+
+    const grid = await loadBackupGrid(venue);
+    const filled: [number, number][] = [];
+    grid.has.forEach((row, day) =>
+      row.forEach((has, slot) => {
+        if (has) filled.push([day, slot]);
+      }),
+    );
+    expect(filled).toEqual([
+      [0, 20],
+      [0, 21],
+      [0, 22],
+      [0, 23],
+    ]);
+    expect(grid.values[0]?.[20]).toBe(40);
   });
 });
