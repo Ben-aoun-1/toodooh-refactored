@@ -1,7 +1,10 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { asc, eq } from 'drizzle-orm';
+import Fastify from 'fastify';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
 import { screenhostAffluenceHourly, screenhosts } from '../src/db/schema.js';
+import { internalRoutes } from '../src/routes/internal.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
@@ -13,6 +16,15 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 const seedVenue = async (name = 'LEARN-1 venue'): Promise<string> => {
   const [host] = await db.insert(screenhosts).values({ name }).returning({ id: screenhosts.id });
   return host!.id;
+};
+
+// The /api/internal/* surface takes the key as a plugin option (internal.test.ts idiom), so no env.
+const SYNC_KEY = 'test-sync-key-0123456789';
+const auth = { authorization: `Bearer ${SYNC_KEY}` };
+const buildApp = () => {
+  const app = Fastify({ logger: false });
+  app.register(internalRoutes, { syncKey: SYNC_KEY });
+  return app;
 };
 
 afterAll(async () => {
@@ -41,5 +53,117 @@ describe('LEARN-1 T2 — screenhost_affluence_hourly.estimate (migration 0077)',
       sql`insert into screenhost_affluence_hourly (screenhost_id, date, hour, slot, value, estimate)
           values (${venue}, '2026-09-14', 11, 22, null, -1)`,
     ).rejects.toThrow(/screenhost_affluence_hourly_estimate_nonneg/);
+  });
+});
+
+describe('LEARN-1 T2 — C1h stores the estimate (receiver contract)', () => {
+  let app: ReturnType<typeof buildApp> | undefined;
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.ready();
+  });
+  afterEach(async () => {
+    if (app) await app.close();
+    app = undefined;
+  });
+
+  const push = (places: unknown) =>
+    app!.inject({
+      method: 'POST',
+      url: '/api/internal/affluence-hourly',
+      headers: auth,
+      payload: { places },
+    });
+
+  const rowsOf = (venue: string) =>
+    db
+      .select({
+        slot: screenhostAffluenceHourly.slot,
+        value: screenhostAffluenceHourly.value,
+        estimate: screenhostAffluenceHourly.estimate,
+        deviceOnline: screenhostAffluenceHourly.deviceOnline,
+      })
+      .from(screenhostAffluenceHourly)
+      .where(eq(screenhostAffluenceHourly.screenhostId, venue))
+      .orderBy(asc(screenhostAffluenceHourly.slot));
+
+  it("stores `estimate` beside a null value — the flagged hub's exact cell (no hour, no device_online)", async () => {
+    const venue = await seedVenue();
+    const res = await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [
+          { date: '2026-09-14', slot: 18, value: 12 },
+          { date: '2026-09-14', slot: 20, value: null, estimate: 30 },
+        ],
+      },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ upserted: 2, slot_rows: 2, unknown_locations: [] });
+    expect(await rowsOf(venue)).toEqual([
+      { slot: 18, value: 12, estimate: null, deviceOnline: null },
+      { slot: 20, value: null, estimate: 30, deviceOnline: null },
+    ]);
+  });
+
+  it('a later push WITHOUT estimate clears it — measured since, or nothing to offer any more', async () => {
+    const venue = await seedVenue();
+    await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [
+          { date: '2026-09-14', slot: 20, value: null, estimate: 30 },
+          { date: '2026-09-14', slot: 21, value: null, estimate: 30 },
+        ],
+      },
+    ]);
+    const res = await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [
+          { date: '2026-09-14', slot: 20, value: 7 }, // the sensor's late reading landed
+          { date: '2026-09-14', slot: 21, value: null }, // the hub has no value for it any more
+        ],
+      },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(await rowsOf(venue)).toEqual([
+      { slot: 20, value: 7, estimate: null, deviceOnline: null },
+      { slot: 21, value: null, estimate: null, deviceOnline: null },
+    ]);
+  });
+
+  it('400 on a negative or non-integer estimate — nothing of the batch is written', async () => {
+    const venue = await seedVenue();
+    for (const estimate of [-1, 2.5]) {
+      const res = await push([
+        {
+          toodooh_screenhost_id: venue,
+          cells: [
+            { date: '2026-09-14', slot: 18, value: 12 },
+            { date: '2026-09-14', slot: 20, value: null, estimate },
+          ],
+        },
+      ]);
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ error: string }>().error).toBe('INVALID_INPUT');
+    }
+    expect(await rowsOf(venue)).toEqual([]);
+  });
+
+  it('an hour-shaped cell carries its estimate onto BOTH halves (MEJ-13-B rule 2)', async () => {
+    const venue = await seedVenue();
+    const res = await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [{ date: '2026-09-14', hour: 10, value: null, estimate: 30 }],
+      },
+    ]);
+    expect(res.json()).toEqual({ upserted: 1, slot_rows: 2, unknown_locations: [] });
+    expect(await rowsOf(venue)).toEqual([
+      { slot: 20, value: null, estimate: 30, deviceOnline: null },
+      { slot: 21, value: null, estimate: 30, deviceOnline: null },
+    ]);
   });
 });

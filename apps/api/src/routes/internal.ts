@@ -128,6 +128,11 @@ const affluenceHourlyBodySchema = z.object({
                 // about, so an empty one arrives carrying only `device_online`.
                 value: z.number().int().min(0).nullable(),
                 device_online: z.boolean().optional(),
+                // LEARN-1 T2 — the hub's ready-made value for a slot it did NOT measure (its learned
+                // average, else the typed seed). Sent only beside `value: null`, in its OWN field so
+                // an estimate can never be read as a measurement. Optional: absent → stored NULL, so
+                // a later push without it CLEARS a stored one (latest-value-wins).
+                estimate: z.number().int().min(0).optional(),
               })
               .refine((c) => c.slot !== undefined || c.hour !== undefined, HALF_HOUR_CELL_MSG),
           )
@@ -559,6 +564,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
               slot,
               value: cell.value,
               deviceOnline: cell.device_online ?? null,
+              estimate: cell.estimate ?? null, // LEARN-1 T2 — absent = NULL, never a guess
             },
           });
         }
@@ -593,6 +599,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
               set: {
                 value: sql`excluded.value`,
                 deviceOnline: sql`excluded.device_online`,
+                estimate: sql`excluded.estimate`, // LEARN-1 T2 — an absent estimate clears it
                 receivedAt: new Date(),
               },
             });
