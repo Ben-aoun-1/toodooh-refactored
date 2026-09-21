@@ -148,6 +148,18 @@ export const firstOpenMeasuredDay = async (
   return first?.date ?? null;
 };
 
+/** LEARN-1 — the flag-on floor: max(creation day, first OPEN measured day), as `estimationFloor`. */
+const learnedFloor = async (
+  venueId: string,
+  hours: { openingHour: number | null; closingHour: number | null },
+  venue: { createdAt: Date } | undefined,
+): Promise<string | null> => {
+  const firstOpen = await firstOpenMeasuredDay(venueId, hours);
+  if (!venue) return firstOpen;
+  const createdIso = tunisDateOf(venue.createdAt);
+  return firstOpen !== null && firstOpen > createdIso ? firstOpen : createdIso;
+};
+
 export interface PeriodSourceParams {
   venueId: string;
   range: DateRange;
@@ -209,7 +221,11 @@ export async function loadPeriodAudienceInput(
     // LEARN-1 T3 — the venue's CURRENT hours: under the flag every slot outside them is ignored,
     // across the whole history (spec §3, « the venue's current hours apply to all of its history »).
     db
-      .select({ openingHour: screenhosts.openingHour, closingHour: screenhosts.closingHour })
+      .select({
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+        createdAt: screenhosts.createdAt,
+      })
       .from(screenhosts)
       .where(eq(screenhosts.id, venueId))
       .limit(1),
@@ -218,10 +234,11 @@ export async function loadPeriodAudienceInput(
   const learned = learnedAffluence
     ? { openingHour: venue?.openingHour ?? null, closingHour: venue?.closingHour ?? null }
     : null;
-  // LEARN-1 T3 amendment — under the flag the floor is the first OPEN measured day, not the raw
-  // estimationFloor (which a closed-hour reading, stored before the flag, could drag earlier).
+  // LEARN-1 T3 amendment — under the flag the floor is max(creation day, first OPEN measured day):
+  // estimationFloor's shape, but a closed-hour reading stored before the flag cannot drag it earlier.
+  // Never measured inside the hours → the creation day (rule 6: typed from creation), never null.
   const onboardedIso =
-    learned !== null ? await firstOpenMeasuredDay(venueId, learned) : defaultFloor;
+    learned !== null ? await learnedFloor(venueId, learned, venue) : defaultFloor;
 
   return {
     months,

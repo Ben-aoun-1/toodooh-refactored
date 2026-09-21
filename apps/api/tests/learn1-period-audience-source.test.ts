@@ -147,6 +147,16 @@ describe('LEARN-1 T3 amendment — under the flag the floor is the first OPEN me
     expect((await load(venue, true)).onboardedIso).toBe(EARLY_CLOSED);
   });
 
+  it('flag ON, never measured inside the hours: the floor is the creation day, never null', async () => {
+    const neverMeasured = await seedVenue(10, 22);
+    expect((await load(neverMeasured, true)).onboardedIso).toBe('2026-09-01');
+    const onlyClosed = await seedVenue(10, 22);
+    await db
+      .insert(screenhostAffluenceHourly)
+      .values([{ screenhostId: onlyClosed, date: EARLY_CLOSED, hour: 23, slot: 46, value: 5 }]);
+    expect((await load(onlyClosed, true)).onboardedIso).toBe('2026-09-01');
+  });
+
   it('firstOpenMeasuredDay: opening === closing is zero-width — null even with a measured row', async () => {
     const venue = await seedVenue(9, 9);
     await db
