@@ -1,4 +1,4 @@
-import { and, count, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { db } from '../db/client.js';
@@ -36,13 +36,22 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 //  - revenue:   DASH-1 (operator rulings R1–R3, 2026-09-21), all HT:
 //                 total_tnd   = Σ campaign_reconciliation.spend_tnd — the advertisers' SETTLED
 //                               debit (classic and event settlements both write that table);
-//                 toodooh_tnd = Σ reversement_lines.toodooh_amount_tnd, every source — Toodooh's
-//                               share. The 3 % agent lines recorded with NO agent are NOT added;
+//                 toodooh_tnd = R2 AMENDED (day log §5 decision 4): Σ reversement_lines
+//                               .toodooh_amount_tnd (every source — the 44 % lines) + for every
+//                               settled campaign that HAS lines, spend_tnd − Σ its lines'
+//                               base_value_tnd: the sub-S_min undelivered value a RÉUSSIE debits
+//                               but never splits (0 for a PARTIAL and for an event). The 3 % agent
+//                               lines — with or without an agent — are NOT added;
 //                 monthly     = both, over the current TUNIS calendar month: the total by
-//                               reconciled_at, the Toodooh share by settled_at.
+//                               reconciled_at; Toodooh's lines by settled_at, the remainder by
+//                               reconciled_at.
+//               Post-E7 the ledger closes: toodooh_tnd + Σ SH + Σ agent lines = total_tnd.
+//               The remainder is NEVER clamped, so the identity holds exactly. It can read a
+//               sub-millime NEGATIVE: a classic line's base is rounded to the millime while
+//               spend_tnd is the 4-decimal Σ of the venue earnings (up to −0.0005 per line).
 //               Confirmed recharges are advertiser PREPAYMENTS, not revenue: no figure reads them.
 //               Settlements that predate E7 (#121) have no reversement lines, so they count in
-//               total_tnd but not in toodooh_tnd.
+//               total_tnd but not in toodooh_tnd (neither split nor remainder).
 //  - FLAGGED (no new-engine source, NOT returned): events, occupancy/uptime, per-screen revenue
 //    (top screens), revenue growth-rate, daily-revenue projection, average-revenue-per-screen.
 
@@ -71,6 +80,21 @@ export const adminPlatformStatsRoutes: FastifyPluginAsync<AdminPlatformStatsOpti
     const inMonth = (
       column: typeof campaignReconciliation.reconciledAt | typeof reversementLines.settledAt,
     ) => and(gte(column, monthStart), lt(column, monthEnd));
+    // R2 (amended) — per settled campaign: its Toodooh lines (all time + those settled in the
+    // month) and Σ of its line bases, the value that WAS split. Pre-E7 settlements have no row here.
+    const linesByCampaign = db
+      .select({
+        campaignId: reversementLines.campaignId,
+        toodoohTnd: sql<string>`sum(${reversementLines.toodoohAmountTnd})`.as('toodooh_tnd'),
+        toodoohInMonthTnd:
+          sql<string>`coalesce(sum(${reversementLines.toodoohAmountTnd}) filter (where ${inMonth(reversementLines.settledAt)}), 0)`.as(
+            'toodooh_in_month_tnd',
+          ),
+        baseTnd: sql<string>`sum(${reversementLines.baseValueTnd})`.as('base_tnd'),
+      })
+      .from(reversementLines)
+      .groupBy(reversementLines.campaignId)
+      .as('lines_by_campaign');
 
     const [
       userRows,
@@ -122,13 +146,20 @@ export const adminPlatformStatsRoutes: FastifyPluginAsync<AdminPlatformStatsOpti
           monthly: sql<string>`coalesce(sum(${campaignReconciliation.spendTnd}) filter (where ${inMonth(campaignReconciliation.reconciledAt)}), 0)`,
         })
         .from(campaignReconciliation),
-      // R2 / R3 — Toodooh's share, every source, all time and over the Tunis month (by settled_at).
+      // R2 (amended) / R3 — Revenu Toodooh, all time and over the Tunis month, in ONE exact numeric
+      // sum: each settled campaign's 44 % lines (by settled_at) + its unsplit remainder
+      // spend − Σ base (by reconciled_at). The LEFT JOIN keeps every line's share even if a line
+      // ever lacked its settlement row (no remainder then). Not clamped: see the header.
       db
         .select({
-          total: sql<string>`coalesce(sum(${reversementLines.toodoohAmountTnd}), 0)`,
-          monthly: sql<string>`coalesce(sum(${reversementLines.toodoohAmountTnd}) filter (where ${inMonth(reversementLines.settledAt)}), 0)`,
+          total: sql<string>`coalesce(sum(${linesByCampaign.toodoohTnd}), 0) + coalesce(sum(${campaignReconciliation.spendTnd} - ${linesByCampaign.baseTnd}), 0)`,
+          monthly: sql<string>`coalesce(sum(${linesByCampaign.toodoohInMonthTnd}), 0) + coalesce(sum(${campaignReconciliation.spendTnd} - ${linesByCampaign.baseTnd}) filter (where ${inMonth(campaignReconciliation.reconciledAt)}), 0)`,
         })
-        .from(reversementLines),
+        .from(linesByCampaign)
+        .leftJoin(
+          campaignReconciliation,
+          eq(campaignReconciliation.campaignId, linesByCampaign.campaignId),
+        ),
     ]);
 
     // users — fold the role × status grid.

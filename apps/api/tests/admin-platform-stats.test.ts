@@ -317,10 +317,10 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
   });
 
   // DASH-1 (R1/R2/R3, operator ruling 2026-09-21). « Revenu total » = Σ campaign_reconciliation
-  // .spend_tnd (the advertisers' settled debit — classic AND event settlements both write that
-  // table); « Revenu Toodooh » = Σ reversement_lines.toodooh_amount_tnd (every source), the 3 %
-  // agent lines with NO agent NOT added; « Revenu mensuel » = both, over the current TUNIS month —
-  // the total by reconciled_at, the Toodooh share by settled_at.
+  // .spend_tnd (classic AND event settlements); « Revenu Toodooh » = Σ toodooh_amount_tnd (every
+  // source, the NULL-agent 3 % lines NOT added) + each settled campaign's unsplit spend − Σ base,
+  // 0 here: base = spend in every fixture (R2 amended → admin-platform-stats-toodooh.test.ts).
+  // « Revenu mensuel » = both, over the TUNIS month: lines by settled_at, the rest by reconciled_at.
   describe('DASH-1 revenue — realised spend, Toodooh share, the Tunis month', () => {
     const seedSettlement = async (
       advertiserId: string,
