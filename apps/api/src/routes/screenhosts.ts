@@ -847,6 +847,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     if (!updated) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
+    // LEARN-1 T1 — the hub learns only inside a venue's hours: re-push the location so it holds the
+    // new window. The WiFi-edit idiom: approved owners only (an unapproved owner's location reaches
+    // the hub at approval, carrying its hours), fire-and-forget — a hub outage stamps
+    // export_status='failed' and the 10-min sweep retries; it NEVER fails this PATCH.
+    if (request.user?.status === 'approved') {
+      void pushApprovedOwnerLocations(userId, request.log).catch((err: unknown) => {
+        request.log.warn({ err }, 'wedooh hours re-push (owner edit) failed to start');
+      });
+    }
     return reply.status(200).send({
       id: updated.id,
       name: updated.name,
@@ -1879,8 +1888,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         id: screenhosts.id,
         openingHour: screenhosts.openingHour,
         closingHour: screenhosts.closingHour,
+        // LEARN-1 T1 — who to re-push for, and whether the hub may know this venue yet.
+        ownerId: screenhosts.ownerId,
+        ownerStatus: users.status,
       })
       .from(screenhosts)
+      .leftJoin(users, eq(screenhosts.ownerId, users.id))
       .where(eq(screenhosts.id, parsedParams.data.id))
       .limit(1);
     if (!existing) {
@@ -1946,6 +1959,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .set(buildEligibilityPatch(parsed.data))
       .where(eq(screenhosts.id, existing.id))
       .returning(eligibilitySelection);
+    // LEARN-1 T1 — an hours CHANGE re-pushes the location (the admin WiFi-edit idiom: approved owner
+    // only, fire-and-forget, the sweep retries). A patch that leaves the window as it was is silent.
+    const hoursChanged =
+      effectiveOpening !== existing.openingHour || effectiveClosing !== existing.closingHour;
+    if (hoursChanged && existing.ownerId && existing.ownerStatus === 'approved') {
+      void pushApprovedOwnerLocations(existing.ownerId, request.log).catch((err: unknown) => {
+        request.log.warn({ err }, 'wedooh hours re-push (admin eligibility edit) failed to start');
+      });
+    }
     return reply.status(200).send(eligibilityView(updated as EligibilityRow));
   });
 
