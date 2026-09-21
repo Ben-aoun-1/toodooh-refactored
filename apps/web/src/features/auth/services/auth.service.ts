@@ -110,19 +110,16 @@ export const authService = {
       ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),
     };
     // R7/N4 — owners now SEND their document volets (reversing F5 for owners): multipart with a
-    // `payload` field = the accepted-fields JSON string + named file parts. SIGN-2 (ruling
-    // 2026-08-31): an individual_owner sends NO legal volet (CIN is provide-later); fleet_owner
-    // sends `rne`; both may send `bank`. Advertisers keep the JSON path verbatim (no documents at
-    // signup). Files never enter `payload` (only scalar fields are spread).
+    // `payload` field = the accepted-fields JSON string + named file parts. SIGN-2 took the CIN out
+    // of signup; since CIN-2b EVERY owner (individual_owner and fleet_owner) sends its RNE as `rne`
+    // and its RIB as `bank`, each only when picked (RNE-SIGN1). Advertisers keep the JSON path
+    // verbatim (no documents at signup). Files never enter `payload` (only scalar fields are spread).
     const isOwner = data.profile_type === 'individual_owner' || data.profile_type === 'fleet_owner';
     try {
       if (isOwner) {
         const form = new FormData();
         form.append('payload', JSON.stringify(payload));
-        // Only the fleet owner carries a legal volet at signup.
-        if (data.profile_type !== 'individual_owner' && data.registration_doc) {
-          form.append('rne', data.registration_doc);
-        }
+        if (data.registration_doc) form.append('rne', data.registration_doc);
         if (data.bank_doc) form.append('bank', data.bank_doc);
         return await apiClient.postForm<SignupResponse>('/signup', form);
       }

@@ -288,13 +288,15 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(postForm).not.toHaveBeenCalled();
   });
 
-  // SIGN-2 (operator ruling 2026-08-31) — an individual owner signs up with the RIB alone: the CIN
-  // volets left signup entirely (they are provide-later now), so the multipart carries no CIN part.
-  it('individual_owner → multipart: payload + bank ONLY (no CIN, no rne)', async () => {
+  // SIGN-2 (operator ruling 2026-08-31) took the CIN volets out of signup (no CIN part). RNE-SIGN1
+  // (2026-09-21) — CIN-2b made the wizard collect the RNE from EVERY owner, so an individual owner's
+  // RNE pick is sent as `rne` exactly like a fleet owner's (it used to be silently dropped here).
+  it('individual_owner → multipart: payload + rne + bank parts (no CIN)', async () => {
     postForm.mockResolvedValue(ok);
     await authService.signUp({
       ...advertiser,
       profile_type: 'individual_owner',
+      registration_doc: ownerFile('rne.pdf'),
       bank_doc: ownerFile('rib.pdf'),
     });
     expect(post).not.toHaveBeenCalled();
@@ -302,18 +304,24 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(postForm.mock.calls[0][0]).toBe('/signup');
     const form = ownerForm();
     expect(typeof form.get('payload')).toBe('string');
+    expect(form.get('rne')).toBeInstanceOf(File); // the individual owner's RNE reaches the api
+    expect((form.get('rne') as File).name).toBe('rne.pdf');
     expect(form.get('bank')).toBeInstanceOf(File);
     expect(form.get('cin_recto')).toBeNull(); // the intake is gone from signup
     expect(form.get('cin_verso')).toBeNull();
-    expect(form.get('rne')).toBeNull(); // individual owner sends no RNE
   });
 
   it('individual_owner with NO document at all still posts multipart and completes', async () => {
     postForm.mockResolvedValue(ok);
-    await authService.signUp({ ...advertiser, profile_type: 'individual_owner' });
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'individual_owner',
+      registration_doc: undefined,
+    });
     expect(postForm).toHaveBeenCalledTimes(1);
     const form = ownerForm();
     expect(typeof form.get('payload')).toBe('string');
+    expect(form.get('rne')).toBeNull(); // no pick → no part (never an empty one)
     expect(form.get('bank')).toBeNull();
   });
 

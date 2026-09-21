@@ -191,8 +191,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [rneFiles, setRneFiles] = useState<File[]>([]);
   const [complementaireFiles, setComplementaireFiles] = useState<File[]>([]);
   const [addDocumentLater, setAddDocumentLater] = useState(false);
-  // R7/N4 (reversed — Kais QA 2026-06-24) — owner document volets (individual_owner: CIN recto/verso;
-  // fleet_owner: RNE; both: RIB). OPTIONAL at signup (provide-later): the "fournir plus tard" toggle
+  // R7/N4 (reversed — Kais QA 2026-06-24) — owner document volets (every owner: RNE + RIB since
+  // CIN-2b; no CIN since SIGN-2). OPTIONAL at signup (provide-later): the "fournir plus tard" toggle
   // skips them, and a partial set never blocks submit. Sent as multipart by authService.signUp.
   const [ownerVolets, setOwnerVolets] = useState<OwnerVoletFiles>(emptyOwnerVolets());
   const [addOwnerDocsLater, setAddOwnerDocsLater] = useState(false);
@@ -826,11 +826,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         contact_name: composedContactName,
         profile_type: selectedProfileType,
         fonction: fonction.trim() || undefined,
-        // R7/N4 (reversed) — owner legal volet: fleet_owner → RNE (sent as `rne`). Non-owner keeps the
-        // existing RNE pick (JSON, dropped server-side). bank_doc is the owner RIB volet. SIGN-2 —
-        // individual_owner sends NO legal volet at signup: CIN moved to provide-later. All optional —
-        // any blank volet is omitted by the service (|| undefined), so an owner can finalize with none.
-        // CIN-2b (2026-09-12): every owner sends its RNE volet (individual owners included).
+        // R7/N4 (reversed) — owner legal volet: CIN-2b (2026-09-12) — EVERY owner (individual_owner and
+        // fleet_owner) sends its RNE volet as `rne` (RNE-SIGN1). SIGN-2 took the CIN out of signup.
+        // Non-owner keeps the existing RNE pick (JSON, dropped server-side). bank_doc is the owner RIB
+        // volet. All optional — any blank volet is omitted by the service (|| undefined), so an owner
+        // can finalize with none.
         registration_doc: isOwner ? ownerVolets.rne || undefined : rneFiles[0] || undefined,
         company_logo: companyLogo || undefined,
         bank_doc: isOwner ? ownerVolets.bank || undefined : undefined,
