@@ -16,6 +16,7 @@
     "reports:regenerate": "tsx --env-file-if-exists=.env scripts/regenerate-monthly-reports.ts",
     "reconcile:run": "tsx --env-file-if-exists=.env scripts/reconcile-run.ts",
     "cpm1:restore": "tsx --env-file-if-exists=.env scripts/cpm1-restore-creation-cpm.ts",
+    "learn1:resync-locations": "tsx --env-file-if-exists=.env scripts/learn1-resync-locations.ts",
     "db:generate": "drizzle-kit generate",
     "audience:backfill": "tsx --env-file-if-exists=.env scripts/backfill-monthly-audience.ts"
   },
