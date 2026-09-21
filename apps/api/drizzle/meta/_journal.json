@@ -540,6 +540,13 @@
       "when": 1789800000000,
       "tag": "0076_screencaster_cpm",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1789880000000,
+      "tag": "0077_affluence_estimate",
+      "breakpoints": true
     }
   ]
 }
