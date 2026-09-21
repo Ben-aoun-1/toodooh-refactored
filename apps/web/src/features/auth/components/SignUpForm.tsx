@@ -2067,9 +2067,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
 
       {/* R7/N4 reversed (Kais QA 2026-06-24) — owner documents are OPTIONAL at signup again. The
           "fournir plus tard" toggle restores the pre-C6 skip; checking it clears + hides the volets.
-          When left unchecked, the two-volet structure (CIN recto/verso OR RNE, + RIB) is collected and
-          sent — but a partial/empty set never blocks submit. (bg-neutral-100 = the sibling step's
-          #F5F5F5, as a Tailwind token.) */}
+          When left unchecked, the two volets (RNE + RIB — every owner since CIN-2b; no CIN since
+          SIGN-2) are collected and sent — but a partial/empty set never blocks submit.
+          (bg-neutral-100 = the sibling step's #F5F5F5, as a Tailwind token.) */}
       <div className="rounded-2xl bg-neutral-100 p-5">
         <label
           className="flex items-start cursor-pointer gap-3"
