@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNotNull, lte } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, lte, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -111,6 +111,43 @@ export const firstMeasuredDay = async (venueId: string): Promise<string | null> 
   return first?.date ?? null;
 };
 
+/**
+ * LEARN-1 T3 amendment (Task 9's review, Important 1) — under the flag, the floor is the first
+ * date holding a measured cell (`value IS NOT NULL`) in a slot OPEN for the venue's CURRENT hours
+ * — `isOpenSlot` semantics, done in SQL: either bound NULL = all open, `opening === closing` =
+ * nothing open, wrap-around included. A legacy per-date row can hold a closed-hour measured cell
+ * (a sensor installed at 23:00 after a 22:00 close, stored before the flag); such a row must not
+ * set the floor, or « Depuis le début » counts a full estimated day the hub itself shows blank.
+ * Read only when `learned !== null` — flag off keeps `estimationFloor` byte for byte.
+ */
+export const firstOpenMeasuredDay = async (
+  venueId: string,
+  hours: { openingHour: number | null; closingHour: number | null },
+): Promise<string | null> => {
+  const { openingHour, closingHour } = hours;
+  if (openingHour !== null && closingHour !== null && openingHour === closingHour) return null;
+  const hour = sql`(${screenhostAffluenceHourly.slot} / 2)`;
+  const openFilter =
+    openingHour === null || closingHour === null
+      ? sql`true`
+      : openingHour < closingHour
+        ? sql`${hour} >= ${openingHour} AND ${hour} < ${closingHour}`
+        : sql`${hour} >= ${openingHour} OR ${hour} < ${closingHour}`;
+  const [first] = await db
+    .select({ date: screenhostAffluenceHourly.date })
+    .from(screenhostAffluenceHourly)
+    .where(
+      and(
+        eq(screenhostAffluenceHourly.screenhostId, venueId),
+        isNotNull(screenhostAffluenceHourly.value),
+        openFilter,
+      ),
+    )
+    .orderBy(asc(screenhostAffluenceHourly.date))
+    .limit(1);
+  return first?.date ?? null;
+};
+
 export interface PeriodSourceParams {
   venueId: string;
   range: DateRange;
@@ -135,7 +172,7 @@ export async function loadPeriodAudienceInput(
   const { venueId, range, todayIso } = params;
   const learnedAffluence = params.learnedAffluence ?? env.LEARNED_AFFLUENCE_ENABLED;
 
-  const [months, hourlyRows, grid, onboardedIso, venueRows] = await Promise.all([
+  const [months, hourlyRows, grid, defaultFloor, venueRows] = await Promise.all([
     // Month rows overlapping the range — the day-granularity history older than the hourly window.
     db
       .select({ month: screenhostMonthlyStats.month, daily: screenhostMonthlyStats.daily })
@@ -178,6 +215,13 @@ export async function loadPeriodAudienceInput(
       .limit(1),
   ]);
   const venue = venueRows[0];
+  const learned = learnedAffluence
+    ? { openingHour: venue?.openingHour ?? null, closingHour: venue?.closingHour ?? null }
+    : null;
+  // LEARN-1 T3 amendment — under the flag the floor is the first OPEN measured day, not the raw
+  // estimationFloor (which a closed-hour reading, stored before the flag, could drag earlier).
+  const onboardedIso =
+    learned !== null ? await firstOpenMeasuredDay(venueId, learned) : defaultFloor;
 
   return {
     months,
@@ -187,8 +231,6 @@ export async function loadPeriodAudienceInput(
     todayIso,
     nowSlot: params.nowSlot ?? tunisSlotOf(new Date()),
     onboardedIso,
-    learned: learnedAffluence
-      ? { openingHour: venue?.openingHour ?? null, closingHour: venue?.closingHour ?? null }
-      : null,
+    learned,
   };
 }

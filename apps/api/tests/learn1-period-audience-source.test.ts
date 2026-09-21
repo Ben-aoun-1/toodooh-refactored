@@ -3,7 +3,10 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
 import { screenhostAffluence, screenhostAffluenceHourly, screenhosts } from '../src/db/schema.js';
-import { loadPeriodAudienceInput } from '../src/lib/period-audience-source.js';
+import {
+  firstOpenMeasuredDay,
+  loadPeriodAudienceInput,
+} from '../src/lib/period-audience-source.js';
 import { periodAudience } from '../src/lib/period-audience.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
@@ -112,5 +115,45 @@ describe('LEARN-1 T3 — loadPeriodAudienceInput wires the switch, the hours and
     const input = await load(venue, true);
     expect(input.learned).toEqual({ openingHour: null, closingHour: null });
     expect(periodAudience(input).total).toBe(139);
+  });
+});
+
+// LEARN-1 T3 amendment (Task 9's review, Important 1) — under the flag the floor is the first
+// OPEN measured day: a closed-hour reading stored before the flag must not drag it earlier.
+describe('LEARN-1 T3 amendment — under the flag the floor is the first OPEN measured day', () => {
+  beforeEach(async () => {
+    await resetAuthTables();
+  });
+
+  const EARLY_CLOSED = '2026-09-07'; // 23:00 — closed for the venue's 10 → 22
+  const FIRST_OPEN = '2026-09-08'; // 10:00 — open
+
+  it('flag ON: the closed-hour reading does not set the floor — 2026-09-08; flag OFF: 2026-09-07', async () => {
+    const venue = await seedVenue(10, 22);
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: venue, date: EARLY_CLOSED, hour: 23, slot: 46, value: 5 },
+      { screenhostId: venue, date: FIRST_OPEN, hour: 10, slot: 20, value: 8 },
+    ]);
+    expect((await load(venue, true)).onboardedIso).toBe(FIRST_OPEN);
+    expect((await load(venue, false)).onboardedIso).toBe(EARLY_CLOSED);
+  });
+
+  it('NULL hours = open all day: the 23h reading counts — the floor is 2026-09-07', async () => {
+    const venue = await seedVenue(null, null);
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: venue, date: EARLY_CLOSED, hour: 23, slot: 46, value: 5 },
+      { screenhostId: venue, date: FIRST_OPEN, hour: 10, slot: 20, value: 8 },
+    ]);
+    expect((await load(venue, true)).onboardedIso).toBe(EARLY_CLOSED);
+  });
+
+  it('firstOpenMeasuredDay: opening === closing is zero-width — null even with a measured row', async () => {
+    const venue = await seedVenue(9, 9);
+    await db
+      .insert(screenhostAffluenceHourly)
+      .values([{ screenhostId: venue, date: FIRST_OPEN, hour: 10, slot: 20, value: 8 }]);
+    await expect(
+      firstOpenMeasuredDay(venue, { openingHour: 9, closingHour: 9 }),
+    ).resolves.toBeNull();
   });
 });
