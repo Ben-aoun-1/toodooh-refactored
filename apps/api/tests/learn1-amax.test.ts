@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -157,5 +159,46 @@ describe('LEARN-1 F1 — computeAmax under the flag (real Postgres)', () => {
     await seedReading(other, '2026-09-14', 0, 500); // another venue's row — must not leak in
     expect(await measuredAmaxPph(venue)).toBe(75);
     expect(await computeAmax(venue, ON)).toBe(75);
+  });
+
+  // LEARN-1 F1 fix round (task-11 brief, step F1) — zero-width hours, an unknown venue, and the
+  // ratchet under the flag: none of these change pricing.ts, they pin the existing behaviour.
+
+  it('a zero-width window (opening === closing): measuredAmaxPph is 0 despite measured rows, and computeAmax falls back to the stored value, or 50 UNPERSISTED when there is none', async () => {
+    const noStored = await seedVenue(9, 9);
+    await seedReading(noStored, '2026-09-14', 18, 60); // 9h — inside the degenerate window, ignored
+    expect(await measuredAmaxPph(noStored)).toBe(0);
+    expect(await computeAmax(noStored, ON)).toBe(AMAX_FALLBACK_PPH);
+    expect(await storedAmax(noStored)).toBeNull();
+
+    const withStored = await seedVenue(9, 9);
+    await db.insert(screenhostAmax).values({ screenhostId: withStored, amaxPph: 77 });
+    await seedReading(withStored, '2026-09-14', 18, 60);
+    expect(await measuredAmaxPph(withStored)).toBe(0);
+    expect(await computeAmax(withStored, ON)).toBe(77);
+    expect(await storedAmax(withStored)).toBe(77);
+  });
+
+  it('an unknown venue id (a random UUID): measuredAmaxPph is 0, computeAmax falls back to 50, and no screenhost_amax row is written', async () => {
+    const unknown = randomUUID();
+    expect(await measuredAmaxPph(unknown)).toBe(0);
+    expect(await computeAmax(unknown, ON)).toBe(AMAX_FALLBACK_PPH);
+    expect(await storedAmax(unknown)).toBeNull();
+  });
+
+  it('a stored grid-era A_max of 120 never gets lowered by a smaller measured peak under the flag', async () => {
+    const venue = await seedVenue();
+    await db.insert(screenhostAmax).values({ screenhostId: venue, amaxPph: 120 });
+    await seedReading(venue, '2026-09-14', 18, 60); // 9h = 60
+    expect(await computeAmax(venue, ON)).toBe(120);
+    expect(await storedAmax(venue)).toBe(120);
+  });
+
+  it('flipping the flag on ratchets a stored 40 UP to a higher measured peak of 60', async () => {
+    const venue = await seedVenue();
+    await db.insert(screenhostAmax).values({ screenhostId: venue, amaxPph: 40 });
+    await seedReading(venue, '2026-09-14', 18, 60); // 9h = 60
+    expect(await computeAmax(venue, ON)).toBe(60);
+    expect(await storedAmax(venue)).toBe(60);
   });
 });
