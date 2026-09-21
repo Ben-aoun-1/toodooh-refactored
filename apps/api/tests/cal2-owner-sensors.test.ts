@@ -5,6 +5,8 @@ import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, screenhostAffluenceHourly, screenhosts, users } from '../src/db/schema.js';
 import {
+  openMinutesBetween,
+  ownerSensorStatuses,
   SENSOR_OFFLINE_AFTER_MINUTES,
   sensorStatusOf,
   slotEndInstant,
@@ -60,6 +62,77 @@ describe('CAL-2 — sensorStatusOf (pure)', () => {
       slot: 21,
     });
     expect(tunisSlotKey(new Date('2026-03-02T23:10:00Z'))).toEqual({ date: '2026-03-03', slot: 0 });
+  });
+});
+
+// LEARN-1 — under the hub's flag closed half-hours are never sent: the 120 minutes are counted in
+// the venue's opening time only, or every sensor would read « hors ligne » every night.
+describe('LEARN-1 — recency counts opening time only', () => {
+  const lastAt22 = { date: '2026-09-15', slot: 43, deviceOnline: null }; // 21h30–22h00, ends 22h00
+  const tunis = (iso: string): Date => new Date(`${iso}+01:00`);
+  const open10to22 = { openingHour: 10, closingHour: 22 };
+
+  it('a venue closed for the night stays « active » overnight and in the first opening hour', () => {
+    expect(sensorStatusOf(lastAt22, tunis('2026-09-16T00:30:00'), open10to22).status).toBe(
+      'active',
+    );
+    expect(sensorStatusOf(lastAt22, tunis('2026-09-16T09:59:00'), open10to22).status).toBe(
+      'active',
+    );
+    expect(sensorStatusOf(lastAt22, tunis('2026-09-16T11:59:00'), open10to22).status).toBe(
+      'active',
+    ); // 119 open min
+    expect(sensorStatusOf(lastAt22, tunis('2026-09-16T12:01:00'), open10to22).status).toBe(
+      'offline',
+    ); // 121
+  });
+
+  it('NULL hours = open all day = exactly the wall-clock rule', () => {
+    const none = { openingHour: null, closingHour: null };
+    const at = tunis('2026-09-16T00:30:00'); // 150 wall-clock minutes after 22h00
+    expect(sensorStatusOf(lastAt22, at, none)).toEqual(sensorStatusOf(lastAt22, at));
+    expect(sensorStatusOf(lastAt22, at, none).status).toBe('offline');
+    expect(sensorStatusOf(lastAt22, tunis('2026-09-15T23:59:00'), none).status).toBe('active'); // 119
+  });
+
+  it('a zero-width pair has no opening time: the wall-clock rule applies, never « active forever »', () => {
+    expect(
+      sensorStatusOf(lastAt22, tunis('2026-09-16T00:30:00'), { openingHour: 9, closingHour: 9 })
+        .status,
+    ).toBe('offline');
+  });
+
+  it('an overnight venue (08 → 01) counts its post-midnight hour', () => {
+    const lastAt0030 = { date: '2026-09-16', slot: 0, deviceOnline: null }; // 00h00–00h30
+    const open8to1 = { openingHour: 8, closingHour: 1 };
+    // 30 open minutes (00h30–01h00), then closed until 08h00: 30 + 89 = 119 at 09h29.
+    expect(sensorStatusOf(lastAt0030, tunis('2026-09-16T09:29:00'), open8to1).status).toBe(
+      'active',
+    );
+    expect(sensorStatusOf(lastAt0030, tunis('2026-09-16T09:32:00'), open8to1).status).toBe(
+      'offline',
+    );
+  });
+
+  it('a device the hub flagged offline is still « offline », whatever the hours', () => {
+    expect(
+      sensorStatusOf({ ...lastAt22, deviceOnline: false }, tunis('2026-09-16T00:30:00'), open10to22)
+        .status,
+    ).toBe('offline');
+  });
+
+  it('openMinutesBetween counts open minutes of [from, to) and stops past the cap', () => {
+    const from = tunis('2026-09-15T21:00:00');
+    expect(openMinutesBetween(from, tunis('2026-09-16T10:30:00'), open10to22, 10_000)).toBe(90);
+    // a year of a venue open all day stops early: the result is just past the cap, not 525 600
+    const capped = openMinutesBetween(
+      from,
+      tunis('2027-09-15T21:00:00'),
+      { openingHour: null, closingHour: null },
+      120,
+    );
+    expect(capped).toBeGreaterThan(120);
+    expect(capped).toBeLessThanOrEqual(150);
   });
 });
 
@@ -154,6 +227,28 @@ describe('CAL-2 — GET /api/screenhosts/sensors (real Postgres)', () => {
     expect(statusOf.get(flagged)).toBe('offline');
     expect(statusOf.get(emptyOnly)).toBe('never'); // an empty cell is not a measurement
     expect(rows.find((r) => r.venue_id === never)?.last_measured_at).toBeNull();
+  });
+
+  it('LEARN-1 — counts only opening time, so a venue closed overnight still reads « active »', async () => {
+    const owner = await seedUser({ role: 'individual_owner' });
+    const [withHours] = await db
+      .insert(screenhosts)
+      .values({ name: 'F — horaires 10h-22h', ownerId: owner, openingHour: 10, closingHour: 22 })
+      .returning();
+    const [nullHours] = await db
+      .insert(screenhosts)
+      .values({ name: 'G — sans horaires', ownerId: owner })
+      .returning();
+    const cellAt = new Date('2026-09-15T21:45:00+01:00'); // Tunis 21h45 → date 2026-09-15, slot 43
+    await seedCell(withHours?.id ?? '', cellAt);
+    await seedCell(nullHours?.id ?? '', cellAt);
+
+    // The route itself calls `new Date()`; call ownerSensorStatuses directly to control the clock.
+    const now = new Date('2026-09-16T00:30:00+01:00'); // Tunis 00h30 the next night
+    const rows = await ownerSensorStatuses(owner, now);
+    const statusOf = new Map(rows.map((r) => [r.venue_id, r.status]));
+    expect(statusOf.get(withHours?.id ?? '')).toBe('active');
+    expect(statusOf.get(nullHours?.id ?? '')).toBe('offline');
   });
 
   it('requires a session', async () => {
