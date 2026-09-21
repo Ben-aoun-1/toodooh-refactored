@@ -18,6 +18,7 @@ import { campaignTargetingRoutes } from '../src/routes/campaign-targeting.js';
 
 import { seedApprovedOwner } from './helpers/approved-owner.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { sweepZones } from './helpers/zones.js';
 
 // Integration suite — real Postgres. getSession is mocked to drive the advertiser identity. Owner
 // business sectors are pre-seeded (audience='owner') and survive resetAuthTables (only users/auth
@@ -102,14 +103,17 @@ const seedScreenhost = async (opts: {
   return id;
 };
 
-// CF-U2 — a zone + campaign-zone pair for the whole-network coverage tests. Zone names are
-// globally unique and zones SURVIVE resetAuthTables (not an auth table), so a per-run counter
-// would collide with rows a previous run left behind — suffix with a uuid instead.
+// CF-U2 — a zone + campaign-zone pair for the whole-network coverage tests. zones SURVIVE
+// resetAuthTables (not an auth table): every seeded id is tracked and swept in afterEach
+// (TEST-ISO1 — another file pins the exact zone catalogue). The uuid suffix stays: zone names are
+// UNIQUE, and a crashed run can still leave a row behind.
+const seededZoneIds: string[] = [];
 const seedZone = async (name: string): Promise<string> => {
   const [z] = await db
     .insert(zones)
     .values({ name: `${name} ${crypto.randomUUID()}` })
     .returning();
+  if (z) seededZoneIds.push(z.id);
   return z?.id ?? '';
 };
 const linkCampaignZone = async (campaignId: string, zoneId: string): Promise<void> => {
@@ -135,6 +139,7 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
   });
 
   afterEach(async () => {
+    await sweepZones(seededZoneIds.splice(0));
     await app.close();
     vi.restoreAllMocks();
   });
