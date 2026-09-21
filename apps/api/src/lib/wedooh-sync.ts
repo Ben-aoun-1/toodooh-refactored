@@ -95,6 +95,11 @@ export const buildLocationPayload = (
   // canonical 5 strings (identity mapping, no id translation). Explicit null when the venue has
   // no sector, per the locked keys-always-present convention of wedooh's .strict() receiver.
   business_sector: businessSectorName,
+  // LEARN-1 T1 — the venue's declared opening hours, VERBATIM (Tunis clock ints 0–23; closing ≤
+  // opening = closes the next day, HOURS-X1). The hub stores them latest-wins (H1) and learns only
+  // inside them. Keys always present — explicit null = no hours (the hub then counts all 48 slots).
+  opening_hour: s.openingHour,
+  closing_hour: s.closingHour,
   wifi_ssid: s.wifiSsid,
   wifi_password: decryptWifi(s.wifiPasswordEncrypted),
   // The referring agent's code (agents.code) if this owner signed up via an agent referral, else
