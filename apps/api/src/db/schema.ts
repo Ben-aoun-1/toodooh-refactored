@@ -382,7 +382,9 @@ export const screenhosts = pgTable(
     // set. Per-weekday hours + overnight (closing ≤ opening) semantics are deferred to L-disp.
     openingHour: integer('opening_hour'),
     closingHour: integer('closing_hour'),
-    // Broadcast capacity (concurrent spot slots) the dispatcher allocates against; nullable until set.
+    // « Capacité de diffusion » — CAP-EVT1: the venue's EVENT SWITCH. SET (not NULL) makes it eligible
+    // to events; its numeric value is unused, and standard campaigns never read it. One home for the
+    // rule: lib/event-pricing/event-switch.ts. Nullable = switch off.
     broadcastCapacity: integer('broadcast_capacity'),
     // SPS — Screenhost Priority Score (qualité/fiabilité), 0–100. NEUTRAL default 50 for every row;
     // the real computation (TxActivité/TxRespect from proof-of-play) is DEFERRED to L-playout, so in
