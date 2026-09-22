@@ -45,7 +45,6 @@ describe('label coverage — every emitted event_type has a French label', () =>
   it('labels every exclusion reason the pool can emit', () => {
     for (const reason of [
       'inactive',
-      'capacity_missing',
       'hours_missing',
       'targeting_mismatch',
       'zone_mismatch',
@@ -57,6 +56,10 @@ describe('label coverage — every emitted event_type has a French label', () =>
     ]) {
       expect(EXCLUSION_REASON_LABELS[reason]).toBeTruthy();
     }
+  });
+
+  it('CAP-EVT1 — keeps the retired capacity_missing label for the rows written before', () => {
+    expect(EXCLUSION_REASON_LABELS['capacity_missing']).toBe('capacité manquante');
   });
 });
 

@@ -6,6 +6,7 @@ export type EligibleHostsKind = 'standard' | 'event';
 
 export type ExclusionReason =
   | 'excluded'
+  /** Legacy — no api after CAP-EVT1 sends it (the capacity is no standard gate any more). */
   | 'capacity_missing'
   | 'hours_missing'
   | 'targeting_mismatch'
@@ -14,6 +15,7 @@ export type ExclusionReason =
   | 'no_available_days'
   | 'no_residual_capacity'
   | 'not_event_eligible'
+  | 'event_capacity_missing'
   | 'no_bloc_available'
   | 'no_sector'
   | 'owner_not_approved'
@@ -66,6 +68,9 @@ export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
   no_available_days: 'Indisponible sur toute la période',
   no_residual_capacity: 'Écrans déjà pleins ou affluence nulle',
   not_event_eligible: 'Catégorie non éligible aux événements',
+  // CAP-EVT1 (operator ruling 2026-09-22) — the capacity is the venue's EVENT switch: empty = no
+  // events (standard campaigns never read it).
+  event_capacity_missing: 'Non éligible aux événements (capacité de diffusion vide)',
   no_bloc_available: 'Aucun bloc disponible pendant le match',
   no_sector: 'Catégorie non renseignée',
   // ELIG-2 (operator ruling 2026-09-16) — only a venue whose owner is validated counts anywhere.

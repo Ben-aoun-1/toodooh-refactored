@@ -67,6 +67,8 @@ export const EVENT_LABELS: Record<string, string> = {
 
 export const EXCLUSION_REASON_LABELS: Record<string, string> = {
   inactive: 'établissement inactif',
+  // CAP-EVT1 (operator ruling 2026-09-22) — the pool no longer emits it (the capacity became the
+  // event-only switch); kept so the journal rows written before still render.
   capacity_missing: 'capacité manquante',
   hours_missing: 'horaires manquants',
   targeting_mismatch: 'hors ciblage',

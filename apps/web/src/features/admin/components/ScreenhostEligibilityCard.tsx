@@ -6,6 +6,9 @@ import ScreenhostLiveness from '@/features/admin/components/ScreenhostLiveness';
 import ScreenhostSpsBreakdown from '@/features/admin/components/ScreenhostSpsBreakdown';
 import { useUpdateScreenhostEligibility } from '@/features/admin/hooks/useAdminScreenhostEligibility';
 import {
+  CAPACITY_FIELD_HINT,
+  CAPACITY_FIELD_LABEL,
+  CAPACITY_FIELD_PLACEHOLDER,
   ELIGIBILITY_CONSEQUENCE_NOTE,
   ELIGIBILITY_ERROR_TOAST,
   ELIGIBILITY_SAVED_TOAST,
@@ -38,10 +41,11 @@ const CLEAR = '';
 
 /**
  * EL1 — one venue's « Éligibilité dispatch » editor (admin-only): catégorie (owner sectors),
- * classe, horaires (single-window pair), capacité de diffusion. Prefilled from the eligibility
- * GET; saves the DIRTY fields only (null clears). The client mirrors the pair rules (set-together,
- * ouverture < fermeture) and the positive-int capacity BEFORE the PATCH; a 400's fields[] is
- * mapped back under the matching inputs in French.
+ * classe, horaires (single-window pair), capacité de diffusion — since CAP-EVT1 the venue's EVENT
+ * switch only (labelled and hinted as such). Prefilled from the eligibility GET; saves the DIRTY
+ * fields only (null clears). The client mirrors the pair rules (set-together, ouverture <
+ * fermeture) and the positive-int capacity BEFORE the PATCH; a 400's fields[] is mapped back under
+ * the matching inputs in French.
  */
 export default function ScreenhostEligibilityCard({
   screenhost,
@@ -235,7 +239,7 @@ export default function ScreenhostEligibilityCard({
             htmlFor={idFor('capacity')}
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Capacité de diffusion
+            {CAPACITY_FIELD_LABEL}
           </label>
           <input
             type="text"
@@ -244,9 +248,13 @@ export default function ScreenhostEligibilityCard({
             value={form.capacityInput}
             onChange={(e) => setForm((f) => ({ ...f, capacityInput: e.target.value }))}
             className={SELECT_CLASS}
-            placeholder="Nombre de créneaux simultanés"
+            placeholder={CAPACITY_FIELD_PLACEHOLDER}
+            aria-describedby={idFor('capacity-hint')}
             autoComplete="off"
           />
+          <p id={idFor('capacity-hint')} className="mt-1 text-xs text-gray-500">
+            {CAPACITY_FIELD_HINT}
+          </p>
           {fieldError('broadcast_capacity')}
         </div>
       </div>

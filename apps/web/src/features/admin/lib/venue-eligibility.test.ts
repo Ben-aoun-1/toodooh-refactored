@@ -5,6 +5,9 @@ import { HOURS_ORDER_HINT } from '@/features/screenhost/lib/venue-hours';
 
 import {
   CAPACITY_ERROR,
+  CAPACITY_FIELD_HINT,
+  CAPACITY_FIELD_LABEL,
+  CAPACITY_FIELD_PLACEHOLDER,
   ELIGIBILITY_CONSEQUENCE_NOTE,
   HOURS_PAIR_ERROR,
   READINESS_ELIGIBLE_LABEL,
@@ -157,14 +160,22 @@ describe('mapEligibilityServerErrors — server field errors surfaced in French'
 });
 
 describe('pinned copy', () => {
-  it('pins the null-clearing consequence note (charter verbatim)', () => {
+  it('pins the null-clearing consequence note (CAP-EVT1: horaires gate both, capacité events only)', () => {
     expect(ELIGIBILITY_CONSEQUENCE_NOTE).toBe(
-      "Sans horaires ou capacité, l'établissement est exclu des prochaines campagnes.",
+      "Sans horaires, l'établissement est exclu des prochaines campagnes et des événements. Sans capacité de diffusion, il est exclu des événements seulement.",
     );
+  });
+
+  it('CAP-EVT1 — the capacity field says it is the event switch (operator copy)', () => {
+    expect(CAPACITY_FIELD_LABEL).toBe('Capacité de diffusion (événements)');
+    expect(CAPACITY_FIELD_HINT).toBe(
+      "Rend l'établissement éligible aux événements (ex. 1). Sans effet sur les campagnes classiques.",
+    );
+    expect(CAPACITY_FIELD_PLACEHOLDER).toBe('Vide = hors événements');
   });
 });
 
-describe('eligibilityReadiness — the badge matrix (catégorie × horaires × capacité)', () => {
+describe('eligibilityReadiness — the badge matrix (catégorie × horaires)', () => {
   const withFields = (sector: boolean, hours: boolean, capacity: boolean) => ({
     ...emptyView,
     business_sector_id: sector ? 'sec-1' : null,
@@ -173,25 +184,37 @@ describe('eligibilityReadiness — the badge matrix (catégorie × horaires × c
     broadcast_capacity: capacity ? 40 : null,
   });
 
-  it('is eligible only when ALL of catégorie, horaires, capacité are present', () => {
+  it('is eligible when catégorie and horaires are present', () => {
     expect(eligibilityReadiness(withFields(true, true, true))).toEqual({
       eligible: true,
       missing: [],
     });
   });
 
+  it('CAP-EVT1 — an empty capacité never makes a venue « Incomplet » (it is the event switch)', () => {
+    expect(eligibilityReadiness(withFields(true, true, false))).toEqual({
+      eligible: true,
+      missing: [],
+    });
+    for (const sector of [true, false])
+      for (const hours of [true, false]) {
+        expect(eligibilityReadiness(withFields(sector, hours, false)).missing).not.toContain(
+          'capacité',
+        );
+        expect(eligibilityReadiness(withFields(sector, hours, false))).toEqual(
+          eligibilityReadiness(withFields(sector, hours, true)),
+        );
+      }
+  });
+
   it.each([
-    [false, true, true, ['catégorie']],
-    [true, false, true, ['horaires']],
-    [true, true, false, ['capacité']],
-    [false, false, true, ['catégorie', 'horaires']],
-    [false, true, false, ['catégorie', 'capacité']],
-    [true, false, false, ['horaires', 'capacité']],
-    [false, false, false, ['catégorie', 'horaires', 'capacité']],
+    [false, true, ['catégorie']],
+    [true, false, ['horaires']],
+    [false, false, ['catégorie', 'horaires']],
   ])(
-    'lists the missing fields in fixed order (sector=%s hours=%s capacity=%s → %j)',
-    (sector, hours, capacity, missing) => {
-      expect(eligibilityReadiness(withFields(sector, hours, capacity))).toEqual({
+    'lists the missing fields in fixed order (sector=%s hours=%s → %j)',
+    (sector, hours, missing) => {
+      expect(eligibilityReadiness(withFields(sector, hours, true))).toEqual({
         eligible: false,
         missing,
       });
@@ -233,8 +256,8 @@ describe('readinessBadgeLabel', () => {
   });
 
   it('lists the missing fields after « Incomplet — »', () => {
-    expect(readinessBadgeLabel({ eligible: false, missing: ['horaires', 'capacité'] })).toBe(
-      'Incomplet — horaires, capacité',
+    expect(readinessBadgeLabel({ eligible: false, missing: ['catégorie', 'horaires'] })).toBe(
+      'Incomplet — catégorie, horaires',
     );
   });
 });
