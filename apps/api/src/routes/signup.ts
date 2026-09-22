@@ -18,6 +18,15 @@ import { encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { storage } from '../storage/s3-storage.js';
 import { companySizeSchema } from '../validation/company-size.js';
 import { validatePhone } from '../validation/phone.js';
+import {
+  HOURS_REQUIRED_MESSAGE,
+  ORDER_MESSAGE,
+  PAIR_MESSAGE,
+  fleetEstablishmentSchema,
+  hourField,
+  hoursAreOrdered,
+  hoursArePaired,
+} from '../validation/signup-venue.js';
 import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
 // snake_case request shape (apps/web-facing per Decision 3) — the full signup wizard profile
@@ -26,55 +35,6 @@ import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.
 // non-privileged hint mapped to role post-create (CF-24 class-b). Required = the minimal account
 // identity + terms; the rest of the profile is optional and stored when present (kept lenient to
 // decouple from the reference-data-GET ordering and avoid FK-500s on partial data).
-// One fleet location the fleet_owner declares at signup → one screenhosts row. All
-// location/WiFi fields are optional ("add later"); name is the only requirement.
-// room_count is accepted on the wire (the FE still sends it) but stripped here —
-// screenhosts has no room_count column, so it is never persisted.
-
-// H1 (Mejri item 5) — working hours at signup: the venue's single daily window [open, close),
-// ints 0–23, landing in the SAME screenhosts.opening_hour/closing_hour columns the admin
-// eligibility PATCH and the C3 ingest write. The pair is all-or-nothing and must satisfy
-// open < close (the dispatch/report reading semantics); skipping leaves both NULL (14h report
-// fallback, full hachure, dispatch-ineligible until set). Per-day + overnight stay deferred.
-const hourField = z.number().int().min(0).max(23);
-interface HoursPair {
-  opening_hour?: number;
-  closing_hour?: number;
-}
-const hoursArePaired = (b: HoursPair): boolean =>
-  (b.opening_hour === undefined) === (b.closing_hour === undefined);
-// HOURS-X1: closing ≤ opening is legal (« closes the next day »); only an EQUAL pair is refused.
-const hoursAreOrdered = (b: HoursPair): boolean =>
-  b.opening_hour === undefined || b.closing_hour === undefined || b.opening_hour !== b.closing_hour;
-const PAIR_MESSAGE = 'opening_hour and closing_hour must be provided together';
-const ORDER_MESSAGE =
-  'opening_hour and closing_hour must differ (closing before opening = closes the next day)';
-const HOURS_REQUIRED_MESSAGE = 'opening_hour and closing_hour are required for a screenhost signup';
-
-const fleetEstablishmentSchema = z
-  .object({
-    name: z.string().min(1).max(200),
-    screen_count: z.number().int().min(0).optional(),
-    address: z.string().min(1).optional(),
-    city: z.string().min(1).optional(),
-    zone: z.string().optional(),
-    governorate_id: z.uuid().optional(),
-    postal_code: z
-      .string()
-      .regex(/^\d{4}$/, 'Postal code must be 4 digits')
-      .optional(),
-    latitude: z.number().min(-90).max(90).optional(),
-    longitude: z.number().min(-180).max(180).optional(),
-    wifi_ssid: z.string().min(1).optional(),
-    wifi_password: z.string().min(1).optional(),
-    // HOURS-M1 (Mejri 09/09, operator 2026-09-12): the pair is REQUIRED per establishment —
-    // « préciser plus tard » is gone from the wizard and refused on the wire.
-    opening_hour: hourField,
-    closing_hour: hourField,
-  })
-  .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
-  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] });
-
 const signupBodySchema = z
   .object({
     email: z.email('A valid email is required'),
