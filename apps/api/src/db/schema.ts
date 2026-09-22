@@ -345,8 +345,10 @@ export const screenhosts = pgTable(
     name: text('name').notNull(),
     latitude: numeric('latitude', { precision: 10, scale: 8 }),
     longitude: numeric('longitude', { precision: 11, scale: 8 }),
-    // Free metadata, NOT screens rows.
+    // The DECLARED screens, NOT screens rows (SCR-DECL1: once the owner is approved, an edit makes
+    // the rows follow it — lib/screens.ts). room_count: declared rooms, NULL = never declared (0078).
     screenCount: integer('screen_count').notNull().default(0),
+    roomCount: integer('room_count'),
     address: text('address'),
     city: text('city'),
     postalCode: text('postal_code'),
@@ -426,6 +428,7 @@ export const screenhosts = pgTable(
       sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`,
     ),
     check('screenhosts_screen_count_nonneg', sql`${table.screenCount} >= 0`),
+    check('screenhosts_room_count_nonneg', sql`${table.roomCount} >= 0`),
     check(
       'screenhosts_opening_hour_range',
       sql`${table.openingHour} IS NULL OR (${table.openingHour} >= 0 AND ${table.openingHour} <= 23)`,
