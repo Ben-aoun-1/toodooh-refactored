@@ -1,21 +1,26 @@
-import { randomUUID } from 'node:crypto';
-
 import multipart from '@fastify/multipart';
 import { APIError } from 'better-auth/api';
 import { eq } from 'drizzle-orm';
-import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { accounts, agentReferrals, screenhosts, userDocuments, users } from '../db/schema.js';
+import { accounts, agentReferrals, screenhosts, users } from '../db/schema.js';
 import { env } from '../env.js';
 import { ROLE_LABELS_FR, notifyAdmins } from '../lib/admin-notifications.js';
 import { agentCodeVerdict, agentCompatibleWith, resolveAgentByCode } from '../lib/agent-lookup.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
-import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
+import {
+  type VoletField,
+  type VoletFile,
+  attachedVoletErrors,
+  isOwnerType,
+  isVoletField,
+  persistVolet,
+} from '../lib/signup-documents.js';
+import { MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
-import { storage } from '../storage/s3-storage.js';
 import { companySizeSchema } from '../validation/company-size.js';
 import { validatePhone } from '../validation/phone.js';
 import {
@@ -112,83 +117,6 @@ const deleteOrphanUser = async (email: string): Promise<void> => {
     .limit(1);
   if (acct) return; // account-backed → real user, not an orphan
   await db.delete(users).where(eq(users.id, u.id));
-};
-
-// ── R7/N4 — owner signup document volets (reverses F5 for owners) ──────────────────────────────
-// Owners post multipart: a `payload` field (the signup JSON) + the volet files. fleet_owner → RNE;
-// both owner types → bank (RIB). Advertisers/agencies still post JSON and submit no documents.
-//
-// SIGN-2 (operator ruling 2026-08-31) — the CIN volets are GONE from signup: an individual owner is
-// asked for the RIB only. CIN is NOT abolished, it is PROVIDE-LATER — the 'cin' document category,
-// the admin request path and POST /api/profile/documents all still accept it after sign-in. An
-// unknown file part is ignored by the parser below, so a stale client still signs up cleanly; its
-// CIN parts are simply dropped rather than rejected.
-type VoletFile = { buffer: Buffer; mimetype: string; filename: string };
-
-const VOLET_FIELDS = ['rne', 'bank'] as const;
-type VoletField = (typeof VOLET_FIELDS)[number];
-const isVoletField = (name: string): name is VoletField =>
-  (VOLET_FIELDS as readonly string[]).includes(name);
-
-const isOwnerType = (t: string | undefined): boolean =>
-  t === 'individual_owner' || t === 'fleet_owner';
-
-// Owner documents are OPTIONAL at signup (provide-later — Kais QA 2026-06-24): presence/completeness
-// is an approval signal via documentPresence, NOT a signup-submit gate. So we never reject a missing
-// or partial volet — only the MIME of an ATTACHED file is validated (size is already capped by the
-// multipart fileSize limit → 413 on parse). Mirrors profile-documents' MIME guard via the shared set.
-// Returns the problems (empty = valid).
-const attachedVoletErrors = (
-  files: Partial<Record<VoletField, VoletFile>>,
-): { field: string; reason: string }[] => {
-  const errs: { field: string; reason: string }[] = [];
-  for (const field of VOLET_FIELDS) {
-    const file = files[field];
-    if (file && !ALLOWED_DOCUMENT_MIME.has(file.mimetype)) {
-      errs.push({ field, reason: `unsupported content type: ${file.mimetype}` });
-    }
-  }
-  return errs;
-};
-
-// Persist one volet AFTER account creation. Storage-FIRST so a row never references a missing object
-// (the profile-documents no-orphan-key rule); on a row-insert failure, best-effort delete the object
-// we just wrote so no orphan object lingers. Degraded, NEVER thrown: a failure leaves the volet absent
-// → the onboarding indicator (C1) shows incomplete → the user finishes via the post-signin
-// /api/profile/documents path. Same storage key format + table as that path (no new storage path).
-const persistVolet = async (
-  userId: string,
-  category: 'cin' | 'rne' | 'bank',
-  position: number,
-  file: VoletFile,
-  log: FastifyBaseLogger,
-): Promise<void> => {
-  const rowId = randomUUID();
-  const key = `${category}/${userId}/${rowId}`;
-  const uploaded = await storage.upload({ key, body: file.buffer, contentType: file.mimetype });
-  if ('error' in uploaded) {
-    log.error({ userId, category, position }, 'signup volet upload failed (degraded)');
-    return;
-  }
-  try {
-    await db.insert(userDocuments).values({
-      // The row id MUST equal the UUID embedded in storageKey (<cat>/<uid>/<rowId>) so isRowOwnedKey
-      // holds — else a later DELETE/REPLACE via /api/profile/documents skips storage.delete and
-      // orphans the object. Mirrors profile-documents.ts's `.values({ id: rowId, ... })`.
-      id: rowId,
-      userId,
-      category,
-      position,
-      storageKey: key,
-      originalFilename: file.filename,
-      mimeType: file.mimetype,
-      sizeBytes: file.buffer.length,
-    });
-  } catch (err) {
-    // The row didn't land — drop the object we just wrote so it isn't orphaned in MinIO.
-    await storage.delete({ key }).catch(() => undefined);
-    log.error({ userId, category, position, err }, 'signup volet row insert failed (degraded)');
-  }
 };
 
 export const signupRoute: FastifyPluginAsync = async (app) => {
@@ -288,7 +216,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
     // R7/N4 reversed (Kais QA 2026-06-24): owner documents are OPTIONAL at signup (provide-later via
     // the post-signin /api/profile/documents surface). An owner may finalize with NO documents — on
     // the JSON path or an empty multipart → 201. We do NOT 400 a missing or partial volet; completeness
-    // (both CIN faces + RIB) is enforced as an approval signal via documentPresence, not a submit gate.
+    // (RNE + RIB) is surfaced as an approval signal via documentPresence, not a submit gate.
     // Only the MIME of any ATTACHED file is validated BEFORE create → 400 with NO account (the FE caps
     // MIME at pick, so this is a defensive guard for a malformed upload, never for absence).
     if (isMultipart) {
