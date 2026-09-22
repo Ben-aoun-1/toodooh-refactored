@@ -2477,8 +2477,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               Vous pourrez uploader vos documents depuis votre profil après inscription.
             </p>
             <p className="text-xs text-gray-500">
-              Vous ne pourrez lancer votre première campagne une fois tous les documents téléchargés
-              et validés.
+              Vous ne pourrez lancer votre première campagne qu&apos;une fois tous les documents
+              téléchargés et validés.
             </p>
           </div>
         </label>
