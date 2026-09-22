@@ -12,12 +12,14 @@ import { ROLE_LABELS_FR, notifyAdmins } from '../lib/admin-notifications.js';
 import { agentCodeVerdict, agentCompatibleWith, resolveAgentByCode } from '../lib/agent-lookup.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
 import {
-  type VoletField,
-  type VoletFile,
-  attachedVoletErrors,
-  isOwnerType,
-  isVoletField,
-  persistVolet,
+  MAX_SIGNUP_FILE_PARTS,
+  type SignupDocument,
+  type SignupFilePart,
+  persistSignupDocument,
+  signupDocumentErrors,
+  signupFileLimit,
+  signupKind,
+  slotSignupDocuments,
 } from '../lib/signup-documents.js';
 import { MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
@@ -119,42 +121,44 @@ const deleteOrphanUser = async (email: string): Promise<void> => {
   await db.delete(users).where(eq(users.id, u.id));
 };
 
+// Every refusal of an oversized or over-numerous multipart body (no account is created).
+const payloadTooLarge = {
+  error: 'PAYLOAD_TOO_LARGE',
+  message: `A document exceeds the ${MAX_DOCUMENT_BYTES}-byte limit.`,
+} as const;
+
 export const signupRoute: FastifyPluginAsync = async (app) => {
-  // Owners post multipart (a `payload` field + the volet files); advertisers/agencies still post JSON.
+  // A signup WITH documents posts multipart (a `payload` field + the file parts): every owner, and a
+  // screencaster that attached files (DOC-CAST1); a signup without documents may post plain JSON.
   // Registration is content-type-scoped — JSON requests are parsed by Fastify's JSON parser, unchanged.
-  // files:4 leaves headroom over rne/bank; the fileSize limit is the shared 5 MB cap.
+  // The files limit is the largest kind's (lib/signup-documents.ts); the route re-checks per kind.
+  // The fileSize limit is the shared 5 MB cap.
   await app.register(multipart, {
-    limits: { fileSize: MAX_DOCUMENT_BYTES, files: 4, fields: 5 },
+    limits: { fileSize: MAX_DOCUMENT_BYTES, files: MAX_SIGNUP_FILE_PARTS, fields: 5 },
   });
 
   app.post('/api/signup', async (request, reply) => {
-    // Dual-path body source: a multipart owner request carries the signup JSON in a `payload` field +
-    // named volet file parts; a JSON request uses request.body verbatim (advertiser/agency, unchanged).
+    // Dual-path body source: a multipart request carries the signup JSON in a `payload` field + named
+    // file parts; a JSON request uses request.body verbatim.
     const isMultipart = request.isMultipart();
     let rawBody: unknown = request.body;
-    const voletFiles: Partial<Record<VoletField, VoletFile>> = {};
+    const fileParts: SignupFilePart[] = [];
     if (isMultipart) {
       let payloadRaw: string | undefined;
       try {
         for await (const part of request.parts()) {
           if (part.type === 'file') {
             const buffer = await part.toBuffer(); // throws past the fileSize limit
-            if (isVoletField(part.fieldname)) {
-              voletFiles[part.fieldname] = {
-                buffer,
-                mimetype: part.mimetype,
-                filename: part.filename,
-              };
-            }
+            fileParts.push({
+              field: part.fieldname,
+              file: { buffer, mimetype: part.mimetype, filename: part.filename },
+            });
           } else if (part.fieldname === 'payload') {
             payloadRaw = part.value as string;
           }
         }
       } catch {
-        return reply.status(413).send({
-          error: 'PAYLOAD_TOO_LARGE',
-          message: `A document exceeds the ${MAX_DOCUMENT_BYTES}-byte limit.`,
-        });
+        return reply.status(413).send(payloadTooLarge);
       }
       if (payloadRaw === undefined) {
         return reply.status(400).send({
@@ -213,19 +217,26 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
     // terms_accepted is enforced `true` by the schema (z.literal); the acceptance time is
     // server-stamped below, never taken from the client.
 
-    // R7/N4 reversed (Kais QA 2026-06-24): owner documents are OPTIONAL at signup (provide-later via
-    // the post-signin /api/profile/documents surface). An owner may finalize with NO documents — on
-    // the JSON path or an empty multipart → 201. We do NOT 400 a missing or partial volet; completeness
-    // (RNE + RIB) is surfaced as an approval signal via documentPresence, not a submit gate.
-    // Only the MIME of any ATTACHED file is validated BEFORE create → 400 with NO account (the FE caps
-    // MIME at pick, so this is a defensive guard for a malformed upload, never for absence).
+    // R7/N4 reversed (Kais QA 2026-06-24): documents are OPTIONAL at signup (provide-later via the
+    // post-signin /api/profile/documents surface). An account may finalize with NO documents — on the
+    // JSON path or an empty multipart → 201. We do NOT 400 a missing or partial set; completeness is
+    // surfaced as an approval signal via documentPresence, not a submit gate. BEFORE create, with NO
+    // account on refusal: more file parts than the kind allows → 413, and the MIME of every part that
+    // will be stored → 400 (the FE caps MIME at pick, so this is a defensive guard for a malformed
+    // upload, never for absence). The same rules for owners and — since DOC-CAST1 — screencasters.
+    let signupDocuments: SignupDocument[] = [];
     if (isMultipart) {
-      const voletErrs = attachedVoletErrors(voletFiles);
-      if (voletErrs.length > 0) {
+      const kind = signupKind(profile_type);
+      if (fileParts.length > signupFileLimit(kind)) {
+        return reply.status(413).send(payloadTooLarge);
+      }
+      signupDocuments = slotSignupDocuments(fileParts, kind);
+      const documentErrs = signupDocumentErrors(signupDocuments);
+      if (documentErrs.length > 0) {
         return reply.status(400).send({
           error: 'INVALID_INPUT',
           message: 'Validation failed',
-          fields: voletErrs,
+          fields: documentErrs,
         });
       }
     }
@@ -390,19 +401,12 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           }
         }
 
-        // R7/N4 — persist whatever owner volets WERE provided, now that the account exists (inside the
-        // persisted-id guard, so a duplicate-email signup never uploads). Documents are optional at
-        // signup, so the per-file presence guards below are load-bearing: only attached volets persist;
-        // a missing one simply leaves onboarding incomplete (C1). Degraded + never thrown: a storage/db
-        // failure also leaves a volet absent, not a failed signup.
-        if (isMultipart && isOwnerType(profile_type)) {
-          // SIGN-2 removed the CIN from signup; CIN-2b (2026-09-12) — EVERY owner may attach its
-          // RNE (individual owners included). Both types may attach the RIB below.
-          if (voletFiles.rne) {
-            await persistVolet(persisted.id, 'rne', 1, voletFiles.rne, request.log);
-          }
-          if (voletFiles.bank)
-            await persistVolet(persisted.id, 'bank', 1, voletFiles.bank, request.log);
+        // R7/N4 + DOC-CAST1 — persist whatever documents WERE provided, now that the account exists
+        // (inside the persisted-id guard, so a duplicate-email signup never uploads). Documents are
+        // optional at signup: a missing one simply leaves onboarding incomplete (C1). Degraded + never
+        // thrown: a storage/db failure also leaves a document absent, not a failed signup.
+        for (const doc of signupDocuments) {
+          await persistSignupDocument(persisted.id, doc, request.log);
         }
       }
 

@@ -769,7 +769,8 @@ describe('POST /api/signup', () => {
     expect(res.statusCode).toBe(201);
     const [u] = await usersByEmail('owner@example.com');
     expect(u?.role).toBe('advertiser');
-    expect(await docsFor(u?.id ?? '')).toHaveLength(0); // no docs at signup for advertisers
+    // A JSON signup carries no file; a screencaster's documents ride multipart (DOC-CAST1 suite).
+    expect(await docsFor(u?.id ?? '')).toHaveLength(0);
   });
 
   it('post-create storage failure → account still created (degraded), surfaced not thrown', async () => {
