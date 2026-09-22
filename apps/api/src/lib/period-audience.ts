@@ -423,7 +423,9 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       }
 
       const entry = measuredDayByDate.get(date);
-      if (isMeasuredDay(entry)) {
+      // LEARN-1 — under the flag a monthly day total before the floor (the first OPEN reading) came
+      // from closed-hour readings only, which the hub shows blank: it does not count either.
+      if (isMeasuredDay(entry) && (learned === null || mayBackup)) {
         // ── day granularity: history older than the hourly window. No hour detail, no S02 cell.
         days.push({ date, audience: entry.audience, source: 'measured', hasMeasured: true });
         dayGranularityMeasured += 1;

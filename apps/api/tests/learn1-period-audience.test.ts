@@ -208,6 +208,30 @@ describe('LEARN-1 T3 — a hub date under the flag takes the hub cells as they a
     ]);
   });
 
+  it('a monthly day total BEFORE the floor does not count under the flag (closed-hour readings only)', () => {
+    const over = {
+      range: { from: '2026-09-12', to: '2026-09-13' },
+      months: [
+        {
+          month: '2026-09',
+          daily: [
+            { date: '2026-09-12', audience: 40, source: 'measured' as const }, // before the floor
+            { date: '2026-09-13', audience: 400, source: 'measured' as const },
+          ],
+        },
+      ],
+      onboardedIso: '2026-09-13',
+    };
+    expect(periodAudience(input(over)).days).toEqual([
+      { date: '2026-09-13', audience: 400, source: 'measured', hasMeasured: true },
+    ]);
+    // Flag off: measurement is never clamped — today's behaviour, both days.
+    expect(periodAudience(input({ ...over, learned: null })).days.map((d) => d.date)).toEqual([
+      '2026-09-12',
+      '2026-09-13',
+    ]);
+  });
+
   it('S02 folds learned cells by the peak rule, provenance and all (PEAK-MAX1 untouched)', () => {
     const result = periodAudience(
       input({
