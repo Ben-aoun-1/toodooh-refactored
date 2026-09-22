@@ -50,7 +50,7 @@ const meUser: MeUser = {
   bank_account_holder: null,
   bank_rib: null,
   bank_iban: null,
-  documents: { registration: false, cin: false, bank: false },
+  documents: { registration: false, bank: false },
   notifications: { news_updates: true, reminders_events: false, promotions_offers: true },
 };
 
@@ -162,8 +162,9 @@ describe('authService.getBusinessProfile (F4a — /api/me read bridge)', () => {
     // bank fields: null on the wire → undefined on the profile (no details saved yet)
     expect(p?.bank_rib).toBeUndefined();
     expect(p?.bank_doc_path).toBeUndefined();
-    // F5 — document presence is a direct map of /api/me's booleans (no sentinel; _doc_url undefined)
-    expect(p?.documents).toEqual({ registration: false, cin: false, bank: false });
+    // F5 — document presence is a direct map of /api/me's booleans (no sentinel; _doc_url undefined).
+    // CIN-HOST1 — exactly { registration, bank }: strict, so even an undefined `cin` key fails.
+    expect(p?.documents).toStrictEqual({ registration: false, bank: false });
     expect(p?.registration_doc_url).toBeUndefined();
   });
 
@@ -174,7 +175,7 @@ describe('authService.getBusinessProfile (F4a — /api/me read bridge)', () => {
         bank_account_holder: 'Foulen Ben Foulen',
         bank_rib: '12345678901234567890',
         bank_iban: 'TN5912345678901234567890',
-        documents: { registration: false, cin: false, bank: true },
+        documents: { registration: false, bank: true },
       },
     });
     const p = await authService.getBusinessProfile();
@@ -210,7 +211,7 @@ describe('authService documents (F-docs — grouped multi-document model)', () =
     uploaded_at: '2026-06-11T00:00:00.000Z',
     ...over,
   });
-  const emptyGroups = { cin: [], rne: [], complementaire: [], bank: [] };
+  const emptyGroups = { rne: [], complementaire: [], bank: [] };
 
   beforeEach(() => {
     postForm.mockReset();
@@ -235,14 +236,14 @@ describe('authService documents (F-docs — grouped multi-document model)', () =
     expect(form.get('file')).toBe(file);
   });
 
-  it('uploadProfileDocument(cin, position) → POST /profile/documents/cin?position=2 (semantic verso slot)', async () => {
-    postForm.mockResolvedValue({ document: doc({ category: 'cin', position: 2 }) });
+  it('uploadProfileDocument(rne, position) → POST /profile/documents/rne?position=2 (explicit slot)', async () => {
+    postForm.mockResolvedValue({ document: doc({ position: 2 }) });
     await authService.uploadProfileDocument(
-      'cin',
-      new File(['x'], 'verso.png', { type: 'image/png' }),
+      'rne',
+      new File(['x'], 'rc-2.png', { type: 'image/png' }),
       2,
     );
-    expect(postForm.mock.calls[0][0]).toBe('/profile/documents/cin?position=2');
+    expect(postForm.mock.calls[0][0]).toBe('/profile/documents/rne?position=2');
   });
 
   it('uploadProfileDocument(bank) sends no position (single-slot: the server replaces slot 1)', async () => {

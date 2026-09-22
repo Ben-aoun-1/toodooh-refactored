@@ -25,7 +25,7 @@ export function useProfileDocuments() {
 interface UploadInput {
   category: ProfileDocumentCategory;
   file: File;
-  /** REQUIRED for cin (1=recto, 2=verso); omitted elsewhere (server picks the lowest free slot). */
+  /** An explicit slot; omitted → the server picks the lowest free slot. */
   position?: number;
 }
 

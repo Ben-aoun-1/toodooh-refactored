@@ -51,7 +51,7 @@ export const authService = {
     // Accepted-fields JSON (snake wire, Phase-1f F2). F5 is REVERSED for owners (R7/N4): owner volet
     // files (registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see
     // below). Still NOT sent: company_logo (no signup home) and the owner-extras
-    // (cin/formule/number_of_screens/number_of_rooms — backend-stripped; company_size IS sent and
+    // (formule/number_of_screens/number_of_rooms — backend-stripped; company_size IS sent and
     // stored since SIZE-PERSIST1). Advertisers/
     // agencies stay JSON, no documents (F5 stands for them).
     // SENT (P3): screenhost geo + WiFi — top-level latitude/longitude/wifi_ssid/wifi_password build
@@ -332,7 +332,7 @@ export const authService = {
     }
   },
 
-  // F-docs Commit 2 — the user's documents grouped by category (cin/rne/complementaire/bank),
+  // F-docs Commit 2 — the user's documents grouped by category (rne/complementaire/bank),
   // the multi-document read source. Presence flags in /api/me stay the cheap booleans; this is
   // the full listing the settings manager renders.
   async listProfileDocuments(): Promise<GroupedProfileDocuments> {
@@ -348,12 +348,12 @@ export const authService = {
 
   // Phase-1f F5, reshaped by F-docs Commit 2 — slot upload (multipart, post-signin; at signup
   // the user is unverified + logged-out and can't call this requireAuth endpoint). `position`
-  // is REQUIRED for cin (1=recto, 2=verso — semantic slots); elsewhere it's omitted and the
-  // server picks the lowest free slot (bank cap-1 → slot 1, re-upload replaces — the F1 flow).
+  // picks a slot explicitly; when omitted the server picks the lowest free slot (bank cap-1 →
+  // slot 1, re-upload replaces — the F1 flow).
   // Same-slot re-upload replaces in place. request.file() reads the first file (field name is
   // irrelevant).
   async uploadProfileDocument(
-    category: 'rne' | 'cin' | 'complementaire' | 'bank',
+    category: ProfileDocument['category'],
     file: File,
     position?: number,
   ): Promise<ProfileDocument> {
@@ -386,7 +386,7 @@ export const authService = {
   // F-docs Commit 2 — category convenience for single-slot views (the bank RIB card): list,
   // then presign the lowest-position document. None of that category → null.
   async getProfileDocumentUrlByCategory(
-    category: 'rne' | 'cin' | 'complementaire' | 'bank',
+    category: ProfileDocument['category'],
   ): Promise<string | null> {
     const documents = await this.listProfileDocuments();
     const lowest = [...documents[category]].sort((a, b) => a.position - b.position)[0];
@@ -453,7 +453,6 @@ export const authService = {
       // undefined (no stored URL; the view presigns on demand via getProfileDocumentUrlByCategory).
       documents: {
         registration: user.documents.registration,
-        cin: user.documents.cin,
         bank: user.documents.bank,
       },
     };

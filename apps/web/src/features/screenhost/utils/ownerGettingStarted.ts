@@ -7,7 +7,7 @@ import type { BusinessProfile } from '@/features/auth/types/auth';
  */
 
 // Reads /api/me's `documents` booleans (OwnerSettings precedent). The legacy
-// cin_doc_url/registration_doc_* fields are never set by the /api/me bridge — reading them kept
+// *_doc_url/registration_doc_* fields are never set by the /api/me bridge — reading them kept
 // the block permanently visible for owners whose documents were already on file.
 // CIN-2 (Mejri 09/09, operator 2026-09-12): the CIN is removed. CIN-2b (same evening): EVERY owner
 // files an RNE, individual owners included — the registration flag is the one legal document.

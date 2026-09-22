@@ -46,7 +46,6 @@ const advertiser: SignUpData = {
   fonction: '', // blank optional → must be omitted
   company_size: '50 - 100', // owner-extra → dropped
   number_of_screens: 5, // owner-extra → dropped
-  cin: 'X', // owner-extra → dropped
   registration_doc: {} as unknown as File, // file → dropped
   company_logo: {} as unknown as File, // file → dropped
   terms_accepted: true,

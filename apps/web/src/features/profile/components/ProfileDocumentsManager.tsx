@@ -10,7 +10,6 @@ import {
   useUploadProfileDocument,
 } from '@/features/profile/hooks/useProfileDocuments';
 import {
-  CIN_SLOT_LABELS,
   DOCUMENT_ACCEPT,
   DOCUMENT_CAPS,
   DOCUMENT_FORMATS_COPY,
@@ -41,12 +40,11 @@ function formatFileSize(bytes: number) {
 
 /**
  * F-docs Commit 2 — the per-category multi-document settings surface (replaces
- * the single-slot "Documents légaux" tab body). cin renders two SEMANTIC slots
- * (1=recto, 2=verso — position is explicit on upload); rne/complementaire
- * render saved rows + an add zone until the cap. Caps/size/mime mirror the
- * server inline (C5/F1 pattern); the server stays the authority. Uploads fire
- * on pick (each slot is its own document — there is no multi-slot form to
- * batch); views presign by id on demand.
+ * the single-slot "Documents légaux" tab body). rne/complementaire render saved
+ * rows + an add zone until the cap (CIN-HOST1: the CIN recto/verso slots are
+ * gone). Caps/size/mime mirror the server inline (C5/F1 pattern); the server
+ * stays the authority. Uploads fire on pick (each slot is its own document —
+ * there is no multi-slot form to batch); views presign by id on demand.
  */
 export default function ProfileDocumentsManager({
   categories,
@@ -58,19 +56,14 @@ export default function ProfileDocumentsManager({
   // One in-flight op at a time, keyed so only the touched slot shows a spinner.
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  const pickFile = async (
-    category: DocumentCategoryConfig['category'],
-    file: File,
-    position?: number,
-  ) => {
+  const pickFile = async (category: DocumentCategoryConfig['category'], file: File) => {
     if (file.size > MAX_DOCUMENT_BYTES) {
       toast.error(DOCUMENT_TOO_LARGE_ERROR);
       return;
     }
-    const key = `${category}:${position ?? 'next'}`;
-    setBusyKey(key);
+    setBusyKey(`${category}:next`);
     try {
-      await upload.mutateAsync({ category, file, position });
+      await upload.mutateAsync({ category, file });
       toast.success('Document enregistré');
     } catch (err) {
       toast.error(getErrorMessage(err) || "Erreur lors de l'upload");
@@ -134,8 +127,7 @@ export default function ProfileDocumentsManager({
     </label>
   );
 
-  const savedCard = (doc: ProfileDocument, fallbackName: string, replaceSlot?: number) => {
-    const category = doc.category as DocumentCategoryConfig['category'];
+  const savedCard = (doc: ProfileDocument, fallbackName: string) => {
     return (
       <div
         key={doc.id}
@@ -164,12 +156,6 @@ export default function ProfileDocumentsManager({
         >
           <Eye className="h-5 w-5" />
         </button>
-        {replaceSlot !== undefined &&
-          browseLabel(
-            busyKey === `${category}:${replaceSlot}` ? 'Envoi...' : 'Remplacer',
-            (file) => void pickFile(category, file, replaceSlot),
-            busyKey !== null,
-          )}
         <button
           type="button"
           onClick={() => void deleteDocument(doc)}
@@ -201,52 +187,20 @@ export default function ProfileDocumentsManager({
               </span>
             </div>
 
-            {category === 'cin' ? (
-              // Two SEMANTIC slots — recto/verso are distinct documents, never a free list.
-              [1, 2].map((position) => {
-                const doc = docs.find((d) => d.position === position);
-                const slotLabel = CIN_SLOT_LABELS[position] ?? `Face ${position}`;
-                if (doc) return savedCard(doc, `CIN — ${slotLabel}`, position);
-                return (
-                  <div
-                    key={position}
-                    className="border-2 border-dashed border-gray-300 rounded-xl p-4 flex items-center justify-between gap-3 bg-gray-50/50"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="rounded-full p-2" style={{ background: '#E6F7ED' }}>
-                        <Upload className="h-5 w-5" style={{ color: '#22c55e' }} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900">CIN — {slotLabel}</p>
-                        <p className="text-xs text-gray-500">{DOCUMENT_FORMATS_COPY}</p>
-                      </div>
-                    </div>
-                    {browseLabel(
-                      busyKey === `cin:${position}` ? 'Envoi...' : 'Parcourir les fichiers',
-                      (file) => void pickFile('cin', file, position),
-                      busyKey !== null,
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <>
-                {docs.map((doc) => savedCard(doc, title))}
-                {docs.length < cap && (
-                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 bg-gray-50/50">
-                    <div className="rounded-full p-3" style={{ background: '#E6F7ED' }}>
-                      <Upload className="h-8 w-8" style={{ color: '#22c55e' }} />
-                    </div>
-                    <p className="text-sm font-medium text-gray-900">Ajouter un document</p>
-                    <p className="text-xs text-gray-500">{DOCUMENT_FORMATS_COPY}</p>
-                    {browseLabel(
-                      busyKey === `${category}:next` ? 'Envoi...' : 'Parcourir les fichiers',
-                      (file) => void pickFile(category, file),
-                      busyKey !== null,
-                    )}
-                  </div>
+            {docs.map((doc) => savedCard(doc, title))}
+            {docs.length < cap && (
+              <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 bg-gray-50/50">
+                <div className="rounded-full p-3" style={{ background: '#E6F7ED' }}>
+                  <Upload className="h-8 w-8" style={{ color: '#22c55e' }} />
+                </div>
+                <p className="text-sm font-medium text-gray-900">Ajouter un document</p>
+                <p className="text-xs text-gray-500">{DOCUMENT_FORMATS_COPY}</p>
+                {browseLabel(
+                  busyKey === `${category}:next` ? 'Envoi...' : 'Parcourir les fichiers',
+                  (file) => void pickFile(category, file),
+                  busyKey !== null,
                 )}
-              </>
+              </div>
             )}
           </section>
         );

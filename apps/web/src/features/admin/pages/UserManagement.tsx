@@ -667,16 +667,8 @@ export default function UserManagement() {
                             </div>
 
                             {/* Champs spécifiques au profil (scalaires, NON documentaires) — restent
-                                associés au type. Le numéro CIN n'existe que pour le proprio individuel;
-                                zone + nombre d'écrans pour les propriétaires. */}
-                            {selectedUser.profile_type === 'individual_owner' && (
-                              <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                <span className="text-gray-600">Numéro CIN:</span>
-                                <span className="font-medium text-gray-900">
-                                  {selectedUser.cin || 'Non fourni'}
-                                </span>
-                              </div>
-                            )}
+                                associés au type : zone + nombre d'écrans pour les propriétaires.
+                                CIN-HOST1 : plus de numéro CIN (jamais modélisé). */}
                             {isOwnerProfile(selectedUser.profile_type) && selectedUser.zone && (
                               <div className="flex justify-between items-center pt-2">
                                 <span className="text-gray-600">Zone:</span>
@@ -696,24 +688,16 @@ export default function UserManagement() {
                                 </div>
                               )}
 
-                            {/* Documents (CIN / RNE / complémentaire / bancaire) — pilotés PAR LES
+                            {/* Documents (RNE / complémentaire / bancaire) — pilotés PAR LES
                                 DONNÉES renvoyées par l'endpoint groupé (userDocuments.<catégorie>),
                                 JAMAIS par profile_type. Avant, chaque groupe était conditionné au
                                 profile_type surfacé : un proprio ScreenHost classé advertiser/agency
                                 (ou un rôle null coalescé en 'advertiser') voyait l'API renvoyer ses
                                 volets, mais le modal ne rendait pas la catégorie → "Non fourni"/vide.
-                                En rendant les quatre groupes inconditionnellement, tout volet persisté
+                                En rendant les trois groupes inconditionnellement, tout volet persisté
                                 est affiché et presignable ("Voir") quel que soit le classement du
                                 profil. Chaque groupe s'auto-rend "Non fourni" quand sa catégorie est
-                                vide. */}
-                            <UserDocumentReviewGroup
-                              label="Document CIN"
-                              cin
-                              topBorder
-                              docs={userDocuments?.cin ?? []}
-                              loading={documentsLoading}
-                              onView={(docId) => handleViewDocument(selectedUser.id, docId)}
-                            />
+                                vide. CIN-HOST1 : plus de groupe « Document CIN » (Recto/Verso). */}
                             <UserDocumentReviewGroup
                               label="Registre de commerce"
                               topBorder

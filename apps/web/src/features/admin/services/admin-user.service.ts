@@ -9,7 +9,7 @@ export type AdminProfileType = 'individual_owner' | 'fleet_owner' | 'advertiser'
 // dual-identity collapse means there is one `id` (no separate user_id). Documents are NOT carried
 // here — F-docs Commit 3 moved the review surface onto the per-category grouped endpoint
 // (getUserDocuments), presigned by uuid on demand (getDocumentUrlById). Fields the backend does not
-// model (cin number, number_of_screens, formule, verification_status) are intentionally absent —
+// model (number_of_screens, formule, verification_status) are intentionally absent —
 // the UI null-guards them ("Non fourni"), it does not invent data (audit §17.1 functional
 // reductions; G2 D-G2-2).
 export interface AdminUser {
@@ -44,7 +44,6 @@ export interface AdminUser {
   validated_at: string | null;
   validation_notes: string | null;
   // Not modeled by the backend — always undefined; the UI degrades gracefully (G2 D-G2-2).
-  cin?: string;
   number_of_screens?: number;
   formule?: string;
   verification_status?: string;
@@ -81,9 +80,8 @@ interface AdminUserWire {
 }
 
 // One stored document in the multi-document model (F-docs Commit 3) — mirrors the server's
-// `docView` projection (apps/api lib/user-documents.ts). `position` is semantic for cin (1=recto,
-// 2=verso); for the other categories it is just upload order. Storage keys are never exposed —
-// the URL is presigned by id on demand.
+// `docView` projection (apps/api lib/user-documents.ts). `position` is just upload order. Storage
+// keys are never exposed — the URL is presigned by id on demand.
 export interface AdminDocumentView {
   id: string;
   category: DocumentCategory;
@@ -94,7 +92,8 @@ export interface AdminDocumentView {
   uploaded_at: string;
 }
 
-export type DocumentCategory = 'cin' | 'rne' | 'complementaire' | 'bank';
+// CIN-HOST1 (2026-09-21) — no 'cin': the api never lists or presigns a CIN any more.
+export type DocumentCategory = 'rne' | 'complementaire' | 'bank';
 
 /** REV1 — one recorded change of an owner's payout coordinates (admin-only, never owner-facing). */
 export interface AdminBankAuditSnapshot {
@@ -113,10 +112,9 @@ export interface AdminBankAuditEntry {
 }
 
 // The admin review surface's grouped read — mirrors the server `groupedDocuments` shape (every
-// category present, possibly empty). Caps are server-enforced (cin/rne 2, complémentaire 10,
-// bank 1); the UI reads the arrays as-is.
+// category present, possibly empty). Caps are server-enforced (rne 2, complémentaire 10, bank 1);
+// the UI reads the arrays as-is.
 export interface GroupedAdminDocuments {
-  cin: AdminDocumentView[];
   rne: AdminDocumentView[];
   complementaire: AdminDocumentView[];
   bank: AdminDocumentView[];
@@ -170,7 +168,7 @@ export const adminUserService = {
     await apiClient.post(`/admin/users/${id}/approve`, notes ? { notes } : {});
   },
 
-  // topics = deficient document areas ('legal' RNE/CIN, 'bank' RIB), ≥1 required (N3 Scenario 1).
+  // topics = deficient document areas ('legal' RNE, 'bank' RIB), ≥1 required (N3 Scenario 1).
   async rejectUser(id: string, notes: string, topics: string[]): Promise<void> {
     await apiClient.post(`/admin/users/${id}/reject`, { notes, topics });
   },
@@ -199,7 +197,7 @@ export const adminUserService = {
 
   // Presign ONE document by its uuid (the :id-scoped route). Deliberately NOT the legacy
   // /documents/:ref category shim, which collapses to the category's lowest position and would
-  // lose recto-vs-verso for cin. Throws ApiError (NOT_FOUND / STORAGE_ERROR) on failure.
+  // always open the first of several documents. Throws ApiError (NOT_FOUND / STORAGE_ERROR).
   async getDocumentUrlById(userId: string, docId: string): Promise<string> {
     const { url } = await apiClient.get<{ url: string }>(
       `/admin/users/${userId}/documents/${docId}/url`,
