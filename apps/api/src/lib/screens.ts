@@ -87,7 +87,9 @@ export const ensureOwnerHasScreen = async (userId: string): Promise<void> => {
 // INSTALLED is ADM-FIX1's ruled predicate (paired_at OR last_seen_at). A row carrying proof of play
 // is kept as well: proof_of_play.screen_id is ON DELETE RESTRICT (retain-as-evidence), and a proof
 // does not stamp last_seen_at. One transaction, the screenhost row locked FOR UPDATE, so two edits
-// of the same venue cannot interleave. `GET /api/screens/mine` (the APK) lists exactly these rows.
+// of the same venue cannot interleave, and the venue's screens rows locked FOR UPDATE too, so a TV
+// pairing cannot land between the read and the DELETE (see reconcileScreenRows).
+// `GET /api/screens/mine` (the APK) lists exactly these rows.
 // No hub re-push (Q7): wedooh-sync's payload is left as it is.
 
 type Tx = Parameters<Parameters<(typeof db)['transaction']>[0]>[0];
@@ -156,6 +158,17 @@ const screensWithProof = async (tx: Tx, screenIds: string[]): Promise<Set<string
 
 // Rows follow the count (Q2). Returns the number of rows that must stay when the target is below it.
 // A venue with no rows whose owner is not approved yet is left to approval (D2).
+//
+// The rows are read FOR UPDATE. The screenhost lock above does not serialise against the TV:
+// POST /api/screens/:id/pair and the playout ingest write `screens` alone. Without a row lock, an
+// edit could read « Écran 3 » as never installed, a pairing could commit, and the DELETE (by id)
+// would still remove the now-paired row. With the lock:
+//   • a pairing already in flight makes this read wait, then it sees the committed paired_at and
+//     the row is kept;
+//   • a pairing arriving after it waits for this transaction, then finds the row gone and gets a
+//     404 (routes/screens.ts).
+// A proof of play insert takes a KEY SHARE lock on its screen row, so the same ordering holds for it.
+// Ordered by id so two lockers always take the rows in the same order.
 const reconcileScreenRows = async (
   tx: Tx,
   screenhostId: string,
@@ -171,7 +184,9 @@ const reconcileScreenRows = async (
       lastSeenAt: screens.lastSeenAt,
     })
     .from(screens)
-    .where(eq(screens.screenhostId, screenhostId));
+    .where(eq(screens.screenhostId, screenhostId))
+    .orderBy(asc(screens.id))
+    .for('update');
   if (!approved && venueRows.length === 0) return null;
   const withProof = await screensWithProof(
     tx,
