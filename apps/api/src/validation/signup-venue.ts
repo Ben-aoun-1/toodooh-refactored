@@ -1,13 +1,14 @@
 import { z } from 'zod';
 
+import { declaredCountSchema } from './screen-declaration.js';
+
 // The venue fields a screenhost signup carries — moved verbatim out of routes/signup.ts (the
 // route file was over 400 lines); the individual owner's top level and every fleet entry share
 // the hours rules below. No behaviour change.
 //
-// One fleet location the fleet_owner declares at signup → one screenhosts row. All
-// location/WiFi fields are optional ("add later"); name is the only requirement.
-// room_count is accepted on the wire (the FE still sends it) but stripped here —
-// screenhosts has no room_count column, so it is never persisted.
+// One fleet location the fleet_owner declares at signup → one screenhosts row. Location/WiFi are
+// optional ("add later"); the name, the hours pair and — SCR-DECL1 — the exact screen and room
+// counts are required (both stored: screen_count, and room_count since migration 0077).
 
 // H1 (Mejri item 5) — working hours at signup: the venue's single daily window [open, close),
 // ints 0–23, landing in the SAME screenhosts.opening_hour/closing_hour columns the admin
@@ -33,7 +34,8 @@ export const HOURS_REQUIRED_MESSAGE =
 export const fleetEstablishmentSchema = z
   .object({
     name: z.string().min(1).max(200),
-    screen_count: z.number().int().min(0).optional(),
+    screen_count: declaredCountSchema,
+    room_count: declaredCountSchema,
     address: z.string().min(1).optional(),
     city: z.string().min(1).optional(),
     zone: z.string().optional(),

@@ -19,6 +19,11 @@ import { storage } from '../storage/s3-storage.js';
 import { companySizeSchema } from '../validation/company-size.js';
 import { validatePhone } from '../validation/phone.js';
 import {
+  declarationRequired,
+  declaredCountSchema,
+  individualDeclares,
+} from '../validation/screen-declaration.js';
+import {
   HOURS_REQUIRED_MESSAGE,
   ORDER_MESSAGE,
   PAIR_MESSAGE,
@@ -71,6 +76,9 @@ const signupBodySchema = z
     // « préciser plus tard » skip is gone; NULL hours now only exist on legacy rows.
     opening_hour: hourField.optional(),
     closing_hour: hourField.optional(),
+    // SCR-DECL1 — the individual_owner's venue counts, REQUIRED like its hours (fleet: per entry).
+    screen_count: declaredCountSchema.optional(),
+    room_count: declaredCountSchema.optional(),
     fleet_establishments: z.array(fleetEstablishmentSchema).optional(),
   })
   .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
@@ -78,7 +86,9 @@ const signupBodySchema = z
   .refine((b) => b.profile_type !== 'individual_owner' || b.opening_hour !== undefined, {
     message: HOURS_REQUIRED_MESSAGE,
     path: ['opening_hour'],
-  });
+  })
+  .refine(individualDeclares('screen_count'), declarationRequired('screen_count'))
+  .refine(individualDeclares('room_count'), declarationRequired('room_count'));
 
 // Q4 — better-auth's signup is sequential, not atomic (createUser → linkAccount
 // → verification are separate calls; no injectable tx). If linkAccount throws
@@ -268,6 +278,8 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       wifi_password,
       opening_hour,
       closing_hour,
+      screen_count,
+      room_count,
       fleet_establishments,
     } = parsed.data;
     // terms_accepted is enforced `true` by the schema (z.literal); the acceptance time is
@@ -400,6 +412,9 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
             wifiPasswordEncrypted: wifi_password ? encryptWifiPassword(wifi_password) : null,
             openingHour: opening_hour ?? null,
             closingHour: closing_hour ?? null,
+            // SCR-DECL1 — both present for an individual_owner (the refines above).
+            screenCount: screen_count ?? 0,
+            roomCount: room_count ?? null,
             businessSectorId: business_sector_id ?? null,
             ownerId: persisted.id,
           });
@@ -407,7 +422,8 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           await db.insert(screenhosts).values(
             fleet_establishments.map((establishment) => ({
               name: establishment.name,
-              screenCount: establishment.screen_count ?? 0,
+              screenCount: establishment.screen_count,
+              roomCount: establishment.room_count,
               address: establishment.address ?? null,
               city: establishment.city ?? null,
               postalCode: establishment.postal_code ?? null,

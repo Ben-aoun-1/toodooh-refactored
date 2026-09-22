@@ -65,6 +65,7 @@ import {
 } from '@/features/auth/utils/signup-step-errors';
 import { companySizeLabel, companySizeOptions } from '@/lib/company-size';
 import { getErrorMessage } from '@/lib/errors';
+import { DECLARED_COUNT_ERROR, parseDeclaredCount } from '@/lib/screen-declaration';
 
 import SignupDocumentSlots from './SignupDocumentSlots';
 import SignupOwnerDocuments from './SignupOwnerDocuments';
@@ -159,13 +160,6 @@ const tunisianCities = [
 ];
 
 type FleetRow = FleetEstablishmentInput & { id: string };
-
-function parseFleetScreenCount(v: string): number {
-  if (v === '6-10') return 8;
-  if (v === '10+') return 10;
-  const n = parseInt(v, 10);
-  return Number.isNaN(n) ? 0 : n;
-}
 
 // F6 — a manually-typed coordinate string → a finite number, or undefined when blank/invalid
 // (so an empty field is omitted from the payload rather than sent as NaN).
@@ -273,8 +267,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     zone: '',
     formule: '',
     agent_toodooh: '',
-    number_of_screens: undefined,
-    number_of_rooms: undefined,
     company_size: '',
     terms_accepted: false,
   });
@@ -562,6 +554,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       return {
         etablissementName: readDom('etablissement-name'),
         taxNumber: readDom('tax-number', 'tax-number-2'),
+        etablissementScreens: readDom('etablissement-screens'),
         etablissementRooms: readDom('etablissement-rooms'),
         businessName: readDom('business-name'),
         streetAddress: readDom('street-address'),
@@ -593,6 +586,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       else if (key === 'fonction') setFonction(v);
       else if (key === 'confirmPassword') setConfirmPassword(v);
       else if (key === 'etablissementName') setEtablissementName(v);
+      else if (key === 'etablissementScreens') setEtablissementScreens(v);
       else if (key === 'etablissementRooms') setEtablissementRooms(v);
       else if (key === 'email') patch.email = v;
       else if (key === 'phone') patch.contact_phone = v;
@@ -689,17 +683,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       }
     }
     if (selectedProfileType === 'individual_owner' && currentStep === 2) {
-      const screensNum =
-        etablissementScreens === '6-10'
-          ? 8
-          : etablissementScreens === '10+'
-            ? 10
-            : parseInt(etablissementScreens, 10);
+      // SCR-DECL1 — the exact counts the step gate just validated (1–99), sent at signup.
       setFormData((prev) => ({
         ...prev,
         business_name: ctx.etablissementName.trim(),
-        number_of_screens: Number.isNaN(screensNum) ? undefined : screensNum,
-        number_of_rooms: parseInt(ctx.etablissementRooms, 10) || undefined,
+        screen_count: parseDeclaredCount(ctx.etablissementScreens) ?? undefined,
+        room_count: parseDeclaredCount(ctx.etablissementRooms) ?? undefined,
       }));
     }
     if (isOwner && currentStep === 3 && selectedProfileType === 'individual_owner') {
@@ -708,27 +697,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         business_name: prev.business_name?.trim() || etablissementName.trim(),
       }));
     }
-    if (isOwner && currentStep === 3 && selectedProfileType === 'fleet_owner') {
-      const totalScreens = fleetEstablishments.reduce((a, e) => a + e.screen_count, 0);
-      const totalRooms = fleetEstablishments.reduce((a, e) => a + e.room_count, 0);
-      setFormData((prev) => ({
-        ...prev,
-        number_of_screens: totalScreens,
-        number_of_rooms: totalRooms,
-      }));
-    }
     onStepChange(currentStep + 1);
   };
 
   const isFleetDraftValid = () => {
-    const rooms = parseInt(fleetDraftRooms, 10);
-    const screens = parseFleetScreenCount(fleetDraftScreens);
     return Boolean(
       fleetDraftName.trim() &&
-      fleetDraftScreens &&
-      screens > 0 &&
-      fleetDraftRooms.trim() &&
-      !Number.isNaN(rooms) &&
+      parseDeclaredCount(fleetDraftScreens) !== null &&
+      parseDeclaredCount(fleetDraftRooms) !== null &&
       fleetDraftStreet.trim() &&
       fleetDraftCity &&
       fleetDraftZone.trim() &&
@@ -757,12 +733,18 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   };
 
   const addFleetEstablishment = () => {
-    if (!isFleetDraftValid()) {
-      toast.error('Veuillez remplir tous les champs obligatoires');
+    const screenCount = parseDeclaredCount(fleetDraftScreens);
+    const rooms = parseDeclaredCount(fleetDraftRooms);
+    if (!isFleetDraftValid() || screenCount === null || rooms === null) {
+      // SCR-DECL1 — a typed but invalid count names the rule instead of « champs obligatoires ».
+      const badCount =
+        (fleetDraftScreens.trim() !== '' && screenCount === null) ||
+        (fleetDraftRooms.trim() !== '' && rooms === null);
+      toast.error(
+        badCount ? DECLARED_COUNT_ERROR : 'Veuillez remplir tous les champs obligatoires',
+      );
       return;
     }
-    const rooms = parseInt(fleetDraftRooms, 10);
-    const screenCount = parseFleetScreenCount(fleetDraftScreens);
     const row: FleetRow = {
       id: crypto.randomUUID(),
       name: fleetDraftName.trim(),
@@ -854,6 +836,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         ...(selectedProfileType === 'individual_owner'
           ? hoursPayload(ownerOpeningHour, ownerClosingHour)
           : {}),
+        // SCR-DECL1 — the step-2 counts belong to the individual_owner only (a fleet sends them
+        // per entry); a profile switch after step 2 must not carry them along.
+        screen_count:
+          selectedProfileType === 'individual_owner' ? formData.screen_count : undefined,
+        room_count: selectedProfileType === 'individual_owner' ? formData.room_count : undefined,
         fleet_establishments:
           selectedProfileType === 'fleet_owner' && fleetEstablishments.length > 0
             ? fleetEstablishments.map(({ id: _id, ...rest }) => rest)
@@ -1378,7 +1365,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               <label className={labelClass} htmlFor="etablissement-screens">
                 Nombre d&apos;écrans <span className="text-red-500">*</span>
               </label>
-              <select
+              <input
+                type="text"
+                inputMode="numeric"
                 required
                 value={etablissementScreens}
                 onChange={(e) => {
@@ -1386,14 +1375,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                   setEtablissementScreens(e.target.value);
                 }}
                 className={inputClass}
+                placeholder="3"
                 id="etablissement-screens"
-              >
-                {screenOptions.map((o) => (
-                  <option key={`io-${o.value || 'empty'}`} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              />
               {fieldError('screens')}
             </div>
             <div>
@@ -1402,6 +1386,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               </label>
               <input
                 type="text"
+                inputMode="numeric"
                 required
                 value={etablissementRooms}
                 onChange={(e) => {
@@ -1705,17 +1690,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     </div>
   );
 
-  const screenOptions = [
-    { value: '', label: 'Sélectionnez' },
-    { value: '1', label: '1' },
-    { value: '2', label: '2' },
-    { value: '3', label: '3' },
-    { value: '4', label: '4' },
-    { value: '5', label: '5' },
-    { value: '6-10', label: '6-10' },
-    { value: '10+', label: '10+' },
-  ];
-
   /* ═══════ Step 3 (owner): Établissement — propriétaire individuel ═══════ */
   const renderEtablissementIndividual = () => (
     <div className="max-w-3xl mx-auto w-full space-y-5">
@@ -1745,19 +1719,16 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           <label className={labelClass} htmlFor="etablissement-screens-2">
             Nombre d&apos;écrans <span className="text-red-500">*</span>
           </label>
-          <select
+          <input
+            type="text"
+            inputMode="numeric"
             required
             value={etablissementScreens}
             onChange={(e) => setEtablissementScreens(e.target.value)}
             className={inputClass}
+            placeholder="3"
             id="etablissement-screens-2"
-          >
-            {screenOptions.map((o) => (
-              <option key={o.value || 'empty'} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          />
         </div>
         <div>
           <label className={labelClass} htmlFor="etablissement-rooms-2">
@@ -1765,6 +1736,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </label>
           <input
             type="text"
+            inputMode="numeric"
             required
             value={etablissementRooms}
             onChange={(e) => setEtablissementRooms(e.target.value)}
@@ -1934,18 +1906,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           <label className={labelClass} htmlFor="fleet-draft-screens">
             Nombre d&apos;écrans <span className="text-red-500">*</span>
           </label>
-          <select
+          <input
+            type="text"
+            inputMode="numeric"
             value={fleetDraftScreens}
             onChange={(e) => setFleetDraftScreens(e.target.value)}
             className={inputClass}
+            placeholder="3"
             id="fleet-draft-screens"
-          >
-            {screenOptions.map((o) => (
-              <option key={`f-${o.value || 'e'}`} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          />
         </div>
         <div>
           <label className={labelClass} htmlFor="fleet-draft-rooms">
@@ -1953,6 +1922,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </label>
           <input
             type="text"
+            inputMode="numeric"
             value={fleetDraftRooms}
             onChange={(e) => setFleetDraftRooms(e.target.value)}
             className={inputClass}

@@ -122,8 +122,10 @@ export interface SignUpData {
   zone?: string; // Zone géographique pour les propriétaires
   formule?: string; // Formule choisie par le propriétaire (abonnement, revenue_share) - loyer retiré pour les nouvelles inscriptions
   agent_toodooh?: string; // Agent Toodooh - champ de saisie libre pour les propriétaires
-  number_of_screens?: number; // Nombre d'écrans pour les propriétaires
-  number_of_rooms?: number; // Nombre de salles (étape Établissement)
+  // SCR-DECL1 — the individual_owner's exact « Nombre d'écrans » / « Nombre de salles » (1–99),
+  // stored on its venue (a fleet owner's live on each fleet_establishments entry).
+  screen_count?: number;
+  room_count?: number;
   company_size?: string; // Nombre d'établissements du parc / taille entreprise
   registration_doc?: File; // RNE — non-owner picker AND every owner's legal volet since CIN-2b (sent as `rne`, R7/N4)
   company_logo?: File; // Logo entreprise/établissement

@@ -49,11 +49,10 @@ export const authService = {
 
   async signUp(data: SignUpData): Promise<SignupResponse> {
     // Accepted-fields JSON (snake wire, Phase-1f F2). F5 is REVERSED for owners (R7/N4): owner volet
-    // files (registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see
-    // below). Still NOT sent: company_logo (no signup home) and the owner-extras
-    // (formule/number_of_screens/number_of_rooms — backend-stripped; company_size IS sent and
-    // stored since SIZE-PERSIST1). Advertisers/
-    // agencies stay JSON, no documents (F5 stands for them).
+    // files (registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see below). Still NOT
+    // sent: company_logo (no signup home) and `formule`. company_size is sent (SIZE-PERSIST1), and
+    // SCR-DECL1 sends the exact screen_count + room_count: top level for the individual_owner, per
+    // entry for a fleet. Advertisers/agencies stay JSON, no documents (F5 stands for them).
     // SENT (P3): screenhost geo + WiFi — top-level latitude/longitude/wifi_ssid/wifi_password build
     // the individual_owner's single location; `fleet_establishments` (one per fleet_owner location)
     // each carry the same, with street_address remapped to the endpoint's `address`. Empty optionals
@@ -66,6 +65,7 @@ export const authService = {
     const fleetEstablishments = data.fleet_establishments?.map((e) => ({
       name: e.name,
       screen_count: e.screen_count,
+      room_count: e.room_count,
       ...(t(e.street_address) ? { address: t(e.street_address) } : {}),
       ...(t(e.city) ? { city: t(e.city) } : {}),
       ...(t(e.zone) ? { zone: t(e.zone) } : {}),
@@ -107,6 +107,8 @@ export const authService = {
       // H1 — the individual_owner's working-hours window (skip = both absent → NULL columns).
       ...(n(data.opening_hour) !== undefined ? { opening_hour: n(data.opening_hour) } : {}),
       ...(n(data.closing_hour) !== undefined ? { closing_hour: n(data.closing_hour) } : {}),
+      ...(n(data.screen_count) !== undefined ? { screen_count: n(data.screen_count) } : {}),
+      ...(n(data.room_count) !== undefined ? { room_count: n(data.room_count) } : {}),
       ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),
     };
     // R7/N4 — owners now SEND their document volets (reversing F5 for owners): multipart with a

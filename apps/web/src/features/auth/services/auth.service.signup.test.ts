@@ -44,8 +44,7 @@ const advertiser: SignUpData = {
   agent_toodooh: 'AG-9',
   zone: '', // blank optional → must be omitted
   fonction: '', // blank optional → must be omitted
-  company_size: '50 - 100', // owner-extra → dropped
-  number_of_screens: 5, // owner-extra → dropped
+  company_size: '50 - 100', // sent since SIZE-PERSIST1
   registration_doc: {} as unknown as File, // file → dropped
   company_logo: {} as unknown as File, // file → dropped
   terms_accepted: true,
@@ -185,7 +184,7 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
           wifi_ssid: 'CafeWifi',
           wifi_password: 'cafe1234',
         },
-        // Minimal row: every optional blank → only name + screen_count reach the wire.
+        // Minimal row: every optional blank → only name + the two counts reach the wire.
         {
           name: 'Kiosque Lac',
           screen_count: 1,
@@ -202,6 +201,7 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(sent[0]).toEqual({
       name: 'Café Centre',
       screen_count: 3,
+      room_count: 2,
       address: '12 Av. Habib Bourguiba',
       city: 'Tunis',
       zone: 'Centre Ville Tunis',
@@ -212,8 +212,8 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
       wifi_password: 'cafe1234',
     });
     expect(sent[0]).not.toHaveProperty('street_address'); // remapped, never sent raw
-    expect(sent[0]).not.toHaveProperty('room_count'); // backend has no such column
-    expect(sent[1]).toEqual({ name: 'Kiosque Lac', screen_count: 1 });
+    // SCR-DECL1 — room_count reaches the api (stored since migration 0077; it used to be dropped).
+    expect(sent[1]).toEqual({ name: 'Kiosque Lac', screen_count: 1, room_count: 1 });
   });
 
   // ── H1 (Mejri item 5) — working hours: the single [open, close) window rides the payload
@@ -268,10 +268,31 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(sent[0]).toEqual({
       name: 'Café Centre',
       screen_count: 3,
+      room_count: 2,
       opening_hour: 6,
       closing_hour: 23,
     });
-    expect(sent[1]).toEqual({ name: 'Kiosque Lac', screen_count: 1 });
+    expect(sent[1]).toEqual({ name: 'Kiosque Lac', screen_count: 1, room_count: 1 });
+  });
+
+  // SCR-DECL1 — the individual owner's declaration used to be dropped here (« backend-stripped »),
+  // so its venue was stored with 0 screens and no rooms.
+  it('sends the individual_owner exact screen_count + room_count at the top level (SCR-DECL1)', async () => {
+    postForm.mockResolvedValue(ok);
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'individual_owner',
+      screen_count: 3,
+      room_count: 2,
+    });
+    expect(ownerPayload()).toMatchObject({ screen_count: 3, room_count: 2 });
+  });
+
+  it('an advertiser sends no screen or room count (SCR-DECL1)', async () => {
+    post.mockResolvedValue(ok);
+    await authService.signUp(advertiser);
+    expect(body()).not.toHaveProperty('screen_count');
+    expect(body()).not.toHaveProperty('room_count');
   });
 
   it('throws a French message when the POST fails', async () => {
