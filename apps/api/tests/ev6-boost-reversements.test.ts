@@ -32,6 +32,7 @@ import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { eventBoostRoutes } from '../src/routes/event-boost.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 import { sweepZones } from './helpers/zones.js';
 
 // EV6 — the event booster (ZONES ONLY) + the venue reversement lines on E7's rail (source='event',
@@ -116,6 +117,7 @@ const seedVenue = async (
   await db
     .insert(screenhostAffluence)
     .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 19, estimatedImpressions: 100 }));
+  await seedInstalledScreen(id);
   return { id, ownerId };
 };
 

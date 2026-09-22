@@ -27,6 +27,7 @@ import { adminEngineJournalRoutes } from '../src/routes/admin-engine-journal.js'
 
 import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // LOG1 — per-phase pins over the REAL engine (real Postgres): the journal records why the engine
 // did what it did, and the engine's own outcomes are byte-unchanged (the full pre-LOG1 suite
@@ -68,6 +69,7 @@ const seedVenue = async (ownerId: string, name: string): Promise<string> => {
       broadcastCapacity: 10,
     })
     .returning();
+  await seedInstalledScreen(sh?.id ?? '');
   await db.insert(screenhostAffluence).values(
     bothHalves(
       Array.from({ length: 7 }, (_, d) =>
@@ -127,6 +129,7 @@ describe('LOG1 engine journal — per-phase pins (real Postgres)', () => {
       .insert(screenhosts)
       .values({ name: 'Venue sans horaires', ownerId: owner, broadcastCapacity: 5 })
       .returning();
+    await seedInstalledScreen(bare?.id ?? '');
     const campaignId = await seedCampaign(advertiser, { start: '2027-01-04', end: '2027-01-08' });
 
     const result = await runDispatch(

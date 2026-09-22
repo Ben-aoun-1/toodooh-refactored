@@ -18,6 +18,7 @@ import { campaignTargetingRoutes } from '../src/routes/campaign-targeting.js';
 
 import { seedApprovedOwner } from './helpers/approved-owner.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 import { sweepZones } from './helpers/zones.js';
 
 // Integration suite — real Postgres. getSession is mocked to drive the advertiser identity. Owner
@@ -77,8 +78,9 @@ const seedScreenhost = async (opts: {
 }): Promise<string> => {
   const hours = opts.hours === undefined ? { open: 8, close: 22 } : opts.hours;
   // ELIG-2 / MAP-4 (2026-09-16) — a covered venue also needs an APPROVED owner and one affluence
-  // value; every venue here gets both, so each test still isolates the gate it is about. (The
-  // campaigns are date-less drafts, so MAP-4's availability gate does not apply to them.)
+  // value, and (MAP-TV1, 2026-09-21) an installed screen; every venue here gets all three, so each
+  // test still isolates the gate it is about. (The campaigns are date-less drafts, so MAP-4's
+  // availability gate does not apply to them.)
   const ownerId = await seedApprovedOwner();
   const [sh] = await db
     .insert(screenhosts)
@@ -100,6 +102,7 @@ const seedScreenhost = async (opts: {
   await db
     .insert(screenhostAffluence)
     .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 10, estimatedImpressions: 100 }));
+  await seedInstalledScreen(id);
   return id;
 };
 

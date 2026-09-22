@@ -21,6 +21,7 @@ import {
 import { campaignDispatchRoutes } from '../src/routes/campaign-dispatch.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 import { sweepZones } from './helpers/zones.js';
 
 // Integration — real Postgres. End-to-end dispatch: a well-formed campaign + targeting + eligible
@@ -118,6 +119,7 @@ const seedEligibleScreenhost = async (
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return id;
 };
 
@@ -339,6 +341,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
         bumped = true;
       }
     await db.insert(screenhostAffluence).values(bothHalves(rows));
+    await seedInstalledScreen(sh?.id ?? '');
     mockSession(admin);
 
     // i_cible 100000 > fact 36018 → the SH's full residual is allocated (the fractional path).

@@ -27,6 +27,7 @@ import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { campaignBoostRoutes } from '../src/routes/campaign-boost.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // CF-B1 (spec §3.3) — « Booster »: strictly additive on Active/À venir; the complementary budget
 // dispatches over the MERGED perimeter under the same rules. Real Postgres; session mocked. The
@@ -100,6 +101,7 @@ const seedVenue = async (
         estimatedImpressions: opts.affluence ?? 100,
       });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return id;
 };
 

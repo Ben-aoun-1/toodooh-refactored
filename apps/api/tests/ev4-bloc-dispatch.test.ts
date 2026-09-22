@@ -41,6 +41,7 @@ import { adminCampaignsRoutes } from '../src/routes/admin-campaigns.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // EV4 — the bloc dispatch engine: D2 SPS ordering, D3 greedy concentration to I_cible_evt,
 // D4 anti-miette DROP (both sides of the 20-TND line), D5/D7 N_max atomic block, D6 partial +
@@ -116,6 +117,7 @@ const seedVenue = async (opts: {
         estimatedImpressions: opts.affluence ?? 100,
       });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return { id, ownerId };
 };
 

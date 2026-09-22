@@ -35,6 +35,7 @@ import {
   setCpmConfig,
 } from './helpers/cpm-config.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 import { sweepZones } from './helpers/zones.js';
 
 // CPM-1 on the EVENT engine — a positioning keeps the event CPM in effect when it was created:
@@ -107,6 +108,7 @@ const seedVenue = async (sps: string, zoneId?: string) => {
     for (let h = 8; h < 23; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return { id, ownerId };
 };
 

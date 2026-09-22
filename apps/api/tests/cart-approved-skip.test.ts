@@ -26,6 +26,7 @@ import { adminCampaignsRoutes } from '../src/routes/admin-campaigns.js';
 import { cartRoutes } from '../src/routes/cart.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // CF-SK1 (spec §2.1, ruling #9) — the approved-spot SKIP: « la campagne saute En attente et passe
 // à À venir (ou Active) dès la confirmation du panier ». Real Postgres; session mocked. One venue
@@ -86,6 +87,7 @@ const seedVenue = async (ownerId: string, categoryId: string): Promise<string> =
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return id;
 };
 

@@ -29,6 +29,7 @@ import { cartRoutes } from '../src/routes/cart.js';
 import { rechargesRoutes } from '../src/routes/recharges.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // FIX2 (Option A ruling — reservation semantics) against real Postgres. THE probe inversion: the
 // exact sequence that DEMONSTRATED the overdraft hole (fund 550 → confirm 400 → confirm another
@@ -91,6 +92,7 @@ const seedVenue = async (ownerId: string, categoryId: string): Promise<void> => 
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
 };
 
 const seedCreative = async (advertiserId: string): Promise<string> => {

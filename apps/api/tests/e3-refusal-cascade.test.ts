@@ -23,6 +23,7 @@ import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // E3 — the refusal cascade (US-2.8), real Postgres, driven through the REAL reject route. Engine
 // fixtures mirror campaign-dispatch.test.ts: cpm 10 / s 10 → T 0.6, seuil = seuilImpressions(10)
@@ -128,6 +129,7 @@ const seedVenue = async (
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
 
   // SPS-DISPATCH1 — these venues are ordered BY their stored sps, which is the whole point of the
   // cascade tests. A venue with no history at all now ranks at the neutral midpoint instead (its

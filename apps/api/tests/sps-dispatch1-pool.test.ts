@@ -14,6 +14,7 @@ import { assemblePool } from '../src/lib/dispatch/pool.js';
 import { SPS_NEUTRAL, recomputeVenueSps } from '../src/lib/sps-score.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // SPS-DISPATCH1 (ruled 2026-09-01) — end to end, through the real pool: a venue whose score is not
 // computable does not carry its defaults-90 into the ORDERING INPUT. It ranks at the neutral
@@ -54,6 +55,7 @@ const seedVenue = async (sps: number, opts: { withHistory: boolean }): Promise<s
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 500 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
 
   if (opts.withHistory) {
     // ONE real observation — an inspection it passed. Dated far in the past so it cannot leak into

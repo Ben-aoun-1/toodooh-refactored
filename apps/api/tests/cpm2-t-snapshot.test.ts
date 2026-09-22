@@ -33,6 +33,7 @@ import {
   setTConfig,
 } from './helpers/cpm-config.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // CPM-2 (ruling 4A, 2026-09-17) — the attention index T is frozen per campaign at CREATION, like
 // CPM-1 froze the CPM. An admin T change (PATCH /api/admin/dispatch-config, t_10s/t_20s/t_30s)
@@ -214,6 +215,7 @@ describe('CPM-2 — a campaign keeps the attention index T in effect when it was
             estimatedImpressions: 100,
           });
       await db.insert(screenhostAffluence).values(bothHalves(cells));
+      await seedInstalledScreen(venue?.id ?? '');
       await db.insert(recharges).values({
         advertiserId: advertiser,
         amountTnd: '1000',

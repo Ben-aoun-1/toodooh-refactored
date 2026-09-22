@@ -18,6 +18,7 @@ import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 
 import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // EV1 rider (the CF-HF3 watch-item, ruled LEGAL): a ONE-DAY campaign (start = end). The web's
 // Période step was the only blocker in the chain — the server never mirrored the strict < and the
@@ -81,6 +82,7 @@ describe('one-day campaign (start = end) — the server chain', () => {
         })),
       ),
     );
+    await seedInstalledScreen(venue?.id ?? '');
 
     const advertiserId = await seedUser({ role: 'advertiser' });
     const [creative] = await db

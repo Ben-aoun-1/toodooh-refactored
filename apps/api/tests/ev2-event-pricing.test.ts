@@ -31,6 +31,7 @@ import { adminEventsRoutes } from '../src/routes/admin-events.js';
 import { eventsRoutes } from '../src/routes/events.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // EV2 — the EVENT pricing engine (its own module, D51): the A_max ratchet, the per-bloc D1
 // availability (full-bloc-only, per-Tunis-date, E2 + foreign reservations), the I_max/C_max
@@ -105,6 +106,7 @@ const seedVenue = async (opts: {
       ),
     );
   }
+  await seedInstalledScreen(shId);
   return shId;
 };
 
