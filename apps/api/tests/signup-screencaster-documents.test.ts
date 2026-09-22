@@ -151,8 +151,11 @@ describe('POST /api/signup — screencaster documents (DOC-CAST1)', () => {
     sessionAs(userId, 'advertiser', 'pending');
     const me = await app.inject({ method: 'GET', url: '/api/me' });
     expect(me.statusCode).toBe(200);
+    // `cin` is still in the presence shape: CIN-HOST1's api half (which drops it) is NOT in this
+    // batch — only its web half shipped, as #232. Remove the line when that api half lands.
     expect(me.json<{ user: { documents: unknown } }>().user.documents).toEqual({
       registration: true,
+      cin: false,
       bank: false,
     });
   });
