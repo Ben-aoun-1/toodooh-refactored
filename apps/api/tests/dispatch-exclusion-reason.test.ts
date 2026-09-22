@@ -12,6 +12,7 @@ import {
 const venue = (over: Partial<PoolVenueRow> = {}): PoolVenueRow => ({
   id: 'venue-1',
   ownerApproved: true,
+  installedScreen: true,
   businessSectorId: 'cafe',
   class: 'premium',
   zoneId: 'zone-1',
@@ -39,6 +40,9 @@ describe('poolExclusionReason — the pool filter and the reason it journals', (
 
   it('names each filter on its own', () => {
     expect(poolExclusionReason(venue({ ownerApproved: false }), ctx())).toBe('owner_not_approved');
+    expect(poolExclusionReason(venue({ installedScreen: false }), ctx())).toBe(
+      'no_installed_screen',
+    );
     expect(poolExclusionReason(venue(), ctx({ excluded: new Set(['venue-1']) }))).toBe('excluded');
     expect(poolExclusionReason(venue({ broadcastCapacity: null }), ctx())).toBe('capacity_missing');
     expect(poolExclusionReason(venue({ openingHour: null }), ctx())).toBe('hours_missing');
@@ -54,6 +58,7 @@ describe('poolExclusionReason — the pool filter and the reason it journals', (
   it('the FIRST failing filter wins, in the journal order', () => {
     const everythingWrong = venue({
       ownerApproved: false,
+      installedScreen: false,
       broadcastCapacity: null,
       openingHour: null,
       businessSectorId: 'gym',
@@ -61,20 +66,17 @@ describe('poolExclusionReason — the pool filter and the reason it journals', (
     });
     const refused = ctx({ excluded: new Set(['venue-1']) });
     expect(poolExclusionReason(everythingWrong, refused)).toBe('owner_not_approved');
-    expect(poolExclusionReason({ ...everythingWrong, ownerApproved: true }, refused)).toBe(
-      'excluded',
+    // MAP-TV1 — no TV: nothing else about an approved owner's venue matters
+    const approved = { ...everythingWrong, ownerApproved: true };
+    expect(poolExclusionReason(approved, refused)).toBe('no_installed_screen');
+    const installed = { ...approved, installedScreen: true };
+    expect(poolExclusionReason(installed, refused)).toBe('excluded');
+    expect(poolExclusionReason(installed, ctx())).toBe('capacity_missing');
+    expect(poolExclusionReason({ ...installed, broadcastCapacity: 4 }, ctx())).toBe(
+      'hours_missing',
     );
-    expect(poolExclusionReason({ ...everythingWrong, ownerApproved: true }, ctx())).toBe(
-      'capacity_missing',
+    expect(poolExclusionReason({ ...installed, broadcastCapacity: 4, openingHour: 8 }, ctx())).toBe(
+      'targeting_mismatch',
     );
-    expect(
-      poolExclusionReason({ ...everythingWrong, ownerApproved: true, broadcastCapacity: 4 }, ctx()),
-    ).toBe('hours_missing');
-    expect(
-      poolExclusionReason(
-        { ...everythingWrong, ownerApproved: true, broadcastCapacity: 4, openingHour: 8 },
-        ctx(),
-      ),
-    ).toBe('targeting_mismatch');
   });
 });

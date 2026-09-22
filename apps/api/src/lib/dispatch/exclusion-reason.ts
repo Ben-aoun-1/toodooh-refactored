@@ -12,6 +12,7 @@ import {
 //
 //   owner_not_approved — ELIG-2: no other property of the venue matters until its owner is
 //                        validated (pending, rejected, banned or no owner at all);
+//   no_installed_screen — MAP-TV1: nor until it has a TV that ever ran (lib/installed-screen.ts);
 //   excluded           — the caller removed it (the cascade's refusers, redispatch's defaulters
 //                        and dead screens);
 //   capacity_missing, hours_missing — the venue's own settings;
@@ -23,16 +24,19 @@ import {
 
 export type PoolExclusionReason =
   | 'owner_not_approved'
+  | 'no_installed_screen'
   | 'excluded'
   | 'capacity_missing'
   | 'hours_missing'
   | 'targeting_mismatch'
   | 'zone_mismatch';
 
-/** The columns of an active venue the filters read (ownerApproved = lib/approved-owner.ts). */
+/** The columns of an active venue the filters read (ownerApproved = lib/approved-owner.ts,
+ *  installedScreen = lib/installed-screen.ts — both selected as SQL booleans). */
 export interface PoolVenueRow {
   id: string;
   ownerApproved: boolean;
+  installedScreen: boolean;
   businessSectorId: string | null;
   class: string | null;
   zoneId: string | null;
@@ -54,6 +58,7 @@ export const poolExclusionReason = (
   ctx: PoolFilterContext,
 ): PoolExclusionReason | null => {
   if (!sh.ownerApproved) return 'owner_not_approved';
+  if (!sh.installedScreen) return 'no_installed_screen';
   if (ctx.excluded.has(sh.id)) return 'excluded';
   if (sh.broadcastCapacity === null) return 'capacity_missing';
   if (broadcastableHours(sh.openingHour, sh.closingHour).length === 0) return 'hours_missing';

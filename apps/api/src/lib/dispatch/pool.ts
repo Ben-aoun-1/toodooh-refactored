@@ -15,6 +15,7 @@ import {
 import { ownerApprovedSql } from '../approved-owner.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
+import { venueHasInstalledScreenSql } from '../installed-screen.js';
 import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
 import { spsObservationsFor } from '../sps-observations.js';
 import { SPS_NEUTRAL, spsComputable } from '../sps-score.js';
@@ -32,9 +33,9 @@ import { availableWindowDays, buildWindowDays } from './window.js';
 
 // E3 — the ONE pool-assembly authority. Extracted VERBATIM from runDispatch (dispatch-service.ts)
 // so dispatch, the refusal cascade (US-2.8) and later redispatch (E6) assemble the eligible pool +
-// occupancy netting through the SAME code path: hard filters (active + approved owner + horaires +
-// capacity + targeting + zones), affluence (Ai), engaged broadcast SECONDS from OTHER allocations →
-// residual F-budget → R_eff → facturable capacity. The exclusions are the only additions:
+// occupancy netting through the SAME code path: hard filters (active + ./exclusion-reason.ts),
+// affluence (Ai), engaged broadcast SECONDS from OTHER allocations → residual F-budget → R_eff →
+// facturable capacity. The exclusions are the only additions:
 //   • excludeScreenhostIds — screenhosts removed from the candidates (the cascade excludes the
 //     refuser(s); E6 will exclude dead screens). Empty/absent = the original behavior.
 //   • excludeAllocationId / excludeAllocationIds — allocations removed from the ENGAGEMENT
@@ -142,15 +143,14 @@ export const assemblePool = async (
   const excluded = new Set(opts.excludeScreenhostIds ?? []);
   const trace = opts.trace ?? NOOP_TRACE;
 
-  // Hard filters on the active venues: approved owner + horaires set + capacity present + matches
-  // targeting (category × class) + in a targeted zone (CF-Z1 — with prod entirely Grand Tunis this
-  // changes nothing today). ELIG-2 — the owner gate is SELECTED rather than filtered in SQL so the
-  // journal below can name it. ONE ordered list decides both membership and the journaled reason
-  // (./exclusion-reason.ts), so the two can never disagree.
+  // Hard filters on the active venues: ONE ordered list (./exclusion-reason.ts) decides both
+  // membership and the journaled reason, so the two never disagree. ELIG-2 / MAP-TV1 — the owner
+  // and installed-screen gates are SELECTED rather than filtered in SQL so the journal can name them.
   const activeRows = await executor
     .select({
       id: screenhosts.id,
       ownerApproved: ownerApprovedSql(),
+      installedScreen: venueHasInstalledScreenSql(),
       sps: screenhosts.sps,
       businessSectorId: screenhosts.businessSectorId,
       class: screenhosts.class,

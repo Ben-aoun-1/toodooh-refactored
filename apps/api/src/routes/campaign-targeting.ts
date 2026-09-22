@@ -18,6 +18,7 @@ import {
 } from '../lib/dispatch/eligibility.js';
 import { loadUnavailableDays } from '../lib/dispatch/pool.js';
 import { availableWindowDays, buildWindowDays } from '../lib/dispatch/window.js';
+import { venueHasInstalledScreenSql } from '../lib/installed-screen.js';
 import { venueHasAffluenceSql } from '../lib/venue-has-affluence.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -130,6 +131,9 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   //   • AT LEAST ONE AFFLUENCE VALUE — one manual grid cell > 0 still in effect, or one live
   //     measured value > 0 (lib/venue-has-affluence.ts). Zero or NULL everywhere = no audience =
   //     no dot.
+  // MAP-TV1 (operator ruling 2026-09-21) — and AT LEAST ONE INSTALLED SCREEN: a screens row ever
+  // paired or ever seen (lib/installed-screen.ts, the pool's own gate). A venue that never had the
+  // APK has nothing to air on, so it is no dot and no count.
   // The response shape (screenhosts / covered_count / without_coordinates) is unchanged.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
@@ -147,9 +151,9 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       .from(campaignTargeting)
       .where(eq(campaignTargeting.campaignId, campaign.id));
 
-    // Pull the active venues of approved owners that carry an affluence value (MAP-4 — the two
-    // shared SQL predicates), then apply the pool's gates + matchers in memory (the matchers are
-    // the shared dispatch primitives).
+    // Pull the active venues of approved owners that carry an affluence value (MAP-4) and have an
+    // installed screen (MAP-TV1) — the three shared SQL predicates — then apply the pool's gates +
+    // matchers in memory (the matchers are the shared dispatch primitives).
     const venues = await db
       .select({
         id: screenhosts.id,
@@ -168,7 +172,14 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       })
       .from(screenhosts)
       .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-      .where(and(eq(screenhosts.isActive, true), ownerApprovedSql(), venueHasAffluenceSql()));
+      .where(
+        and(
+          eq(screenhosts.isActive, true),
+          ownerApprovedSql(),
+          venueHasAffluenceSql(),
+          venueHasInstalledScreenSql(),
+        ),
+      );
 
     const zoneRows = await db
       .select({ zoneId: campaignZones.zoneId })

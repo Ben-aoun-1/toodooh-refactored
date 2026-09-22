@@ -18,6 +18,7 @@ import {
   computeAmax,
 } from '../event-pricing/pricing.js';
 import { fenetreDiffusion } from '../fenetre-diffusion.js';
+import { venueHasInstalledScreenSql } from '../installed-screen.js';
 
 // EV4 — THE EVENT DISPATCH ENGINE (its own module, the D51 boundary: nothing here imports
 // lib/dispatch or any campaign lib — the campaign engine and this one only ever meet at the
@@ -25,9 +26,9 @@ import { fenetreDiffusion } from '../fenetre-diffusion.js';
 // been blind to).
 //
 // The rules (engine doc D1–D7):
-//   D1 — eligibility per EV2: active venue, APPROVED owner (ELIG-2), event-eligible sector,
-//        per-bloc availability (opening hours ∩ E2 declarations ∩ OTHER events' reservations,
-//        full-bloc-only).
+//   D1 — eligibility per EV2: active venue, APPROVED owner (ELIG-2), INSTALLED screen (MAP-TV1),
+//        event-eligible sector, per-bloc availability (opening hours ∩ E2 declarations ∩ OTHER
+//        events' reservations, full-bloc-only).
 //   D2 — processing order: SPS desc; ancienneté asc then id asc as deterministic tiebreaks
 //        (the classic queue's tiebreak idiom WITHOUT its dignity partition — G_jour/activeToday
 //        are campaign-engine concepts).
@@ -102,9 +103,9 @@ export type EventFillResult =
   | { status: 'NO_POOL' };
 
 /**
- * D1/D2 — assemble the bloc pool: every active event-eligible venue of an approved owner with
- * ≥ 1 available bloc, SPS desc (ancienneté asc, id asc tiebreaks). `excludeScreenhostIds` keeps
- * refused/already-allocated venues out of a cascade re-fill.
+ * D1/D2 — assemble the bloc pool: every active event-eligible venue of an approved owner, with an
+ * installed screen and ≥ 1 available bloc, SPS desc (ancienneté asc, id asc tiebreaks).
+ * `excludeScreenhostIds` keeps refused/already-allocated venues out of a cascade re-fill.
  */
 export const assembleEventPool = async (
   event: EventRef,
@@ -123,9 +124,8 @@ export const assembleEventPool = async (
     })
     .from(screenhosts)
     .innerJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-    // ELIG-2 — only an APPROVED owner's venue is placeable (the shared predicate, the same one
-    // computeEventCmax prices with, so the ceiling and the pool agree).
-    .where(and(eq(screenhosts.isActive, true), ownerApprovedSql()));
+    // ELIG-2 + MAP-TV1 — the SAME shared predicates computeEventCmax prices with: ceiling = pool.
+    .where(and(eq(screenhosts.isActive, true), ownerApprovedSql(), venueHasInstalledScreenSql()));
   // An ownerless venue can never decide a proposal (§11.1) — out of the pool. (The approved-owner
   // clause above already implies an owner; the check stays as the type narrowing for ownerId.)
   const eligible = candidates.filter(
