@@ -24,6 +24,31 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(err('NETWORK'))).toMatch(/connexion/i);
   });
 
+  // DOC-CAST1 — the signup route refuses a part COUNT with its own code. It used to borrow
+  // PAYLOAD_TOO_LARGE, telling a user who sent fifteen small files that one weighed over 5 Mo.
+  it('TOO_MANY_FILES speaks of the number of documents, never of 5 Mo', () => {
+    const msg = apiErrorMessage(err('TOO_MANY_FILES'));
+    expect(msg).toMatch(/Trop de documents/i);
+    expect(msg).not.toMatch(/5 Mo/);
+    expect(msg).not.toMatch(/réessayer dans quelques instants/);
+  });
+
+  // DOC-CAST1 — nginx answers its OWN HTML 413 when the whole multipart signup body exceeds
+  // client_max_body_size, so toApiError finds no `error` field and falls back to 'UNKNOWN'. The
+  // generic « réessayez dans quelques instants » would invite a retry that can never succeed.
+  it('a bodiless 413 (the reverse proxy, not the API) names the documents, not a generic retry', () => {
+    const proxied = new ApiError({ status: 413, code: 'UNKNOWN', message: '' });
+    const msg = apiErrorMessage(proxied);
+    expect(msg).toMatch(/documents sont trop volumineux/i);
+    expect(msg).not.toMatch(/réessayer dans quelques instants/);
+  });
+
+  // ... while a 413 the API itself wrote keeps its own, more precise wording.
+  it('a coded 413 still uses its own message', () => {
+    const coded = new ApiError({ status: 413, code: 'PAYLOAD_TOO_LARGE', message: '' });
+    expect(apiErrorMessage(coded)).toMatch(/5 Mo/);
+  });
+
   it('includes the first field in an INVALID_INPUT message', () => {
     const msg = apiErrorMessage(err('INVALID_INPUT', [{ field: 'email', reason: 'requis' }]));
     expect(msg).toContain('email');
