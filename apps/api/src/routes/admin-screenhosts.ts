@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { screenhosts, screens, users } from '../db/schema.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
+import { isScreenInstalled, screenIsInstalledSql } from '../lib/installed-screen.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 // ADM-SCR1 — the admin « Localités et écrans » listing (the /admin-screens page), read from the
@@ -26,8 +27,10 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 // `screens.is_active` defaults to true and is written by NO code, so a venue whose device never
 // existed still read « Active ». INSTALLED is the operator ruling — `paired_at IS NOT NULL OR
 // last_seen_at IS NOT NULL`, i.e. either proof that a real device once ran. Declared-but-never-
-// installed venues get their own value instead of borrowing « Active ». DISPLAY-ONLY: no row is
-// created, deleted or migrated, and dispatch/pricing never read these columns.
+// installed venues get their own value instead of borrowing « Active ». This listing writes
+// nothing (no row is created, deleted or migrated), but the predicate is NOT display-only: since
+// MAP-TV1 it is also the gate on what is sold and placed (coverage map, dispatch pool, C_max,
+// event pricing and dispatch). Its one home is lib/installed-screen.ts; read it from there.
 //
 // SCR-DECL1 — the owner's DECLARATION rides along: declared_screens_count (= screenhosts.screen_count,
 // what « X déclarés · Y installés » reads) and room_count (NULL = never declared). screens_count
@@ -67,7 +70,7 @@ const toScreenView = (
 ) => ({
   id: row.id,
   name: row.name,
-  installed: row.pairedAt !== null || row.lastSeenAt !== null,
+  installed: isScreenInstalled(row),
   connected:
     row.lastSeenAt !== null && now - row.lastSeenAt.getTime() <= REDISPATCH_HEARTBEAT_TOLERANCE_MS,
   last_seen_at: row.lastSeenAt,
@@ -106,10 +109,9 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
           .mapWith(Number)
           .as('active_count'),
         // INSTALLED — either proof that a real device once ran against this row (operator ruling).
-        installedCount:
-          sql<number>`count(*) filter (where ${screens.pairedAt} is not null or ${screens.lastSeenAt} is not null)`
-            .mapWith(Number)
-            .as('installed_count'),
+        installedCount: sql<number>`count(*) filter (where ${screenIsInstalledSql()})`
+          .mapWith(Number)
+          .as('installed_count'),
         onlineCount:
           sql<number>`count(*) filter (where ${gte(screens.lastSeenAt, heartbeatCutoff)})`
             .mapWith(Number)

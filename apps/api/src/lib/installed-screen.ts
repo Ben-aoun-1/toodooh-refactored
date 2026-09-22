@@ -5,9 +5,13 @@ import { screenhosts, screens } from '../db/schema.js';
 // MAP-TV1 (operator ruling 2026-09-21, M1 A · M2 A) — a venue is SELLABLE only when it has AT
 // LEAST ONE INSTALLED screen. Installed is ADM-FIX1's definition, unchanged: a `screens` row whose
 // `paired_at IS NOT NULL OR last_seen_at IS NOT NULL` — either proof that a real device once ran
-// against it (the admin « Écrans » listing counts `installed_count` with the very same clause, in
-// routes/admin-screenhosts.ts). A row alone is a declaration, not a TV: `screens.is_active`
-// defaults to true and nothing writes it, so it is deliberately NOT part of the rule.
+// against it. A row alone is a declaration, not a TV: `screens.is_active` defaults to true and
+// nothing writes it, so it is deliberately NOT part of the rule.
+//
+// This file is the rule's ONLY home — the SQL row clause, its JS twin and the per-venue EXISTS.
+// The admin « Écrans » listing (routes/admin-screenhosts.ts: `installed_count` and each screen's
+// `installed`) reads the same two exports, so what the admin sees as installed is exactly what
+// the engine sells. Change the rule here or nowhere.
 //
 // Why: nothing that sold or placed a campaign checked for a TV. The advertiser coverage map,
 // C_max and the dispatch pool counted venues that never had the APK (no row, no login, no proof),
@@ -36,6 +40,17 @@ import { screenhosts, screens } from '../db/schema.js';
 // keeps the correlation whether a reader selects the predicate or filters on it.
 const column = (c: { name: string }): Name => sql.identifier(c.name);
 
+/** SQL boolean over ONE `screens` row — TRUE iff that row was ever paired or ever seen. Valid
+ *  wherever the `screens` table is in scope under its own name (not aliased). */
+export const screenIsInstalledSql = (): SQL<boolean> =>
+  sql<boolean>`(${screens}.${column(screens.pairedAt)} is not null or ${screens}.${column(screens.lastSeenAt)} is not null)`;
+
+/** The JS twin of screenIsInstalledSql, for a `screens` row already read. */
+export const isScreenInstalled = (row: {
+  pairedAt: Date | null;
+  lastSeenAt: Date | null;
+}): boolean => row.pairedAt !== null || row.lastSeenAt !== null;
+
 /** SQL boolean — TRUE iff one of the row's venue's screens was ever paired or ever seen. */
 export const venueHasInstalledScreenSql = (): SQL<boolean> =>
-  sql<boolean>`exists (select 1 from ${screens} where ${screens}.${column(screens.screenhostId)} = ${screenhosts}.${column(screenhosts.id)} and (${screens}.${column(screens.pairedAt)} is not null or ${screens}.${column(screens.lastSeenAt)} is not null))`;
+  sql<boolean>`exists (select 1 from ${screens} where ${screens}.${column(screens.screenhostId)} = ${screenhosts}.${column(screenhosts.id)} and ${screenIsInstalledSql()})`;
