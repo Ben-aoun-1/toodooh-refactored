@@ -16,7 +16,8 @@ export type ExclusionReason =
   | 'not_event_eligible'
   | 'no_bloc_available'
   | 'no_sector'
-  | 'owner_not_approved';
+  | 'owner_not_approved'
+  | 'no_installed_screen';
 
 export interface EligibleHost {
   id: string;
@@ -69,6 +70,8 @@ export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
   no_sector: 'Catégorie non renseignée',
   // ELIG-2 (operator ruling 2026-09-16) — only a venue whose owner is validated counts anywhere.
   owner_not_approved: 'Propriétaire non validé',
+  // MAP-TV1 (operator ruling 2026-09-21) — only a venue with a TV that ever ran is sold.
+  no_installed_screen: 'Aucun écran installé',
 };
 
 export const exclusionLabel = (reason: string): string =>

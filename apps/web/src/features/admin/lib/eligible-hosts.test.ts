@@ -23,6 +23,7 @@ describe('ELIG-1 — eligible-hosts labels', () => {
       'no_bloc_available',
       'no_sector',
       'owner_not_approved',
+      'no_installed_screen',
     ];
     for (const code of apiCodes) {
       expect(EXCLUSION_REASON_LABEL).toHaveProperty(code);
@@ -43,6 +44,11 @@ describe('ELIG-1 — eligible-hosts labels', () => {
       label: 'Propriétaire non validé',
       count: 2,
     });
+  });
+
+  it('MAP-TV1 — a venue with no installed screen says so in French', () => {
+    expect(EXCLUSION_REASON_LABEL.no_installed_screen).toBe('Aucun écran installé');
+    expect(exclusionLabel('no_installed_screen')).toBe('Aucun écran installé');
   });
 
   it('an unknown code is shown as is rather than hidden', () => {
