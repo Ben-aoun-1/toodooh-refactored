@@ -39,7 +39,11 @@ export interface CampaignView {
   delivered_impressions?: number | null;
   spend_tnd?: number | null;
   reconciled_at?: string | null;
-  /** CF-HF3 — the frozen plan's placed facturable (Σ ii_potentiel); null until a plan exists. */
+  /**
+   * CF-HF3 + IMP-UNIT1 — the frozen plan's PHYSICAL impressions (the real audience: Σ créneau
+   * impressions over the non-REFUSE allocations, Σ impressions_total for an event positioning);
+   * null until a plan exists, and the surface then asks for the dry-run estimate.
+   */
   planned_impressions?: number | null;
 }
 

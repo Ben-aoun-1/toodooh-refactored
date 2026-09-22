@@ -1,12 +1,7 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
-import {
-  campaignDispatchAllocation,
-  campaignDispatchPlan,
-  eventAllocations,
-  events,
-} from '../db/schema.js';
+import { events } from '../db/schema.js';
 
 import { deriveICible } from './activation-service.js';
 import {
@@ -21,6 +16,7 @@ import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
 import { buildWindowDays } from './dispatch/window.js';
 import { assembleEventPool, fillEventBlocs } from './event-dispatch/dispatch.js';
 import { predictedImpressions } from './impressions-display.js';
+import { eventPrevuesByCampaign, planPrevuesByCampaign } from './planned-impressions.js';
 
 // IMP-EST1 (operator 2026-09-22, ruled Q1 A · Q2 A · Q3 A) — « Impressions estimées » is a
 // READ-ONLY DRY-RUN of the real dispatch at this moment, never ⌊budget × 1000 ÷ CPM⌋:
@@ -93,29 +89,17 @@ const budgetOf = (c: EstimateCampaign, override: number | undefined): number | n
   return budget !== null && Number.isFinite(budget) && budget > 0 ? budget : null;
 };
 
-// A dispatched classic campaign: its frozen plan's prédites. A REFUSE allocation never airs (its
-// share was re-placed by the refusal cascade), so it is left out.
+// A dispatched classic campaign: its frozen plan's prédites, read from THE post-dispatch home
+// (lib/planned-impressions.ts) — the very read GET /api/campaigns/mine serves, so the estimate and
+// « Impressions prévues » are the same number by construction (IMP-UNIT1).
 const frozenPlanEstimate = async (c: EstimateCampaign): Promise<ImpressionsEstimate | null> => {
-  const [plan] = await db
-    .select({ id: campaignDispatchPlan.id })
-    .from(campaignDispatchPlan)
-    .where(eq(campaignDispatchPlan.campaignId, c.id))
-    .limit(1);
-  if (!plan) return null;
-  const allocations = await db
-    .select({ creneaux: campaignDispatchAllocation.creneaux })
-    .from(campaignDispatchAllocation)
-    .where(
-      and(
-        eq(campaignDispatchAllocation.planId, plan.id),
-        ne(campaignDispatchAllocation.statutAcceptation, 'REFUSE'),
-      ),
-    );
+  const planned = (await planPrevuesByCampaign([c.id])).get(c.id);
+  if (!planned) return null;
   return {
     status: 'OK',
     source: 'PLAN',
-    impressions: predictedImpressions(allocations),
-    venuesCount: allocations.length,
+    impressions: planned.impressions,
+    venuesCount: planned.venuesCount,
     daysCount: windowDaysCount(c),
   };
 };
@@ -167,18 +151,15 @@ const eventEstimate = async (
   eventId: string,
   budgetOverride: number | undefined,
 ): Promise<ImpressionsEstimate> => {
-  // A dispatched positioning: its placed blocs (runEventDispatch would short-circuit on any row).
-  const placed = await db
-    .select({ statut: eventAllocations.statut, impressions: eventAllocations.impressionsTotal })
-    .from(eventAllocations)
-    .where(eq(eventAllocations.campaignId, c.id));
-  if (placed.length > 0) {
-    const live = placed.filter((p) => p.statut !== 'REFUSE');
+  // A dispatched positioning: its placed blocs (runEventDispatch would short-circuit on any row),
+  // through the same post-dispatch home as the classic branch and /mine (IMP-UNIT1).
+  const placed = (await eventPrevuesByCampaign([c.id])).get(c.id);
+  if (placed) {
     return {
       status: 'OK',
       source: 'PLAN',
-      impressions: live.reduce((sum, p) => sum + p.impressions, 0),
-      venuesCount: live.length,
+      impressions: placed.impressions,
+      venuesCount: placed.venuesCount,
       daysCount: null,
     };
   }

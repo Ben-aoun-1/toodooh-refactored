@@ -47,8 +47,7 @@ export interface MyCampaignRow {
   selected_zones: string[];
   /** CF-B1 — the untrimmed wire row (the Booster modal needs targeting category_ids + zones). */
   raw: CampaignView;
-  /** CF-HF3 — NULL until the admin reconcile writes delivered (null ≠ 0; renders '—'). */
-  /** CF-HF3 — the frozen plan's placed facturable (« Impressions prévues »); null pre-plan. */
+  /** CF-HF3 + IMP-UNIT1 — the frozen plan's PHYSICAL « Impressions prévues »; null pre-plan. */
   planned_impressions: number | null;
 }
 

@@ -37,6 +37,12 @@ interface UseDashboardStatsResult {
  * delivered numbers stay host-side). The old hardcoded empty list (the Supabase-era stub) is
  * retired.
  *
+ * IMP-UNIT1 (ruled B, 2026-09-22) — planned_impressions is now PHYSICAL (the real audience) on
+ * both sides of dispatch, so this tile stopped shrinking by ~T when a campaign got dispatched.
+ * KNOWN LIMIT, deliberate: the tile still counts only campaigns that HAVE a plan. A pre-dispatch
+ * campaign contributes 0 here while its card shows IMP-EST1's dry-run estimate — a list endpoint
+ * never fans dry-runs out (one pool assembly per row).
+ *
  * GREEN2 (the INV-1 rule) — a FAILING leg now REJECTS the query instead of degrading to 0/[]:
  * zeros rendered as truth on infra failure were the same masquerade as the owner surfaces'
  * pre-first-data copy. The page renders the error state; React Query retries.

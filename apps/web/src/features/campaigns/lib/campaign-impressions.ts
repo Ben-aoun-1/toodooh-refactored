@@ -1,6 +1,6 @@
 // CF-HF3 (Mejri item 3) — the ONE impressions display rule for every ADVERTISER surface (Mes
 // campagnes cards/rows, the dashboard, Consulter):
-//   « Impressions prévues » = the FROZEN plan's placed facturable (planned_impressions, a pure
+//   « Impressions prévues » = the FROZEN plan's PHYSICAL impressions (planned_impressions, a pure
 //                             read of the plan) when a plan exists; before that — IMP-EST1
 //                             (ruled 2026-09-22) — the server's dry-run of the real dispatch over
 //                             the live semaine type (components/CampaignPrevues → GET
@@ -11,6 +11,9 @@
 // untouched).
 // CPM-1 — the dry-run prices at the campaign's OWN CPM (CPM-3: its screencaster's) server-side;
 // no CPM is read here any more.
+// IMP-UNIT1 (ruled B, 2026-09-22) — « real audience, not billable »: BOTH sides of dispatch are
+// PHYSICAL impressions. The post-dispatch figure was the plan's facturable (Σ ii_potentiel = the
+// physical × T), so the same label used to drop by ~T the moment the campaign was dispatched.
 
 export const PREVUES_LABEL = 'Impressions prévues';
 
