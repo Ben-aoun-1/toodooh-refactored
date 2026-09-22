@@ -88,9 +88,29 @@ export const planPrevuesByCampaign = async (
 };
 
 /**
- * An EVENT positioning's « prévues », per campaign id: Σ event_allocations.impressions_total over
- * the non-REFUSE rows (EV4 places whole 20-min blocs of A_max × 20 — already physical). ONE row of
- * any statut means the positioning is dispatched.
+ * THE rule for an EVENT positioning's « prévues », over rows already in hand: Σ
+ * event_allocations.impressions_total across the non-REFUSE rows (EV4 places whole 20-min blocs of
+ * A_max × 20 — already physical, no T anywhere). Pure, so every surface that prints « impressions
+ * prévues » for a positioning — GET /api/campaigns/mine and the Consulter drawer's own placement
+ * block, GET /api/campaigns/:id/event-allocations — reads the same figure from the same rows. They
+ * sit in ONE drawer side by side; they used to be equal only by construction, and a single refused
+ * venue was enough to make them contradict each other.
+ */
+export const eventPrevuesOf = (
+  rows: readonly { statut: string; impressionsTotal: number }[],
+): PlannedPrevues =>
+  rows.reduce<PlannedPrevues>(
+    (acc, r) =>
+      r.statut === 'REFUSE'
+        ? acc
+        : { impressions: acc.impressions + r.impressionsTotal, venuesCount: acc.venuesCount + 1 },
+    EMPTY,
+  );
+
+/**
+ * An EVENT positioning's « prévues », per campaign id — `eventPrevuesOf` over the campaign's rows.
+ * ONE row of any statut means the positioning is dispatched (a wholly refused positioning answers
+ * 0, never « no plan »).
  */
 export const eventPrevuesByCampaign = async (
   campaignIds: readonly string[],
@@ -101,13 +121,18 @@ export const eventPrevuesByCampaign = async (
     .select({
       campaignId: eventAllocations.campaignId,
       statut: eventAllocations.statut,
-      impressions: eventAllocations.impressionsTotal,
+      impressionsTotal: eventAllocations.impressionsTotal,
     })
     .from(eventAllocations)
     .where(inArray(eventAllocations.campaignId, [...campaignIds]));
+  const byCampaign = new Map<string, { statut: string; impressionsTotal: number }[]>();
   for (const r of rows) {
-    if (!out.has(r.campaignId)) out.set(r.campaignId, EMPTY);
-    if (r.statut !== 'REFUSE') add(out, r.campaignId, r.impressions);
+    const list = byCampaign.get(r.campaignId) ?? [];
+    list.push({ statut: r.statut, impressionsTotal: r.impressionsTotal });
+    byCampaign.set(r.campaignId, list);
+  }
+  for (const [campaignId, campaignRows] of byCampaign) {
+    out.set(campaignId, eventPrevuesOf(campaignRows));
   }
   return out;
 };

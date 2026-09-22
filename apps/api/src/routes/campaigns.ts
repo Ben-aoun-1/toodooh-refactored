@@ -28,7 +28,7 @@ import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { validateEventSpot } from '../lib/event-pricing/spot.js';
-import { plannedPrevuesByCampaign } from '../lib/planned-impressions.js';
+import { eventPrevuesOf, plannedPrevuesByCampaign } from '../lib/planned-impressions.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -680,7 +680,15 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
 
     return reply.status(200).send({
       count: rows.length,
-      impressions_total: rows.reduce((sum, r) => sum + r.impressionsTotal, 0),
+      // IMP-UNIT1 (ruled B, 2026-09-22) — the web prints this total as « impressions prévues »
+      // (EventPlacementSummary), in the SAME Consulter drawer as /mine's « Impressions prévues ».
+      // So it is the same figure read through the same home: a REFUSE row never airs and is out of
+      // it. It used to be Σ over every row — equal to /mine only by construction, and the moment
+      // /mine dropped the refused venues the one drawer showed two different « prévues ».
+      // `count` still counts every placed venue: the per-venue lines below are listed REFUSE
+      // included, each with its own statut badge. `montant_total_tnd` is MONEY and this ruling is
+      // display-only, so it keeps summing every row — it is not rendered next to this figure.
+      impressions_total: eventPrevuesOf(rows).impressions,
       montant_total_tnd:
         Math.round(rows.reduce((sum, r) => sum + Number(r.montantTnd) * 1000, 0)) / 1000,
       allocations: rows.map((r) => {
