@@ -14,8 +14,6 @@ export interface BusinessProfile {
   postal_code: string;
   governorate_id: string;
   zone?: string;
-  cin?: string;
-  cin_doc_url?: string;
   formule?: string;
   agent_toodooh?: string;
   number_of_screens?: number;
@@ -29,7 +27,7 @@ export interface BusinessProfile {
    * hold a storage key, not a URL; the view presigns on demand via getProfileDocumentUrlByCategory). The
    * `*_doc_url`/`*_doc_path` fields stay undefined off the /api/me bridge (no stored URL).
    */
-  documents?: { registration: boolean; cin: boolean; bank: boolean };
+  documents?: { registration: boolean; bank: boolean };
   bank_account_holder?: string;
   bank_rib?: string;
   bank_iban?: string;
@@ -56,7 +54,7 @@ export interface BusinessProfile {
  */
 export interface ProfileDocument {
   id: string;
-  category: 'cin' | 'rne' | 'complementaire' | 'bank';
+  category: 'rne' | 'complementaire' | 'bank';
   position: number;
   original_filename: string | null;
   mime_type: string | null;
@@ -65,10 +63,7 @@ export interface ProfileDocument {
 }
 
 /** GET /api/profile/documents — every category present, empty arrays when none. */
-export type GroupedProfileDocuments = Record<
-  'cin' | 'rne' | 'complementaire' | 'bank',
-  ProfileDocument[]
->;
+export type GroupedProfileDocuments = Record<ProfileDocument['category'], ProfileDocument[]>;
 
 export interface BusinessSector {
   id: string;
@@ -125,13 +120,12 @@ export interface SignUpData {
   postal_code: string;
   governorate_id: string;
   zone?: string; // Zone géographique pour les propriétaires
-  cin?: string; // CIN pour les propriétaires individuels
   formule?: string; // Formule choisie par le propriétaire (abonnement, revenue_share) - loyer retiré pour les nouvelles inscriptions
   agent_toodooh?: string; // Agent Toodooh - champ de saisie libre pour les propriétaires
   number_of_screens?: number; // Nombre d'écrans pour les propriétaires
   number_of_rooms?: number; // Nombre de salles (étape Établissement)
   company_size?: string; // Nombre d'établissements du parc / taille entreprise
-  registration_doc?: File; // RNE — non-owner picker AND the fleet_owner legal volet (sent as `rne`, R7/N4)
+  registration_doc?: File; // RNE — non-owner picker AND every owner's legal volet since CIN-2b (sent as `rne`, R7/N4)
   company_logo?: File; // Logo entreprise/établissement
   bank_doc?: File; // Relevé d'identité bancaire (RIB) — owner volet 2 (sent as `bank`, R7/N4)
   terms_accepted: boolean;
@@ -192,7 +186,7 @@ export interface MeUser {
   bank_account_holder: string | null;
   bank_rib: string | null;
   bank_iban: string | null;
-  documents: { registration: boolean; cin: boolean; bank: boolean };
+  documents: { registration: boolean; bank: boolean };
   notifications: {
     news_updates: boolean | null;
     reminders_events: boolean | null;
@@ -213,7 +207,7 @@ export interface SessionUser {
   status: 'pending' | 'approved' | 'rejected';
   /** The admin's moderation note. For a `rejected` account this is the rejection reason (N3). */
   validation_notes: string | null;
-  /** Deficient document areas on a rejection: 'legal' (RNE/CIN) and/or 'bank' (RIB) (N3 Scenario 1). */
+  /** Deficient document areas on a rejection: 'legal' (RNE) and/or 'bank' (RIB) (N3 Scenario 1). */
   rejection_topics: string[] | null;
   onboarding_completed: boolean;
   business_type: string | null;

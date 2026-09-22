@@ -29,7 +29,7 @@ describe('adminUserService document review', () => {
   });
 
   it('getUserDocuments reads the grouped listing and returns the documents map', async () => {
-    const documents = { cin: [], rne: [], complementaire: [], bank: [] };
+    const documents = { rne: [], complementaire: [], bank: [] };
     getMock.mockResolvedValue({ documents });
 
     const result = await adminUserService.getUserDocuments('user-1');

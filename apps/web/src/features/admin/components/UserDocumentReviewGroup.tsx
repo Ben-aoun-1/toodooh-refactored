@@ -1,18 +1,15 @@
 import { FileText } from 'lucide-react';
 
-import { cinSlots } from '@/features/admin/lib/cin-slots';
 import type { AdminDocumentView } from '@/features/admin/services/admin-user.service';
 
-// F-docs Commit 3 — one category's slice of the admin grouped-document review. CIN is rendered as
-// two SEMANTIC slots (1=recto, 2=verso) so a missing side is visible; rne / complémentaire / bank
-// are flat lists (server-capped at 2 / 10 / 1). Each present document presigns by id on the "Voir"
-// click (getDocumentUrlById) — never the legacy category shim, which would lose recto-vs-verso.
+// F-docs Commit 3 — one category's slice of the admin grouped-document review. rne / complémentaire
+// / bank are flat lists (server-capped at 2 / 10 / 1). Each present document presigns by id on the
+// "Voir" click (getDocumentUrlById) — never the legacy category shim, which only reaches the first.
+// CIN-HOST1 (2026-09-21): the CIN view is gone — the api never lists a CIN any more.
 
 interface UserDocumentReviewGroupProps {
-  /** Section label, e.g. "Document CIN" / "Registre de commerce" / "Documents complémentaires". */
+  /** Section label, e.g. "Registre de commerce" / "Documents complémentaires". */
   label: string;
-  /** When true the slots are the two named CIN sides; otherwise a flat list by filename. */
-  cin?: boolean;
   /** When true (server cap 1, e.g. bank) render ONE row keyed by `label`, not a filename list. */
   single?: boolean;
   /** Adds the modal's `border-t … mt-2` divider above the group's first row (matches the old layout). */
@@ -56,7 +53,6 @@ function Row({
 
 export default function UserDocumentReviewGroup({
   label,
-  cin = false,
   single = false,
   topBorder = false,
   docs,
@@ -81,27 +77,6 @@ export default function UserDocumentReviewGroup({
           <span className="text-xs text-gray-500">Non fourni</span>
         )}
       </Row>
-    );
-  }
-
-  if (cin) {
-    return (
-      <>
-        {cinSlots(docs).map(({ position, label: slotLabel, doc }, index) => (
-          <Row
-            key={position}
-            rowLabel={`${label} — ${slotLabel}`}
-            first={index === 0}
-            topBorder={topBorder}
-          >
-            {doc ? (
-              <ViewButton docId={doc.id} onView={onView} />
-            ) : (
-              <span className="text-xs text-gray-500">Non fourni</span>
-            )}
-          </Row>
-        ))}
-      </>
     );
   }
 
