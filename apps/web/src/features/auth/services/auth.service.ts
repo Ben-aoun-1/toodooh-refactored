@@ -11,6 +11,8 @@ import {
 } from '@/features/auth/types/auth';
 import { apiClient, ApiError } from '@/lib/api-client';
 
+import { signupFormData } from '../lib/signup-documents';
+
 import { apiErrorMessage } from './auth-errors';
 
 export type AgentCodeVerdict = 'ok' | 'unknown' | 'incompatible';
@@ -48,11 +50,11 @@ export const authService = {
   },
 
   async signUp(data: SignUpData): Promise<SignupResponse> {
-    // Accepted-fields JSON (snake wire, Phase-1f F2). F5 is REVERSED for owners (R7/N4): owner volet
-    // files (registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see below). Still NOT
-    // sent: company_logo (no signup home) and `formule`. company_size is sent (SIZE-PERSIST1), and
-    // SCR-DECL1 sends the exact screen_count + room_count: top level for the individual_owner, per
-    // entry for a fleet. Advertisers/agencies stay JSON, no documents (F5 stands for them).
+    // Accepted-fields JSON (snake wire, Phase-1f F2). F5 is REVERSED: the owner volets (R7/N4) and,
+    // since DOC-CAST1, a screencaster's RNE + complémentaire picks ARE sent at signup via multipart
+    // (see below). Still NOT sent: company_logo (no signup home) and `formule`. company_size is sent
+    // (SIZE-PERSIST1), and SCR-DECL1 sends the exact screen_count + room_count: top level for the
+    // individual_owner, per entry for a fleet.
     // SENT (P3): screenhost geo + WiFi — top-level latitude/longitude/wifi_ssid/wifi_password build
     // the individual_owner's single location; `fleet_establishments` (one per fleet_owner location)
     // each carry the same, with street_address remapped to the endpoint's `address`. Empty optionals
@@ -111,20 +113,13 @@ export const authService = {
       ...(n(data.room_count) !== undefined ? { room_count: n(data.room_count) } : {}),
       ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),
     };
-    // R7/N4 — owners now SEND their document volets (reversing F5 for owners): multipart with a
-    // `payload` field = the accepted-fields JSON string + named file parts. SIGN-2 took the CIN out
-    // of signup; since CIN-2b EVERY owner (individual_owner and fleet_owner) sends its RNE as `rne`
-    // and its RIB as `bank`, each only when picked (RNE-SIGN1). Advertisers keep the JSON path
-    // verbatim (no documents at signup). Files never enter `payload` (only scalar fields are spread).
-    const isOwner = data.profile_type === 'individual_owner' || data.profile_type === 'fleet_owner';
+    // Documents ride multipart — a `payload` field = this JSON string + named file parts
+    // (lib/signup-documents.ts): every owner (R7/N4: `rne` + `bank`, each only when picked) and a
+    // screencaster that attached files (DOC-CAST1: one `rne` / `complementaire` part per file). A
+    // screencaster without files posts the JSON as is. Files never enter `payload`.
+    const form = signupFormData(payload, data);
     try {
-      if (isOwner) {
-        const form = new FormData();
-        form.append('payload', JSON.stringify(payload));
-        if (data.registration_doc) form.append('rne', data.registration_doc);
-        if (data.bank_doc) form.append('bank', data.bank_doc);
-        return await apiClient.postForm<SignupResponse>('/signup', form);
-      }
+      if (form) return await apiClient.postForm<SignupResponse>('/signup', form);
       return await apiClient.post<SignupResponse>('/signup', payload);
     } catch (error) {
       throw new Error(apiErrorMessage(error));

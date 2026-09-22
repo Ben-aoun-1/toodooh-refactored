@@ -20,11 +20,10 @@ interface SignupDocumentSlotsProps {
 
 /**
  * Signup step 4's per-category document picker (F-docs Commit 2 — replaces the
- * single `documentFile` zone). LOCAL state only: signup is sessionless, so the
- * picks are never uploaded here (the F5 flow-position ruling — documents
- * upload post-signin from settings); the picker mirrors the server's caps and
- * size/mime rules inline (C5/F1 pattern) so the categories users see at signup
- * match what settings will accept.
+ * single `documentFile` zone). It only holds the picks: the signup submit sends
+ * them (DOC-CAST1 — one `rne` / `complementaire` multipart part per file); the
+ * picker mirrors the server's caps and size/mime rules inline (C5/F1 pattern)
+ * so the categories users see at signup match what settings will accept.
  */
 export default function SignupDocumentSlots({
   rneFiles,

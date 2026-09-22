@@ -22,6 +22,7 @@ import {
   sectorsForAdvertiserAgencySignup,
 } from '@/features/advertiser/constants/advertiserBusinessSectors';
 import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
+import { screencasterSignupDocuments } from '@/features/auth/lib/signup-documents';
 import {
   DEFAULT_CLOSING_HOUR,
   DEFAULT_OPENING_HOUR,
@@ -180,8 +181,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType>('advertiser');
   // F-docs Commit 2 — per-category picks (rne ≤2, complémentaires ≤10, caps mirrored from the
-  // server). LOCAL only: signup is sessionless, so files are dropped by the service (F5 ruling —
-  // upload happens post-signin from settings); registration_doc keeps carrying the first RNE pick.
+  // server). DOC-CAST1 — every pick is sent with the signup (multipart) unless « plus tard » is ticked.
   const [rneFiles, setRneFiles] = useState<File[]>([]);
   const [complementaireFiles, setComplementaireFiles] = useState<File[]>([]);
   const [addDocumentLater, setAddDocumentLater] = useState(false);
@@ -808,14 +808,18 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         contact_name: composedContactName,
         profile_type: selectedProfileType,
         fonction: fonction.trim() || undefined,
-        // R7/N4 (reversed) — owner legal volet: CIN-2b (2026-09-12) — EVERY owner (individual_owner and
-        // fleet_owner) sends its RNE volet as `rne` (RNE-SIGN1). SIGN-2 took the CIN out of signup.
-        // Non-owner keeps the existing RNE pick (JSON, dropped server-side). bank_doc is the owner RIB
-        // volet. All optional — any blank volet is omitted by the service (|| undefined), so an owner
-        // can finalize with none.
-        registration_doc: isOwner ? ownerVolets.rne || undefined : rneFiles[0] || undefined,
+        // R7/N4 (reversed) — the owner volets: EVERY owner's RNE (`rne`, CIN-2b / RNE-SIGN1) and RIB
+        // (`bank`), each optional (a blank one is omitted by the service). DOC-CAST1 — a screencaster
+        // sends EVERY RNE + complémentaire pick instead (none under « plus tard »).
+        registration_doc: isOwner ? ownerVolets.rne || undefined : undefined,
         company_logo: companyLogo || undefined,
         bank_doc: isOwner ? ownerVolets.bank || undefined : undefined,
+        ...screencasterSignupDocuments({
+          profileType: selectedProfileType,
+          rneFiles,
+          complementaireFiles,
+          addLater: addDocumentLater,
+        }),
         // F6 — individual_owner's single screenhost location/WiFi (optional). The service omits any
         // blank field; the endpoint only consumes these for the individual_owner role. Dual-source
         // ruling (2026-06-11): signup MAY send coordinates; the TV's first-login GPS fills only
