@@ -107,7 +107,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   // someone else's draft). Matching reuses the dispatch eligibility primitives
   // (screenhostMatchesTargeting / screenhostMatchesZones) so the preview mirrors L-disp exactly.
   // MAP-2 (Mejri 08/09 point 3, 2026-09-12): the coverage IS the dispatch-eligible set — active ∩
-  // horaires set ∩ capacity set ∩ targeting ∩ zones, the same gates as assemblePool — so the map
+  // horaires set ∩ targeting ∩ zones, the same gates as assemblePool — so the map
   // and its caption count « the hosts that count for the campaign ». Coordinates are a
   // PLOTTABILITY attribute, not an eligibility one: `screenhosts` carries the plottable subset,
   // `covered_count` the whole set, `without_coordinates` the unplottable remainder (said out loud
@@ -134,6 +134,9 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   // MAP-TV1 (operator ruling 2026-09-21) — and AT LEAST ONE INSTALLED SCREEN: a screens row ever
   // paired or ever seen (lib/installed-screen.ts, the pool's own gate). A venue that never had the
   // APK has nothing to air on, so it is no dot and no count.
+  // CAP-EVT1 (operator ruling 2026-09-22) — `broadcast_capacity` is NO LONGER a gate here: it is the
+  // venue's event-only switch, and the standard pool stopped reading it (MAP-2's « capacity set »
+  // retired with it).
   // The response shape (screenhosts / covered_count / without_coordinates) is unchanged.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
@@ -165,7 +168,6 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         zoneId: screenhosts.zoneId,
         openingHour: screenhosts.openingHour,
         closingHour: screenhosts.closingHour,
-        broadcastCapacity: screenhosts.broadcastCapacity,
         // CF-SK1 rider — the venue's sector NAME so the map popup can chip the real category
         // (CF-U4 shipped a truthful « Établissement couvert » placeholder pending this field).
         sectorName: businessSectors.name,
@@ -190,11 +192,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
     // The zone clause gates every path; the matcher owns the empty-set semantics (E5.1 —
     // zero lines = whole network), so the preview provably mirrors dispatch with no local guard.
     const matched = venues
-      .filter(
-        (v) =>
-          v.broadcastCapacity !== null &&
-          broadcastableHours(v.openingHour, v.closingHour).length > 0,
-      )
+      .filter((v) => broadcastableHours(v.openingHour, v.closingHour).length > 0)
       .filter((v) => screenhostMatchesZones(v.zoneId, zoneIds))
       .filter((v) =>
         screenhostMatchesTargeting({ businessSectorId: v.businessSectorId, class: v.class }, lines),

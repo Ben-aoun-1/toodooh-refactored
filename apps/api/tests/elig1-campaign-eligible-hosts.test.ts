@@ -202,6 +202,8 @@ describe('ELIG-1 — GET /api/admin/campaigns/:id/eligible-hosts (real Postgres)
       cls: 'premium',
       hours: null,
     });
+    // CAP-EVT1 (operator ruling 2026-09-22) — the capacity is the EVENT switch only: a standard
+    // campaign reaches a venue without one.
     const noCapacity = await seedVenue({
       name: 'D — sans capacité',
       ownerId: owner,
@@ -228,7 +230,7 @@ describe('ELIG-1 — GET /api/admin/campaigns/:id/eligible-hosts (real Postgres)
     expect(report.spot_seconds).toBe(15);
     expect(report.spot_source).toBe('creative');
 
-    expect(report.eligible.map((v) => v.id)).toEqual([inPool]);
+    expect(report.eligible.map((v) => v.id)).toEqual([inPool, noCapacity]); // sorted by name
     const a = report.eligible[0]!;
     expect(a.class).toBe('premium');
     expect(a.affluence).toBe(100);
@@ -240,15 +242,19 @@ describe('ELIG-1 — GET /api/admin/campaigns/:id/eligible-hosts (real Postgres)
     const reasonOf = new Map(report.excluded.map((e) => [e.id, e.reason]));
     expect(reasonOf.get(wrongClass)).toBe('targeting_mismatch');
     expect(reasonOf.get(noHours)).toBe('hours_missing');
-    expect(reasonOf.get(noCapacity)).toBe('capacity_missing');
+    expect(reasonOf.has(noCapacity)).toBe(false);
     expect(reasonOf.get(inactive)).toBe('inactive');
 
-    // the ceiling is the real C_max formula over the pool's capacity
+    // the ceiling is the real C_max formula over the pool's capacity (two identical venues)
+    const d = report.eligible[1]!;
+    expect(d.capacity).toBe(a.capacity);
     const cfg = await getDispatchConfig();
-    expect(report.totals.eligible).toBe(1);
-    expect(report.totals.excluded).toBe(4);
-    expect(report.totals.capacity).toBe(a.capacity);
-    expect(report.totals.c_max_tnd).toBe(Math.floor((cfg.standardCpmTnd * a.capacity) / 1000));
+    expect(report.totals.eligible).toBe(2);
+    expect(report.totals.excluded).toBe(3);
+    expect(report.totals.capacity).toBe(a.capacity + d.capacity);
+    expect(report.totals.c_max_tnd).toBe(
+      Math.floor((cfg.standardCpmTnd * (a.capacity + d.capacity)) / 1000),
+    );
     expect(report.cpm_tnd).toBe(cfg.standardCpmTnd);
   });
 

@@ -157,7 +157,6 @@ export const assemblePool = async (
       zoneId: screenhosts.zoneId,
       openingHour: screenhosts.openingHour,
       closingHour: screenhosts.closingHour,
-      broadcastCapacity: screenhosts.broadcastCapacity,
     })
     .from(screenhosts)
     .where(eq(screenhosts.isActive, true));

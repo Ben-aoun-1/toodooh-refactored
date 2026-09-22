@@ -44,13 +44,15 @@ import { venueHasInstalledScreenSql } from './installed-screen.js';
 // (lib/installed-screen.ts) is out of both engines as 'no_installed_screen', named right after the
 // owner's status (and, for the event branch, after « inactif », as the pool journals inactive
 // venues apart).
+//
+// CAP-EVT1 (operator ruling 2026-09-22) — `broadcast_capacity` is no longer a standard gate, so the
+// standard branch never names 'capacity_missing' any more (the pool stopped producing it).
 
 /** A draft without a spot yet is priced like the most common spot length. */
 export const DEFAULT_SPOT_SECONDS = 10;
 
 export type ExclusionReason =
   | 'excluded'
-  | 'capacity_missing'
   | 'hours_missing'
   | 'targeting_mismatch'
   | 'zone_mismatch'
@@ -110,7 +112,6 @@ export type EligibleHostsResult =
 
 const KNOWN_REASONS = new Set<string>([
   'excluded',
-  'capacity_missing',
   'hours_missing',
   'targeting_mismatch',
   'zone_mismatch',

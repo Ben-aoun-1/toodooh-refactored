@@ -18,7 +18,6 @@ const venue = (over: Partial<PoolVenueRow> = {}): PoolVenueRow => ({
   zoneId: 'zone-1',
   openingHour: 8,
   closingHour: 23,
-  broadcastCapacity: 4,
   ...over,
 });
 
@@ -44,7 +43,6 @@ describe('poolExclusionReason — the pool filter and the reason it journals', (
       'no_installed_screen',
     );
     expect(poolExclusionReason(venue(), ctx({ excluded: new Set(['venue-1']) }))).toBe('excluded');
-    expect(poolExclusionReason(venue({ broadcastCapacity: null }), ctx())).toBe('capacity_missing');
     expect(poolExclusionReason(venue({ openingHour: null }), ctx())).toBe('hours_missing');
     expect(poolExclusionReason(venue({ openingHour: 10, closingHour: 10 }), ctx())).toBe(
       'hours_missing',
@@ -59,7 +57,6 @@ describe('poolExclusionReason — the pool filter and the reason it journals', (
     const everythingWrong = venue({
       ownerApproved: false,
       installedScreen: false,
-      broadcastCapacity: null,
       openingHour: null,
       businessSectorId: 'gym',
       zoneId: 'zone-2',
@@ -71,12 +68,14 @@ describe('poolExclusionReason — the pool filter and the reason it journals', (
     expect(poolExclusionReason(approved, refused)).toBe('no_installed_screen');
     const installed = { ...approved, installedScreen: true };
     expect(poolExclusionReason(installed, refused)).toBe('excluded');
-    expect(poolExclusionReason(installed, ctx())).toBe('capacity_missing');
-    expect(poolExclusionReason({ ...installed, broadcastCapacity: 4 }, ctx())).toBe(
-      'hours_missing',
-    );
-    expect(poolExclusionReason({ ...installed, broadcastCapacity: 4, openingHour: 8 }, ctx())).toBe(
-      'targeting_mismatch',
-    );
+    expect(poolExclusionReason(installed, ctx())).toBe('hours_missing');
+    expect(poolExclusionReason({ ...installed, openingHour: 8 }, ctx())).toBe('targeting_mismatch');
+  });
+
+  it('CAP-EVT1 — the broadcast capacity is not a standard filter', () => {
+    // It is the venue's EVENT switch, read by the event engine only: a row that carries a NULL
+    // capacity is still a standard candidate.
+    const withNullCapacity = { ...venue(), broadcastCapacity: null };
+    expect(poolExclusionReason(withNullCapacity, ctx())).toBeNull();
   });
 });

@@ -15,18 +15,22 @@ import {
 //   no_installed_screen — MAP-TV1: nor until it has a TV that ever ran (lib/installed-screen.ts);
 //   excluded           — the caller removed it (the cascade's refusers, redispatch's defaulters
 //                        and dead screens);
-//   capacity_missing, hours_missing — the venue's own settings;
+//   hours_missing      — the venue's own opening hours;
 //   targeting_mismatch — category × class (E5.1: no line = the whole network);
 //   zone_mismatch      — CF-Z1 (no zone on the campaign = the whole network).
 //
 // Inactive venues never reach this list: assemblePool reads active rows only and journals the
 // inactive ones apart.
+//
+// CAP-EVT1 (operator ruling 2026-09-22) — `broadcast_capacity` is NOT a standard gate any more: it
+// is the venue's EVENT-only eligibility switch. A standard campaign sells and places a venue
+// whatever its capacity says, so 'capacity_missing' is no longer produced here. (The admin engine
+// journal keeps its label: rows written before still carry it.)
 
 export type PoolExclusionReason =
   | 'owner_not_approved'
   | 'no_installed_screen'
   | 'excluded'
-  | 'capacity_missing'
   | 'hours_missing'
   | 'targeting_mismatch'
   | 'zone_mismatch';
@@ -42,7 +46,6 @@ export interface PoolVenueRow {
   zoneId: string | null;
   openingHour: number | null;
   closingHour: number | null;
-  broadcastCapacity: number | null;
 }
 
 /** What the campaign (and the caller) bring: targeting lines, targeted zones, excluded venues. */
@@ -60,7 +63,6 @@ export const poolExclusionReason = (
   if (!sh.ownerApproved) return 'owner_not_approved';
   if (!sh.installedScreen) return 'no_installed_screen';
   if (ctx.excluded.has(sh.id)) return 'excluded';
-  if (sh.broadcastCapacity === null) return 'capacity_missing';
   if (broadcastableHours(sh.openingHour, sh.closingHour).length === 0) return 'hours_missing';
   const venue = { businessSectorId: sh.businessSectorId, class: sh.class };
   if (!screenhostMatchesTargeting(venue, ctx.lines)) return 'targeting_mismatch';
