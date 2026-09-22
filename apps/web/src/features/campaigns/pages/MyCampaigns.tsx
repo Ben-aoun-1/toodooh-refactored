@@ -690,8 +690,8 @@ export default function MyCampaigns() {
                       {htTtcOrDash(campaign.budget)}
                     </p>
                   </div>
-                  {/* CF-HF3 (Mejri item 3) — the display rule: prévues (plan facturable, else
-                      IMP-EST1's dry-run estimate). Never a fake 0. */}
+                  {/* CF-HF3 (Mejri item 3) — the display rule: prévues (plan, else IMP-EST1's
+                      dry-run estimate). Never a fake 0. */}
                   <div className="flex items-start gap-1.5 justify-end">
                     <div className="flex flex-col items-end">
                       <div className="flex items-center gap-1 text-xs text-gray-500">
