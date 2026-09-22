@@ -177,6 +177,12 @@ interface MineRow {
   planned_impressions: number | null;
 }
 
+interface PlacementBody {
+  count: number;
+  impressions_total: number;
+  montant_total_tnd: number;
+}
+
 interface EstimateBody {
   status: string;
   source: string | null;
@@ -212,6 +218,16 @@ describe('IMP-UNIT1 — « Impressions prévues » is the real audience on both 
 
   const prevuesOf = async (campaignId: string): Promise<number | null> =>
     (await mine()).find((r) => r.id === campaignId)?.planned_impressions ?? null;
+
+  /** The drawer's OTHER « impressions prévues » — EV4's placement block for a positioning. */
+  const placementOf = async (campaignId: string): Promise<PlacementBody> => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/campaigns/${campaignId}/event-allocations`,
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json() as PlacementBody;
+  };
 
   const estimate = async (campaignId: string): Promise<EstimateBody> => {
     const res = await app.inject({
@@ -358,6 +374,10 @@ describe('IMP-UNIT1 — « Impressions prévues » is the real audience on both 
       const total = placed.reduce((s, p) => s + p.impressions, 0);
       expect(await prevuesOf(campaignId)).toBe(total);
       expect(before.impressions).toBe(total);
+      expect(await placementOf(campaignId)).toMatchObject({
+        count: placed.length,
+        impressions_total: total,
+      });
 
       const dropped = placed[0];
       await db
@@ -365,6 +385,13 @@ describe('IMP-UNIT1 — « Impressions prévues » is the real audience on both 
         .set({ statut: 'REFUSE' })
         .where(eq(eventAllocations.id, dropped?.id ?? ''));
       expect(await prevuesOf(campaignId)).toBe(total - (dropped?.impressions ?? 0));
+      // ONE drawer, ONE figure: MyCampaigns mounts /mine's « Impressions prévues » and this
+      // placement header's « impressions prévues » side by side, so the refusal has to leave BOTH.
+      // The venue LINES keep listing the refused établissement (with its badge), hence count.
+      expect(await placementOf(campaignId)).toMatchObject({
+        count: placed.length,
+        impressions_total: total - (dropped?.impressions ?? 0),
+      });
     });
   });
 });
