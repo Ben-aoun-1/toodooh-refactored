@@ -29,6 +29,10 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 // installed venues get their own value instead of borrowing « Active ». DISPLAY-ONLY: no row is
 // created, deleted or migrated, and dispatch/pricing never read these columns.
 //
+// SCR-DECL1 — the owner's DECLARATION rides along: declared_screens_count (= screenhosts.screen_count,
+// what « X déclarés · Y installés » reads) and room_count (NULL = never declared). screens_count
+// keeps meaning ROWS. The declaration is edited by PATCH /api/admin/screenhosts/:id/declaration.
+//
 // `connected` / online_screens_count use THE ONE liveness truth (E6's heartbeat tolerance on
 // last_seen_at — the same predicate as /api/admin/screenhosts/:id/devices and the owner reads).
 // Revenue is NOT served: the legacy monthly_revenue column has no new-engine twin, and a payout
@@ -157,6 +161,8 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
           ownerBusinessName: users.businessName,
           ownerContactName: users.contactName,
           createdAt: screenhosts.createdAt,
+          declaredScreensCount: screenhosts.screenCount,
+          roomCount: screenhosts.roomCount,
           status: statusExpr,
           screensCount,
           activeCount,
@@ -203,6 +209,8 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
         status: r.status,
         owner_id: r.ownerId,
         owner_business_name: r.ownerBusinessName ?? r.ownerContactName ?? null,
+        declared_screens_count: r.declaredScreensCount,
+        room_count: r.roomCount,
         screens_count: r.screensCount,
         active_screens_count: r.activeCount,
         installed_screens_count: r.installedCount,

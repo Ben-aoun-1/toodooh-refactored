@@ -1,4 +1,9 @@
-import type { ScreenhostWifi, WifiPatch } from '@/features/screenhost/services/screenhost.service';
+import type {
+  DeclarationPatch,
+  ScreenhostDeclaration,
+  ScreenhostWifi,
+  WifiPatch,
+} from '@/features/screenhost/services/screenhost.service';
 import { apiClient } from '@/lib/api-client';
 
 /** The venue tiers L-disp prices against — mirrors the server enum (screenhosts.class). */
@@ -67,6 +72,14 @@ export const adminScreenhostService = {
   /** GET /api/admin/screenhosts/:id/eligibility — the venue's L-disp eligibility inputs. */
   getEligibility(id: string): Promise<ScreenhostEligibility> {
     return apiClient.get<ScreenhostEligibility>(`/admin/screenhosts/${id}/eligibility`);
+  },
+
+  /**
+   * SCR-DECL1 — PATCH /api/admin/screenhosts/:id/declaration: the venue's declared screens /
+   * rooms, through the same row reconciliation as the owner's edit (409 below the installed).
+   */
+  updateDeclaration(id: string, patch: DeclarationPatch): Promise<ScreenhostDeclaration> {
+    return apiClient.patch<ScreenhostDeclaration>(`/admin/screenhosts/${id}/declaration`, patch);
   },
 
   /** PATCH /api/admin/screenhosts/:id/eligibility — partial write; null clears a field. */

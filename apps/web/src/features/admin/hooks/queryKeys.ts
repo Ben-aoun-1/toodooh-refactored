@@ -114,6 +114,8 @@ export const adminKeys = {
     page: number,
     perPage: number,
   ) => [...adminKeys.all, 'adminLocations', status, ownerId, search, page, perPage] as const,
+  /** SCR-DECL1 — the prefix of every venue-list key (a declaration edit refetches them all). */
+  adminLocationsAll: () => [...adminKeys.all, 'adminLocations'] as const,
   /** ADM-SCR1 — the owner picker (GET /api/admin/screenhosts/owners). */
   screenOwners: () => [...adminKeys.all, 'screenOwners'] as const,
 

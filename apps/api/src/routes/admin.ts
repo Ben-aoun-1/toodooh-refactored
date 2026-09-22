@@ -84,21 +84,20 @@ const documentsPresenceFor = async (userIds: string[]): Promise<Map<string, Docu
 
 const NO_DOCUMENTS: DocumentPresence = { registration: false, cin: false, bank: false };
 
-// A screenhost's WiFi state for the admin user-info view. The password is WRITE-ONLY: only its
-// presence (wifi_password_set) ever crosses the wire — the cipher/plaintext never does (parallel
-// to routes/screenhosts.ts wifiView; the editable counterpart is PATCH /api/admin/screenhosts/:id/wifi).
+// A venue in the admin user-info view: its WiFi (the password is WRITE-ONLY — only wifi_password_set
+// crosses the wire) and SCR-DECL1's declared screen_count, which the user detail sums.
 interface ScreenhostWifiView {
   id: string;
   name: string;
   wifi_ssid: string | null;
   wifi_password_set: boolean;
+  screen_count: number;
 }
 
 const NO_SCREENHOSTS: ScreenhostWifiView[] = [];
 
-// Batch-load each user's screenhosts (WiFi-redacted), grouped by owner id — one round-trip for the
-// moderation list, mirroring documentsPresenceFor. Selects only what the view needs; the encrypted
-// password is read solely to derive the boolean and is never returned.
+// Batch-load each user's screenhosts, grouped by owner id — one round-trip, mirroring
+// documentsPresenceFor. The encrypted password is read only to derive the boolean, never returned.
 const screenhostsFor = async (userIds: string[]): Promise<Map<string, ScreenhostWifiView[]>> => {
   const byOwner = new Map<string, ScreenhostWifiView[]>();
   if (userIds.length === 0) return byOwner;
@@ -109,6 +108,7 @@ const screenhostsFor = async (userIds: string[]): Promise<Map<string, Screenhost
       ownerId: screenhosts.ownerId,
       wifiSsid: screenhosts.wifiSsid,
       wifiPasswordEncrypted: screenhosts.wifiPasswordEncrypted,
+      screenCount: screenhosts.screenCount,
     })
     .from(screenhosts)
     .where(inArray(screenhosts.ownerId, userIds))
@@ -121,6 +121,7 @@ const screenhostsFor = async (userIds: string[]): Promise<Map<string, Screenhost
       name: row.name,
       wifi_ssid: row.wifiSsid,
       wifi_password_set: row.wifiPasswordEncrypted !== null,
+      screen_count: row.screenCount,
     });
     byOwner.set(row.ownerId, list);
   }

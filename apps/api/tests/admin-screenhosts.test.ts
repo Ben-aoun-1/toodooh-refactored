@@ -64,6 +64,8 @@ interface LocationView {
   status: 'active' | 'inactive' | 'never_installed' | 'no_screens';
   owner_id: string | null;
   owner_business_name: string | null;
+  declared_screens_count: number;
+  room_count: number | null;
   screens_count: number;
   active_screens_count: number;
   installed_screens_count: number;
@@ -229,6 +231,32 @@ describe('GET /api/admin/screenhosts (real Postgres)', () => {
     expect(b?.screens.map((s) => [s.installed, s.connected, s.last_seen_at])).toEqual([
       [true, false, null],
     ]);
+  });
+
+  // SCR-DECL1 — « X déclarés · Y installés » reads the owner's DECLARATION, not the rows.
+  it('carries the declaration beside the rows: declared_screens_count and room_count', async () => {
+    const adminId = await seedUser({ role: 'admin' });
+    mockSession(adminId);
+    const owner = await seedUser({ role: 'individual_owner' });
+    const [declared] = await db
+      .insert(screenhosts)
+      .values({ name: 'Déclaré', ownerId: owner, screenCount: 3, roomCount: 2 })
+      .returning({ id: screenhosts.id });
+    await db.insert(screens).values({ screenhostId: declared?.id ?? '', name: 'Écran 1' });
+    await db.insert(screenhosts).values({ name: 'Jamais déclaré', ownerId: owner });
+    const body = (await list()).json() as ListBody;
+    const byName = new Map(body.locations.map((l) => [l.name, l]));
+    expect(byName.get('Déclaré')).toMatchObject({
+      declared_screens_count: 3,
+      room_count: 2,
+      screens_count: 1, // still ROWS
+      installed_screens_count: 0,
+    });
+    expect(byName.get('Jamais déclaré')).toMatchObject({
+      declared_screens_count: 0,
+      room_count: null,
+      screens_count: 0,
+    });
   });
 
   it('filters by status BEFORE pagination — total honors the filter', async () => {

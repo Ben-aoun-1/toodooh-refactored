@@ -4,12 +4,14 @@ import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminLocationsPagination from '@/features/admin/components/AdminLocationsPagination';
+import AdminVenueDeclarationForm from '@/features/admin/components/AdminVenueDeclarationForm';
 import { useAdminLocations, useScreenOwners } from '@/features/admin/hooks/useAdminScreens';
 import { formatAdminDateTime } from '@/features/admin/lib/admin-dates';
 import {
   LOCATION_STATUS_BADGE,
   LOCATION_STATUS_FILTER_OPTIONS,
   SCREEN_STATUS_BADGE,
+  roomsLabel,
   screenInstallNote,
   screenStatusOf,
   screensCountLabel,
@@ -267,9 +269,12 @@ export default function ScreenManagement() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {screensCountLabel(
-                                location.screens_count,
+                                location.declared_screens_count,
                                 location.installed_screens_count,
                               )}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {roomsLabel(location.room_count)}
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -299,6 +304,7 @@ export default function ScreenManagement() {
                         {isExpanded && (
                           <tr>
                             <td colSpan={6} className="bg-gray-50 px-6 py-4">
+                              <AdminVenueDeclarationForm location={location} />
                               <ScreensTable screens={location.screens} />
                             </td>
                           </tr>

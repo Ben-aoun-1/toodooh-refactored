@@ -23,6 +23,29 @@ export const parseDeclaredCount = (raw: string): number | null => {
   return value >= DECLARED_COUNT_MIN && value <= DECLARED_COUNT_MAX ? value : null;
 };
 
+export const DECLARATION_EMPTY_ERROR = "Renseignez le nombre d'écrans ou de salles.";
+
+/**
+ * The admin's edit on « Localités et écrans »: a BLANK input is left unchanged (an admin must not
+ * have to invent a legacy venue's unknown room count), a typed one must be a valid count, and at
+ * least one must be given. The owner's own card requires both (Q5) — see venue-declaration.
+ */
+export const partialDeclarationPatch = (
+  screensInput: string,
+  roomsInput: string,
+): { patch: { screen_count?: number; room_count?: number } } | { error: string } => {
+  const screens = screensInput.trim() === '' ? undefined : parseDeclaredCount(screensInput);
+  const rooms = roomsInput.trim() === '' ? undefined : parseDeclaredCount(roomsInput);
+  if (screens === null || rooms === null) return { error: DECLARED_COUNT_ERROR };
+  if (screens === undefined && rooms === undefined) return { error: DECLARATION_EMPTY_ERROR };
+  return {
+    patch: {
+      ...(screens !== undefined ? { screen_count: screens } : {}),
+      ...(rooms !== undefined ? { room_count: rooms } : {}),
+    },
+  };
+};
+
 /** A stored count → the input's text: a declaration below the minimum (0 = never declared) is
  *  shown EMPTY, so the field reads « to fill in », never « 0 ». */
 export const declaredCountInput = (value: number | null): string =>

@@ -7,8 +7,10 @@ import {
   DECLARED_COUNT_ERROR,
   DECLARED_COUNT_MAX,
   DECLARED_COUNT_MIN,
+  DECLARATION_EMPTY_ERROR,
   declaredCountInput,
   parseDeclaredCount,
+  partialDeclarationPatch,
 } from './screen-declaration';
 
 // SCR-DECL1 — the declared screens / rooms input rule (D1: integers 1–99). The api refuses what
@@ -54,6 +56,22 @@ describe('parseDeclaredCount', () => {
     for (const raw of ['', '   ', '0', '100', '2.5', '-1', '6-10', '10+', 'abc', '1e2']) {
       expect(parseDeclaredCount(raw)).toBeNull();
     }
+  });
+});
+
+describe('partialDeclarationPatch (the admin edit)', () => {
+  it('sends only the filled counts — a blank one is left unchanged, never invented', () => {
+    expect(partialDeclarationPatch('3', '')).toEqual({ patch: { screen_count: 3 } });
+    expect(partialDeclarationPatch('', '2')).toEqual({ patch: { room_count: 2 } });
+    expect(partialDeclarationPatch('4', '1')).toEqual({
+      patch: { screen_count: 4, room_count: 1 },
+    });
+  });
+
+  it('refuses a typed invalid count, and an edit with nothing in it', () => {
+    expect(partialDeclarationPatch('0', '2')).toEqual({ error: DECLARED_COUNT_ERROR });
+    expect(partialDeclarationPatch('3', '6-10')).toEqual({ error: DECLARED_COUNT_ERROR });
+    expect(partialDeclarationPatch('', ' ')).toEqual({ error: DECLARATION_EMPTY_ERROR });
   });
 });
 

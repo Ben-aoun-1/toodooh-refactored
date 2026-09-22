@@ -1,9 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { adminScreenhostService } from '@/features/admin/services/admin-screenhost.service';
 import {
   adminScreensService,
   type AdminLocationStatus,
 } from '@/features/admin/services/admin-screens.service';
+import type { DeclarationPatch } from '@/features/screenhost/services/screenhost.service';
 
 import { adminKeys } from './queryKeys';
 
@@ -42,6 +44,23 @@ export function useAdminLocations(filters: AdminLocationFilters) {
     loading: query.isLoading,
     isError: query.isError,
   };
+}
+
+/**
+ * SCR-DECL1 — the admin edit of a venue's declared screens / rooms. On success every venue-list
+ * page refetches (the label and the rows may have moved), and so does the users list, whose
+ * detail sums each owner's declared screens.
+ */
+export function useUpdateAdminScreenhostDeclaration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ screenhostId, patch }: { screenhostId: string; patch: DeclarationPatch }) =>
+      adminScreenhostService.updateDeclaration(screenhostId, patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.adminLocationsAll() });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+    },
+  });
 }
 
 /** The owner picker for ScreenManagement's owner filter. */

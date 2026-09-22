@@ -66,11 +66,27 @@ export const screenStatusOf = (
 export const screenInstallNote = (row: Pick<AdminScreenRow, 'installed'>): string | null =>
   row.installed ? null : 'Jamais installé';
 
+const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`;
+
+/** SCR-DECL1 — the wording of a count nobody declared yet (0 screens, NULL rooms). */
+export const NOT_DECLARED_LABEL = 'Non déclaré';
+export const ROOMS_NOT_GIVEN_LABEL = 'Non renseigné';
+
 /**
  * « 3 déclarés · 0 installé » — French agreement, and the page's own `> 1` convention: zero and
  * one stay singular (the listing already writes « 1 localité trouvée » / « 0 localité trouvée »).
+ * SCR-DECL1: `declared` is the owner's DECLARATION (declared_screens_count), no longer the rows;
+ * 0 means never declared and reads « Non déclaré », never « 0 déclaré ».
  */
-export const screensCountLabel = (declared: number, installed: number): string => {
-  const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`;
-  return `${plural(declared, 'déclaré')} · ${plural(installed, 'installé')}`;
+export const screensCountLabel = (declared: number, installed: number): string =>
+  `${declared > 0 ? plural(declared, 'déclaré') : NOT_DECLARED_LABEL} · ${plural(installed, 'installé')}`;
+
+/** SCR-DECL1 — the venue's declared rooms: « Salles : 2 », or « Non renseigné » (NULL). */
+export const roomsLabel = (rooms: number | null): string =>
+  `Salles : ${rooms === null ? ROOMS_NOT_GIVEN_LABEL : rooms}`;
+
+/** SCR-DECL1 — the admin user detail: the owner's declared screens summed over their venues. */
+export const declaredScreensTotalLabel = (venues: readonly { screen_count: number }[]): string => {
+  const total = venues.reduce((sum, venue) => sum + venue.screen_count, 0);
+  return total > 0 ? plural(total, 'déclaré') : NOT_DECLARED_LABEL;
 };
