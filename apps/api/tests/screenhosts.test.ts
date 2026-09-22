@@ -116,7 +116,8 @@ describe('screenhost WiFi (owner + admin, real Postgres)', () => {
     expect(b).toMatchObject({ wifi_ssid: null, wifi_password_set: false });
     // The plaintext password must never cross the wire, and the shape must expose only the
     // presence flag — no `wifi_password` / ciphertext field. H2 added the venue's opening hours
-    // to this list (the owner settings' Horaires editor reads them here).
+    // to this list (the owner settings' Horaires editor reads them here), SCR-DECL1 the declared
+    // screens and rooms (the « Écrans et salles » cards).
     expect(JSON.stringify(body)).not.toContain('secret-a');
     for (const r of body) {
       expect(Object.keys(r).sort()).toEqual([
@@ -124,6 +125,8 @@ describe('screenhost WiFi (owner + admin, real Postgres)', () => {
         'id',
         'name',
         'opening_hour',
+        'room_count',
+        'screen_count',
         'wifi_password_set',
         'wifi_ssid',
       ]);

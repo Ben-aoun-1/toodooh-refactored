@@ -270,9 +270,7 @@ export const deriveOwnerDecision = (
 };
 
 export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
-  // GET /api/screenhosts/mine — the caller's screenhosts, password-redacted.
-  // H2 — the venue's opening hours ride along so the owner settings' « Horaires d'ouverture »
-  // editor reads its current state from the same list the WiFi editor already uses.
+  // GET /api/screenhosts/mine — the caller's venues, password-redacted: WiFi, hours, declaration.
   app.get('/api/screenhosts/mine', ownerGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) {
@@ -285,6 +283,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         ...wifiSelection,
         openingHour: screenhosts.openingHour,
         closingHour: screenhosts.closingHour,
+        screenCount: screenhosts.screenCount,
+        roomCount: screenhosts.roomCount,
       })
       .from(screenhosts)
       .where(eq(screenhosts.ownerId, userId))
@@ -294,6 +294,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         ...wifiView(row),
         opening_hour: row.openingHour,
         closing_hour: row.closingHour,
+        screen_count: row.screenCount,
+        room_count: row.roomCount,
       })),
     );
   });

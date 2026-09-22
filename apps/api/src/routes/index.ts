@@ -43,6 +43,7 @@ import { profileDocumentsRoutes } from './profile-documents.js';
 import { profileRoutes } from './profile.js';
 import { rechargesRoutes } from './recharges.js';
 import { referenceRoutes } from './reference.js';
+import { screenhostDeclarationRoutes } from './screenhost-declaration.js';
 import { screenhostsRoutes } from './screenhosts.js';
 import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
@@ -72,6 +73,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // Owner + admin WiFi maintenance for screenhosts (SSID/password) — every edit re-pushes the
   // owner's approved screenhosts to wedooh (S-T1 Edge B2) so the hub's credentials stay current.
   await app.register(screenhostsRoutes);
+  // SCR-DECL1 — the per-venue declared screens / rooms edit (owner + admin twin); rows follow.
+  await app.register(screenhostDeclarationRoutes);
   await app.register(meRoutes);
   // In-app notification feed (session-user-scoped): GET /api/notifications + POST /:id/read.
   // Producers (e.g. the dispatch producer) write rows; the FE bell reads + marks them read.
