@@ -23,6 +23,9 @@ interface UseImpressionsEstimateOptions {
   budgetTnd?: number | null;
   inputs?: EstimateInputs;
   enabled?: boolean;
+  /** Past the dispatch, or refused (lib/impressions-estimate: isEstimableStatus): the request is
+   *  NOT sent — the view is « — » + « aucun plan de diffusion », never a stuck « … ». */
+  notEstimable?: boolean;
 }
 
 /**
@@ -31,7 +34,12 @@ interface UseImpressionsEstimateOptions {
  */
 export function useImpressionsEstimate(
   campaignId: string | null,
-  { budgetTnd, inputs = {}, enabled = true }: UseImpressionsEstimateOptions = {},
+  {
+    budgetTnd,
+    inputs = {},
+    enabled = true,
+    notEstimable = false,
+  }: UseImpressionsEstimateOptions = {},
 ): EstimateView {
   const cursor = useDebouncedValue(budgetTnd, ESTIMATE_DEBOUNCE_MS);
   const query = useQuery({
@@ -41,10 +49,11 @@ export function useImpressionsEstimate(
       estimateInputsKey(inputs),
     ),
     queryFn: () => campaignsApi.impressionsEstimate(campaignId ?? '', cursor ?? undefined),
-    enabled: enabled && !!campaignId && cursor !== null,
+    enabled: enabled && !notEstimable && !!campaignId && cursor !== null,
     staleTime: ESTIMATE_STALE_TIME_MS,
   });
   return estimateView({
+    notEstimable,
     budgetUnset: budgetTnd === null,
     pending: cursor !== budgetTnd || query.isPending,
     isError: query.isError,

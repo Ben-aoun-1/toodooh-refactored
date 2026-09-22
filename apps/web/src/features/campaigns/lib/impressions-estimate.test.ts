@@ -3,13 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { campaignsKeys } from '../hooks/queryKeys';
 import type { ImpressionsEstimateRead } from '../services/campaigns.api';
 
+import { CAMPAIGN_STATUS_IDS } from './campaign-status';
 import {
   ESTIMATE_ERROR_REASON,
   ESTIMATE_LOADING_TEXT,
   ESTIMATE_NONE_TEXT,
+  ESTIMATE_NO_DISPATCH_REASON,
   ESTIMATE_REASONS,
+  PRE_DISPATCH_STATUSES,
   estimateInputsKey,
   estimateView,
+  isEstimableStatus,
 } from './impressions-estimate';
 
 // IMP-EST1 (ruled Q1 A · Q2 A · Q3 A) — « Impressions estimées » = the server's dry-run of the real
@@ -88,6 +92,36 @@ describe('estimateView — loading / value / reason', () => {
     expect(estimateView({ ...settled, data: { ...ok(1), impressions: null } }).reason).toBe(
       ESTIMATE_ERROR_REASON,
     );
+  });
+});
+
+describe('only a pre-dispatch campaign is estimated', () => {
+  it('draft / pending / upcoming are estimable; active, rejected and completed are not', () => {
+    expect([...PRE_DISPATCH_STATUSES]).toEqual(['draft', 'pending', 'upcoming']);
+    const estimable = CAMPAIGN_STATUS_IDS.filter(isEstimableStatus);
+    expect(estimable).toEqual(['draft', 'pending', 'upcoming']);
+    for (const status of ['active', 'rejected', 'completed']) {
+      expect(isEstimableStatus(status), status).toBe(false);
+    }
+    // An unknown or absent status is never estimated (no request on a shape we do not know).
+    expect(isEstimableStatus('archived')).toBe(false);
+    expect(isEstimableStatus(null)).toBe(false);
+    expect(isEstimableStatus(undefined)).toBe(false);
+  });
+
+  it('a non-estimable plan-less row renders « — » + its reason, never « … » nor a number', () => {
+    // The request is not sent, so the query stays pending forever: the view must not show « … ».
+    expect(
+      estimateView({
+        notEstimable: true,
+        budgetUnset: false,
+        pending: true,
+        isError: false,
+        data: undefined,
+      }),
+    ).toEqual({ kind: 'none', text: ESTIMATE_NONE_TEXT, reason: ESTIMATE_NO_DISPATCH_REASON });
+    // Even a cached answer from an earlier status never resurfaces as a live figure.
+    expect(estimateView({ ...settled, notEstimable: true, data: ok(48_000) }).text).toBe('—');
   });
 });
 

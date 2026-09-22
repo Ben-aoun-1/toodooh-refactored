@@ -52,4 +52,10 @@ describe('« Impressions estimées » reads the dispatch dry-run everywhere', ()
   it('the estimate request fires only for a plan-less row (a frozen plan wins)', () => {
     expect(read(SURFACES.prevues)).toContain('enabled: planned === null');
   });
+
+  it('…and only in a pre-dispatch status: the list rows never pay for a terminal row', () => {
+    expect(read(SURFACES.prevues)).toContain('notEstimable: !isEstimableStatus(campaign.status)');
+    // The hook must honour it by NOT sending the request (the cost half of the gate).
+    expect(read('../hooks/useImpressionsEstimate.ts')).toContain('enabled && !notEstimable');
+  });
 });
