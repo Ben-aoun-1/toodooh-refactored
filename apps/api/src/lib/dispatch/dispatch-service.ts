@@ -14,7 +14,7 @@ import type { CpmFreezeCheck } from '../cpm-freeze-guard.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
 import { type TTiers, getDispatchConfig } from './config.js';
-import { buildPlan } from './plan.js';
+import { planFromPool } from './plan-outcome.js';
 import { assemblePool } from './pool.js';
 import { seuilImpressions, tForDuration } from './thresholds.js';
 
@@ -92,38 +92,22 @@ export const runDispatch = async (
       if (cpmCheck && !(await cpmCheck(tx, inputs.cpm))) return { status: 'CPM_CHANGED' };
       // E3 — the pool assembly + occupancy netting live in assemblePool (shared with the refusal
       // cascade and later redispatch); dispatch runs it with no exclusions.
-      const { windowDays, pool, candidateCount } = await assemblePool(
+      const assembled = await assemblePool(
         tx,
         { id: campaign.id, startDate, endDate },
         { s: inputs.s, t, fMaxSeconds: config.fMaxSeconds },
         { lockOccupancy: true, trace },
       );
 
-      const built = buildPlan({
-        iCible: inputs.iCible,
-        cpm: inputs.cpm,
-        s: inputs.s,
-        t,
-        seuilDiffusable: seuil,
-        gMois: config.gMois,
-        joursActifs: config.joursActifs,
-        rMinEfficace: config.rMinEfficace,
-        fMaxSeconds: config.fMaxSeconds,
-        windowDays,
-        pool,
-      });
-
-      // Clôture: a too-thin (N_min>N_max / empty pool) or no-allocation result is NOT a deliverable
-      // plan — do NOT freeze it. Freezing an empty plan + the unique index would lock the campaign
-      // forever; instead return the clôture alert so the advertiser can adjust the cursor / targeting
-      // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
-      // CF-HF4 — an EMPTY pool is an INVENTORY refusal, not a materiality one: candidates
-      // existed but every one fell to capacity/days (saturated — « réessayez avec une autre
-      // période ») vs the targeting matching nothing at all. TOO_THIN keeps meaning what its
-      // message says (N_min > N_max on a real pool).
-      if (pool.length === 0) return { status: 'NO_ELIGIBLE', saturated: candidateCount > 0 };
-      if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
-      if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE', saturated: candidateCount > 0 };
+      // IMP-EST1 — buildPlan + the clôtures (TOO_THIN / NO_ELIGIBLE, never frozen) live in
+      // ./plan-outcome.ts, shared VERBATIM with the « Impressions estimées » dry-run.
+      const planned = planFromPool(
+        { iCible: inputs.iCible, cpm: inputs.cpm, s: inputs.s, t, seuil },
+        config,
+        assembled,
+      );
+      if (planned.status !== 'OK') return planned;
+      const { built } = planned;
 
       // LOG1 — the SÉLECTION outcome, read post-hoc from the built plan (selection/plan stay pure
       // and untouched): each placement with its venue/impressions/value, the stored reliquat, and
