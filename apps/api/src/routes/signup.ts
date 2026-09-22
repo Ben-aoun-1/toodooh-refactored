@@ -121,11 +121,30 @@ const deleteOrphanUser = async (email: string): Promise<void> => {
   await db.delete(users).where(eq(users.id, u.id));
 };
 
-// Every refusal of an oversized or over-numerous multipart body (no account is created).
+// A file part over the shared 5 MB cap → 413, no account created.
 const payloadTooLarge = {
   error: 'PAYLOAD_TOO_LARGE',
   message: `A document exceeds the ${MAX_DOCUMENT_BYTES}-byte limit.`,
 } as const;
+
+// MORE file parts than the kind allows → 413, no account created. A DISTINCT code from the size
+// refusal above: both are 413, but the client words them differently and « le fichier est trop
+// volumineux (maximum 5 Mo) » is simply false when fifteen small files arrived. The two causes used
+// to share `payloadTooLarge` (and, before DOC-CAST1, the bare busboy `files: 4` overflow did too).
+const tooManyFiles = {
+  error: 'TOO_MANY_FILES',
+  message: 'Too many document parts for this signup.',
+} as const;
+
+// The multipart plugin refuses the part COUNT itself (busboy's `files` limit) with FST_FILES_LIMIT,
+// and an oversized part with FST_REQ_FILE_TOO_LARGE — both surface as a throw from request.parts().
+// Read the code off the error so the count case keeps its own reply instead of borrowing the size
+// one. `unknown` + a real narrowing, never a cast.
+const errorCode = (err: unknown): string | undefined => {
+  if (typeof err !== 'object' || err === null || !('code' in err)) return undefined;
+  const { code } = err;
+  return typeof code === 'string' ? code : undefined;
+};
 
 export const signupRoute: FastifyPluginAsync = async (app) => {
   // A signup WITH documents posts multipart (a `payload` field + the file parts): every owner, and a
@@ -157,8 +176,10 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
             payloadRaw = part.value as string;
           }
         }
-      } catch {
-        return reply.status(413).send(payloadTooLarge);
+      } catch (err) {
+        return reply
+          .status(413)
+          .send(errorCode(err) === 'FST_FILES_LIMIT' ? tooManyFiles : payloadTooLarge);
       }
       if (payloadRaw === undefined) {
         return reply.status(400).send({
@@ -228,7 +249,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
     if (isMultipart) {
       const kind = signupKind(profile_type);
       if (fileParts.length > signupFileLimit(kind)) {
-        return reply.status(413).send(payloadTooLarge);
+        return reply.status(413).send(tooManyFiles);
       }
       signupDocuments = slotSignupDocuments(fileParts, kind);
       const documentErrs = signupDocumentErrors(signupDocuments);

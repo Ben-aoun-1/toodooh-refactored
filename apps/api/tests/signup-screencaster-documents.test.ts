@@ -17,8 +17,9 @@ import { type MultipartFile, signupMultipart } from './helpers/signup-multipart.
 // be lost twice: the web posted JSON, and this route only read an OWNER's `rne` + `bank` parts. The
 // screencaster parts now land in user_documents through the owners' storage path, and follow the
 // owner volets' policy on this route: a bad MIME → 400 before any account exists, a part over 5 MB
-// → 413, a part the kind may not send → ignored, surplus parts of a category → the later ones win
-// (one slot: the last part, as a repeated owner volet always did), too many file parts → 413.
+// → 413 PAYLOAD_TOO_LARGE, a part the kind may not send → ignored, surplus parts of a category → the
+// later ones win (one slot: the last part, as a repeated owner volet always did), too many file parts
+// → 413 TOO_MANY_FILES (its own code: a count is not a byte count).
 
 const { sendMailMock } = vi.hoisted(() => ({
   sendMailMock: vi.fn().mockResolvedValue({ messageId: 'test-msg-id' }),
@@ -229,9 +230,14 @@ describe('POST /api/signup — screencaster documents (DOC-CAST1)', () => {
     ]);
   });
 
-  it('more file parts than the screencaster limit (caps 12 + 2 headroom) → 413, NO account', async () => {
+  // The count refusal carries its OWN code: both causes are 413, but « le fichier est trop volumineux
+  // (maximum 5 Mo) » is false when fifteen small files arrived. This body trips the multipart plugin's
+  // `files` limit (15 > 14), which throws FST_FILES_LIMIT out of request.parts() — the route must not
+  // let that borrow the size reply either.
+  it('more file parts than the screencaster limit (caps 12 + 2 headroom) → 413 TOO_MANY_FILES, NO account', async () => {
     const res = await signup({}, [...range(3).map(rne), ...range(12).map(complementaire)]);
     expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ error: 'TOO_MANY_FILES' });
     expect(await accountsNamed(EMAIL)).toEqual([]);
   });
 
@@ -272,9 +278,12 @@ describe('POST /api/signup — screencaster documents (DOC-CAST1)', () => {
     ]);
   });
 
-  it('owner: more than 4 file parts → 413, NO account (the owner limit is unchanged)', async () => {
+  // 5 parts: under the plugin's shared `files` limit, so this one is refused by the ROUTE's per-kind
+  // re-check rather than by busboy — the other half of the TOO_MANY_FILES branch.
+  it('owner: more than 4 file parts → 413 TOO_MANY_FILES, NO account (the owner limit is unchanged)', async () => {
     const res = await signup({ profile_type: 'individual_owner' }, [rne(2), rne(3), rne(4)]);
     expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ error: 'TOO_MANY_FILES' });
     expect(await accountsNamed(EMAIL)).toEqual([]);
   });
 
