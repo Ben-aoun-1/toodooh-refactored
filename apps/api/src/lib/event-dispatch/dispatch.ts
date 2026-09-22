@@ -1,24 +1,14 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
-import {
-  businessSectors,
-  eventAllocations,
-  hourReservations,
-  notifications,
-  screenhostUnavailability,
-  screenhosts,
-} from '../../db/schema.js';
-import { ownerApprovedSql } from '../approved-owner.js';
+import { eventAllocations, hourReservations, notifications } from '../../db/schema.js';
 import {
   REPS_PER_BLOC,
   type EventRef,
-  availableBlocs,
   blocCells,
   computeAmax,
+  eventEligibleVenues,
 } from '../event-pricing/pricing.js';
-import { fenetreDiffusion } from '../fenetre-diffusion.js';
-import { venueHasInstalledScreenSql } from '../installed-screen.js';
 
 // EV4 — THE EVENT DISPATCH ENGINE (its own module, the D51 boundary: nothing here imports
 // lib/dispatch or any campaign lib — the campaign engine and this one only ever meet at the
@@ -27,8 +17,9 @@ import { venueHasInstalledScreenSql } from '../installed-screen.js';
 //
 // The rules (engine doc D1–D7):
 //   D1 — eligibility per EV2: active venue, APPROVED owner (ELIG-2), INSTALLED screen (MAP-TV1),
-//        event-eligible sector, per-bloc availability (opening hours ∩ E2 declarations ∩ OTHER
-//        events' reservations, full-bloc-only).
+//        EVENT SWITCH on (CAP-EVT1 — a « Capacité de diffusion » set), event-eligible sector,
+//        per-bloc availability (opening hours ∩ E2 declarations ∩ OTHER events' reservations,
+//        full-bloc-only) — ONE function, eventEligibleVenues (lib/event-pricing/pricing.ts).
 //   D2 — processing order: SPS desc; ancienneté asc then id asc as deterministic tiebreaks
 //        (the classic queue's tiebreak idiom WITHOUT its dignity partition — G_jour/activeToday
 //        are campaign-engine concepts).
@@ -103,99 +94,27 @@ export type EventFillResult =
   | { status: 'NO_POOL' };
 
 /**
- * D1/D2 — assemble the bloc pool: every active event-eligible venue of an approved owner, with an
- * installed screen and ≥ 1 available bloc, SPS desc (ancienneté asc, id asc tiebreaks).
- * `excludeScreenhostIds` keeps refused/already-allocated venues out of a cascade re-fill.
+ * D1/D2 — assemble the bloc pool: the event pool of eventEligibleVenues (lib/event-pricing — THE
+ * one home, the same set the ceiling prices), each venue with its A_max, SPS desc (ancienneté asc,
+ * id asc tiebreaks). `excludeScreenhostIds` keeps refused/already-allocated venues out of a cascade
+ * re-fill.
  */
 export const assembleEventPool = async (
   event: EventRef,
   excludeScreenhostIds: ReadonlySet<string> = new Set(),
 ): Promise<EventPoolVenue[]> => {
-  const candidates = await db
-    .select({
-      id: screenhosts.id,
-      ownerId: screenhosts.ownerId,
-      name: screenhosts.name,
-      sps: screenhosts.sps,
-      createdAt: screenhosts.createdAt,
-      openingHour: screenhosts.openingHour,
-      closingHour: screenhosts.closingHour,
-      eventEligible: businessSectors.eventEligible,
-    })
-    .from(screenhosts)
-    .innerJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-    // ELIG-2 + MAP-TV1 — the SAME shared predicates computeEventCmax prices with: ceiling = pool.
-    .where(and(eq(screenhosts.isActive, true), ownerApprovedSql(), venueHasInstalledScreenSql()));
-  // An ownerless venue can never decide a proposal (§11.1) — out of the pool. (The approved-owner
-  // clause above already implies an owner; the check stays as the type narrowing for ownerId.)
-  const eligible = candidates.filter(
-    (c) => c.eventEligible && c.ownerId !== null && !excludeScreenhostIds.has(c.id),
-  );
-  const ids = eligible.map((c) => c.id);
-  if (ids.length === 0) return [];
-
-  // The window's Tunis dates bound both context reads (the EV2 idiom — a midnight-crossing
-  // window reads both dates through the blocs' own cells).
-  const { blocs } = fenetreDiffusion(event.kickoffAt, event.endsAt);
-  const windowDates = new Set<string>();
-  for (const b of blocs) for (const c of blocCells(b.start, b.end)) windowDates.add(c.date);
-  const dateList = [...windowDates];
-
-  const unavailabilityRows = await db
-    .select({
-      screenhostId: screenhostUnavailability.screenhostId,
-      day: screenhostUnavailability.day,
-    })
-    .from(screenhostUnavailability)
-    .where(
-      and(
-        inArray(screenhostUnavailability.screenhostId, ids),
-        inArray(screenhostUnavailability.day, dateList),
-      ),
-    );
-  const reservationRows = await db
-    .select({
-      screenhostId: hourReservations.screenhostId,
-      day: hourReservations.day,
-      hour: hourReservations.hour,
-      eventId: hourReservations.eventId,
-    })
-    .from(hourReservations)
-    .where(
-      and(inArray(hourReservations.screenhostId, ids), inArray(hourReservations.day, dateList)),
-    );
-
-  const unavailableBySh = new Map<string, Set<string>>();
-  for (const u of unavailabilityRows) {
-    const set = unavailableBySh.get(u.screenhostId) ?? new Set<string>();
-    set.add(u.day);
-    unavailableBySh.set(u.screenhostId, set);
-  }
-  const foreignReservedBySh = new Map<string, Set<string>>();
-  for (const r of reservationRows) {
-    if (r.eventId === event.id) continue; // our own holds never block our own placement
-    const set = foreignReservedBySh.get(r.screenhostId) ?? new Set<string>();
-    set.add(`${r.day}:${r.hour}`);
-    foreignReservedBySh.set(r.screenhostId, set);
-  }
-
-  const EMPTY: ReadonlySet<string> = new Set();
+  const eligible = await eventEligibleVenues(event, excludeScreenhostIds);
   const pool: EventPoolVenue[] = [];
   for (const venue of eligible) {
-    const blocsDisponibles = availableBlocs(event, venue, {
-      unavailableDates: unavailableBySh.get(venue.id) ?? EMPTY,
-      foreignReservedCells: foreignReservedBySh.get(venue.id) ?? EMPTY,
-    });
-    if (blocsDisponibles.length === 0) continue;
     const amaxPph = await computeAmax(venue.id);
     pool.push({
       screenhostId: venue.id,
-      ownerId: venue.ownerId as string,
+      ownerId: venue.ownerId,
       name: venue.name,
-      sps: Number(venue.sps),
-      createdAtMs: venue.createdAt.getTime(),
+      sps: venue.sps,
+      createdAtMs: venue.createdAtMs,
       amaxPph,
-      blocs: blocsDisponibles.map((b) => ({ start: b.start, end: b.end })),
+      blocs: venue.blocs.map((b) => ({ start: b.start, end: b.end })),
     });
   }
   // D2 — SPS desc; ancienneté asc then id asc as the deterministic tiebreaks.

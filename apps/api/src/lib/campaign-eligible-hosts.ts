@@ -22,6 +22,7 @@ import {
 import { assemblePool } from './dispatch/pool.js';
 import { tForDuration } from './dispatch/thresholds.js';
 import type { EngineTrace } from './engine-journal/trace.js';
+import { isEventSwitchOn } from './event-pricing/event-switch.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
 import { venueHasInstalledScreenSql } from './installed-screen.js';
 
@@ -46,7 +47,9 @@ import { venueHasInstalledScreenSql } from './installed-screen.js';
 // venues apart).
 //
 // CAP-EVT1 (operator ruling 2026-09-22) — `broadcast_capacity` is no longer a standard gate, so the
-// standard branch never names 'capacity_missing' any more (the pool stopped producing it).
+// standard branch never names 'capacity_missing' any more (the pool stopped producing it). It is
+// the venue's EVENT SWITCH (lib/event-pricing/event-switch.ts): the event branch names a venue
+// whose capacity is empty 'event_capacity_missing', right after its sector's own event verdict.
 
 /** A draft without a spot yet is priced like the most common spot length. */
 export const DEFAULT_SPOT_SECONDS = 10;
@@ -60,6 +63,7 @@ export type ExclusionReason =
   | 'no_available_days'
   | 'no_residual_capacity'
   | 'not_event_eligible'
+  | 'event_capacity_missing'
   | 'no_bloc_available'
   | 'no_sector'
   | 'owner_not_approved'
@@ -155,6 +159,7 @@ interface VenueLabel {
   ownerApproved: boolean;
   installedScreen: boolean;
   eventEligible: boolean | null;
+  eventSwitchOn: boolean;
 }
 
 const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
@@ -169,6 +174,7 @@ const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
       isActive: screenhosts.isActive,
       ownerApproved: ownerApprovedSql(),
       installedScreen: venueHasInstalledScreenSql(),
+      broadcastCapacity: screenhosts.broadcastCapacity,
     })
     .from(screenhosts)
     .leftJoin(businessSectors, eq(businessSectors.id, screenhosts.businessSectorId));
@@ -185,6 +191,7 @@ const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
         ownerApproved: r.ownerApproved,
         installedScreen: r.installedScreen,
         eventEligible: r.eventEligible,
+        eventSwitchOn: isEventSwitchOn(r.broadcastCapacity),
       },
     ]),
   );
@@ -281,7 +288,9 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
                 ? 'no_sector'
                 : !v.eventEligible
                   ? 'not_event_eligible'
-                  : 'no_bloc_available',
+                  : !v.eventSwitchOn
+                    ? 'event_capacity_missing'
+                    : 'no_bloc_available',
       }));
     return {
       status: 'OK',

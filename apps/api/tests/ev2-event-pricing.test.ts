@@ -505,7 +505,13 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
 
 describe('D51 — the module boundary (the event engine imports NO campaign engine)', () => {
   it('event-pricing sources never import lib/dispatch or campaign libs (the E7 rail idiom)', () => {
-    for (const rel of ['../src/lib/event-pricing/pricing.ts', '../src/lib/event-pricing/spot.ts']) {
+    for (const rel of [
+      '../src/lib/event-pricing/pricing.ts',
+      '../src/lib/event-pricing/spot.ts',
+      // CAP-EVT1 — the event switch and the event-page coverage live in the event module too.
+      '../src/lib/event-pricing/event-switch.ts',
+      '../src/lib/event-pricing/coverage.ts',
+    ]) {
       const source = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
       expect(source, `${rel} crosses the D51 boundary`).not.toMatch(/from '.*dispatch/);
       expect(source, `${rel} crosses the D51 boundary`).not.toMatch(/from '.*campaign/i);

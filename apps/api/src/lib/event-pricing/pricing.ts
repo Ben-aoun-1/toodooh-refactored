@@ -17,6 +17,8 @@ import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 import { venueHasInstalledScreenSql } from '../installed-screen.js';
 import { isOpenAt, isOpenSlot } from '../opening-hours.js';
 
+import { eventSwitchOnSql } from './event-switch.js';
+
 // EV2 — the EVENT pricing engine (D51: its OWN module). The campaign engine is untouched and
 // UNIMPORTED — no lib/dispatch, no campaign-* libs (boundary-pinned like E7's rail). The event
 // economics deliberately have NO attention coefficient: facturable = brut.
@@ -34,7 +36,9 @@ import { isOpenAt, isOpenSlot } from '../opening-hours.js';
 // available bloc, an event-eligible sector, is_active and an APPROVED owner participates (ELIG-2,
 // operator ruling 2026-09-16 — the shared predicate lives in lib/approved-owner.ts, outside
 // dispatch/ so this boundary stays clean) — and only with an INSTALLED screen (MAP-TV1, operator
-// ruling 2026-09-21: a screens row ever paired or ever seen, lib/installed-screen.ts).
+// ruling 2026-09-21: a screens row ever paired or ever seen, lib/installed-screen.ts) and its
+// EVENT SWITCH on (CAP-EVT1, operator ruling 2026-09-22: « Capacité de diffusion » set,
+// ./event-switch.ts). All of it lives in ONE function, eventEligibleVenues below.
 
 export const AMAX_FALLBACK_PPH = 50;
 export const ANTENNE_SECONDS_PER_BLOC = 300;
@@ -234,28 +238,64 @@ export interface EventCmaxResult {
   venues: EventVenuePricing[];
 }
 
+export interface EventEligibleVenue {
+  id: string;
+  ownerId: string;
+  name: string;
+  sps: number;
+  /** Ancienneté tiebreak anchor (venue created_at, ms). */
+  createdAtMs: number;
+  /** The venue's AVAILABLE blocs for this match (D1) — never empty. */
+  blocs: BlocDiffusion[];
+}
+
 /**
- * The event ceiling: every active venue of an event-eligible sector, owned by an approved owner,
- * with an installed screen and ≥ 1 available bloc contributes blocs × A_max × 20. CPM_evt arrives
- * resolved from the caller (the config read stays out of this module — D51).
+ * THE EVENT POOL — ONE home for which venues can take this match (CAP-EVT1 made it one function;
+ * the ceiling and the bloc pool used to hold a copy each). A venue is in iff it is active, its
+ * owner is APPROVED (ELIG-2), it has an INSTALLED screen (MAP-TV1), its EVENT SWITCH is on
+ * (CAP-EVT1 — a « Capacité de diffusion » is set) and its sector is event-eligible, and it has
+ * ≥ 1 available bloc of the match (D1: opening hours ∩ E2 declarations ∩ OTHER events'
+ * reservations, full-bloc-only). NOT read: audience (A_max falls back to 50/h), zones (the event
+ * booster's axis only), category × class, coordinates.
+ *
+ * Read-only: A_max is NOT computed here (its ratchet writes), so a preview can call this safely.
+ * Consumers: computeEventCmax (and through it the event booster's ceiling and « Hosts éligibles »),
+ * assembleEventPool (event dispatch, the event refusal cascade, the event booster's perimeter) and
+ * the event page's coverage map (GET /api/campaigns/:id/coverage on a positioning draft).
+ * `excludeScreenhostIds` keeps refused/already-allocated venues out of a cascade re-fill.
  */
-export const computeEventCmax = async (
+export const eventEligibleVenues = async (
   event: EventRef,
-  cpmEvtTnd: number,
-): Promise<EventCmaxResult> => {
+  excludeScreenhostIds: ReadonlySet<string> = new Set(),
+): Promise<EventEligibleVenue[]> => {
   const candidates = await db
     .select({
       id: screenhosts.id,
+      ownerId: screenhosts.ownerId,
       name: screenhosts.name,
+      sps: screenhosts.sps,
+      createdAt: screenhosts.createdAt,
       openingHour: screenhosts.openingHour,
       closingHour: screenhosts.closingHour,
-      eventEligible: businessSectors.eventEligible,
     })
     .from(screenhosts)
     .innerJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-    .where(and(eq(screenhosts.isActive, true), ownerApprovedSql(), venueHasInstalledScreenSql()));
-  const eligibleSector = candidates.filter((c) => c.eventEligible);
-  const ids = eligibleSector.map((c) => c.id);
+    .where(
+      and(
+        eq(screenhosts.isActive, true),
+        ownerApprovedSql(),
+        venueHasInstalledScreenSql(),
+        eventSwitchOnSql(),
+        eq(businessSectors.eventEligible, true),
+      ),
+    );
+  // An ownerless venue can never decide a proposal (§11.1). The approved-owner clause above
+  // already implies an owner; the check stays as the type narrowing for ownerId.
+  const eligible = candidates.flatMap((c) =>
+    c.ownerId !== null && !excludeScreenhostIds.has(c.id) ? [{ ...c, ownerId: c.ownerId }] : [],
+  );
+  const ids = eligible.map((c) => c.id);
+  if (ids.length === 0) return [];
 
   // The window's Tunis dates bound both context reads (a two-day span at most in practice —
   // derived from the blocs themselves so a midnight-crossing window reads both dates).
@@ -264,33 +304,29 @@ export const computeEventCmax = async (
   for (const b of blocs) for (const c of blocCells(b.start, b.end)) windowDates.add(c.date);
   const dateList = [...windowDates];
 
-  const unavailabilityRows = ids.length
-    ? await db
-        .select({
-          screenhostId: screenhostUnavailability.screenhostId,
-          day: screenhostUnavailability.day,
-        })
-        .from(screenhostUnavailability)
-        .where(
-          and(
-            inArray(screenhostUnavailability.screenhostId, ids),
-            inArray(screenhostUnavailability.day, dateList),
-          ),
-        )
-    : [];
-  const reservationRows = ids.length
-    ? await db
-        .select({
-          screenhostId: hourReservations.screenhostId,
-          day: hourReservations.day,
-          hour: hourReservations.hour,
-          eventId: hourReservations.eventId,
-        })
-        .from(hourReservations)
-        .where(
-          and(inArray(hourReservations.screenhostId, ids), inArray(hourReservations.day, dateList)),
-        )
-    : [];
+  const unavailabilityRows = await db
+    .select({
+      screenhostId: screenhostUnavailability.screenhostId,
+      day: screenhostUnavailability.day,
+    })
+    .from(screenhostUnavailability)
+    .where(
+      and(
+        inArray(screenhostUnavailability.screenhostId, ids),
+        inArray(screenhostUnavailability.day, dateList),
+      ),
+    );
+  const reservationRows = await db
+    .select({
+      screenhostId: hourReservations.screenhostId,
+      day: hourReservations.day,
+      hour: hourReservations.hour,
+      eventId: hourReservations.eventId,
+    })
+    .from(hourReservations)
+    .where(
+      and(inArray(hourReservations.screenhostId, ids), inArray(hourReservations.day, dateList)),
+    );
 
   const unavailableBySh = new Map<string, Set<string>>();
   for (const u of unavailabilityRows) {
@@ -300,20 +336,45 @@ export const computeEventCmax = async (
   }
   const foreignReservedBySh = new Map<string, Set<string>>();
   for (const r of reservationRows) {
-    if (r.eventId === event.id) continue; // our own hold never blocks our own pricing
+    if (r.eventId === event.id) continue; // our own hold never blocks our own pricing/placement
     const set = foreignReservedBySh.get(r.screenhostId) ?? new Set<string>();
     set.add(`${r.day}:${r.hour}`);
     foreignReservedBySh.set(r.screenhostId, set);
   }
 
-  const venues: EventVenuePricing[] = [];
   const EMPTY: ReadonlySet<string> = new Set();
-  for (const venue of eligibleSector) {
-    const blocsDisponibles = blocAvailability(event, venue, {
+  const venues: EventEligibleVenue[] = [];
+  for (const venue of eligible) {
+    const available = availableBlocs(event, venue, {
       unavailableDates: unavailableBySh.get(venue.id) ?? EMPTY,
       foreignReservedCells: foreignReservedBySh.get(venue.id) ?? EMPTY,
     });
-    if (blocsDisponibles === 0) continue;
+    if (available.length === 0) continue;
+    venues.push({
+      id: venue.id,
+      ownerId: venue.ownerId,
+      name: venue.name,
+      sps: Number(venue.sps),
+      createdAtMs: venue.createdAt.getTime(),
+      blocs: available,
+    });
+  }
+  return venues;
+};
+
+/**
+ * The event ceiling: every venue of the event pool (eventEligibleVenues) contributes
+ * blocs × A_max × 20. CPM_evt arrives resolved from the caller (the config read stays out of this
+ * module — D51).
+ */
+export const computeEventCmax = async (
+  event: EventRef,
+  cpmEvtTnd: number,
+): Promise<EventCmaxResult> => {
+  const pool = await eventEligibleVenues(event);
+  const venues: EventVenuePricing[] = [];
+  for (const venue of pool) {
+    const blocsDisponibles = venue.blocs.length;
     const amaxPph = await computeAmax(venue.id);
     venues.push({
       screenhostId: venue.id,

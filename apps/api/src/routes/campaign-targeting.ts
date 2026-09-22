@@ -18,6 +18,7 @@ import {
 } from '../lib/dispatch/eligibility.js';
 import { loadUnavailableDays } from '../lib/dispatch/pool.js';
 import { availableWindowDays, buildWindowDays } from '../lib/dispatch/window.js';
+import { type CoverageVenue, eventCoverageVenues } from '../lib/event-pricing/coverage.js';
 import { venueHasInstalledScreenSql } from '../lib/installed-screen.js';
 import { venueHasAffluenceSql } from '../lib/venue-has-affluence.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
@@ -68,11 +69,29 @@ const readLines = async (campaignId: string) => {
   return rows;
 };
 
+// The coverage wire, ONE shape for the standard and the event map: `screenhosts` = the plottable
+// subset (coordinates coerced to numbers), `covered_count` = the whole set,
+// `without_coordinates` = the unplottable remainder.
+const coverageBody = (eligible: readonly CoverageVenue[]) => {
+  const plottable = eligible.filter((v) => v.latitude !== null && v.longitude !== null);
+  return {
+    screenhosts: plottable.map((v) => ({
+      id: v.id,
+      name: v.name,
+      latitude: Number(v.latitude),
+      longitude: Number(v.longitude),
+      sector_name: v.sectorName,
+    })),
+    covered_count: eligible.length,
+    without_coordinates: eligible.length - plottable.length,
+  };
+};
+
 export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   const advertiserGuard = { preHandler: [requireAuth, requireAdvertiser] };
 
-  // Owner-scoped campaign lookup (id + status + window); null when foreign/missing (→ caller
-  // sends 404).
+  // Owner-scoped campaign lookup (id + status + window + match); null when foreign/missing (→
+  // caller sends 404).
   const findOwnedCampaign = async (campaignId: string, advertiserId: string) => {
     const [row] = await db
       .select({
@@ -80,6 +99,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         status: campaigns.status,
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
+        eventId: campaigns.eventId,
       })
       .from(campaigns)
       .where(and(eq(campaigns.id, campaignId), eq(campaigns.advertiserId, advertiserId)))
@@ -137,6 +157,8 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   // CAP-EVT1 (operator ruling 2026-09-22) — `broadcast_capacity` is NO LONGER a gate here: it is the
   // venue's event-only switch, and the standard pool stopped reading it (MAP-2's « capacity set »
   // retired with it).
+  // CAP-EVT1 — an EVENT positioning draft (event_id set) answers with its match's EVENT POOL
+  // instead (lib/event-pricing/coverage.ts): the event rules, none of the above.
   // The response shape (screenhosts / covered_count / without_coordinates) is unchanged.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
@@ -147,6 +169,9 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
     const campaign = await findOwnedCampaign(parsedParams.data.id, userId);
     if (!campaign) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    }
+    if (campaign.eventId !== null) {
+      return reply.status(200).send(coverageBody(await eventCoverageVenues(campaign.eventId)));
     }
 
     const lines = await db
@@ -214,20 +239,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       );
     }
 
-    const plottable = eligible.filter((v) => v.latitude !== null && v.longitude !== null);
-    const matching = plottable.map((v) => ({
-      id: v.id,
-      name: v.name,
-      latitude: Number(v.latitude),
-      longitude: Number(v.longitude),
-      sector_name: v.sectorName,
-    }));
-
-    return reply.status(200).send({
-      screenhosts: matching,
-      covered_count: eligible.length,
-      without_coordinates: eligible.length - plottable.length,
-    });
+    return reply.status(200).send(coverageBody(eligible));
   });
 
   // PUT /api/campaigns/:id/targeting — replace-set the campaign's targeting lines (draft-only).
