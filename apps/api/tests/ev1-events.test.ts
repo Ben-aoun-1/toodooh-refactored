@@ -21,6 +21,7 @@ import { adminEventsRoutes } from '../src/routes/admin-events.js';
 import { eventsRoutes } from '../src/routes/events.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // EV1 — the event entity + catalogue + suggestions + the slots_evt seam (real Postgres):
 //  - admin CRUD per the §10 field set (type LOCKED sport; the removed legacy fields do not
@@ -428,6 +429,7 @@ describe('EV1 — events entity + catalogue + suggestions (real Postgres)', () =
         for (let h = 8; h < 18; h += 1)
           rows.push({ screenhostId: shId, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
       await db.insert(screenhostAffluence).values(bothHalves(rows));
+      await seedInstalledScreen(shId);
       return shId;
     };
 

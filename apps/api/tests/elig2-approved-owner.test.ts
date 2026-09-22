@@ -24,6 +24,7 @@ import { campaignTargetingRoutes } from '../src/routes/campaign-targeting.js';
 
 import { seedApprovedOwner } from './helpers/approved-owner.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // ELIG-2 (operator ruling 2026-09-16) — ONLY APPROVED OWNERS COUNT, everywhere a venue is put to
 // work: the standard pool (journaled 'owner_not_approved' before any other reason), the event
@@ -110,6 +111,7 @@ const seedVenue = async (opts: {
         rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
     await db.insert(screenhostAffluence).values(bothHalves(rows));
   }
+  await seedInstalledScreen(id);
   return id;
 };
 

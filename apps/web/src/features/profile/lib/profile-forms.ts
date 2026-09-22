@@ -21,8 +21,6 @@ export interface ProfileFormInitialValues {
   tax_number: string;
   business_sector_id: string;
   company_size: string;
-  number_of_screens: string;
-  number_of_rooms: string;
   street_address: string;
   city: string;
   postal_code: string;
@@ -44,8 +42,6 @@ export interface EntrepriseForm {
   tax_number: string;
   business_sector_id: string;
   company_size: string;
-  number_of_screens: string;
-  number_of_rooms: string;
 }
 export interface AdresseForm {
   street_address: string;
@@ -77,8 +73,6 @@ export const entrepriseFormFrom = (v: ProfileFormInitialValues): EntrepriseForm 
   tax_number: v.tax_number,
   business_sector_id: v.business_sector_id,
   company_size: v.company_size,
-  number_of_screens: v.number_of_screens,
-  number_of_rooms: v.number_of_rooms,
 });
 
 export const adresseFormFrom = (v: ProfileFormInitialValues): AdresseForm => ({

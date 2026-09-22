@@ -45,7 +45,6 @@ describe('label coverage — every emitted event_type has a French label', () =>
   it('labels every exclusion reason the pool can emit', () => {
     for (const reason of [
       'inactive',
-      'capacity_missing',
       'hours_missing',
       'targeting_mismatch',
       'zone_mismatch',
@@ -53,9 +52,14 @@ describe('label coverage — every emitted event_type has a French label', () =>
       'no_available_days',
       'no_residual_capacity',
       'owner_not_approved',
+      'no_installed_screen',
     ]) {
       expect(EXCLUSION_REASON_LABELS[reason]).toBeTruthy();
     }
+  });
+
+  it('CAP-EVT1 — keeps the retired capacity_missing label for the rows written before', () => {
+    expect(EXCLUSION_REASON_LABELS['capacity_missing']).toBe('capacité manquante');
   });
 });
 
@@ -80,6 +84,17 @@ describe('eventLabel', () => {
         payload: { reason: 'owner_not_approved' },
       }),
     ).toBe('Établissement exclu — propriétaire non validé');
+  });
+
+  it('MAP-TV1 — names a venue left out because it has no installed screen', () => {
+    expect(
+      eventLabel({
+        event_type: 'venue_excluded',
+        screenhost_id: 'x',
+        screenhost_name: 'Café',
+        payload: { reason: 'no_installed_screen' },
+      }),
+    ).toBe('Établissement exclu — aucun écran installé');
   });
 
   it('labels the plain events', () => {

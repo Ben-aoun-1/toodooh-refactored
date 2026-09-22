@@ -32,6 +32,7 @@ import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
 import UserDocumentReviewGroup from '@/features/admin/components/UserDocumentReviewGroup';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import { useUserDocuments, useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
+import { declaredScreensTotalLabel } from '@/features/admin/lib/venue-screens';
 import { adminUserService, type AdminUser } from '@/features/admin/services/admin-user.service';
 import { apiErrorMessage } from '@/features/auth/services/auth-errors';
 import { ApiError } from '@/lib/api-client';
@@ -667,8 +668,8 @@ export default function UserManagement() {
                             </div>
 
                             {/* Champs spécifiques au profil (scalaires, NON documentaires) — restent
-                                associés au type : zone + nombre d'écrans pour les propriétaires.
-                                CIN-HOST1 : plus de numéro CIN (jamais modélisé). */}
+                                associés au type : zone + écrans déclarés (SCR-DECL1 : la somme des
+                                lieux) pour les propriétaires. CIN-HOST1 : plus de numéro CIN. */}
                             {isOwnerProfile(selectedUser.profile_type) && selectedUser.zone && (
                               <div className="flex justify-between items-center pt-2">
                                 <span className="text-gray-600">Zone:</span>
@@ -677,16 +678,14 @@ export default function UserManagement() {
                                 </span>
                               </div>
                             )}
-                            {isOwnerProfile(selectedUser.profile_type) &&
-                              selectedUser.number_of_screens !== undefined &&
-                              selectedUser.number_of_screens !== null && (
-                                <div className="flex justify-between items-center pt-2">
-                                  <span className="text-gray-600">Nombre d'écrans:</span>
-                                  <span className="font-medium text-gray-900">
-                                    {selectedUser.number_of_screens}
-                                  </span>
-                                </div>
-                              )}
+                            {isOwnerProfile(selectedUser.profile_type) && (
+                              <div className="flex justify-between items-center pt-2">
+                                <span className="text-gray-600">Écrans déclarés:</span>
+                                <span className="font-medium text-gray-900">
+                                  {declaredScreensTotalLabel(selectedUser.screenhosts)}
+                                </span>
+                              </div>
+                            )}
 
                             {/* Documents (RNE / complémentaire / bancaire) — pilotés PAR LES
                                 DONNÉES renvoyées par l'endpoint groupé (userDocuments.<catégorie>),

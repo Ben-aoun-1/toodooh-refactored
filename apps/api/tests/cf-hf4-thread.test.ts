@@ -28,6 +28,7 @@ import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // CF-HF4 — the thread batch:
 //  - ENGAGEMENT is window-overlap-aware + terminal-releasing (the r_i=1 anti-concentration
@@ -106,6 +107,7 @@ const seedVenue = async (
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: shId, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(shId);
   return { shId, ownerId };
 };
 

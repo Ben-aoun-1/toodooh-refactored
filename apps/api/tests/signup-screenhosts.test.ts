@@ -4,7 +4,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authPlugin } from '../src/auth/plugin.js';
 import { db, sql } from '../src/db/client.js';
-import { businessSectors, governorates, screenhosts, users } from '../src/db/schema.js';
+import { businessSectors, governorates, screenhosts, screens, users } from '../src/db/schema.js';
+import { createMissingScreensForOwner } from '../src/lib/screens.js';
 import { decryptWifiPassword } from '../src/lib/wifi-crypto.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -25,6 +26,11 @@ vi.mock('nodemailer', () => ({
 
 const buildApp = () => Fastify({ logger: false });
 
+// SCR-DECL1: an individual_owner declares its exact screens + rooms (both required); a fleet
+// entry carries its own pair (FLEET_COUNTS). The base carries a valid pair so each test below
+// isolates the rule it is about.
+const DECLARED = { screen_count: 3, room_count: 2 };
+const FLEET_COUNTS = { screen_count: 1, room_count: 1 };
 const ownerBaseNoHours = {
   email: 'host@example.com',
   password: 'a-strong-passw0rd',
@@ -32,6 +38,7 @@ const ownerBaseNoHours = {
   business_name: 'Host Biz',
   contact_phone: '+21612345678',
   terms_accepted: true as const,
+  ...DECLARED,
 };
 // HOURS-M1: hours are mandatory for an individual_owner (fleet entries carry their own pair).
 const HOURS = { opening_hour: 8, closing_hour: 22 };
@@ -172,12 +179,13 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
             longitude: 10.2316,
             wifi_ssid: 'CAFE-LAC',
             wifi_password: 'lac-wifi-pw',
-            room_count: 2, // accepted on the wire, stripped (no column)
+            room_count: 2, // SCR-DECL1: stored since migration 0077 (was stripped)
           },
           {
             name: 'Resto Centre',
             ...HOURS,
             screen_count: 1,
+            room_count: 4,
             city: 'Sousse',
             // no coordinates / WiFi → "add later" → NULLs
           },
@@ -192,6 +200,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
 
     const cafe = rows.find((r) => r.name === 'Café du Lac');
     expect(cafe?.screenCount).toBe(3);
+    expect(cafe?.roomCount).toBe(2);
     expect(cafe?.city).toBe('Tunis');
     expect(cafe?.governorateId).toBe(governorateId);
     expect(cafe?.postalCode).toBe('1053');
@@ -204,6 +213,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
 
     const resto = rows.find((r) => r.name === 'Resto Centre');
     expect(resto?.screenCount).toBe(1);
+    expect(resto?.roomCount).toBe(4);
     expect(resto?.city).toBe('Sousse');
     expect(resto?.latitude).toBeNull();
     expect(resto?.wifiSsid).toBeNull();
@@ -314,8 +324,8 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
         ...ownerBase,
         profile_type: 'fleet_owner',
         fleet_establishments: [
-          { name: 'Café du Lac', opening_hour: 6, closing_hour: 23 },
-          { name: 'Resto Centre', opening_hour: 10, closing_hour: 22 },
+          { name: 'Café du Lac', ...FLEET_COUNTS, opening_hour: 6, closing_hour: 23 },
+          { name: 'Resto Centre', ...FLEET_COUNTS, opening_hour: 10, closing_hour: 22 },
         ],
       }),
     });
@@ -339,8 +349,8 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
         email: 'host2@example.com',
         profile_type: 'fleet_owner',
         fleet_establishments: [
-          { name: 'Café du Lac', opening_hour: 6, closing_hour: 23 },
-          { name: 'Resto Centre' },
+          { name: 'Café du Lac', ...FLEET_COUNTS, opening_hour: 6, closing_hour: 23 },
+          { name: 'Resto Centre', ...FLEET_COUNTS },
         ],
       }),
     });
@@ -355,7 +365,9 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
       ...signupMultipart({
         ...ownerBase,
         profile_type: 'fleet_owner',
-        fleet_establishments: [{ name: 'Café du Lac', opening_hour: 6, closing_hour: 6 }],
+        fleet_establishments: [
+          { name: 'Café du Lac', ...FLEET_COUNTS, opening_hour: 6, closing_hour: 6 },
+        ],
       }),
     });
     expect(res.statusCode).toBe(400);
@@ -382,7 +394,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
       ...signupMultipart({
         ...ownerBase,
         profile_type: 'fleet_owner',
-        fleet_establishments: [{ name: 'Sneaky Location', ...HOURS }],
+        fleet_establishments: [{ name: 'Sneaky Location', ...FLEET_COUNTS, ...HOURS }],
       }),
     });
     expect(res2.statusCode).toBe(201); // generic, anti-enumeration
@@ -390,5 +402,106 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     const all = await db.select().from(screenhosts);
     expect(all).toHaveLength(1);
     expect(all[0]?.ownerId).toBe(ownerId);
+  });
+
+  // ── SCR-DECL1 — the declared screens and rooms reach the venue (they were dropped: the
+  // individual owner's never left the web, and no column existed for the rooms). ────────────
+  it('SCR-DECL1: an individual_owner declaring 3 screens / 2 rooms → the venue stores 3 / 2, and approval creates « Écran 1..3 »', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner' }),
+    });
+    expect(res.statusCode).toBe(201);
+    const ownerId = await userIdByEmail(ownerBase.email);
+    const [venue] = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
+    expect(venue?.screenCount).toBe(3);
+    expect(venue?.roomCount).toBe(2);
+
+    // The approval's row generation reads the declaration (it used to read 0 → no rows).
+    await createMissingScreensForOwner(ownerId);
+    const rows = await db
+      .select({ name: screens.name })
+      .from(screens)
+      .where(eq(screens.screenhostId, venue?.id ?? ''));
+    expect(rows.map((r) => r.name).sort()).toEqual(['Écran 1', 'Écran 2', 'Écran 3']);
+  });
+
+  it('SCR-DECL1: an individual_owner missing either count → 400 naming it, no user, no row', async () => {
+    for (const field of ['screen_count', 'room_count'] as const) {
+      const body: Record<string, unknown> = { ...ownerBase, profile_type: 'individual_owner' };
+      delete body[field];
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/signup',
+        ...signupMultipart(body),
+      });
+      expect(res.statusCode).toBe(400);
+      const fields = res.json<{ fields: { field: string }[] }>().fields.map((f) => f.field);
+      expect(fields).toContain(field);
+    }
+    expect(await userIdByEmail(ownerBase.email)).toBe('');
+    expect(await db.select().from(screenhosts)).toHaveLength(0);
+  });
+
+  it('SCR-DECL1: the counts are exact integers from 1 to 99 (D1) — the old buckets are refused', async () => {
+    const bad: Record<string, unknown>[] = [
+      { screen_count: 0 },
+      { screen_count: 100 },
+      { screen_count: 2.5 },
+      { screen_count: '6-10' },
+      { room_count: 0 },
+      { room_count: 100 },
+    ];
+    for (const over of bad) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/signup',
+        ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner', ...over }),
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    const edges = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBase,
+        profile_type: 'individual_owner',
+        screen_count: 99,
+        room_count: 1,
+      }),
+    });
+    expect(edges.statusCode).toBe(201);
+    const [venue] = await db.select().from(screenhosts);
+    expect([venue?.screenCount, venue?.roomCount]).toEqual([99, 1]);
+  });
+
+  it('SCR-DECL1: a fleet entry missing its screen or room count → 400, nothing persisted', async () => {
+    for (const entry of [
+      { name: 'Café du Lac', ...HOURS, room_count: 1 },
+      { name: 'Café du Lac', ...HOURS, screen_count: 1 },
+    ]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/signup',
+        ...signupMultipart({
+          ...ownerBase,
+          profile_type: 'fleet_owner',
+          fleet_establishments: [entry],
+        }),
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(await db.select().from(screenhosts)).toHaveLength(0);
+    expect(await userIdByEmail(ownerBase.email)).toBe('');
+  });
+
+  it('SCR-DECL1: an advertiser carries no counts and needs none', async () => {
+    const advertiser: Record<string, unknown> = { ...ownerBaseNoHours, profile_type: 'advertiser' };
+    delete advertiser['screen_count'];
+    delete advertiser['room_count'];
+    const res = await app.inject({ method: 'POST', url: '/api/signup', payload: advertiser });
+    expect(res.statusCode).toBe(201);
+    expect(await db.select().from(screenhosts)).toHaveLength(0);
   });
 });

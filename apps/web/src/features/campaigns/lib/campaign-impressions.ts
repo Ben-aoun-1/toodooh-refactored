@@ -1,70 +1,30 @@
-import { estimateImpressions } from '@/features/campaigns/lib/impressions';
-
 // CF-HF3 (Mejri item 3) — the ONE impressions display rule for every ADVERTISER surface (Mes
 // campagnes cards/rows, the dashboard, Consulter):
-//   « Impressions prévues » = the FROZEN plan's placed facturable (planned_impressions, a pure
-//                             read of the plan) when a plan exists, else the budget-derived
-//                             estimate ⌊budget×1000/cpm⌋ — never a bare 0 on a funded campaign.
+//   « Impressions prévues » = the FROZEN plan's PHYSICAL impressions (planned_impressions, a pure
+//                             read of the plan) when a plan exists; before that — IMP-EST1
+//                             (ruled 2026-09-22) — the server's dry-run of the real dispatch over
+//                             the live semaine type (components/CampaignPrevues → GET
+//                             /:id/impressions-estimate), never ⌊budget×1000/cpm⌋ and never a
+//                             bare 0 on a funded campaign.
 // CF-HF4 (Kais) — the advertiser side is PRÉVUES-ONLY: « Impressions validées » left every cast
 // surface (the delivered/reconciled numbers remain a HOST-side read — the owner surfaces are
-// untouched). The CPM picks by campaign type (event campaigns price at the event CPM — the
-// estimate must not overstate 2×).
-// CPM-1 (user rule, 2026-09-17) — the estimate prices at the ROW's own rates (standard_cpm_tnd /
-// event_cpm_tnd on the campaign wire). CPM-3: a campaign carries its screencaster's CPM — an admin
-// change realigns a draft not yet frozen; every other campaign keeps its copy. The live
-// pricing-config is what a campaign created NOW would capture (the caller's own CPM) — only the
-// fallback for a row that does not carry its rates (not created yet, not loaded yet).
+// untouched).
+// CPM-1 — the dry-run prices at the campaign's OWN CPM (CPM-3: its screencaster's) server-side;
+// no CPM is read here any more.
+// IMP-UNIT1 (ruled B, 2026-09-22) — « real audience, not billable »: BOTH sides of dispatch are
+// PHYSICAL impressions. The post-dispatch figure was the plan's facturable (Σ ii_potentiel = the
+// physical × T), so the same label used to drop by ~T the moment the campaign was dispatched.
 
 export const PREVUES_LABEL = 'Impressions prévues';
 
-export interface PricingCpm {
-  standard_cpm_tnd?: number | null;
-  event_cpm_tnd?: number | null;
-}
-
-/** A campaign row as the display rule reads it — its own CPMs ride along (CPM-1). */
-export interface ImpressionsSource extends PricingCpm {
-  status: string;
-  campaign_type?: string;
+/** A campaign row as the display rule reads it. */
+export interface PrevuesSource {
   planned_impressions?: number | null;
-  requested_budget?: number | null;
 }
 
-export interface ImpressionsDisplay {
-  /** null = not derivable yet (no plan AND no usable budget/CPM) — renders '—'. */
-  prevues: number | null;
-}
-
-export const cpmForCampaignType = (
-  campaignType: string | undefined,
-  pricing: PricingCpm | undefined,
-): number | null =>
-  (campaignType === 'event' ? pricing?.event_cpm_tnd : pricing?.standard_cpm_tnd) ?? null;
-
-/**
- * CPM-1 — the CPM a campaign prices at: its OWN rate for its type (CPM-3: its screencaster's);
- * the live pricing-config only when the row does not carry one (a campaign not created or not
- * loaded yet). null when neither is known — the estimate then renders « — ».
- */
-export const campaignCpm = (
-  campaignType: string | undefined,
-  row: PricingCpm | undefined,
-  pricing: PricingCpm | undefined,
-): number | null =>
-  cpmForCampaignType(campaignType, row) ?? cpmForCampaignType(campaignType, pricing);
-
-export const impressionsDisplay = (
-  row: ImpressionsSource,
-  pricing: PricingCpm | undefined,
-): ImpressionsDisplay => {
-  const planned = row.planned_impressions ?? null;
-  const prevues =
-    planned ??
-    (row.requested_budget == null
-      ? null
-      : estimateImpressions(row.requested_budget, campaignCpm(row.campaign_type, row, pricing)));
-  return { prevues };
-};
+/** The frozen plan's figure, or null: no plan yet — the surface shows the dry-run estimate. */
+export const plannedPrevues = (row: PrevuesSource): number | null =>
+  row.planned_impressions ?? null;
 
 const intFr = new Intl.NumberFormat('fr-FR');
 

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   displayImpressionsInFlight,
   displayImpressionsSettled,
+  predictedImpressions,
+  predictedImpressionsOf,
 } from '../src/lib/impressions-display.js';
 import { slotKey, valueAllocation } from '../src/lib/reconcile/valuation.js';
 
@@ -123,5 +125,40 @@ describe('displayImpressionsInFlight (R2 — predicted minus missed-so-far)', ()
 
   it('empty input → empty output', () => {
     expect(displayImpressionsInFlight([], new Map(), NOW)).toEqual([]);
+  });
+});
+
+// IMP-EST1 — « prédites » has ONE computation home: the dry-run estimate
+// (lib/impressions-estimate.ts) sums a SIMULATED plan with the very function the in-flight
+// display sums a frozen one with, so the estimate and the owner-facing figure cannot drift apart.
+describe('predictedImpressions — THE one « prédites » sum', () => {
+  const allocations = [
+    {
+      screenhostId: 'sh-a',
+      creneaux: [
+        { date: '2026-07-01', hour: 10, impressions: 300 },
+        { date: '2026-07-02', hour: 11, impressions: 250 },
+      ],
+    },
+    {
+      screenhostId: 'sh-b',
+      creneaux: [{ date: '2026-07-02', hour: 12, impressions: 450 }],
+    },
+  ];
+
+  it('per allocation, it is exactly the predictedImp the in-flight display reports', () => {
+    const rows = displayImpressionsInFlight(allocations, new Map(), NOW);
+    for (const a of allocations) {
+      const row = rows.find((r) => r.screenhostId === a.screenhostId);
+      expect(predictedImpressionsOf(a)).toBe(row?.predictedImp);
+    }
+  });
+
+  it('over a plan, it is Σ of those same per-venue figures', () => {
+    const rows = displayImpressionsInFlight(allocations, new Map(), NOW);
+    const sumOfHome = rows.reduce((sum, r) => sum + r.predictedImp, 0);
+    expect(predictedImpressions(allocations)).toBe(sumOfHome);
+    expect(predictedImpressions(allocations)).toBe(1000);
+    expect(predictedImpressions([])).toBe(0);
   });
 });

@@ -32,11 +32,13 @@ import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { eventBoostRoutes } from '../src/routes/event-boost.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
+import { sweepZones } from './helpers/zones.js';
 
 // EV6 — the event booster (ZONES ONLY) + the venue reversement lines on E7's rail (source='event',
 // DELIVERED value only). The campaign booster and the campaign reversement path are byte-untouched
 // (zero edits in their suites). No business_sectors rows added (the fixture footgun); zones ARE
-// inserted here because the boost's axis is zones and the seed set is per-test.
+// inserted here because the boost's axis is zones and the seed set is per-test (swept in afterEach).
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 const mockSession = (userId: string, role = 'advertiser'): void => {
@@ -73,15 +75,19 @@ const ownerSectorId = async (): Promise<string> => {
 
 /**
  * A fresh zone (the boost's axis) — EV6 seeds its own rather than reusing the V1 Grand Tunis row.
- * The name carries a random token: zones.name is UNIQUE and the table is NOT swept between runs
- * (the Zone In/Out suites do the same). No suite pins a zone COUNT, so adding rows is safe.
+ * zones is a GLOBAL table that resetAuthTables never empties, and advertiser-performances pins the
+ * EXACT active-zone catalogue (« every zone » = Grand Tunis only), so every zone seeded here is
+ * tracked and swept in afterEach (TEST-ISO1). The name keeps its random token: zones.name is
+ * UNIQUE and a crashed run can still leave a row behind.
  */
+const seededZoneIds: string[] = [];
 const seedZone = async (): Promise<string> => {
   seq += 1;
   const [z] = await db
     .insert(zones)
     .values({ name: `EV6 Zone ${seq}-${Math.random().toString(16).slice(2, 10)}`, active: true })
     .returning();
+  if (z) seededZoneIds.push(z.id);
   return z?.id ?? '';
 };
 
@@ -111,6 +117,7 @@ const seedVenue = async (
   await db
     .insert(screenhostAffluence)
     .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 19, estimatedImpressions: 100 }));
+  await seedInstalledScreen(id);
   return { id, ownerId };
 };
 
@@ -243,6 +250,7 @@ describe('EV6 — the event booster + event reversements (real Postgres)', () =>
   });
 
   afterEach(async () => {
+    await sweepZones(seededZoneIds.splice(0));
     await app.close();
     vi.restoreAllMocks();
   });

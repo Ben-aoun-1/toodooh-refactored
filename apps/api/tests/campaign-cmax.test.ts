@@ -23,6 +23,7 @@ import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // E5 (VF US-1.3/1.4) — the C_max ceiling. Real Postgres; session mocked. The pool math is pinned
 // against a HAND-COMPUTED fixture (defaults: t10s=0.6, F=300s, CPM standard=15):
@@ -141,6 +142,7 @@ const seedVenue = async (
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return id;
 };
 

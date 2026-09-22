@@ -547,6 +547,13 @@
       "when": 1789880000000,
       "tag": "0077_affluence_estimate",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1789890000000,
+      "tag": "0078_screen_declaration",
+      "breakpoints": true
     }
   ]
 }

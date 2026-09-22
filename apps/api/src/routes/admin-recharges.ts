@@ -3,9 +3,14 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type Recharge, notifications, recharges } from '../db/schema.js';
+import { type Recharge, notifications, recharges, users } from '../db/schema.js';
 import { advertiserRechargeNotification } from '../lib/recharge-notifications.js';
-import { adminRechargeView, isAdminDecidable } from '../lib/recharges.js';
+import {
+  adminRechargeView,
+  isAdminDecidable,
+  rechargeAdvertiser,
+  rechargeAdvertiserById,
+} from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
@@ -67,12 +72,32 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       );
     }
     const { status } = parsedQuery.data;
+    // RECH-ADM1 — the owner's name rides the list read (ADM-FIX1's ONE label, any account
+    // status). INNER on purpose and cannot drop a row: advertiser_id is a NOT NULL FK to users.
     const rows = await db
-      .select()
+      .select({
+        recharge: recharges,
+        advertiserBusinessName: users.businessName,
+        advertiserContactName: users.contactName,
+        advertiserEmail: users.email,
+      })
       .from(recharges)
+      .innerJoin(users, eq(recharges.advertiserId, users.id))
       .where(status ? eq(recharges.status, status) : undefined)
       .orderBy(desc(recharges.createdAt));
-    return reply.status(200).send(rows.map(adminRechargeView));
+    return reply.status(200).send(
+      rows.map((r) =>
+        adminRechargeView(
+          r.recharge,
+          rechargeAdvertiser({
+            id: r.recharge.advertiserId,
+            businessName: r.advertiserBusinessName,
+            contactName: r.advertiserContactName,
+            email: r.advertiserEmail,
+          }),
+        ),
+      ),
+    );
   });
 
   // POST /api/admin/recharges/:id/confirm — decidable → confirmed; credits the balance (the SUM
@@ -96,8 +121,10 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
 
     // Guard the transition in the WHERE so two concurrent confirms can't both win (atomic, no
     // double-credit). A lost race returns 0 rows → re-read + 409. The notification rides the same
-    // transaction — a credited status and its French notice land (or fail) together.
-    const updated = await db.transaction(async (tx) => {
+    // transaction — a credited status and its French notice land (or fail) together. So does the
+    // response's label read (RECH-ADM1): read after the commit, its failure 500'd a recharge that
+    // was already credited; inside, a failure rolls the whole decision back and a retry is safe.
+    const decided = await db.transaction(async (tx) => {
       const [flipped] = await tx
         .update(recharges)
         .set({ status: 'confirmed', confirmedBy: adminId, confirmedAt: new Date() })
@@ -112,13 +139,13 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
             flipped,
           ),
         );
-      return flipped;
+      return adminRechargeView(flipped, await rechargeAdvertiserById(flipped.advertiserId, tx));
     });
-    if (!updated) {
+    if (!decided) {
       const [current] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
       return sendNotPending(reply, request, current ?? existing);
     }
-    return reply.status(200).send(adminRechargeView(updated));
+    return reply.status(200).send(decided);
   });
 
   // POST /api/admin/recharges/:id/reject {reason} — decidable → rejected («Annulée» for method
@@ -150,7 +177,9 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such recharge.' });
     if (!isAdminDecidable(existing)) return sendNotPending(reply, request, existing);
 
-    const updated = await db.transaction(async (tx) => {
+    // Same shape as confirm: the flip, its notice and the response's label read are ONE
+    // transaction, so a failed read can never 500 an already-cancelled recharge (RECH-ADM1).
+    const decided = await db.transaction(async (tx) => {
       const [flipped] = await tx
         .update(recharges)
         .set({ status: 'rejected', rejectReason: parsedBody.data.reason, cancelledAt: new Date() })
@@ -158,13 +187,13 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
         .returning();
       if (!flipped) return undefined;
       await tx.insert(notifications).values(advertiserRechargeNotification('cancelled', flipped));
-      return flipped;
+      return adminRechargeView(flipped, await rechargeAdvertiserById(flipped.advertiserId, tx));
     });
-    if (!updated) {
+    if (!decided) {
       const [current] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
       return sendNotPending(reply, request, current ?? existing);
     }
-    return reply.status(200).send(adminRechargeView(updated));
+    return reply.status(200).send(decided);
   });
 
   // GET /api/admin/recharges/:id/document-url — short-TTL presigned view of a recharge's

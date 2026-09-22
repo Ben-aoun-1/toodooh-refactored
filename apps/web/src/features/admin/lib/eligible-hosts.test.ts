@@ -12,7 +12,6 @@ describe('ELIG-1 — eligible-hosts labels', () => {
     // The api's ExclusionReason union, verbatim — keep in step with lib/campaign-eligible-hosts.ts.
     const apiCodes = [
       'excluded',
-      'capacity_missing',
       'hours_missing',
       'targeting_mismatch',
       'zone_mismatch',
@@ -20,9 +19,11 @@ describe('ELIG-1 — eligible-hosts labels', () => {
       'no_available_days',
       'no_residual_capacity',
       'not_event_eligible',
+      'event_capacity_missing',
       'no_bloc_available',
       'no_sector',
       'owner_not_approved',
+      'no_installed_screen',
     ];
     for (const code of apiCodes) {
       expect(EXCLUSION_REASON_LABEL).toHaveProperty(code);
@@ -43,6 +44,19 @@ describe('ELIG-1 — eligible-hosts labels', () => {
       label: 'Propriétaire non validé',
       count: 2,
     });
+  });
+
+  it('MAP-TV1 — a venue with no installed screen says so in French', () => {
+    expect(EXCLUSION_REASON_LABEL.no_installed_screen).toBe('Aucun écran installé');
+    expect(exclusionLabel('no_installed_screen')).toBe('Aucun écran installé');
+  });
+
+  it('CAP-EVT1 — an event venue whose capacity is empty says it is not event-eligible', () => {
+    expect(exclusionLabel('event_capacity_missing')).toBe(
+      'Non éligible aux événements (capacité de diffusion vide)',
+    );
+    // The retired standard code keeps a French label (an api from before CAP-EVT1 still sends it).
+    expect(exclusionLabel('capacity_missing')).toBe('Capacité de diffusion non renseignée');
   });
 
   it('an unknown code is shown as is rather than hidden', () => {

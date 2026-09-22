@@ -9,10 +9,14 @@ import {
   BANK_COORDS_PENDING_LINE,
   JUSTIFICATIF_REQUIRED_ERROR,
   MIN_RECHARGE_TND,
+  RECHARGE_TYPES,
+  RECHARGE_TYPE_LABELS,
+  adminStatusFilterLabels,
   bankCoordsProvided,
   isAdminDecidable,
   methodLabel,
   parseRechargeAmount,
+  rechargeTypeOf,
   statusChipClass,
   statusLabel,
 } from './recharge-methods';
@@ -67,8 +71,67 @@ describe('the per-method status label matrix (chips)', () => {
   });
 });
 
-describe('methodLabel (the admin Type column)', () => {
-  it('labels the two methods and renders legacy as « — »', () => {
+// RECH-ADM1 — the recharge TYPE is derived from the method (the reference prefix: VIR-/BC-/FCT-),
+// and the admin status filter offers only the chosen type's labels (T1 A · T2 A). Read through
+// statusLabel, never a second copy of the words — MyRecharges shares every label below.
+describe('the recharge type (VIR / BC / FCT) and its status labels', () => {
+  it('derives the type from the method — NULL is the legacy FCT format', () => {
+    expect(rechargeTypeOf('virement')).toBe('VIR');
+    expect(rechargeTypeOf('bon_de_commande')).toBe('BC');
+    expect(rechargeTypeOf(null)).toBe('FCT');
+  });
+
+  it('labels the three types; FCT is the OLD FORMAT, not a third payment method (T1)', () => {
+    expect(RECHARGE_TYPES).toEqual(['VIR', 'BC', 'FCT']);
+    expect(RECHARGE_TYPE_LABELS).toEqual({
+      VIR: 'Virement (VIR)',
+      BC: 'Bon de commande (BC)',
+      FCT: 'Ancien format (FCT)',
+    });
+  });
+
+  it('VIR offers only its three labels (spec §3 US-FCT-8)', () => {
+    expect(adminStatusFilterLabels('VIR')).toEqual([
+      'En attente de réception',
+      'Créditée',
+      'Annulée',
+    ]);
+  });
+
+  it('BC offers only its four labels', () => {
+    expect(adminStatusFilterLabels('BC')).toEqual([
+      'Bon émis',
+      'Bon retourné signé',
+      'Fonds reçus',
+      'Annulée',
+    ]);
+  });
+
+  it('FCT (legacy) offers only the as-found labels', () => {
+    expect(adminStatusFilterLabels('FCT')).toEqual(['En attente', 'Validée', 'Annulée']);
+  });
+
+  it('« Tous les types » offers every label — the unchanged flat list', () => {
+    expect(adminStatusFilterLabels('all')).toEqual(ADMIN_STATUS_FILTER_LABELS);
+  });
+
+  it('the three per-type lists cover the flat list exactly — no label lost, none invented', () => {
+    const union = new Set(RECHARGE_TYPES.flatMap((t) => adminStatusFilterLabels(t)));
+    expect([...union].sort()).toEqual([...ADMIN_STATUS_FILTER_LABELS].sort());
+  });
+
+  it('every offered label is a chip label of a row of that type (the filter can match it)', () => {
+    const method = { VIR: 'virement', BC: 'bon_de_commande', FCT: null } as const;
+    const statuses = ['pending', 'confirmed', 'rejected', 'bon_issued', 'bon_returned'] as const;
+    for (const type of RECHARGE_TYPES) {
+      const chips = new Set(statuses.map((s) => statusLabel(method[type], s)));
+      for (const label of adminStatusFilterLabels(type)) expect(chips.has(label)).toBe(true);
+    }
+  });
+});
+
+describe('methodLabel (the screencaster Type column — MyRecharges)', () => {
+  it('labels the two methods and renders legacy as « — » (the admin names it via adminRechargeTypeLabel)', () => {
     expect(methodLabel('virement')).toBe('Virement bancaire');
     expect(methodLabel('bon_de_commande')).toBe('Bon de commande');
     expect(methodLabel(null)).toBe('—');

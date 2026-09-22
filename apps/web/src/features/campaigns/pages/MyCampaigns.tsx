@@ -30,10 +30,10 @@ import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import BoostCampaignModal from '@/features/campaigns/components/BoostCampaignModal';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
+import CampaignPrevues from '@/features/campaigns/components/CampaignPrevues';
 import { useDeleteCampaign, useReplayCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
-import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
 import { canBoostCampaign } from '@/features/campaigns/lib/boost-rules';
 import {
   canDeleteDraftCampaign,
@@ -46,10 +46,6 @@ import {
   categoryFilterOptions,
   statusFilterFromSearch,
 } from '@/features/campaigns/lib/campaign-filters';
-import {
-  formatImpressions,
-  impressionsDisplay,
-} from '@/features/campaigns/lib/campaign-impressions';
 import {
   REPLAY_ERROR_TOAST,
   REPLAY_SUCCESS_TOAST,
@@ -180,10 +176,9 @@ export default function MyCampaigns() {
     setTimeout(() => setSelectedCampaign(null), 300);
   };
 
-  // CF-HF3 (Mejri items 2–3) — the Consulter drawer's live data: the pricing CPM feeds the
-  // budget-derived « prévues » fallback; the linked creative previews via the wizard's presign
-  // (image AND video — the dead undefined-video legacy prop is retired for this variant).
-  const pricing = usePricingConfig();
+  // CF-HF3 (Mejri items 2–3) — the Consulter drawer's live data: the linked creative previews via
+  // the wizard's presign (image AND video — the dead undefined-video legacy prop is retired for
+  // this variant). IMP-EST1 — « prévues » is CampaignPrevues (plan, else the dry-run estimate).
   const { data: myCreatives = [] } = useMyCreatives(user?.id);
   const selectedCreativeId: string | null = selectedCampaign?.creative_id ?? null;
   const previewUrl = useCreativePreviewUrl(selectedCreativeId);
@@ -695,24 +690,19 @@ export default function MyCampaigns() {
                       {htTtcOrDash(campaign.budget)}
                     </p>
                   </div>
-                  {/* CF-HF3 (Mejri item 3) — the display rule: prévues (plan facturable, else the
-                      budget estimate), + validées once Active/Passée. Never a fake 0. */}
-                  {(() => {
-                    const imp = impressionsDisplay(campaign, pricing.data);
-                    return (
-                      <div className="flex items-start gap-1.5 justify-end">
-                        <div className="flex flex-col items-end">
-                          <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
-                            <span>PRÉVUES</span>
-                          </div>
-                          <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
-                            {formatImpressions(imp.prevues)}
-                          </p>
-                        </div>
+                  {/* CF-HF3 (Mejri item 3) — the display rule: prévues (plan, else IMP-EST1's
+                      dry-run estimate). Never a fake 0. */}
+                  <div className="flex items-start gap-1.5 justify-end">
+                    <div className="flex flex-col items-end">
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
+                        <span>PRÉVUES</span>
                       </div>
-                    );
-                  })()}
+                      <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
+                        <CampaignPrevues campaign={campaign} />
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex gap-2 pt-4 mt-4 border-t border-gray-200 -mx-5 px-5">
                   <button
@@ -845,8 +835,6 @@ export default function MyCampaigns() {
                       : '—';
                     // CF-U1 (Mejri item 6) — « — » for a null budget; HT (TTC) otherwise.
                     const budgetStr = htTtcOrDash(campaign.budget);
-                    // CF-HF3 (Mejri item 3) — the display rule, never a fake 0.
-                    const imp = impressionsDisplay(campaign, pricing.data);
                     const isMenuOpen = openActionRowId === campaign.id;
                     return (
                       <tr key={campaign.id} className="hover:bg-gray-50/50 transition-colors">
@@ -898,7 +886,10 @@ export default function MyCampaigns() {
                           {budgetStr}
                         </td>
                         <td className="px-5 py-3.5 text-sm text-gray-900 tabular-nums">
-                          <div>Prévues : {formatImpressions(imp.prevues)}</div>
+                          {/* CF-HF3 — the display rule (IMP-EST1), never a fake 0. */}
+                          <div>
+                            Prévues : <CampaignPrevues campaign={campaign} />
+                          </div>
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="relative flex justify-end">
@@ -1069,7 +1060,7 @@ export default function MyCampaigns() {
                     }
                   : null
               }
-              impressions={impressionsDisplay(selectedCampaign, pricing.data)}
+              prevues={<CampaignPrevues campaign={selectedCampaign} />}
               eventPlacementSlot={
                 selectedCampaign?.event_id ? (
                   <EventPlacementSummary campaignId={selectedCampaign.id} />

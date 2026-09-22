@@ -3,11 +3,7 @@ import { type ReactNode } from 'react';
 
 import Drawer from '@/components/Drawer';
 import { rejectReasonToShow } from '@/features/campaigns/lib/campaign-actions';
-import {
-  PREVUES_LABEL,
-  formatImpressions,
-  type ImpressionsDisplay,
-} from '@/features/campaigns/lib/campaign-impressions';
+import { PREVUES_LABEL } from '@/features/campaigns/lib/campaign-impressions';
 import CreativePreviewTile from '@/features/campaigns/pages/new-campaign/CreativePreviewTile';
 import type { CreativeType } from '@/features/campaigns/services/creatives.api';
 
@@ -47,8 +43,8 @@ interface CampaignDrawerProps {
   video?: { url?: string | null } | null;
   /** CF-HF3 (advertiser) — when present, the Spot section renders the type-aware tile. */
   creative?: CampaignDrawerCreative | null;
-  /** CF-HF3 (advertiser) — the per-status impressions rule, computed by the page. */
-  impressions?: ImpressionsDisplay | null;
+  /** CF-HF3 + IMP-EST1 (advertiser) — « prévues », rendered by the page (CampaignPrevues). */
+  prevues?: ReactNode;
   /** EV4 — the positioning's placement block (a consumer slot, like statusBadge). */
   eventPlacementSlot?: ReactNode;
   /** Named `variant` (not `role`) to avoid the jsx-a11y/aria-role lint on `role=`. */
@@ -86,7 +82,7 @@ export default function CampaignDrawer({
   campaign,
   video,
   creative,
-  impressions,
+  prevues,
   variant,
   statusBadge,
   footerSlot,
@@ -222,9 +218,7 @@ export default function CampaignDrawer({
           {/* CF-HF4 (Kais) — the advertiser side is PRÉVUES-ONLY ('—' for a not-yet value,
               never a fake 0); the delivered numbers stay a host-side read. */}
           <Section label={PREVUES_LABEL}>
-            <div className="text-sm font-semibold text-[#171717]">
-              {formatImpressions(impressions?.prevues ?? null)}
-            </div>
+            <div className="text-sm font-semibold text-[#171717]">{prevues ?? '—'}</div>
           </Section>
 
           {/* EV4 — the positioning's placement (N établissements + per-venue lines). */}

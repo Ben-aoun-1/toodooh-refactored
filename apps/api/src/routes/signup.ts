@@ -1,23 +1,44 @@
-import { randomUUID } from 'node:crypto';
-
 import multipart from '@fastify/multipart';
 import { APIError } from 'better-auth/api';
 import { eq } from 'drizzle-orm';
-import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { accounts, agentReferrals, screenhosts, userDocuments, users } from '../db/schema.js';
+import { accounts, agentReferrals, screenhosts, users } from '../db/schema.js';
 import { env } from '../env.js';
 import { ROLE_LABELS_FR, notifyAdmins } from '../lib/admin-notifications.js';
 import { agentCodeVerdict, agentCompatibleWith, resolveAgentByCode } from '../lib/agent-lookup.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
-import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
+import {
+  MAX_SIGNUP_FILE_PARTS,
+  type SignupDocument,
+  type SignupFilePart,
+  persistSignupDocument,
+  signupDocumentErrors,
+  signupFileLimit,
+  signupKind,
+  slotSignupDocuments,
+} from '../lib/signup-documents.js';
+import { MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
-import { storage } from '../storage/s3-storage.js';
 import { companySizeSchema } from '../validation/company-size.js';
 import { validatePhone } from '../validation/phone.js';
+import {
+  declarationRequired,
+  declaredCountSchema,
+  individualDeclares,
+} from '../validation/screen-declaration.js';
+import {
+  HOURS_REQUIRED_MESSAGE,
+  ORDER_MESSAGE,
+  PAIR_MESSAGE,
+  fleetEstablishmentSchema,
+  hourField,
+  hoursAreOrdered,
+  hoursArePaired,
+} from '../validation/signup-venue.js';
 import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
 // snake_case request shape (apps/web-facing per Decision 3) — the full signup wizard profile
@@ -26,55 +47,6 @@ import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.
 // non-privileged hint mapped to role post-create (CF-24 class-b). Required = the minimal account
 // identity + terms; the rest of the profile is optional and stored when present (kept lenient to
 // decouple from the reference-data-GET ordering and avoid FK-500s on partial data).
-// One fleet location the fleet_owner declares at signup → one screenhosts row. All
-// location/WiFi fields are optional ("add later"); name is the only requirement.
-// room_count is accepted on the wire (the FE still sends it) but stripped here —
-// screenhosts has no room_count column, so it is never persisted.
-
-// H1 (Mejri item 5) — working hours at signup: the venue's single daily window [open, close),
-// ints 0–23, landing in the SAME screenhosts.opening_hour/closing_hour columns the admin
-// eligibility PATCH and the C3 ingest write. The pair is all-or-nothing and must satisfy
-// open < close (the dispatch/report reading semantics); skipping leaves both NULL (14h report
-// fallback, full hachure, dispatch-ineligible until set). Per-day + overnight stay deferred.
-const hourField = z.number().int().min(0).max(23);
-interface HoursPair {
-  opening_hour?: number;
-  closing_hour?: number;
-}
-const hoursArePaired = (b: HoursPair): boolean =>
-  (b.opening_hour === undefined) === (b.closing_hour === undefined);
-// HOURS-X1: closing ≤ opening is legal (« closes the next day »); only an EQUAL pair is refused.
-const hoursAreOrdered = (b: HoursPair): boolean =>
-  b.opening_hour === undefined || b.closing_hour === undefined || b.opening_hour !== b.closing_hour;
-const PAIR_MESSAGE = 'opening_hour and closing_hour must be provided together';
-const ORDER_MESSAGE =
-  'opening_hour and closing_hour must differ (closing before opening = closes the next day)';
-const HOURS_REQUIRED_MESSAGE = 'opening_hour and closing_hour are required for a screenhost signup';
-
-const fleetEstablishmentSchema = z
-  .object({
-    name: z.string().min(1).max(200),
-    screen_count: z.number().int().min(0).optional(),
-    address: z.string().min(1).optional(),
-    city: z.string().min(1).optional(),
-    zone: z.string().optional(),
-    governorate_id: z.uuid().optional(),
-    postal_code: z
-      .string()
-      .regex(/^\d{4}$/, 'Postal code must be 4 digits')
-      .optional(),
-    latitude: z.number().min(-90).max(90).optional(),
-    longitude: z.number().min(-180).max(180).optional(),
-    wifi_ssid: z.string().min(1).optional(),
-    wifi_password: z.string().min(1).optional(),
-    // HOURS-M1 (Mejri 09/09, operator 2026-09-12): the pair is REQUIRED per establishment —
-    // « préciser plus tard » is gone from the wizard and refused on the wire.
-    opening_hour: hourField,
-    closing_hour: hourField,
-  })
-  .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
-  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] });
-
 const signupBodySchema = z
   .object({
     email: z.email('A valid email is required'),
@@ -111,6 +83,9 @@ const signupBodySchema = z
     // « préciser plus tard » skip is gone; NULL hours now only exist on legacy rows.
     opening_hour: hourField.optional(),
     closing_hour: hourField.optional(),
+    // SCR-DECL1 — the individual_owner's venue counts, REQUIRED like its hours (fleet: per entry).
+    screen_count: declaredCountSchema.optional(),
+    room_count: declaredCountSchema.optional(),
     fleet_establishments: z.array(fleetEstablishmentSchema).optional(),
   })
   .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
@@ -118,7 +93,9 @@ const signupBodySchema = z
   .refine((b) => b.profile_type !== 'individual_owner' || b.opening_hour !== undefined, {
     message: HOURS_REQUIRED_MESSAGE,
     path: ['opening_hour'],
-  });
+  })
+  .refine(individualDeclares('screen_count'), declarationRequired('screen_count'))
+  .refine(individualDeclares('room_count'), declarationRequired('room_count'));
 
 // Q4 — better-auth's signup is sequential, not atomic (createUser → linkAccount
 // → verification are separate calls; no injectable tx). If linkAccount throws
@@ -144,119 +121,65 @@ const deleteOrphanUser = async (email: string): Promise<void> => {
   await db.delete(users).where(eq(users.id, u.id));
 };
 
-// ── R7/N4 — owner signup document volets (reverses F5 for owners) ──────────────────────────────
-// Owners post multipart: a `payload` field (the signup JSON) + the volet files. fleet_owner → RNE;
-// both owner types → bank (RIB). Advertisers/agencies still post JSON and submit no documents.
-//
-// SIGN-2 (operator ruling 2026-08-31) — the CIN volets are GONE from signup: an individual owner is
-// asked for the RIB only. CIN is NOT abolished, it is PROVIDE-LATER — the 'cin' document category,
-// the admin request path and POST /api/profile/documents all still accept it after sign-in. An
-// unknown file part is ignored by the parser below, so a stale client still signs up cleanly; its
-// CIN parts are simply dropped rather than rejected.
-type VoletFile = { buffer: Buffer; mimetype: string; filename: string };
+// A file part over the shared 5 MB cap → 413, no account created.
+const payloadTooLarge = {
+  error: 'PAYLOAD_TOO_LARGE',
+  message: `A document exceeds the ${MAX_DOCUMENT_BYTES}-byte limit.`,
+} as const;
 
-const VOLET_FIELDS = ['rne', 'bank'] as const;
-type VoletField = (typeof VOLET_FIELDS)[number];
-const isVoletField = (name: string): name is VoletField =>
-  (VOLET_FIELDS as readonly string[]).includes(name);
+// MORE file parts than the kind allows → 413, no account created. A DISTINCT code from the size
+// refusal above: both are 413, but the client words them differently and « le fichier est trop
+// volumineux (maximum 5 Mo) » is simply false when fifteen small files arrived. The two causes used
+// to share `payloadTooLarge` (and, before DOC-CAST1, the bare busboy `files: 4` overflow did too).
+const tooManyFiles = {
+  error: 'TOO_MANY_FILES',
+  message: 'Too many document parts for this signup.',
+} as const;
 
-const isOwnerType = (t: string | undefined): boolean =>
-  t === 'individual_owner' || t === 'fleet_owner';
-
-// Owner documents are OPTIONAL at signup (provide-later — Kais QA 2026-06-24): presence/completeness
-// is an approval signal via documentPresence, NOT a signup-submit gate. So we never reject a missing
-// or partial volet — only the MIME of an ATTACHED file is validated (size is already capped by the
-// multipart fileSize limit → 413 on parse). Mirrors profile-documents' MIME guard via the shared set.
-// Returns the problems (empty = valid).
-const attachedVoletErrors = (
-  files: Partial<Record<VoletField, VoletFile>>,
-): { field: string; reason: string }[] => {
-  const errs: { field: string; reason: string }[] = [];
-  for (const field of VOLET_FIELDS) {
-    const file = files[field];
-    if (file && !ALLOWED_DOCUMENT_MIME.has(file.mimetype)) {
-      errs.push({ field, reason: `unsupported content type: ${file.mimetype}` });
-    }
-  }
-  return errs;
-};
-
-// Persist one volet AFTER account creation. Storage-FIRST so a row never references a missing object
-// (the profile-documents no-orphan-key rule); on a row-insert failure, best-effort delete the object
-// we just wrote so no orphan object lingers. Degraded, NEVER thrown: a failure leaves the volet absent
-// → the onboarding indicator (C1) shows incomplete → the user finishes via the post-signin
-// /api/profile/documents path. Same storage key format + table as that path (no new storage path).
-const persistVolet = async (
-  userId: string,
-  category: 'cin' | 'rne' | 'bank',
-  position: number,
-  file: VoletFile,
-  log: FastifyBaseLogger,
-): Promise<void> => {
-  const rowId = randomUUID();
-  const key = `${category}/${userId}/${rowId}`;
-  const uploaded = await storage.upload({ key, body: file.buffer, contentType: file.mimetype });
-  if ('error' in uploaded) {
-    log.error({ userId, category, position }, 'signup volet upload failed (degraded)');
-    return;
-  }
-  try {
-    await db.insert(userDocuments).values({
-      // The row id MUST equal the UUID embedded in storageKey (<cat>/<uid>/<rowId>) so isRowOwnedKey
-      // holds — else a later DELETE/REPLACE via /api/profile/documents skips storage.delete and
-      // orphans the object. Mirrors profile-documents.ts's `.values({ id: rowId, ... })`.
-      id: rowId,
-      userId,
-      category,
-      position,
-      storageKey: key,
-      originalFilename: file.filename,
-      mimeType: file.mimetype,
-      sizeBytes: file.buffer.length,
-    });
-  } catch (err) {
-    // The row didn't land — drop the object we just wrote so it isn't orphaned in MinIO.
-    await storage.delete({ key }).catch(() => undefined);
-    log.error({ userId, category, position, err }, 'signup volet row insert failed (degraded)');
-  }
+// The multipart plugin refuses the part COUNT itself (busboy's `files` limit) with FST_FILES_LIMIT,
+// and an oversized part with FST_REQ_FILE_TOO_LARGE — both surface as a throw from request.parts().
+// Read the code off the error so the count case keeps its own reply instead of borrowing the size
+// one. `unknown` + a real narrowing, never a cast.
+const errorCode = (err: unknown): string | undefined => {
+  if (typeof err !== 'object' || err === null || !('code' in err)) return undefined;
+  const { code } = err;
+  return typeof code === 'string' ? code : undefined;
 };
 
 export const signupRoute: FastifyPluginAsync = async (app) => {
-  // Owners post multipart (a `payload` field + the volet files); advertisers/agencies still post JSON.
+  // A signup WITH documents posts multipart (a `payload` field + the file parts): every owner, and a
+  // screencaster that attached files (DOC-CAST1); a signup without documents may post plain JSON.
   // Registration is content-type-scoped — JSON requests are parsed by Fastify's JSON parser, unchanged.
-  // files:4 leaves headroom over rne/bank; the fileSize limit is the shared 5 MB cap.
+  // The files limit is the largest kind's (lib/signup-documents.ts); the route re-checks per kind.
+  // The fileSize limit is the shared 5 MB cap.
   await app.register(multipart, {
-    limits: { fileSize: MAX_DOCUMENT_BYTES, files: 4, fields: 5 },
+    limits: { fileSize: MAX_DOCUMENT_BYTES, files: MAX_SIGNUP_FILE_PARTS, fields: 5 },
   });
 
   app.post('/api/signup', async (request, reply) => {
-    // Dual-path body source: a multipart owner request carries the signup JSON in a `payload` field +
-    // named volet file parts; a JSON request uses request.body verbatim (advertiser/agency, unchanged).
+    // Dual-path body source: a multipart request carries the signup JSON in a `payload` field + named
+    // file parts; a JSON request uses request.body verbatim.
     const isMultipart = request.isMultipart();
     let rawBody: unknown = request.body;
-    const voletFiles: Partial<Record<VoletField, VoletFile>> = {};
+    const fileParts: SignupFilePart[] = [];
     if (isMultipart) {
       let payloadRaw: string | undefined;
       try {
         for await (const part of request.parts()) {
           if (part.type === 'file') {
             const buffer = await part.toBuffer(); // throws past the fileSize limit
-            if (isVoletField(part.fieldname)) {
-              voletFiles[part.fieldname] = {
-                buffer,
-                mimetype: part.mimetype,
-                filename: part.filename,
-              };
-            }
+            fileParts.push({
+              field: part.fieldname,
+              file: { buffer, mimetype: part.mimetype, filename: part.filename },
+            });
           } else if (part.fieldname === 'payload') {
             payloadRaw = part.value as string;
           }
         }
-      } catch {
-        return reply.status(413).send({
-          error: 'PAYLOAD_TOO_LARGE',
-          message: `A document exceeds the ${MAX_DOCUMENT_BYTES}-byte limit.`,
-        });
+      } catch (err) {
+        return reply
+          .status(413)
+          .send(errorCode(err) === 'FST_FILES_LIMIT' ? tooManyFiles : payloadTooLarge);
       }
       if (payloadRaw === undefined) {
         return reply.status(400).send({
@@ -308,24 +231,33 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       wifi_password,
       opening_hour,
       closing_hour,
+      screen_count,
+      room_count,
       fleet_establishments,
     } = parsed.data;
     // terms_accepted is enforced `true` by the schema (z.literal); the acceptance time is
     // server-stamped below, never taken from the client.
 
-    // R7/N4 reversed (Kais QA 2026-06-24): owner documents are OPTIONAL at signup (provide-later via
-    // the post-signin /api/profile/documents surface). An owner may finalize with NO documents — on
-    // the JSON path or an empty multipart → 201. We do NOT 400 a missing or partial volet; completeness
-    // (both CIN faces + RIB) is enforced as an approval signal via documentPresence, not a submit gate.
-    // Only the MIME of any ATTACHED file is validated BEFORE create → 400 with NO account (the FE caps
-    // MIME at pick, so this is a defensive guard for a malformed upload, never for absence).
+    // R7/N4 reversed (Kais QA 2026-06-24): documents are OPTIONAL at signup (provide-later via the
+    // post-signin /api/profile/documents surface). An account may finalize with NO documents — on the
+    // JSON path or an empty multipart → 201. We do NOT 400 a missing or partial set; completeness is
+    // surfaced as an approval signal via documentPresence, not a submit gate. BEFORE create, with NO
+    // account on refusal: more file parts than the kind allows → 413, and the MIME of every part that
+    // will be stored → 400 (the FE caps MIME at pick, so this is a defensive guard for a malformed
+    // upload, never for absence). The same rules for owners and — since DOC-CAST1 — screencasters.
+    let signupDocuments: SignupDocument[] = [];
     if (isMultipart) {
-      const voletErrs = attachedVoletErrors(voletFiles);
-      if (voletErrs.length > 0) {
+      const kind = signupKind(profile_type);
+      if (fileParts.length > signupFileLimit(kind)) {
+        return reply.status(413).send(tooManyFiles);
+      }
+      signupDocuments = slotSignupDocuments(fileParts, kind);
+      const documentErrs = signupDocumentErrors(signupDocuments);
+      if (documentErrs.length > 0) {
         return reply.status(400).send({
           error: 'INVALID_INPUT',
           message: 'Validation failed',
-          fields: voletErrs,
+          fields: documentErrs,
         });
       }
     }
@@ -440,6 +372,9 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
             wifiPasswordEncrypted: wifi_password ? encryptWifiPassword(wifi_password) : null,
             openingHour: opening_hour ?? null,
             closingHour: closing_hour ?? null,
+            // SCR-DECL1 — both present for an individual_owner (the refines above).
+            screenCount: screen_count ?? 0,
+            roomCount: room_count ?? null,
             businessSectorId: business_sector_id ?? null,
             ownerId: persisted.id,
           });
@@ -447,7 +382,8 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           await db.insert(screenhosts).values(
             fleet_establishments.map((establishment) => ({
               name: establishment.name,
-              screenCount: establishment.screen_count ?? 0,
+              screenCount: establishment.screen_count,
+              roomCount: establishment.room_count,
               address: establishment.address ?? null,
               city: establishment.city ?? null,
               postalCode: establishment.postal_code ?? null,
@@ -486,19 +422,12 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           }
         }
 
-        // R7/N4 — persist whatever owner volets WERE provided, now that the account exists (inside the
-        // persisted-id guard, so a duplicate-email signup never uploads). Documents are optional at
-        // signup, so the per-file presence guards below are load-bearing: only attached volets persist;
-        // a missing one simply leaves onboarding incomplete (C1). Degraded + never thrown: a storage/db
-        // failure also leaves a volet absent, not a failed signup.
-        if (isMultipart && isOwnerType(profile_type)) {
-          // SIGN-2 removed the CIN from signup; CIN-2b (2026-09-12) — EVERY owner may attach its
-          // RNE (individual owners included). Both types may attach the RIB below.
-          if (voletFiles.rne) {
-            await persistVolet(persisted.id, 'rne', 1, voletFiles.rne, request.log);
-          }
-          if (voletFiles.bank)
-            await persistVolet(persisted.id, 'bank', 1, voletFiles.bank, request.log);
+        // R7/N4 + DOC-CAST1 — persist whatever documents WERE provided, now that the account exists
+        // (inside the persisted-id guard, so a duplicate-email signup never uploads). Documents are
+        // optional at signup: a missing one simply leaves onboarding incomplete (C1). Degraded + never
+        // thrown: a storage/db failure also leaves a document absent, not a failed signup.
+        for (const doc of signupDocuments) {
+          await persistSignupDocument(persisted.id, doc, request.log);
         }
       }
 

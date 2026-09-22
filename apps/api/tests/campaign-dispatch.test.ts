@@ -21,6 +21,8 @@ import {
 import { campaignDispatchRoutes } from '../src/routes/campaign-dispatch.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
+import { sweepZones } from './helpers/zones.js';
 
 // Integration — real Postgres. End-to-end dispatch: a well-formed campaign + targeting + eligible
 // screenhosts + affluence → a frozen PlanDiffusion. Config is the seeded V1 singleton.
@@ -117,11 +119,15 @@ const seedEligibleScreenhost = async (
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return id;
 };
 
 describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
+  // TEST-ISO1 — zones survive resetAuthTables (global table) and another file pins the exact
+  // zone catalogue: every zone a test inserts is tracked here and swept in afterEach.
+  const createdZoneIds: string[] = [];
 
   beforeEach(async () => {
     await resetAuthTables();
@@ -130,6 +136,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await app.ready();
   });
   afterEach(async () => {
+    await sweepZones(createdZoneIds.splice(0));
     await app.close();
     vi.restoreAllMocks();
   });
@@ -209,6 +216,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
       .insert(zones)
       .values({ name: `Grand Sfax ${Date.now()}-${(seq += 1)}`, active: true })
       .returning();
+    if (sfax) createdZoneIds.push(sfax.id);
     const campaignId = await seedCampaign(advertiser);
     await seedTargeting(campaignId, cat, 'premium');
     await db.insert(campaignZones).values({ campaignId, zoneId: sfax?.id ?? '' });
@@ -333,6 +341,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
         bumped = true;
       }
     await db.insert(screenhostAffluence).values(bothHalves(rows));
+    await seedInstalledScreen(sh?.id ?? '');
     mockSession(admin);
 
     // i_cible 100000 > fact 36018 → the SH's full residual is allocated (the fractional path).

@@ -15,26 +15,27 @@ import {
 import { ownerApprovedSql } from '../approved-owner.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
+import { venueHasInstalledScreenSql } from '../installed-screen.js';
 import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
 import { spsObservationsFor } from '../sps-observations.js';
 import { SPS_NEUTRAL, spsComputable } from '../sps-score.js';
 
 import {
-  broadcastableHours,
   capaciteUtile,
   computeR,
   facturableFromPhysical,
   screenhostMatchesTargeting,
   screenhostMatchesZones,
 } from './eligibility.js';
+import { poolExclusionReason } from './exclusion-reason.js';
 import { type PoolEntry, type WindowDay } from './plan.js';
 import { availableWindowDays, buildWindowDays } from './window.js';
 
 // E3 — the ONE pool-assembly authority. Extracted VERBATIM from runDispatch (dispatch-service.ts)
 // so dispatch, the refusal cascade (US-2.8) and later redispatch (E6) assemble the eligible pool +
-// occupancy netting through the SAME code path: hard filters (active + approved owner + horaires +
-// capacity + targeting + zones), affluence (Ai), engaged broadcast SECONDS from OTHER allocations →
-// residual F-budget → R_eff → facturable capacity. The exclusions are the only additions:
+// occupancy netting through the SAME code path: hard filters (active + ./exclusion-reason.ts),
+// affluence (Ai), engaged broadcast SECONDS from OTHER allocations → residual F-budget → R_eff →
+// facturable capacity. The exclusions are the only additions:
 //   • excludeScreenhostIds — screenhosts removed from the candidates (the cascade excludes the
 //     refuser(s); E6 will exclude dead screens). Empty/absent = the original behavior.
 //   • excludeAllocationId / excludeAllocationIds — allocations removed from the ENGAGEMENT
@@ -142,63 +143,34 @@ export const assemblePool = async (
   const excluded = new Set(opts.excludeScreenhostIds ?? []);
   const trace = opts.trace ?? NOOP_TRACE;
 
-  // Hard filters: active + approved owner + horaires set + capacity present + matches targeting
-  // (category × class) + in a targeted zone (CF-Z1 — with prod entirely Grand Tunis this changes
-  // nothing today). ELIG-2 — the owner gate is SELECTED rather than filtered in SQL so the journal
-  // below can name it; the filter still applies it before anything else.
+  // Hard filters on the active venues: ONE ordered list (./exclusion-reason.ts) decides both
+  // membership and the journaled reason, so the two never disagree. ELIG-2 / MAP-TV1 — the owner
+  // and installed-screen gates are SELECTED rather than filtered in SQL so the journal can name them.
   const activeRows = await executor
     .select({
       id: screenhosts.id,
       ownerApproved: ownerApprovedSql(),
+      installedScreen: venueHasInstalledScreenSql(),
       sps: screenhosts.sps,
       businessSectorId: screenhosts.businessSectorId,
       class: screenhosts.class,
       zoneId: screenhosts.zoneId,
       openingHour: screenhosts.openingHour,
       closingHour: screenhosts.closingHour,
-      broadcastCapacity: screenhosts.broadcastCapacity,
     })
     .from(screenhosts)
     .where(eq(screenhosts.isActive, true));
-  const candidates = activeRows.filter(
-    (sh) =>
-      sh.ownerApproved &&
-      !excluded.has(sh.id) &&
-      sh.broadcastCapacity !== null &&
-      broadcastableHours(sh.openingHour, sh.closingHour).length > 0 &&
-      screenhostMatchesTargeting(
-        { businessSectorId: sh.businessSectorId, class: sh.class },
-        lines,
-      ) &&
-      screenhostMatchesZones(sh.zoneId, campaignZoneIds),
-  );
+  const filterContext = { lines, zoneIds: campaignZoneIds, excluded };
+  const verdicts = activeRows.map((sh) => ({ sh, reason: poolExclusionReason(sh, filterContext) }));
+  const candidates = verdicts.flatMap(({ sh, reason }) => (reason === null ? [sh] : []));
 
-  // LOG1 — observe-only exclusion journaling: re-evaluate the SAME pure predicates on the rows
-  // the filter rejected (first failing reason wins; the filter itself is untouched). The
-  // inactive-venue set needs one EXTRA read — gated on trace.enabled so the default path keeps
-  // its exact query count; only inactive venues that would OTHERWISE match (targeting + zone) are
-  // reported, the operator-relevant set. ELIG-2 — a venue whose owner is not approved (pending,
-  // rejected, banned or no owner at all) reports 'owner_not_approved' BEFORE any other reason: no
-  // other property of the venue matters until its owner is validated.
+  // LOG1 — observe-only exclusion journaling: every rejected active venue under its FIRST failing
+  // reason. The inactive-venue set needs one EXTRA read — gated on trace.enabled so the default
+  // path keeps its exact query count; only inactive venues that would OTHERWISE match (targeting +
+  // zone) are reported, the operator-relevant set.
   if (trace.enabled) {
-    const kept = new Set(candidates.map((c) => c.id));
-    for (const sh of activeRows) {
-      if (kept.has(sh.id)) continue;
-      const reason = !sh.ownerApproved
-        ? 'owner_not_approved'
-        : excluded.has(sh.id)
-          ? 'excluded'
-          : sh.broadcastCapacity === null
-            ? 'capacity_missing'
-            : broadcastableHours(sh.openingHour, sh.closingHour).length === 0
-              ? 'hours_missing'
-              : !screenhostMatchesTargeting(
-                    { businessSectorId: sh.businessSectorId, class: sh.class },
-                    lines,
-                  )
-                ? 'targeting_mismatch'
-                : 'zone_mismatch';
-      trace.event('venue_excluded', { reason }, sh.id);
+    for (const { sh, reason } of verdicts) {
+      if (reason !== null) trace.event('venue_excluded', { reason }, sh.id);
     }
     const inactiveRows = await executor
       .select({

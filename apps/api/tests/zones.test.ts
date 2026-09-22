@@ -8,10 +8,12 @@ import { type NewUser, screenhosts, users, zones } from '../src/db/schema.js';
 import { zonesRoutes } from '../src/routes/zones.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { sweepZones } from './helpers/zones.js';
 
 // CF-Z1 — the zones read + the mig-0040 seed/backfill/default contract. zones is REFERENCE-LIKE
 // (no FK to users → NOT truncated between tests): assertions are containment-based, never
-// exact-count, and any extra rows this suite creates are namespaced + deactivated or unique.
+// exact-count, and any extra row this suite creates is namespaced AND swept in afterEach
+// (TEST-ISO1 — advertiser-performances pins the exact catalogue).
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 const buildApp = () => Fastify({ logger: false });
@@ -46,6 +48,7 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 
 describe('GET /api/zones + the mig-0040 contract (real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
+  const createdZoneIds: string[] = [];
 
   beforeEach(async () => {
     await resetAuthTables();
@@ -54,6 +57,7 @@ describe('GET /api/zones + the mig-0040 contract (real Postgres)', () => {
     await app.ready();
   });
   afterEach(async () => {
+    await sweepZones(createdZoneIds.splice(0));
     await app.close();
     vi.restoreAllMocks();
   });
@@ -80,6 +84,7 @@ describe('GET /api/zones + the mig-0040 contract (real Postgres)', () => {
   it('EXCLUDES inactive zones', async () => {
     const name = `Zone désactivée ${Date.now()}-${seq}`;
     const [inactive] = await db.insert(zones).values({ name, active: false }).returning();
+    if (inactive) createdZoneIds.push(inactive.id);
     mockSession(await seedUser());
     const body = (await app.inject({ method: 'GET', url: '/api/zones' })).json() as {
       id: string;

@@ -32,6 +32,7 @@ import { sectorDisplayName } from '../src/lib/report/sector-display-name.js';
 import { advertiserPerformancesRoutes } from '../src/routes/advertiser-performances.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { resetZonesToSeed } from './helpers/zones.js';
 
 // SC-P — « Mes performances » (Screencaster), real Postgres. The data contract under test:
 // clôture = campaign_reconciliation.reconciled_at; impressions générées = delivered_imp (NET-IMP1
@@ -299,7 +300,9 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
   beforeEach(async () => {
     await resetAuthTables();
     // Proofs / payouts / reconciliations hang off campaigns (cascade from users); affluence and
-    // screenhosts hang off owners. Nothing else to truncate.
+    // screenhosts hang off owners. The zone catalogue does NOT (zones is global) and section 04
+    // lists EVERY active zone, so pin it to the mig-0040 seed rather than trust earlier files.
+    await resetZonesToSeed();
     app = buildApp();
     await app.register(advertiserPerformancesRoutes);
     await app.ready();

@@ -19,10 +19,29 @@ export interface ScreenhostWifi {
 /**
  * H2 — the `/mine` list row: the WiFi view PLUS the venue's single-window hours
  * ([open, close), ints 0–23; both null = none set). The WiFi PATCH response stays hour-less.
+ * SCR-DECL1 — plus the venue's DECLARED screens (0 = never declared) and rooms (null = never).
  */
 export interface OwnerScreenhost extends ScreenhostWifi {
   opening_hour: number | null;
   closing_hour: number | null;
+  screen_count: number;
+  room_count: number | null;
+}
+
+/** SCR-DECL1 — the declared screens / rooms PATCH body: whole numbers 1–99, omitted = unchanged. */
+export interface DeclarationPatch {
+  screen_count?: number;
+  room_count?: number;
+}
+
+/** SCR-DECL1 — the PATCH response. `screens_count` = the screens ROWS after the edit (what the
+ *  TV app can pair against; once approved they follow `screen_count`). */
+export interface ScreenhostDeclaration {
+  id: string;
+  name: string;
+  screen_count: number;
+  room_count: number | null;
+  screens_count: number;
 }
 
 /** H2 — the owner hours PATCH body: BOTH ints 0–23 with open < close, or BOTH null (clears). */
@@ -81,6 +100,14 @@ export const screenhostService = {
   /** H2 — PATCH /api/screenhosts/:id/hours — owner-scoped single-window hours (or both-null clear). */
   updateHours(id: string, patch: HoursPatch): Promise<ScreenhostHours> {
     return apiClient.patch<ScreenhostHours>(`/screenhosts/${id}/hours`, patch);
+  },
+
+  /**
+   * SCR-DECL1 — PATCH /api/screenhosts/:id/declaration — owner-scoped. A 409 names the installed
+   * screens the count cannot go below (French message, surfaced as the toast).
+   */
+  updateDeclaration(id: string, patch: DeclarationPatch): Promise<ScreenhostDeclaration> {
+    return apiClient.patch<ScreenhostDeclaration>(`/screenhosts/${id}/declaration`, patch);
   },
 
   /**

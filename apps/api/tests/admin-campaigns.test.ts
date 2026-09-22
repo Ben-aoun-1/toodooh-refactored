@@ -22,6 +22,7 @@ import { adminDispatchConfigRoutes } from '../src/routes/admin-dispatch-config.j
 import { campaignDispatchRoutes } from '../src/routes/campaign-dispatch.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // Integration — real Postgres. The ACTIVATION keystone: gate (pending + approved creative + funded)
 // → dispatch (reuse runDispatch) → status='active'. Covering scenario mirrors campaign-dispatch.test:
@@ -141,6 +142,7 @@ const seedEligibleScreenhost = async (
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return id;
 };
 

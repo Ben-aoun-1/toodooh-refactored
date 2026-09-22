@@ -13,8 +13,21 @@ import { ApiError } from '@/lib/api-client';
  */
 const GENERIC = "Une erreur s'est produite. Veuillez réessayer dans quelques instants.";
 
+// DOC-CAST1 — a 413 the API never wrote. The signup posts its documents as ONE multipart body, so a
+// reverse proxy whose `client_max_body_size` is smaller than the ruled maximum (2 RNE + 10
+// complémentaires × 5 Mo) answers its own HTML error page BEFORE Fastify: `toApiError` cannot parse
+// it, `code` falls back to 'UNKNOWN', and the generic « réessayez dans quelques instants » would be a
+// lie — resubmitting the same documents can never work. Name the real cause and the way out.
+// Worded for EVERY surface this mapper serves (signup and the post-signin profile uploads alike),
+// so it stays true wherever a proxy cap is hit — no signup-only « après inscription » tail.
+const BODY_TOO_LARGE =
+  'Vos documents sont trop volumineux pour être envoyés en une fois. Retirez-en quelques-uns ou réduisez leur taille, puis réessayez.';
+
 export function apiErrorMessage(err: unknown): string {
   if (!(err instanceof ApiError)) return GENERIC;
+
+  // Our own 413s carry a code and fall through to the switch; only a bodiless/HTML one lands here.
+  if (err.status === 413 && err.code === 'UNKNOWN') return BODY_TOO_LARGE;
 
   switch (err.code) {
     case 'INVALID_CREDENTIALS':
@@ -35,6 +48,11 @@ export function apiErrorMessage(err: unknown): string {
       return 'Ce lien est invalide ou a expiré. Veuillez recommencer.';
     case 'PAYLOAD_TOO_LARGE':
       return 'Le fichier est trop volumineux (maximum 5 Mo).';
+    // DOC-CAST1 — the part COUNT, not a byte count: the signup route refuses more file parts than the
+    // profile's slots allow. It used to borrow PAYLOAD_TOO_LARGE's message, which told a user who had
+    // sent fifteen small files that one of them weighed too much.
+    case 'TOO_MANY_FILES':
+      return 'Trop de documents envoyés. Retirez-en quelques-uns et réessayez.';
     case 'STORAGE_ERROR':
       return 'Le stockage du document a échoué. Veuillez réessayer.';
     case 'NOT_FOUND':

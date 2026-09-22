@@ -272,7 +272,8 @@ export const generateWorld = (params: WorldParams): WorldSpec => {
       ownerId: owners[ownerIndex]!.id,
       openingHour: sector.openingHour,
       closingHour: sector.closingHour,
-      // Prod's value on every venue with hours set — the pool refuses a null capacity.
+      // Prod's value on every venue with hours set. CAP-EVT1: only the event pool reads it (set =
+      // event switch on, lib/event-pricing/event-switch.ts); the standard pool ignores it.
       broadcastCapacity: 4,
       sps: Math.round(rng.float(35, 85) * 100) / 100,
       latitude: Math.round((36.8065 + rng.float(-0.08, 0.08)) * 1e6) / 1e6,

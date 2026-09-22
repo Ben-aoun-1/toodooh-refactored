@@ -67,6 +67,8 @@ export const EVENT_LABELS: Record<string, string> = {
 
 export const EXCLUSION_REASON_LABELS: Record<string, string> = {
   inactive: 'établissement inactif',
+  // CAP-EVT1 (operator ruling 2026-09-22) — the pool no longer emits it (the capacity became the
+  // event-only switch); kept so the journal rows written before still render.
   capacity_missing: 'capacité manquante',
   hours_missing: 'horaires manquants',
   targeting_mismatch: 'hors ciblage',
@@ -76,6 +78,8 @@ export const EXCLUSION_REASON_LABELS: Record<string, string> = {
   no_residual_capacity: 'aucune capacité résiduelle',
   // ELIG-2 (operator ruling 2026-09-16) — the pool's first reason: the owner is not validated.
   owner_not_approved: 'propriétaire non validé',
+  // MAP-TV1 (operator ruling 2026-09-21) — right after the owner: the venue has no installed TV.
+  no_installed_screen: 'aucun écran installé',
 };
 
 /** The refusal reasons a rolled-back run can carry (fallback: the raw reason). */

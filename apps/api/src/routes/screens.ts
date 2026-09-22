@@ -101,11 +101,19 @@ export const screensRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screen.' });
     }
 
+    // The row can vanish between the SELECT above and this UPDATE: an owner or admin lowering the
+    // declared count (SCR-DECL1, lib/screens.ts) deletes never-installed rows while holding their
+    // lock, so this UPDATE waits and then matches nothing. That is the same answer as a missing
+    // screen, never a « paired » for an id that no longer exists.
     const now = new Date();
-    await db
+    const paired = await db
       .update(screens)
       .set({ pairedAt: now, lastSeenAt: now })
-      .where(eq(screens.id, row.screenId));
+      .where(eq(screens.id, row.screenId))
+      .returning({ id: screens.id });
+    if (paired.length === 0) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screen.' });
+    }
 
     // GPS link — guarded UPDATE: the WHERE re-checks both-NULL so two concurrent first
     // pairs cannot both win (the second matches no row).

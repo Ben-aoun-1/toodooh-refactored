@@ -31,6 +31,7 @@ import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // E2 (VF jours_dispo_i) — owner-declared per-day unavailability: capacity/créneaux/C_max respect
 // it through ONE day source (PoolEntry.days); a fully-unavailable venue drops from the pool;
@@ -111,6 +112,8 @@ const seedVenue = async (
         ? new Date(NOW.getTime() - 60_000)
         : new Date(NOW.getTime() - REDISPATCH_HEARTBEAT_TOLERANCE_MS - 60_000);
     await db.insert(screens).values({ screenhostId: shId, name: 'TV', lastSeenAt });
+  } else {
+    await seedInstalledScreen(shId);
   }
   return { shId, ownerId };
 };

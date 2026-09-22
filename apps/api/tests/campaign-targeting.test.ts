@@ -18,6 +18,8 @@ import { campaignTargetingRoutes } from '../src/routes/campaign-targeting.js';
 
 import { seedApprovedOwner } from './helpers/approved-owner.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
+import { sweepZones } from './helpers/zones.js';
 
 // Integration suite — real Postgres. getSession is mocked to drive the advertiser identity. Owner
 // business sectors are pre-seeded (audience='owner') and survive resetAuthTables (only users/auth
@@ -70,14 +72,16 @@ const seedScreenhost = async (opts: {
   lat?: string | null;
   lng?: string | null;
   zoneId?: string | null;
-  /** MAP-2 — coverage = the dispatch-eligible set, so a venue needs hours + capacity to count. */
+  /** MAP-2 — coverage = the dispatch-eligible set, so a venue needs hours to count (CAP-EVT1:
+   *  the capacity is the event switch only — a standard draft ignores it). */
   hours?: { open: number; close: number } | null;
   capacity?: number | null;
 }): Promise<string> => {
   const hours = opts.hours === undefined ? { open: 8, close: 22 } : opts.hours;
   // ELIG-2 / MAP-4 (2026-09-16) — a covered venue also needs an APPROVED owner and one affluence
-  // value; every venue here gets both, so each test still isolates the gate it is about. (The
-  // campaigns are date-less drafts, so MAP-4's availability gate does not apply to them.)
+  // value, and (MAP-TV1, 2026-09-21) an installed screen; every venue here gets all three, so each
+  // test still isolates the gate it is about. (The campaigns are date-less drafts, so MAP-4's
+  // availability gate does not apply to them.)
   const ownerId = await seedApprovedOwner();
   const [sh] = await db
     .insert(screenhosts)
@@ -99,17 +103,21 @@ const seedScreenhost = async (opts: {
   await db
     .insert(screenhostAffluence)
     .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 10, estimatedImpressions: 100 }));
+  await seedInstalledScreen(id);
   return id;
 };
 
-// CF-U2 — a zone + campaign-zone pair for the whole-network coverage tests. Zone names are
-// globally unique and zones SURVIVE resetAuthTables (not an auth table), so a per-run counter
-// would collide with rows a previous run left behind — suffix with a uuid instead.
+// CF-U2 — a zone + campaign-zone pair for the whole-network coverage tests. zones SURVIVE
+// resetAuthTables (not an auth table): every seeded id is tracked and swept in afterEach
+// (TEST-ISO1 — another file pins the exact zone catalogue). The uuid suffix stays: zone names are
+// UNIQUE, and a crashed run can still leave a row behind.
+const seededZoneIds: string[] = [];
 const seedZone = async (name: string): Promise<string> => {
   const [z] = await db
     .insert(zones)
     .values({ name: `${name} ${crypto.randomUUID()}` })
     .returning();
+  if (z) seededZoneIds.push(z.id);
   return z?.id ?? '';
 };
 const linkCampaignZone = async (campaignId: string, zoneId: string): Promise<void> => {
@@ -135,6 +143,7 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
   });
 
   afterEach(async () => {
+    await sweepZones(seededZoneIds.splice(0));
     await app.close();
     vi.restoreAllMocks();
   });
@@ -417,7 +426,7 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
     expect(dots[0]?.id).toBe(inZone);
   });
 
-  it('MAP-2: coverage is the DISPATCH-ELIGIBLE set — no hours or no capacity = not covered; no coordinates = covered but not plotted', async () => {
+  it('MAP-2: coverage is the DISPATCH-ELIGIBLE set — no hours = not covered; no coordinates = covered but not plotted; CAP-EVT1: no capacity = still covered', async () => {
     const me = await seedUser();
     const id = await seedCampaign(me);
     const [catA] = await ownerCategoryIds();
@@ -428,7 +437,9 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
       name: 'NoHours',
       hours: null,
     });
-    await seedScreenhost({
+    // CAP-EVT1 (operator ruling 2026-09-22) — the capacity is the EVENT switch only: a standard
+    // draft covers a venue without one.
+    const noCapacity = await seedScreenhost({
       categoryId: catA ?? null,
       cls: 'premium',
       name: 'NoCap',
@@ -449,8 +460,8 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
       covered_count: number;
       without_coordinates: number;
     };
-    expect(body.screenhosts.map((d) => d.id)).toEqual([plotted]);
-    expect(body.covered_count).toBe(2); // Ok + NoCoords — the caption's number
+    expect(body.screenhosts.map((d) => d.id).sort()).toEqual([plotted, noCapacity].sort());
+    expect(body.covered_count).toBe(3); // Ok + NoCap + NoCoords — the caption's number
     expect(body.without_coordinates).toBe(1);
   });
 

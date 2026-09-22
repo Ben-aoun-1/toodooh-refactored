@@ -1,8 +1,9 @@
 // R7/N4 — owner signup posts multipart: a `payload` field (the signup JSON) + the volet files. This
 // builds that body for fastify `inject`. Volets default to the body's profile_type (SIGN-2:
 // every owner → rne/bank since CIN-2b, the CIN intake left signup); `omit` drops parts and
-// `files` overrides a part (e.g. a bad MIME). Dependency-free (form-data isn't installed). Shared by
-// signup.test.ts and signup-screenhosts.test.ts.
+// `files` overrides a part (e.g. a bad MIME). `parts` appends extra file parts AFTER those, in order,
+// and may repeat a name — a screencaster's RNE ×2 / complémentaires ×10 (DOC-CAST1). Dependency-free
+// (form-data isn't installed). Shared by the signup*.test.ts suites.
 export type MultipartFile = { filename: string; contentType: string; content: Buffer };
 
 const VOLET_PDF = Buffer.from('%PDF-1.4 signup volet bytes');
@@ -21,7 +22,11 @@ const defaultVolets = (profileType: unknown): Record<string, MultipartFile> => {
 
 export const signupMultipart = (
   body: Record<string, unknown>,
-  opts: { omit?: string[]; files?: Record<string, MultipartFile> } = {},
+  opts: {
+    omit?: string[];
+    files?: Record<string, MultipartFile>;
+    parts?: readonly (readonly [string, MultipartFile])[];
+  } = {},
 ): { payload: Buffer; headers: Record<string, string> } => {
   const boundary = `----toodoohsignup${Date.now()}${Math.random().toString(16).slice(2)}`;
   const chunks: Buffer[] = [
@@ -30,8 +35,8 @@ export const signupMultipart = (
     ),
   ];
   const files = { ...defaultVolets(body['profile_type']), ...opts.files };
-  for (const [name, f] of Object.entries(files)) {
-    if (opts.omit?.includes(name)) continue;
+  const named = Object.entries(files).filter(([name]) => !opts.omit?.includes(name));
+  for (const [name, f] of [...named, ...(opts.parts ?? [])]) {
     chunks.push(
       Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="${name}"; filename="${f.filename}"\r\nContent-Type: ${f.contentType}\r\n\r\n`,

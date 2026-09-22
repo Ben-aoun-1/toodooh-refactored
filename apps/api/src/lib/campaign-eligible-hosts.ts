@@ -22,7 +22,9 @@ import {
 import { assemblePool } from './dispatch/pool.js';
 import { tForDuration } from './dispatch/thresholds.js';
 import type { EngineTrace } from './engine-journal/trace.js';
+import { isEventSwitchOn } from './event-pricing/event-switch.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
+import { venueHasInstalledScreenSql } from './installed-screen.js';
 
 // ELIG-1 (Meriam 15/09, « bloquant pour le testing ») — which venues a campaign can reach, AT ANY
 // STATUS (brouillon, en attente, à venir, active…), and why the others are out.
@@ -38,13 +40,22 @@ import { computeEventCmax } from './event-pricing/pricing.js';
 // banned, or no owner) is out of both engines, and BOTH branches name it 'owner_not_approved'
 // before any other reason: the standard branch hears it from the pool's journal, the event branch
 // reads the same shared predicate (lib/approved-owner.ts) on the label row.
+//
+// MAP-TV1 (operator ruling 2026-09-21) — likewise a venue with no INSTALLED screen
+// (lib/installed-screen.ts) is out of both engines as 'no_installed_screen', named right after the
+// owner's status (and, for the event branch, after « inactif », as the pool journals inactive
+// venues apart).
+//
+// CAP-EVT1 (operator ruling 2026-09-22) — `broadcast_capacity` is no longer a standard gate, so the
+// standard branch never names 'capacity_missing' any more (the pool stopped producing it). It is
+// the venue's EVENT SWITCH (lib/event-pricing/event-switch.ts): the event branch names a venue
+// whose capacity is empty 'event_capacity_missing', right after its sector's own event verdict.
 
 /** A draft without a spot yet is priced like the most common spot length. */
 export const DEFAULT_SPOT_SECONDS = 10;
 
 export type ExclusionReason =
   | 'excluded'
-  | 'capacity_missing'
   | 'hours_missing'
   | 'targeting_mismatch'
   | 'zone_mismatch'
@@ -52,9 +63,11 @@ export type ExclusionReason =
   | 'no_available_days'
   | 'no_residual_capacity'
   | 'not_event_eligible'
+  | 'event_capacity_missing'
   | 'no_bloc_available'
   | 'no_sector'
-  | 'owner_not_approved';
+  | 'owner_not_approved'
+  | 'no_installed_screen';
 
 export interface EligibleHost {
   id: string;
@@ -103,7 +116,6 @@ export type EligibleHostsResult =
 
 const KNOWN_REASONS = new Set<string>([
   'excluded',
-  'capacity_missing',
   'hours_missing',
   'targeting_mismatch',
   'zone_mismatch',
@@ -111,6 +123,7 @@ const KNOWN_REASONS = new Set<string>([
   'no_available_days',
   'no_residual_capacity',
   'owner_not_approved',
+  'no_installed_screen',
 ]);
 
 /** An in-memory journal: listens to the pool's own `venue_excluded` events, writes nothing. */
@@ -144,7 +157,9 @@ interface VenueLabel {
   sps: number;
   isActive: boolean;
   ownerApproved: boolean;
+  installedScreen: boolean;
   eventEligible: boolean | null;
+  eventSwitchOn: boolean;
 }
 
 const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
@@ -158,6 +173,8 @@ const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
       sps: screenhosts.sps,
       isActive: screenhosts.isActive,
       ownerApproved: ownerApprovedSql(),
+      installedScreen: venueHasInstalledScreenSql(),
+      broadcastCapacity: screenhosts.broadcastCapacity,
     })
     .from(screenhosts)
     .leftJoin(businessSectors, eq(businessSectors.id, screenhosts.businessSectorId));
@@ -172,7 +189,9 @@ const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
         sps: Number(r.sps),
         isActive: r.isActive,
         ownerApproved: r.ownerApproved,
+        installedScreen: r.installedScreen,
         eventEligible: r.eventEligible,
+        eventSwitchOn: isEventSwitchOn(r.broadcastCapacity),
       },
     ]),
   );
@@ -263,11 +282,15 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
           ? 'owner_not_approved'
           : !v.isActive
             ? 'inactive'
-            : v.eventEligible === null
-              ? 'no_sector'
-              : !v.eventEligible
-                ? 'not_event_eligible'
-                : 'no_bloc_available',
+            : !v.installedScreen
+              ? 'no_installed_screen'
+              : v.eventEligible === null
+                ? 'no_sector'
+                : !v.eventEligible
+                  ? 'not_event_eligible'
+                  : !v.eventSwitchOn
+                    ? 'event_capacity_missing'
+                    : 'no_bloc_available',
       }));
     return {
       status: 'OK',

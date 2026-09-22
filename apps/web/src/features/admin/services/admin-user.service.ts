@@ -4,12 +4,15 @@ import { apiClient } from '@/lib/api-client';
 export type UserStatus = 'pending' | 'approved' | 'rejected' | 'banned';
 export type AdminProfileType = 'individual_owner' | 'fleet_owner' | 'advertiser' | 'agency';
 
+/** One of the owner's venues in GET /api/admin/users: its WiFi view + its declared screens. */
+export type AdminUserScreenhost = ScreenhostWifi & { screen_count: number };
+
 // The admin view of an end-user, repointed onto GET /api/admin/users (Phase-1g G2). Shape mirrors
 // the backend `toAdminUserView` (the /api/me projection + created_at + the validation trio). The
 // dual-identity collapse means there is one `id` (no separate user_id). Documents are NOT carried
 // here — F-docs Commit 3 moved the review surface onto the per-category grouped endpoint
 // (getUserDocuments), presigned by uuid on demand (getDocumentUrlById). Fields the backend does not
-// model (number_of_screens, formule, verification_status) are intentionally absent —
+// model (formule, verification_status) are intentionally absent —
 // the UI null-guards them ("Non fourni"), it does not invent data (audit §17.1 functional
 // reductions; G2 D-G2-2).
 export interface AdminUser {
@@ -36,15 +39,14 @@ export interface AdminUser {
   bank_rib: string | null;
   bank_iban: string | null;
   bank_details_updated_at: string | null;
-  // The owner's screenhosts (WiFi-redacted) — drives the admin "WiFi du lieu" editor. [] for
-  // non-owners. The password is never carried; only wifi_password_set.
-  screenhosts: ScreenhostWifi[];
+  // The owner's screenhosts (WiFi-redacted) — drives the admin "WiFi du lieu" editor, and (SCR-DECL1)
+  // the detail's declared-screens sum. [] for non-owners. The password is never carried.
+  screenhosts: AdminUserScreenhost[];
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;
   validation_notes: string | null;
   // Not modeled by the backend — always undefined; the UI degrades gracefully (G2 D-G2-2).
-  number_of_screens?: number;
   formule?: string;
   verification_status?: string;
 }
@@ -72,7 +74,7 @@ interface AdminUserWire {
   bank_rib: string | null;
   bank_iban: string | null;
   bank_details_updated_at: string | null;
-  screenhosts: ScreenhostWifi[];
+  screenhosts: AdminUserScreenhost[];
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;

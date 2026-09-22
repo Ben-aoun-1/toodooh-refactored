@@ -38,6 +38,12 @@ describe('adminKeys', () => {
     );
   });
 
+  it('keeps the venue-list prefix a prefix of every venue-list key (SCR-DECL1)', () => {
+    const prefix = adminKeys.adminLocationsAll();
+    const listKey = adminKeys.adminLocations('never_installed', 'owner-1', 'café', 3, 50);
+    expect(listKey.slice(0, prefix.length)).toEqual(prefix);
+  });
+
   it('keeps the recharges-all prefix a prefix of every recharge-list key', () => {
     const prefix = adminKeys.rechargesAll();
     const listKey = adminKeys.recharges('pending', '', 1, 20);

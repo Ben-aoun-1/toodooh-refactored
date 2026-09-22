@@ -13,15 +13,14 @@ import {
 import { useEffect, useState } from 'react';
 
 import PillButton from '@/components/PillButton';
+import ImpressionsEstimateText from '@/features/campaigns/components/ImpressionsEstimateText';
 import {
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
 } from '@/features/campaigns/hooks/new-campaign/cart-budget';
-import { useCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
 import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
-import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
-import { campaignCpm } from '@/features/campaigns/lib/campaign-impressions';
+import { useImpressionsEstimate } from '@/features/campaigns/hooks/useImpressionsEstimate';
 import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campaign-summary';
 import {
   CAMPAIGN_BUDGET_FLOOR_TND,
@@ -31,7 +30,6 @@ import {
   cmaxHelperLine,
   isInventoryInsufficient,
 } from '@/features/campaigns/lib/cmax-budget';
-import { estimateImpressions } from '@/features/campaigns/lib/impressions';
 import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
@@ -64,12 +62,11 @@ interface StepCartProps {
 // fr-TN money — space thousands, comma decimals (max 2, no forced trailing zeros: the interim slider
 // is integer-stepped so amounts read "5 000 TND"; L-price's fractional bounds would render decimals).
 const tnd = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 2 });
-const int = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
 
 /**
  * Validation step of the de-Supabase wizard (interim manual cart). LEFT: a read-only recap of the
  * campaign (name, diffusion type, targeting chips, période, coverage, spot preview). RIGHT: the
- * budget cursor with a live budget→impressions estimate priced at the resolved standard CPM. On
+ * budget cursor with the live « Impressions estimées » (IMP-EST1 — the dispatch dry-run). On
  * submit the orchestrator PATCHes requested_budget then POSTs /:id/submit (draft → pending);
  * Enregistrer PATCHes the budget and exits without submitting. Diffusion-type chips are STATIC (V1 is
  * Réseau-only). The estimate + bounds are interim — L-price replaces the numbers, not this layout.
@@ -91,10 +88,6 @@ export default function StepCart({
   saving,
 }: StepCartProps) {
   const targeting = useCampaignTargeting(draftCampaignId);
-  const pricing = usePricingConfig();
-  // CPM-1 — the create-early draft carries its own CPM (CPM-3: its screencaster's); the estimate
-  // prices at it (the live pricing-config only until the draft row is loaded).
-  const draft = useCampaign(draftCampaignId);
   const { data: creatives = [] } = useMyCreatives(userId);
   const previewUrl = useCreativePreviewUrl(creativeId);
   // E5 (VF US-1.3) — the live ceiling bounding the cursor (assemblePool's occupancy truth;
@@ -125,11 +118,6 @@ export default function StepCart({
     }
   }, [cMaxTnd, value, setRequestedBudget]);
 
-  // Impressions estimate — null while the budget is unset or the CPM is loading/errored, so the
-  // tile renders "—", never NaN.
-  const cpm = campaignCpm(draft.data?.campaign_type ?? 'standard', draft.data, pricing.data);
-  const impressions = value == null ? null : estimateImpressions(value, cpm);
-
   const chips = targeting.rows.length ? targeting.rows.map(toChipLabel) : ['Toutes catégories'];
 
   const durationDays = inclusiveDayCount(startDate, endDate);
@@ -137,6 +125,18 @@ export default function StepCart({
   // CF-SK1 (ruling #9) — an already-approved spot skips admin review entirely: say so here, so
   // the advertiser knows the confirm launches immediately. Only 'approved' earns the line.
   const approvedNotice = approvedSpotNotice(linkedCreative?.validation_status);
+  // IMP-EST1 — the dispatch dry-run for THIS cursor (debounced) over the draft's saved inputs.
+  const estimate = useImpressionsEstimate(draftCampaignId, {
+    budgetTnd: value,
+    inputs: {
+      startDate,
+      endDate,
+      targeting: targeting.rows.map((r) => `${r.category_id ?? '*'}:${r.class ?? '*'}`),
+      zones: zoneNames,
+      creativeId,
+      creativeDurationSeconds: linkedCreative?.duration_seconds ?? null,
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -264,7 +264,7 @@ export default function StepCart({
                 </span>
                 <p className="text-sm text-gray-600">Impressions potentielles</p>
                 <p className="mt-0.5 text-lg font-bold text-brand-accent">
-                  {impressions == null ? '—' : int.format(impressions)}
+                  <ImpressionsEstimateText view={estimate} />
                 </p>
               </div>
             </div>
@@ -398,9 +398,9 @@ export default function StepCart({
                 <Info className="h-3.5 w-3.5 text-slate-600" />
               </div>
               <p className="text-sm text-gray-600">
-                <strong>Note :</strong> Les impressions sont estimées sur la base du CPM en vigueur.
-                La diffusion intègre la répartition équitable, la durée effective de campagne et les
-                éventuelles indisponibilités.
+                <strong>Note :</strong> Les impressions sont estimées sur la semaine type des
+                établissements éligibles, comme si la campagne était diffusée maintenant ; elles
+                évoluent avec l’inventaire disponible et les éventuelles indisponibilités.
               </p>
             </div>
           </section>

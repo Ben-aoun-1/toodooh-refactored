@@ -2,6 +2,7 @@ import { HOURS_DIFFER_ERROR } from '@/features/auth/lib/working-hours';
 import { isValidAgentCode, AGENT_CODE_ERROR } from '@/features/auth/utils/agent-code';
 import { isValidPassword } from '@/features/auth/utils/password';
 import { PHONE_FORMAT_ERROR, isValidTunisiaPhone } from '@/features/auth/utils/phone';
+import { DECLARED_COUNT_ERROR, parseDeclaredCount } from '@/lib/screen-declaration';
 
 import { TAX_NUMBER_ERROR, normalizeTaxNumber, validateTaxNumber } from './tax-number';
 
@@ -75,6 +76,12 @@ const requireText = (errors: StepErrors, key: string, value: string): void => {
   if (!value.trim()) errors[key] = REQUIRED_FIELD_ERROR;
 };
 
+// SCR-DECL1 — a declared screen / room count: required, then an exact whole number 1–99 (D1).
+const requireCount = (errors: StepErrors, key: string, value: string): void => {
+  if (!value.trim()) errors[key] = REQUIRED_FIELD_ERROR;
+  else if (parseDeclaredCount(value) === null) errors[key] = DECLARED_COUNT_ERROR;
+};
+
 export const stepFieldErrors = (step: number, ctx: StepErrorCtx): StepErrors => {
   const errors: StepErrors = {};
 
@@ -107,8 +114,8 @@ export const stepFieldErrors = (step: number, ctx: StepErrorCtx): StepErrors => 
       if (!ctx.taxNumber.trim()) errors['taxNumber'] = REQUIRED_FIELD_ERROR;
       else if (!isValidTaxNumber(ctx.taxNumber)) errors['taxNumber'] = TAX_NUMBER_ERROR;
       if (!ctx.businessSectorId) errors['businessSector'] = REQUIRED_FIELD_ERROR;
-      if (!ctx.etablissementScreens) errors['screens'] = REQUIRED_FIELD_ERROR;
-      requireText(errors, 'rooms', ctx.etablissementRooms);
+      requireCount(errors, 'screens', ctx.etablissementScreens);
+      requireCount(errors, 'rooms', ctx.etablissementRooms);
       // H1 — the hour selects only misvalidate on fermeture ≤ ouverture. HOURS-M1: no bypass.
       if (!ctx.hoursValid) errors['hours'] = HOURS_WINDOW_ERROR;
       return errors;

@@ -295,8 +295,11 @@ describe('POST /api/signup', () => {
       postal_code: '1000',
       governorate_id: governorateId,
       fonction: 'Gérant',
-      // HOURS-M1: an individual_owner must carry its hours pair (advertisers never do).
-      ...(over['profile_type'] === 'individual_owner' ? { opening_hour: 8, closing_hour: 22 } : {}),
+      // HOURS-M1: an individual_owner must carry its hours pair (advertisers never do), and
+      // SCR-DECL1 its declared screen + room counts.
+      ...(over['profile_type'] === 'individual_owner'
+        ? { opening_hour: 8, closing_hour: 22, screen_count: 2, room_count: 1 }
+        : {}),
       ...over,
     };
   };
@@ -376,7 +379,9 @@ describe('POST /api/signup', () => {
       number_of_screens: 5,
       number_of_rooms: 3,
       company_size: '10 - 50',
-      fleet_establishments: [{ name: 'X', opening_hour: 8, closing_hour: 22 }],
+      fleet_establishments: [
+        { name: 'X', screen_count: 1, room_count: 1, opening_hour: 8, closing_hour: 22 },
+      ],
     });
     const res = await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     expect(res.statusCode).toBe(201);
@@ -764,7 +769,8 @@ describe('POST /api/signup', () => {
     expect(res.statusCode).toBe(201);
     const [u] = await usersByEmail('owner@example.com');
     expect(u?.role).toBe('advertiser');
-    expect(await docsFor(u?.id ?? '')).toHaveLength(0); // no docs at signup for advertisers
+    // A JSON signup carries no file; a screencaster's documents ride multipart (DOC-CAST1 suite).
+    expect(await docsFor(u?.id ?? '')).toHaveLength(0);
   });
 
   it('post-create storage failure → account still created (degraded), surfaced not thrown', async () => {

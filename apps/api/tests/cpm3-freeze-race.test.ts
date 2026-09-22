@@ -30,6 +30,7 @@ import { campaignDispatchRoutes } from '../src/routes/campaign-dispatch.js';
 import { cartRoutes } from '../src/routes/cart.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // CPM-3 final review (ruled 2026-09-19) — a freeze racing an admin CPM change, on real Postgres
 // with a SECOND connection (`side`) that holds locks. The freeze (runDispatch / runEventDispatch,
@@ -94,6 +95,7 @@ const fixture = async (closingHour: number) => {
     for (let h = 8; h < closingHour; h += 1)
       cells.push({ screenhostId: venue, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(cells));
+  await seedInstalledScreen(venue);
   await db.insert(recharges).values({
     advertiserId: advertiser,
     amountTnd: '5000.00',

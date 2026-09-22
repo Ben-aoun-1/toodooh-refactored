@@ -34,7 +34,11 @@ export interface AdminLocation {
   status: AdminLocationStatus;
   owner_id: string | null;
   owner_business_name: string | null;
-  /** DECLARED — the screens rows an admin created, installed or not. */
+  /** SCR-DECL1 — the owner's DECLARATION (screenhosts.screen_count); 0 = never declared. */
+  declared_screens_count: number;
+  /** SCR-DECL1 — the declared rooms; null = never declared (« Non renseigné »). */
+  room_count: number | null;
+  /** ROWS — the screens rows the TV app can pair against, installed or not. */
   screens_count: number;
   active_screens_count: number;
   /** INSTALLED — the subset that ever paired or ever reported. */

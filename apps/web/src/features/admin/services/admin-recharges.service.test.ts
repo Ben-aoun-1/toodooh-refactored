@@ -18,6 +18,8 @@ import {
 const row = (over: Partial<AdminRecharge> = {}): AdminRecharge => ({
   id: 'r1',
   advertiser_id: 'a1',
+  advertiser_label: 'Café Central',
+  advertiser_email: 'central@example.com',
   amount_tnd: 1000,
   status: 'pending',
   reference: 'VIR-AAAA1111',

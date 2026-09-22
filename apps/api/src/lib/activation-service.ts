@@ -77,8 +77,9 @@ export interface ActivationInput {
 }
 
 // Derived I_cible from the indicative budget at the given CPM, or null when un-derivable.
-// ⌊budget·1000 / cpm⌋; a sub-CPM budget floors to 0 → null (not deliverable).
-const deriveICible = (requestedBudget: number | null, cpm: number): number | null => {
+// ⌊budget·1000 / cpm⌋; a sub-CPM budget floors to 0 → null (not deliverable). IMP-EST1 — exported:
+// the « Impressions estimées » dry-run sizes its simulated dispatch with the SAME derivation.
+export const deriveICible = (requestedBudget: number | null, cpm: number): number | null => {
   if (requestedBudget === null || requestedBudget <= 0 || cpm <= 0) return null;
   const iCible = Math.floor((requestedBudget * 1000) / cpm);
   return iCible >= 1 ? iCible : null;

@@ -30,6 +30,7 @@ import {
   setCpmConfig,
 } from './helpers/cpm-config.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // CPM-1 (user rule, 2026-09-17) — an admin CPM change applies ONLY to campaigns created from that
 // moment on. Every existing campaign keeps the CPM in effect when it was created, whatever its
@@ -84,6 +85,7 @@ const seedVenue = async (sectorId: string): Promise<void> => {
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: sh?.id ?? '', dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(sh?.id ?? '');
 };
 
 const rowRates = async (id: string) => {

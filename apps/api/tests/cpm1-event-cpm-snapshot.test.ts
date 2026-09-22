@@ -35,6 +35,8 @@ import {
   setCpmConfig,
 } from './helpers/cpm-config.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
+import { sweepZones } from './helpers/zones.js';
 
 // CPM-1 on the EVENT engine — a positioning keeps the event CPM in effect when it was created:
 // its validation (runEventDispatch), its ceilings (cursor, submit, cart, « Hosts éligibles »), the
@@ -66,12 +68,16 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
+// TEST-ISO1 — zones survive resetAuthTables (global table) and another file pins the exact zone
+// catalogue: every zone seeded here is tracked and swept in afterEach.
+const seededZoneIds: string[] = [];
 const seedZone = async (): Promise<string> => {
   seq += 1;
   const [z] = await db
     .insert(zones)
     .values({ name: `CPM1 Zone ${tag()}`, active: true })
     .returning({ id: zones.id });
+  if (z) seededZoneIds.push(z.id);
   return z?.id ?? '';
 };
 
@@ -102,6 +108,7 @@ const seedVenue = async (sps: string, zoneId?: string) => {
     for (let h = 8; h < 23; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return { id, ownerId };
 };
 
@@ -136,6 +143,7 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
   });
 
   afterEach(async () => {
+    await sweepZones(seededZoneIds.splice(0));
     await app.close();
     vi.restoreAllMocks();
     await restoreCpmConfig(pinned);

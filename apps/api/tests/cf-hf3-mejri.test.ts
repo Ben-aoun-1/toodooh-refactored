@@ -24,6 +24,7 @@ import { adminCreativesRoutes } from '../src/routes/admin-creatives.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // CF-HF3 (Mejri retest batch 3) — the api half:
 //  (4) an APPROVED IMAGE creative activates end-to-end (the gate is type-agnostic — PINNED; the
@@ -32,8 +33,9 @@ import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 //      the reported « Administrator access required. » string is GONE) + the role-resolution
 //      hardening (a session user WITHOUT the role field resolves from the users row instead of
 //      silently degrading a genuine admin to advertiser);
-//  (3) « Impressions prévues » — /mine exposes planned_impressions (Σ ii_potentiel of the frozen
-//      plan's allocations; null when no plan).
+//  (3) « Impressions prévues » — /mine exposes planned_impressions (IMP-UNIT1: the frozen plan's
+//      PHYSICAL impressions, Σ créneau.impressions over its non-REFUSE allocations — NOT the
+//      facturable Σ ii_potentiel it used to send; null when no plan).
 // Real Postgres; the admin-campaigns.test.ts covering fixture (Ai=100, Hi=20 → i_cible 20000).
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -140,6 +142,7 @@ const seedImageActivatable = async (): Promise<{
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: sh?.id ?? '', dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(sh?.id ?? '');
   seq += 1;
   await db.insert(recharges).values({
     advertiserId: advertiser,
@@ -283,7 +286,7 @@ describe('CF-HF3 (real Postgres)', () => {
   });
 
   // ── (3) « Impressions prévues » on the advertiser wire ─────────────────────
-  it('/mine exposes planned_impressions: null without a plan, Σ ii_potentiel once frozen', async () => {
+  it('/mine exposes planned_impressions: null without a plan, Σ créneaux once frozen', async () => {
     const advertiser = await seedUser({ role: 'advertiser' });
     const owner = await seedUser({ role: 'individual_owner' });
     const [sh] = await db
@@ -334,21 +337,23 @@ describe('CF-HF3 (real Postgres)', () => {
         nRetenus: 1,
       })
       .returning();
+    // IMP-UNIT1 — the two units are DELIBERATELY different here (ii_potentiel = physical × T,
+    // T = 0.60): the wire must carry the 20 000 PHYSICAL, never the 12 000 facturable.
     await db.insert(campaignDispatchAllocation).values([
       {
         planId: plan?.id ?? '',
         screenhostId: sh?.id ?? '',
-        iiPotentiel: 12000,
+        iiPotentiel: 7200,
         rI: 10,
-        revenuPrevisionnel: '120',
+        revenuPrevisionnel: '108',
         creneaux: [{ date: '2026-08-01', hour: 9, reps: 10, impressions: 12000 }],
       },
       {
         planId: plan?.id ?? '',
         screenhostId: sh2?.id ?? '',
-        iiPotentiel: 8000,
+        iiPotentiel: 4800,
         rI: 10,
-        revenuPrevisionnel: '80',
+        revenuPrevisionnel: '72',
         creneaux: [{ date: '2026-08-02', hour: 9, reps: 10, impressions: 8000 }],
       },
     ]);
@@ -359,11 +364,14 @@ describe('CF-HF3 (real Postgres)', () => {
     const rows = res.json() as { name: string; planned_impressions: number | null }[];
     expect(rows.find((r) => r.name === 'Sans plan')?.planned_impressions).toBeNull();
     expect(rows.find((r) => r.name === 'Avec plan')?.planned_impressions).toBe(20000);
+    // The retired figure (Σ ii_potentiel) would have been 12 000.
+    expect(rows.find((r) => r.name === 'Avec plan')?.planned_impressions).not.toBe(12000);
   });
 
   // ADV-DSH1 (Mejri/Kais QA) — an event positioning has NO dispatch plan; its placed impressions
   // live in event_allocations. /mine must expose them as planned_impressions (the dashboard's
   // « Impressions prévues » reads that field and counted 0 for the +38 400 positioning).
+  // IMP-UNIT1 — impressions_total is already PHYSICAL; only a REFUSE row leaves the sum.
   it("ADV-DSH1: /mine exposes an event positioning's Σ event_allocations.impressions_total", async () => {
     const advertiser = await seedUser({ role: 'advertiser' });
     const owner = await seedUser({ role: 'individual_owner' });

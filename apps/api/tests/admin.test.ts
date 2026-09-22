@@ -187,6 +187,7 @@ describe('admin endpoints (real Postgres)', () => {
           ownerId: owner,
           wifiSsid: 'NET-A',
           wifiPasswordEncrypted: encryptWifiPassword('secret-a'),
+          screenCount: 3,
         },
         { name: 'Café B', ownerId: owner, wifiSsid: null, wifiPasswordEncrypted: null },
       ]);
@@ -198,6 +199,7 @@ describe('admin endpoints (real Postgres)', () => {
             name: string;
             wifi_ssid: string | null;
             wifi_password_set: boolean;
+            screen_count: number;
           }[];
         }[];
       }>();
@@ -205,10 +207,17 @@ describe('admin endpoints (real Postgres)', () => {
       expect(row?.screenhosts).toHaveLength(2);
       const a = row?.screenhosts.find((s) => s.name === 'Café A');
       const b = row?.screenhosts.find((s) => s.name === 'Café B');
-      expect(a).toMatchObject({ wifi_ssid: 'NET-A', wifi_password_set: true });
-      expect(b).toMatchObject({ wifi_ssid: null, wifi_password_set: false });
-      // The cipher/plaintext must never reach the wire — the view exposes only the presence flag.
-      expect(Object.keys(a ?? {}).sort()).toEqual(['id', 'name', 'wifi_password_set', 'wifi_ssid']);
+      expect(a).toMatchObject({ wifi_ssid: 'NET-A', wifi_password_set: true, screen_count: 3 });
+      expect(b).toMatchObject({ wifi_ssid: null, wifi_password_set: false, screen_count: 0 });
+      // The cipher/plaintext must never reach the wire — the view exposes only the presence flag
+      // (and SCR-DECL1's declared screen_count, which the admin user detail sums).
+      expect(Object.keys(a ?? {}).sort()).toEqual([
+        'id',
+        'name',
+        'screen_count',
+        'wifi_password_set',
+        'wifi_ssid',
+      ]);
       expect(JSON.stringify(row)).not.toContain('secret-a');
       expect(JSON.stringify(row)).not.toContain('wifiPasswordEncrypted');
       // A user with no screenhosts serializes an empty array.

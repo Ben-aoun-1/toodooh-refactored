@@ -21,6 +21,7 @@ import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { sweepZones } from './helpers/zones.js';
 
 // Integration suite — real Postgres (DATABASE_URL). auth.api.getSession is mocked so we drive the
 // session identity (id/role/status) directly; resetAuthTables TRUNCATE ... CASCADE wipes campaigns
@@ -181,6 +182,9 @@ interface MineRow {
 
 describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
+  // TEST-ISO1 — zones survive resetAuthTables (global table): every zone a test inserts is tracked
+  // here and swept in afterEach, so none accumulates for the files that pin the zone catalogue.
+  const createdZoneIds: string[] = [];
 
   beforeEach(async () => {
     await resetAuthTables();
@@ -190,6 +194,7 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
   });
 
   afterEach(async () => {
+    await sweepZones(createdZoneIds.splice(0));
     await app.close();
     vi.restoreAllMocks();
   });
@@ -328,6 +333,7 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
       .insert(zones)
       .values({ name: inactiveName, active: false })
       .returning();
+    if (inactive) createdZoneIds.push(inactive.id);
     const res2 = await app.inject({
       method: 'POST',
       url: '/api/campaigns',

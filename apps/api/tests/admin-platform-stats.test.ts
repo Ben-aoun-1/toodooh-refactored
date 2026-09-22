@@ -6,14 +6,17 @@ import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
+  campaignReconciliation,
   campaigns,
   cartItems,
   creatives,
   recharges,
+  reversementLines,
   screenhosts,
   screens,
   users,
 } from '../src/db/schema.js';
+import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../src/lib/dispatch/redispatch.js';
 import { adminPlatformStatsRoutes } from '../src/routes/admin-platform-stats.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -55,7 +58,7 @@ interface StatsBody {
     owners: number;
     advertisers: number;
   };
-  screens: { total: number; active: number };
+  screens: { total: number; installed: number; online: number };
   campaigns: {
     total: number;
     draft: number;
@@ -64,12 +67,20 @@ interface StatsBody {
     active: number;
     rejected: number;
     completed: number;
-    total_budget_tnd: number;
     average_budget_tnd: number;
   };
   creatives: { total: number; pending: number; approved: number };
-  revenue: { total_tnd: number; monthly_tnd: number };
+  revenue: {
+    total_tnd: number;
+    toodooh_tnd: number;
+    monthly: { month: string; total_tnd: number; toodooh_tnd: number };
+  };
 }
+
+// DASH-1 — the route's clock is injected; every instant in this file is NAMED (UTC `Z`).
+// Thu 15 Oct 2026, 10:00 Tunis → the Tunis month is October 2026, i.e.
+// [2026-09-30T23:00:00Z, 2026-10-31T23:00:00Z).
+const NOW = new Date('2026-10-15T09:00:00Z');
 
 describe('GET /api/admin/platform-stats (real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
@@ -77,7 +88,7 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
   beforeEach(async () => {
     await resetAuthTables();
     app = buildApp();
-    await app.register(adminPlatformStatsRoutes);
+    await app.register(adminPlatformStatsRoutes, { now: () => NOW });
     await app.ready();
   });
   afterEach(async () => {
@@ -178,13 +189,18 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
     await seedUser({ role: 'individual_owner', status: 'pending' });
     const fleetId = await seedUser({ role: 'fleet_owner', status: 'approved' });
 
-    // Screens: a screenhost with one active + one inactive screen.
+    // Screens: a screenhost with one screen seen a minute ago and one no device ever answered.
     const [sh] = await db
       .insert(screenhosts)
       .values({ name: 'Venue', ownerId: fleetId })
       .returning();
     await db.insert(screens).values([
-      { screenhostId: sh!.id, name: 'Écran 1', isActive: true },
+      {
+        screenhostId: sh!.id,
+        name: 'Écran 1',
+        isActive: true,
+        lastSeenAt: new Date('2026-10-15T08:59:00Z'),
+      },
       { screenhostId: sh!.id, name: 'Écran 2', isActive: false },
     ]);
 
@@ -223,7 +239,8 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
       .set({ creativeId: submitted?.id ?? null })
       .where(eq(campaigns.name, 'C-pending'));
 
-    // Recharges: 1 confirmed (100, this month → counts for total + monthly), 1 pending (50, ignored).
+    // Recharges: 1 confirmed THIS Tunis month (100) + 1 pending (50). DASH-1 (R1/R2): a top-up is
+    // an advertiser PREPAYMENT, not revenue — neither may reach any revenue figure.
     await db.insert(recharges).values([
       {
         advertiserId,
@@ -231,7 +248,7 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
         reference: 'FCT-STATS001',
         status: 'confirmed',
         confirmedBy: adminId,
-        confirmedAt: new Date(),
+        confirmedAt: new Date('2026-10-12T10:00:00Z'),
       },
       { advertiserId, amountTnd: '50.00', reference: 'FCT-STATS002', status: 'pending' },
     ]);
@@ -241,23 +258,32 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
     const body = res.json() as StatsBody;
 
     // SIGN-4 — pending_owners is the OWNER half of `pending`: the pending individual_owner above.
+    // DASH-1 (R5) — owners/advertisers count APPROVED accounts only: the pending owner is waiting,
+    // not part of the network.
     expect(body.users).toEqual({
       total: 3,
       pending: 1,
       approved: 2,
       pending_owners: 1,
-      owners: 2,
+      owners: 1,
       advertisers: 1,
     });
-    expect(body.screens).toEqual({ total: 2, active: 1 });
+    expect(body.screens).toEqual({ total: 2, installed: 1, online: 1 });
     expect(body.campaigns.total).toBe(3);
     expect(body.campaigns.draft).toBe(1);
     expect(body.campaigns.pending).toBe(1);
     expect(body.campaigns.active).toBe(1);
-    expect(body.campaigns.total_budget_tnd).toBe(300);
-    expect(body.campaigns.average_budget_tnd).toBe(150); // avg over the 2 non-null budgets
+    // DASH-1 — « Budget moyen » is left as is (flagged): avg over the 2 non-null budgets, every status.
+    expect(body.campaigns.average_budget_tnd).toBe(150);
+    // DASH-1 (R1) — the requested-budget sum (« Budget Campagnes ») is gone from the wire.
+    expect(body.campaigns).not.toHaveProperty('total_budget_tnd');
     expect(body.creatives).toEqual({ total: 2, pending: 1, approved: 1 }); // the uncarted upload is NOT counted
-    expect(body.revenue).toEqual({ total_tnd: 100, monthly_tnd: 100 });
+    // No settlement, no reversement line → zero revenue, whatever the recharges say.
+    expect(body.revenue).toEqual({
+      total_tnd: 0,
+      toodooh_tnd: 0,
+      monthly: { month: '2026-10', total_tnd: 0, toodooh_tnd: 0 },
+    });
   });
 
   // ADM-FIX1 — the buckets stopped at draft/pending/active/rejected while `total` counted every
@@ -288,5 +314,205 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
     expect(c.completed).toBe(1);
     expect(c.total).toBe(7);
     expect(c.draft + c.pending + c.upcoming + c.active + c.rejected + c.completed).toBe(c.total);
+  });
+
+  // DASH-1 (R1/R2/R3, operator ruling 2026-09-21). « Revenu total » = Σ campaign_reconciliation
+  // .spend_tnd (classic AND event settlements); « Revenu Toodooh » = Σ toodooh_amount_tnd (every
+  // source, the NULL-agent 3 % lines NOT added) + each settled campaign's unsplit spend − Σ base,
+  // 0 here: base = spend in every fixture (R2 amended → admin-platform-stats-toodooh.test.ts).
+  // « Revenu mensuel » = both, over the TUNIS month: lines by settled_at, the rest by reconciled_at.
+  describe('DASH-1 revenue — realised spend, Toodooh share, the Tunis month', () => {
+    const seedSettlement = async (
+      advertiserId: string,
+      screenhostId: string,
+      s: {
+        name: string;
+        campaignType: 'standard' | 'event';
+        spendTnd: string;
+        reconciledAt: Date;
+        toodoohTnd: string;
+        settledAt: Date;
+      },
+    ): Promise<void> => {
+      const [c] = await db
+        .insert(campaigns)
+        .values({
+          advertiserId,
+          name: s.name,
+          campaignType: s.campaignType,
+          status: 'completed',
+          // A requested budget far above the spend: « Revenu total » must read the SETTLED
+          // debit, never the indicative budget.
+          requestedBudget: '9999.00',
+        })
+        .returning();
+      const campaignId = c?.id ?? '';
+      await db.insert(campaignReconciliation).values({
+        campaignId,
+        expectedImp: 1000,
+        deliveredImp: 1000,
+        manquementImp: 0,
+        pPerteTnd: '0.0000',
+        refundTnd: '0.0000',
+        spendTnd: s.spendTnd,
+        status: 'reussie',
+        reconciledAt: s.reconciledAt,
+      });
+      await db.insert(reversementLines).values({
+        source: s.campaignType === 'event' ? 'event' : 'campaign',
+        campaignId,
+        screenhostId,
+        baseValueTnd: s.spendTnd,
+        shAmountTnd: '1.0000',
+        toodoohAmountTnd: s.toodoohTnd,
+        // The two 3 % agent lines, recorded with NO agent (no referral): R2 does NOT add them.
+        agentShAmountTnd: '3.0000',
+        agentScAmountTnd: '3.0000',
+        agentShId: null,
+        agentScId: null,
+        settledAt: s.settledAt,
+      });
+    };
+
+    it('sums settled spend and the Toodooh share, all time and over the Tunis month', async () => {
+      const adminId = await seedUser({ role: 'admin' });
+      mockSession(adminId);
+      const advertiserId = await seedUser({ role: 'advertiser', status: 'approved' });
+      const ownerId = await seedUser({ role: 'individual_owner', status: 'approved' });
+      const [venue] = await db.insert(screenhosts).values({ name: 'Venue', ownerId }).returning();
+      const venueId = venue?.id ?? '';
+
+      // A — classic, Thu 1 Oct 2026 00:30 Tunis (= Wed 30 Sep 23:30 UTC): IN October. The old
+      //     server-time (UTC) month put it in September.
+      await seedSettlement(advertiserId, venueId, {
+        name: 'A-classic-1-oct-0030',
+        campaignType: 'standard',
+        spendTnd: '100.0000',
+        reconciledAt: new Date('2026-09-30T23:30:00Z'),
+        toodoohTnd: '44.0000',
+        settledAt: new Date('2026-09-30T23:30:00Z'),
+      });
+      // B — classic, Wed 30 Sep 2026 23:30 Tunis: OUT (September).
+      await seedSettlement(advertiserId, venueId, {
+        name: 'B-classic-30-sep-2330',
+        campaignType: 'standard',
+        spendTnd: '40.0000',
+        reconciledAt: new Date('2026-09-30T22:30:00Z'),
+        toodoohTnd: '17.6000',
+        settledAt: new Date('2026-09-30T22:30:00Z'),
+      });
+      // C — EVENT settlement, Sat 10 Oct 2026 13:00 Tunis: IN.
+      await seedSettlement(advertiserId, venueId, {
+        name: 'C-event-10-oct',
+        campaignType: 'event',
+        spendTnd: '25.5000',
+        reconciledAt: new Date('2026-10-10T12:00:00Z'),
+        toodoohTnd: '11.2200',
+        settledAt: new Date('2026-10-10T12:00:00Z'),
+      });
+      // D — classic, Sun 1 Nov 2026 00:30 Tunis (= Sat 31 Oct 23:30 UTC): OUT (November).
+      await seedSettlement(advertiserId, venueId, {
+        name: 'D-classic-1-nov-0030',
+        campaignType: 'standard',
+        spendTnd: '7.0000',
+        reconciledAt: new Date('2026-10-31T23:30:00Z'),
+        toodoohTnd: '3.0800',
+        settledAt: new Date('2026-10-31T23:30:00Z'),
+      });
+      // E — each figure reads ITS OWN timestamp (R3): reconciled Wed 30 Sep 23:50 Tunis (OUT for
+      //     the total), its reversement line settled Thu 1 Oct 00:10 Tunis (IN for Toodooh).
+      await seedSettlement(advertiserId, venueId, {
+        name: 'E-straddles-the-boundary',
+        campaignType: 'standard',
+        spendTnd: '10.0000',
+        reconciledAt: new Date('2026-09-30T22:50:00Z'),
+        toodoohTnd: '4.4000',
+        settledAt: new Date('2026-09-30T23:10:00Z'),
+      });
+      // A confirmed recharge inside the month: a prepayment, never revenue.
+      await db.insert(recharges).values({
+        advertiserId,
+        amountTnd: '500.00',
+        reference: 'FCT-DASH1',
+        status: 'confirmed',
+        confirmedBy: adminId,
+        confirmedAt: new Date('2026-10-05T10:00:00Z'),
+      });
+
+      const res = await get();
+      expect(res.statusCode).toBe(200);
+      const { revenue } = res.json() as StatsBody;
+      expect(revenue).toEqual({
+        total_tnd: 182.5, // A 100 + B 40 + C 25.5 + D 7 + E 10
+        toodooh_tnd: 80.3, // 44 + 17.6 + 11.22 + 3.08 + 4.4 — no agent line, no recharge
+        monthly: {
+          month: '2026-10',
+          total_tnd: 125.5, // A 100 + C 25.5 (by reconciled_at)
+          toodooh_tnd: 59.62, // A 44 + C 11.22 + E 4.4 (by settled_at)
+        },
+      });
+    });
+  });
+
+  // DASH-1 (R4) — « Actifs » read screens.is_active, which NO code writes (always true = Total).
+  // « Installés » = paired_at OR last_seen_at (ADM-FIX1's ruling); « En ligne » = a heartbeat
+  // within REDISPATCH_HEARTBEAT_TOLERANCE_MS of now (the one liveness rule). is_active is ignored.
+  it('R4: screens are counted installed (paired OR seen) and online (heartbeat tolerance)', async () => {
+    const adminId = await seedUser({ role: 'admin' });
+    mockSession(adminId);
+    const ownerId = await seedUser({ role: 'fleet_owner', status: 'approved' });
+    const [venue] = await db.insert(screenhosts).values({ name: 'Venue', ownerId }).returning();
+    const screenhostId = venue?.id ?? '';
+    const ago = (ms: number): Date => new Date(NOW.getTime() - ms);
+    await db.insert(screens).values([
+      // Declared, no device ever answered → neither.
+      { screenhostId, name: 'Jamais', isActive: true },
+      // Paired, never heard from → installed, offline.
+      { screenhostId, name: 'Appairé', pairedAt: new Date('2026-09-01T08:00:00Z') },
+      // Seen within the tolerance → installed AND online.
+      {
+        screenhostId,
+        name: 'Frais',
+        pairedAt: new Date('2026-09-01T08:00:00Z'),
+        lastSeenAt: ago(REDISPATCH_HEARTBEAT_TOLERANCE_MS - 60_000),
+      },
+      // Seen, but past the tolerance (no pairing stamp) → installed, offline.
+      { screenhostId, name: 'Périmé', lastSeenAt: ago(REDISPATCH_HEARTBEAT_TOLERANCE_MS + 60_000) },
+      // is_active = false is irrelevant: seen a minute ago → installed AND online.
+      { screenhostId, name: 'Inactif mais vivant', isActive: false, lastSeenAt: ago(60_000) },
+    ]);
+
+    const { screens: s } = (await get()).json() as StatsBody;
+    expect(s).toEqual({ total: 5, installed: 4, online: 2 });
+  });
+
+  // DASH-1 (R5) — Propriétaires / Annonceurs count APPROVED accounts only; Utilisateurs · Total is
+  // every end-user status EXCEPT banned. users.pending and pending_owners are unchanged (SIGN-4's
+  // queue badge reads them).
+  it('R5: owners/advertisers are approved only; the total drops banned accounts only', async () => {
+    const adminId = await seedUser({ role: 'admin' });
+    mockSession(adminId);
+    await seedUser({ role: 'superadmin' }); // internal — never a platform user
+    await seedUser({ role: 'screenhost_agent' }); // internal — never a platform user
+    await seedUser({ role: 'advertiser', status: 'approved' });
+    await seedUser({ role: 'advertiser', status: 'approved' });
+    await seedUser({ role: 'advertiser', status: 'pending' });
+    await seedUser({ role: 'advertiser', status: 'rejected' });
+    await seedUser({ role: 'advertiser', status: 'banned' });
+    await seedUser({ role: 'individual_owner', status: 'approved' });
+    await seedUser({ role: 'individual_owner', status: 'banned' });
+    await seedUser({ role: 'fleet_owner', status: 'approved' });
+    await seedUser({ role: 'fleet_owner', status: 'pending' });
+    await seedUser({ role: 'fleet_owner', status: 'rejected' });
+
+    const { users: u } = (await get()).json() as StatsBody;
+    expect(u).toEqual({
+      total: 8, // 10 end users − 2 banned (rejected accounts still count)
+      pending: 2, // advertiser + fleet_owner — unchanged semantics
+      approved: 4,
+      pending_owners: 1, // the pending fleet_owner — unchanged semantics
+      owners: 2, // approved individual_owner + approved fleet_owner
+      advertisers: 2, // the two approved advertisers
+    });
   });
 });

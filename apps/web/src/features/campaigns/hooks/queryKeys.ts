@@ -33,6 +33,14 @@ export const campaignsKeys = {
   /** E5 — the live C_max ceiling for the Validation-step budget cursor (GET /:id/cmax). */
   cmax: (id: string) => [...campaignsKeys.all, 'cmax', id] as const,
 
+  /**
+   * IMP-EST1 — the dry-run « Impressions estimées » (GET /:id/impressions-estimate). Keyed on
+   * everything that moves the estimate — the budget sized with (the cursor, or 'stored') and a
+   * signature of the campaign's dates / targeting / zones / spot — so a change recomputes it live.
+   */
+  impressionsEstimate: (id: string, budget: number | 'stored', inputs: string) =>
+    [...campaignsKeys.all, 'impressionsEstimate', id, budget, inputs] as const,
+
   /** Persisted `campaign_categories` rows for a campaign (edit-mode hydration). */
   categories: (campaignId: string) => [...campaignsKeys.all, 'categories', campaignId] as const,
 

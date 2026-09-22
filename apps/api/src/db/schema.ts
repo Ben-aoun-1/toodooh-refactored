@@ -345,8 +345,10 @@ export const screenhosts = pgTable(
     name: text('name').notNull(),
     latitude: numeric('latitude', { precision: 10, scale: 8 }),
     longitude: numeric('longitude', { precision: 11, scale: 8 }),
-    // Free metadata, NOT screens rows.
+    // The DECLARED screens, NOT screens rows (SCR-DECL1: once the owner is approved, an edit makes
+    // the rows follow it — lib/screens.ts). room_count: declared rooms, NULL = never declared (0078).
     screenCount: integer('screen_count').notNull().default(0),
+    roomCount: integer('room_count'),
     address: text('address'),
     city: text('city'),
     postalCode: text('postal_code'),
@@ -380,7 +382,9 @@ export const screenhosts = pgTable(
     // set. Per-weekday hours + overnight (closing ≤ opening) semantics are deferred to L-disp.
     openingHour: integer('opening_hour'),
     closingHour: integer('closing_hour'),
-    // Broadcast capacity (concurrent spot slots) the dispatcher allocates against; nullable until set.
+    // « Capacité de diffusion » — CAP-EVT1: the venue's EVENT SWITCH. SET (not NULL) makes it eligible
+    // to events; its numeric value is unused, and standard campaigns never read it. One home for the
+    // rule: lib/event-pricing/event-switch.ts. Nullable = switch off.
     broadcastCapacity: integer('broadcast_capacity'),
     // SPS — Screenhost Priority Score (qualité/fiabilité), 0–100. NEUTRAL default 50 for every row;
     // the real computation (TxActivité/TxRespect from proof-of-play) is DEFERRED to L-playout, so in
@@ -426,6 +430,7 @@ export const screenhosts = pgTable(
       sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`,
     ),
     check('screenhosts_screen_count_nonneg', sql`${table.screenCount} >= 0`),
+    check('screenhosts_room_count_nonneg', sql`${table.roomCount} >= 0`),
     check(
       'screenhosts_opening_hour_range',
       sql`${table.openingHour} IS NULL OR (${table.openingHour} >= 0 AND ${table.openingHour} <= 23)`,

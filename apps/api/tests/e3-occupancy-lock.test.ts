@@ -18,6 +18,7 @@ import { OCCUPANCY_LOCK_NAMESPACE } from '../src/lib/dispatch/pool.js';
 
 import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // E3 / US-4.4 — pessimistic occupancy locking, real Postgres. The engaged-seconds read now runs
 // INSIDE the freeze transaction under per-screenhost pg_advisory_xact_lock (sorted ids), so two
@@ -85,6 +86,7 @@ const seedEligibleScreenhost = async (ownerId: string, categoryId: string): Prom
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+  await seedInstalledScreen(id);
   return id;
 };
 

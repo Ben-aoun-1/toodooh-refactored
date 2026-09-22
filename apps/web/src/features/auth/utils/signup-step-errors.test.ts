@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { DECLARED_COUNT_ERROR } from '@/lib/screen-declaration';
+
 import { AGENT_CODE_ERROR } from './agent-code';
 import { PHONE_FORMAT_ERROR } from './phone';
 import {
@@ -130,6 +132,17 @@ describe('step 2 — individual_owner établissement', () => {
       rooms: REQUIRED_FIELD_ERROR,
       hours: HOURS_WINDOW_ERROR,
     });
+  });
+
+  it('SCR-DECL1: the screen and room counts are exact whole numbers from 1 to 99', () => {
+    for (const bad of ['0', '100', '2.5', '6-10', '10+', 'deux']) {
+      expect(
+        stepFieldErrors(2, ownerCtx({ etablissementScreens: bad, etablissementRooms: bad })),
+      ).toEqual({ screens: DECLARED_COUNT_ERROR, rooms: DECLARED_COUNT_ERROR });
+    }
+    expect(
+      stepFieldErrors(2, ownerCtx({ etablissementScreens: '12', etablissementRooms: '1' })),
+    ).toEqual({});
   });
 
   it('HOURS-M1: the hours window is always required — the former « préciser plus tard » bypass is gone', () => {

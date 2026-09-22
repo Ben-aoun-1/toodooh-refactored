@@ -9,6 +9,10 @@ import { HOURS_ORDER_HINT } from '@/features/screenhost/lib/venue-hours';
 // harness; no render tests). The client-side rules MIRROR the intended PATCH contract: hours
 // set-together with ouverture strictly before fermeture (the H2 pair rules, same copy), capacity
 // a strictly positive integer, catégorie/classe null-clearable via « — ».
+//
+// CAP-EVT1 (operator ruling 2026-09-22) — the capacity is the venue's EVENT SWITCH: set (e.g. 1) =
+// eligible for events, empty = not; its value is unused and standard campaigns never read it. So
+// the field says so (label + hint below) and it is no MISSING field of the dispatch readiness.
 
 export interface EligibilityFormState {
   businessSectorId: string | null;
@@ -30,7 +34,12 @@ export const CLASS_INVALID_ERROR = 'Classe invalide.';
 export const OPENING_RANGE_ERROR = "Heure d'ouverture invalide (entier de 0 à 23).";
 export const CLOSING_RANGE_ERROR = 'Heure de fermeture invalide (entier de 0 à 23).';
 export const ELIGIBILITY_CONSEQUENCE_NOTE =
-  "Sans horaires ou capacité, l'établissement est exclu des prochaines campagnes.";
+  "Sans horaires, l'établissement est exclu des prochaines campagnes et des événements. Sans capacité de diffusion, il est exclu des événements seulement.";
+/** CAP-EVT1 — the capacity field is the event switch, and says so. */
+export const CAPACITY_FIELD_LABEL = 'Capacité de diffusion (événements)';
+export const CAPACITY_FIELD_HINT =
+  "Rend l'établissement éligible aux événements (ex. 1). Sans effet sur les campagnes classiques.";
+export const CAPACITY_FIELD_PLACEHOLDER = 'Vide = hors événements';
 export const ELIGIBILITY_SAVED_TOAST = 'Éligibilité dispatch enregistrée';
 export const ELIGIBILITY_ERROR_TOAST = "Impossible d'enregistrer l'éligibilité";
 export const NO_CHANGES_TOAST = 'Aucune modification à enregistrer';
@@ -128,7 +137,8 @@ export const mapEligibilityServerErrors = (
 
 export interface EligibilityReadiness {
   eligible: boolean;
-  /** French field names, fixed order: catégorie, horaires, capacité. Empty when eligible. */
+  /** French field names, fixed order: catégorie, horaires. Empty when eligible. (CAP-EVT1: the
+   *  capacité is the event switch, never a missing field of the dispatch readiness.) */
   missing: string[];
 }
 
@@ -137,15 +147,12 @@ export const READINESS_ELIGIBLE_LABEL = 'Éligible au dispatch';
 /**
  * The badge's verdict — mirrors the US-2.1 hard pool gates the admin can act on here: catégorie
  * set, a NON-EMPTY horaires window (both bounds, ouverture < fermeture — a half-set or inverted
- * pair yields no broadcastable hours and the pool skips the venue), capacité set. Classe and
- * affluence are not part of this badge (classe only narrows class-targeted campaigns; affluence
- * is S-W2's surface).
+ * pair yields no broadcastable hours and the pool skips the venue). Classe and affluence are not
+ * part of this badge (classe only narrows class-targeted campaigns; affluence is S-W2's surface),
+ * nor is the capacité since CAP-EVT1: it is the event switch, which the standard pool never reads.
  */
 export const eligibilityReadiness = (
-  view: Pick<
-    ScreenhostEligibility,
-    'business_sector_id' | 'opening_hour' | 'closing_hour' | 'broadcast_capacity'
-  >,
+  view: Pick<ScreenhostEligibility, 'business_sector_id' | 'opening_hour' | 'closing_hour'>,
 ): EligibilityReadiness => {
   const missing: string[] = [];
   if (view.business_sector_id === null) missing.push('catégorie');
@@ -154,7 +161,6 @@ export const eligibilityReadiness = (
     view.closing_hour !== null &&
     view.opening_hour !== view.closing_hour; // HOURS-X1: an overnight window counts
   if (!hasWindow) missing.push('horaires');
-  if (view.broadcast_capacity === null) missing.push('capacité');
   return { eligible: missing.length === 0, missing };
 };
 

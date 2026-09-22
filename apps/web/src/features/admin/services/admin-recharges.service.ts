@@ -7,19 +7,27 @@ import { apiClient } from '@/lib/api-client';
 // throw ApiError on failure.
 //
 // FCT1 — the per-method model: virement runs pending («En attente de réception») → confirmed
-// («Créditée») | rejected («Annulée»); a bon reaches the queue only as 'bon_returned' («Bon
-// retourné signé») — 'bon_issued' rows are SERVER-EXCLUDED (screencaster-only) and never appear
-// here. Legacy rows (method null) keep the as-found pending/confirmed/rejected labels. Confirm
-// CREDITS the derived balance AT VALIDATION; reject carries a required reason. Advertiser
-// business_name/email are enriched from GET /api/admin/users?status=approved (see the hook).
+// («Créditée») | rejected («Annulée»); a bon runs 'bon_issued' («Bon émis», read-only here —
+// GREEN2 made those rows visible) → 'bon_returned' («Bon retourné signé», decidable). Legacy rows
+// (method null) keep the as-found pending/confirmed/rejected labels. Confirm CREDITS the derived
+// balance AT VALIDATION; reject carries a required reason. RECH-ADM1 — every row carries its
+// screencaster's name (advertiser_label, ADM-FIX1's ONE label) + email from the api itself.
 
-export type AdminRechargeStatus = 'pending' | 'confirmed' | 'rejected' | 'bon_returned';
+export type AdminRechargeStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'rejected'
+  | 'bon_issued'
+  | 'bon_returned';
 
 // The admin projection (lib/recharges.adminRechargeView): the advertiser-facing fields + advertiser_id
-// + confirmed_by (audit). amount is a number (the numeric column's exact value).
+// (+ its label/email) + confirmed_by (audit). amount is a number (the numeric column's exact value).
 export interface AdminRecharge {
   id: string;
   advertiser_id: string;
+  /** RECH-ADM1 — ADM-FIX1's ONE label (business → contact → email → id), any account status. */
+  advertiser_label: string;
+  advertiser_email: string;
   amount_tnd: number;
   status: AdminRechargeStatus;
   reference: string;
@@ -32,7 +40,7 @@ export interface AdminRecharge {
   has_document: boolean;
   document_uploaded_at: string | null;
   document_mime: string | null;
-  /** FCT1 — null = legacy row (renders as-found: « — » type, as-found status labels). */
+  /** FCT1 — null = legacy row (type « Ancien format (FCT) » here, as-found status labels). */
   method: RechargeMethod | null;
   has_bon: boolean;
   has_signed_bon: boolean;
@@ -73,10 +81,11 @@ export interface RechargeStats {
   rejected_amount: number;
 }
 
-// Counters for the stat cards, DERIVED client-side from the full list (the endpoint returns every
-// row when unfiltered, so this mirrors the old Supabase select-then-reduce — no stats endpoint
-// needed). FCT1: « En attente » counts the ACTIONABLE rows — pending AND bon_returned (a returned
-// signed bon awaits the same Valider).
+// Counters for the stat cards, DERIVED client-side (no stats endpoint needed). RECH-ADM1 (T4): the
+// page passes the rows its filters KEEP, so the cards describe that selection (e.g. one
+// screencaster's totals); with no filter active that is the whole list, i.e. the platform totals.
+// FCT1: « En attente » counts the ACTIONABLE rows — pending AND bon_returned (a returned signed bon
+// awaits the same Valider).
 // ADM-RCH1 (Mejri/Kais QA) — « Montant Total » summed EVERY row, rejected ones included, so an
 // admin who cancelled a 4 000 TND recharge still saw it in the total. A rejected (« Annulée »)
 // recharge never credited anything: it is excluded from total_amount and carried separately as

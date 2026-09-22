@@ -16,8 +16,6 @@ export interface BusinessProfile {
   zone?: string;
   formule?: string;
   agent_toodooh?: string;
-  number_of_screens?: number;
-  number_of_rooms?: number;
   company_size?: string;
   logo_url?: string;
   registration_doc_url?: string;
@@ -122,12 +120,18 @@ export interface SignUpData {
   zone?: string; // Zone géographique pour les propriétaires
   formule?: string; // Formule choisie par le propriétaire (abonnement, revenue_share) - loyer retiré pour les nouvelles inscriptions
   agent_toodooh?: string; // Agent Toodooh - champ de saisie libre pour les propriétaires
-  number_of_screens?: number; // Nombre d'écrans pour les propriétaires
-  number_of_rooms?: number; // Nombre de salles (étape Établissement)
+  // SCR-DECL1 — the individual_owner's exact « Nombre d'écrans » / « Nombre de salles » (1–99),
+  // stored on its venue (a fleet owner's live on each fleet_establishments entry).
+  screen_count?: number;
+  room_count?: number;
   company_size?: string; // Nombre d'établissements du parc / taille entreprise
-  registration_doc?: File; // RNE — non-owner picker AND every owner's legal volet since CIN-2b (sent as `rne`, R7/N4)
+  registration_doc?: File; // RNE — every owner's legal volet since CIN-2b (sent as `rne`, R7/N4)
   company_logo?: File; // Logo entreprise/établissement
   bank_doc?: File; // Relevé d'identité bancaire (RIB) — owner volet 2 (sent as `bank`, R7/N4)
+  // DOC-CAST1 — a screencaster's (advertiser / agency) « Documents » picks: EVERY RNE (≤ 2) and every
+  // document complémentaire (≤ 10), each sent as its own `rne` / `complementaire` part.
+  rne_docs?: File[];
+  complementaire_docs?: File[];
   terms_accepted: boolean;
   // Screenhost geo + WiFi capture (P3) — individual_owner's single location, built server-side from
   // these top-level fields + the street_address/city/zone/… already sent. All optional ("add later").

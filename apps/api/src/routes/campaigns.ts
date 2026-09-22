@@ -1,12 +1,10 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import {
   businessSectors,
-  campaignDispatchAllocation,
-  campaignDispatchPlan,
   campaignReconciliation,
   campaignTargeting,
   campaignZones,
@@ -30,6 +28,7 @@ import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { validateEventSpot } from '../lib/event-pricing/spot.js';
+import { eventPrevuesOf, plannedPrevuesByCampaign } from '../lib/planned-impressions.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -365,46 +364,15 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
 
     const zoneMap = await zonesByCampaign(ids);
 
-    // CF-HF3 (Mejri item 3) — « Impressions prévues »: the FROZEN plan's placed facturable
-    // (Σ allocations.ii_potentiel over the campaign's unique plan) — or, for an event positioning,
-    // Σ event_allocations.impressions_total (ADV-DSH1) — null when neither exists yet (the web
-    // falls back to the budget-derived estimate). A pure READ of the plan — the display rule
-    // never recomputes engine numbers.
-    const plannedByCampaign = new Map<string, number>();
-    if (ids.length > 0) {
-      const planned = await db
-        .select({
-          campaignId: campaignDispatchPlan.campaignId,
-          placedFact: sql<string>`coalesce(sum(${campaignDispatchAllocation.iiPotentiel}), 0)`,
-        })
-        .from(campaignDispatchPlan)
-        .innerJoin(
-          campaignDispatchAllocation,
-          eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
-        )
-        .where(inArray(campaignDispatchPlan.campaignId, ids))
-        .groupBy(campaignDispatchPlan.campaignId);
-      for (const p of planned) plannedByCampaign.set(p.campaignId, Number(p.placedFact));
-      // ADV-DSH1 (Mejri/Kais QA) — an EVENT POSITIONING has no dispatch plan (EV3): its placed
-      // impressions live in event_allocations.impressions_total (EV4). They were null here, so
-      // « Impressions prévues » on the dashboard counted 0 for a positioning the Consulter drawer
-      // showed at 38 400. Same figure, same rows, as GET /:id/event-allocations (Σ over every
-      // allocation row, whatever its statut — the drawer's own total), so the two never disagree.
-      // A campaign has EITHER a plan OR event allocations, never both; the plan wins if it ever did.
-      const eventPlanned = await db
-        .select({
-          campaignId: eventAllocations.campaignId,
-          total: sql<string>`coalesce(sum(${eventAllocations.impressionsTotal}), 0)`,
-        })
-        .from(eventAllocations)
-        .where(inArray(eventAllocations.campaignId, ids))
-        .groupBy(eventAllocations.campaignId);
-      for (const e of eventPlanned) {
-        if (!plannedByCampaign.has(e.campaignId)) {
-          plannedByCampaign.set(e.campaignId, Number(e.total));
-        }
-      }
-    }
+    // CF-HF3 (Mejri item 3) — « Impressions prévues »: a pure READ of the frozen plan, never a
+    // recomputation of engine numbers. IMP-UNIT1 (ruled B, 2026-09-22) — and PHYSICAL, the real
+    // audience, like the pre-dispatch estimate (IMP-EST1): Σ créneau.impressions over the plan's
+    // non-REFUSE allocations, or Σ event_allocations.impressions_total for an event positioning
+    // (ADV-DSH1). It was Σ ii_potentiel, i.e. FACTURABLE (physical × T) counting REFUSE rows, so
+    // the label dropped by ~T at dispatch. ONE home, shared with GET /:id/impressions-estimate, so
+    // the two sides of dispatch cannot disagree. null = no plan yet — the web then asks for the
+    // dry-run estimate per campaign (a list endpoint never fans dry-runs out).
+    const plannedByCampaign = await plannedPrevuesByCampaign(ids);
 
     return reply.status(200).send(
       rows.map((r) => ({
@@ -415,7 +383,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         spend_tnd: r.spendTnd == null ? null : Number(r.spendTnd),
         reconciled_at: r.reconciledAt ?? null,
         targeting: targetingByCampaign.get(r.id) ?? [],
-        planned_impressions: plannedByCampaign.get(r.id) ?? null,
+        planned_impressions: plannedByCampaign.get(r.id)?.impressions ?? null,
       })),
     );
   });
@@ -712,7 +680,15 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
 
     return reply.status(200).send({
       count: rows.length,
-      impressions_total: rows.reduce((sum, r) => sum + r.impressionsTotal, 0),
+      // IMP-UNIT1 (ruled B, 2026-09-22) — the web prints this total as « impressions prévues »
+      // (EventPlacementSummary), in the SAME Consulter drawer as /mine's « Impressions prévues ».
+      // So it is the same figure read through the same home: a REFUSE row never airs and is out of
+      // it. It used to be Σ over every row — equal to /mine only by construction, and the moment
+      // /mine dropped the refused venues the one drawer showed two different « prévues ».
+      // `count` still counts every placed venue: the per-venue lines below are listed REFUSE
+      // included, each with its own statut badge. `montant_total_tnd` is MONEY and this ruling is
+      // display-only, so it keeps summing every row — it is not rendered next to this figure.
+      impressions_total: eventPrevuesOf(rows).impressions,
       montant_total_tnd:
         Math.round(rows.reduce((sum, r) => sum + Number(r.montantTnd) * 1000, 0)) / 1000,
       allocations: rows.map((r) => {

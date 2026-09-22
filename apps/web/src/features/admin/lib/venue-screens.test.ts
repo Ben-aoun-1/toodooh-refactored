@@ -7,6 +7,8 @@ import {
   LOCATION_STATUS_BADGE,
   LOCATION_STATUS_FILTER_OPTIONS,
   SCREEN_STATUS_BADGE,
+  declaredScreensTotalLabel,
+  roomsLabel,
   screenInstallNote,
   screenStatusOf,
   screensCountLabel,
@@ -81,7 +83,28 @@ describe('screensCountLabel', () => {
   it('shows declared vs installed, singular at 0 and 1', () => {
     expect(screensCountLabel(3, 0)).toBe('3 déclarés · 0 installé');
     expect(screensCountLabel(1, 1)).toBe('1 déclaré · 1 installé');
-    expect(screensCountLabel(0, 0)).toBe('0 déclaré · 0 installé');
     expect(screensCountLabel(4, 2)).toBe('4 déclarés · 2 installés');
+  });
+
+  // SCR-DECL1 — a venue nobody declared reads « Non déclaré », not « 0 déclaré ».
+  it('reads « Non déclaré » when the declaration is 0', () => {
+    expect(screensCountLabel(0, 0)).toBe('Non déclaré · 0 installé');
+    expect(screensCountLabel(0, 1)).toBe('Non déclaré · 1 installé');
+  });
+});
+
+describe('the declaration labels (SCR-DECL1)', () => {
+  it('rooms: the count, or « Non renseigné » when never declared', () => {
+    expect(roomsLabel(2)).toBe('Salles : 2');
+    expect(roomsLabel(null)).toBe('Salles : Non renseigné');
+  });
+
+  it('the user detail sums the owner’s venues', () => {
+    expect(declaredScreensTotalLabel([{ screen_count: 3 }, { screen_count: 2 }])).toBe(
+      '5 déclarés',
+    );
+    expect(declaredScreensTotalLabel([{ screen_count: 1 }])).toBe('1 déclaré');
+    expect(declaredScreensTotalLabel([{ screen_count: 0 }])).toBe('Non déclaré');
+    expect(declaredScreensTotalLabel([])).toBe('Non déclaré');
   });
 });

@@ -17,6 +17,7 @@ import ProfileSettings, {
 } from '@/features/profile/components/ProfileSettings';
 import OwnerHoursSlot from '@/features/screenhost/components/OwnerHoursSlot';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import OwnerScreensSlot from '@/features/screenhost/components/OwnerScreensSlot';
 import OwnerWifiSlot from '@/features/screenhost/components/OwnerWifiSlot';
 
 /**
@@ -67,8 +68,6 @@ export default function OwnerSettings() {
       tax_number: profile.tax_number ?? '',
       business_sector_id: profile.business_sector_id ?? '',
       company_size: profile.company_size ?? '',
-      number_of_screens: profile.number_of_screens != null ? String(profile.number_of_screens) : '',
-      number_of_rooms: profile.number_of_rooms != null ? String(profile.number_of_rooms) : '',
       street_address: profile.street_address ?? '',
       city: profile.city ?? '',
       postal_code: profile.postal_code ?? '',
@@ -154,8 +153,6 @@ export default function OwnerSettings() {
               }
               fields={{
                 companySize: isFleetOwner ? 'parc' : false,
-                numberOfScreens: true,
-                numberOfRooms: true,
                 zone: true,
               }}
               copy={{
@@ -168,6 +165,7 @@ export default function OwnerSettings() {
               wifiSubLabel="WiFi du lieu"
               hoursSlot={<OwnerHoursSlot userId={user?.id ?? ''} />}
               hoursSubLabel="Horaires d'ouverture"
+              screensSlot={<OwnerScreensSlot userId={user?.id ?? ''} />}
             />
           </div>
         </div>

@@ -18,6 +18,8 @@ import {
 } from '../lib/dispatch/eligibility.js';
 import { loadUnavailableDays } from '../lib/dispatch/pool.js';
 import { availableWindowDays, buildWindowDays } from '../lib/dispatch/window.js';
+import { type CoverageVenue, eventCoverageVenues } from '../lib/event-pricing/coverage.js';
+import { venueHasInstalledScreenSql } from '../lib/installed-screen.js';
 import { venueHasAffluenceSql } from '../lib/venue-has-affluence.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -67,11 +69,29 @@ const readLines = async (campaignId: string) => {
   return rows;
 };
 
+// The coverage wire, ONE shape for the standard and the event map: `screenhosts` = the plottable
+// subset (coordinates coerced to numbers), `covered_count` = the whole set,
+// `without_coordinates` = the unplottable remainder.
+const coverageBody = (eligible: readonly CoverageVenue[]) => {
+  const plottable = eligible.filter((v) => v.latitude !== null && v.longitude !== null);
+  return {
+    screenhosts: plottable.map((v) => ({
+      id: v.id,
+      name: v.name,
+      latitude: Number(v.latitude),
+      longitude: Number(v.longitude),
+      sector_name: v.sectorName,
+    })),
+    covered_count: eligible.length,
+    without_coordinates: eligible.length - plottable.length,
+  };
+};
+
 export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   const advertiserGuard = { preHandler: [requireAuth, requireAdvertiser] };
 
-  // Owner-scoped campaign lookup (id + status + window); null when foreign/missing (→ caller
-  // sends 404).
+  // Owner-scoped campaign lookup (id + status + window + match); null when foreign/missing (→
+  // caller sends 404).
   const findOwnedCampaign = async (campaignId: string, advertiserId: string) => {
     const [row] = await db
       .select({
@@ -79,6 +99,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         status: campaigns.status,
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
+        eventId: campaigns.eventId,
       })
       .from(campaigns)
       .where(and(eq(campaigns.id, campaignId), eq(campaigns.advertiserId, advertiserId)))
@@ -106,7 +127,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   // someone else's draft). Matching reuses the dispatch eligibility primitives
   // (screenhostMatchesTargeting / screenhostMatchesZones) so the preview mirrors L-disp exactly.
   // MAP-2 (Mejri 08/09 point 3, 2026-09-12): the coverage IS the dispatch-eligible set — active ∩
-  // horaires set ∩ capacity set ∩ targeting ∩ zones, the same gates as assemblePool — so the map
+  // horaires set ∩ targeting ∩ zones, the same gates as assemblePool — so the map
   // and its caption count « the hosts that count for the campaign ». Coordinates are a
   // PLOTTABILITY attribute, not an eligibility one: `screenhosts` carries the plottable subset,
   // `covered_count` the whole set, `without_coordinates` the unplottable remainder (said out loud
@@ -130,6 +151,14 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   //   • AT LEAST ONE AFFLUENCE VALUE — one manual grid cell > 0 still in effect, or one live
   //     measured value > 0 (lib/venue-has-affluence.ts). Zero or NULL everywhere = no audience =
   //     no dot.
+  // MAP-TV1 (operator ruling 2026-09-21) — and AT LEAST ONE INSTALLED SCREEN: a screens row ever
+  // paired or ever seen (lib/installed-screen.ts, the pool's own gate). A venue that never had the
+  // APK has nothing to air on, so it is no dot and no count.
+  // CAP-EVT1 (operator ruling 2026-09-22) — `broadcast_capacity` is NO LONGER a gate here: it is the
+  // venue's event-only switch, and the standard pool stopped reading it (MAP-2's « capacity set »
+  // retired with it).
+  // CAP-EVT1 — an EVENT positioning draft (event_id set) answers with its match's EVENT POOL
+  // instead (lib/event-pricing/coverage.ts): the event rules, none of the above.
   // The response shape (screenhosts / covered_count / without_coordinates) is unchanged.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
@@ -141,15 +170,18 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
     if (!campaign) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     }
+    if (campaign.eventId !== null) {
+      return reply.status(200).send(coverageBody(await eventCoverageVenues(campaign.eventId)));
+    }
 
     const lines = await db
       .select({ categoryId: campaignTargeting.categoryId, class: campaignTargeting.class })
       .from(campaignTargeting)
       .where(eq(campaignTargeting.campaignId, campaign.id));
 
-    // Pull the active venues of approved owners that carry an affluence value (MAP-4 — the two
-    // shared SQL predicates), then apply the pool's gates + matchers in memory (the matchers are
-    // the shared dispatch primitives).
+    // Pull the active venues of approved owners that carry an affluence value (MAP-4) and have an
+    // installed screen (MAP-TV1) — the three shared SQL predicates — then apply the pool's gates +
+    // matchers in memory (the matchers are the shared dispatch primitives).
     const venues = await db
       .select({
         id: screenhosts.id,
@@ -161,14 +193,20 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         zoneId: screenhosts.zoneId,
         openingHour: screenhosts.openingHour,
         closingHour: screenhosts.closingHour,
-        broadcastCapacity: screenhosts.broadcastCapacity,
         // CF-SK1 rider — the venue's sector NAME so the map popup can chip the real category
         // (CF-U4 shipped a truthful « Établissement couvert » placeholder pending this field).
         sectorName: businessSectors.name,
       })
       .from(screenhosts)
       .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-      .where(and(eq(screenhosts.isActive, true), ownerApprovedSql(), venueHasAffluenceSql()));
+      .where(
+        and(
+          eq(screenhosts.isActive, true),
+          ownerApprovedSql(),
+          venueHasAffluenceSql(),
+          venueHasInstalledScreenSql(),
+        ),
+      );
 
     const zoneRows = await db
       .select({ zoneId: campaignZones.zoneId })
@@ -179,11 +217,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
     // The zone clause gates every path; the matcher owns the empty-set semantics (E5.1 —
     // zero lines = whole network), so the preview provably mirrors dispatch with no local guard.
     const matched = venues
-      .filter(
-        (v) =>
-          v.broadcastCapacity !== null &&
-          broadcastableHours(v.openingHour, v.closingHour).length > 0,
-      )
+      .filter((v) => broadcastableHours(v.openingHour, v.closingHour).length > 0)
       .filter((v) => screenhostMatchesZones(v.zoneId, zoneIds))
       .filter((v) =>
         screenhostMatchesTargeting({ businessSectorId: v.businessSectorId, class: v.class }, lines),
@@ -205,20 +239,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       );
     }
 
-    const plottable = eligible.filter((v) => v.latitude !== null && v.longitude !== null);
-    const matching = plottable.map((v) => ({
-      id: v.id,
-      name: v.name,
-      latitude: Number(v.latitude),
-      longitude: Number(v.longitude),
-      sector_name: v.sectorName,
-    }));
-
-    return reply.status(200).send({
-      screenhosts: matching,
-      covered_count: eligible.length,
-      without_coordinates: eligible.length - plottable.length,
-    });
+    return reply.status(200).send(coverageBody(eligible));
   });
 
   // PUT /api/campaigns/:id/targeting — replace-set the campaign's targeting lines (draft-only).
