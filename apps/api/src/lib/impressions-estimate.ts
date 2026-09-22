@@ -20,6 +20,7 @@ import { assemblePool } from './dispatch/pool.js';
 import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
 import { buildWindowDays } from './dispatch/window.js';
 import { assembleEventPool, fillEventBlocs } from './event-dispatch/dispatch.js';
+import { predictedImpressions } from './impressions-display.js';
 
 // IMP-EST1 (operator 2026-09-22, ruled Q1 A · Q2 A · Q3 A) — « Impressions estimées » is a
 // READ-ONLY DRY-RUN of the real dispatch at this moment, never ⌊budget × 1000 ÷ CPM⌋:
@@ -28,7 +29,9 @@ import { assembleEventPool, fillEventBlocs } from './event-dispatch/dispatch.js'
 //     occupancy, zones, targeting, declared days, installed screens) then ./dispatch/plan-outcome
 //     (buildPlan + the clôtures), at the campaign's OWN CPM and T tiers — and answers
 //     Σ allocations Σ créneau.impressions: exactly what « prédites » would read if the campaign were
-//     dispatched now. UNIT: PHYSICAL impressions (lib/impressions-display.ts), not facturable.
+//     dispatched now. That sum is NOT reimplemented here — it is NET-IMP1's own
+//     lib/impressions-display.ts (predictedImpressions), THE display home, so the estimate and the
+//     owner-facing figure can never drift. UNIT: PHYSICAL impressions, not facturable.
 //   • an event positioning runs the EVENT engine's pool + fill (lib/event-dispatch) for its budget:
 //     Σ placed blocs (A_max × 20 per 20-min bloc, whole blocs).
 //   • an already-dispatched campaign reads its real plan instead of simulating.
@@ -80,12 +83,6 @@ export type ImpressionsEstimate =
       daysCount: number | null;
     }
   | { status: EstimateRefusal };
-
-/** Σ allocations Σ créneau.impressions — « prédites », the ONE sum for a simulated or frozen plan. */
-export const predictedImpressions = (
-  allocations: readonly { creneaux: readonly { impressions: number }[] }[],
-): number =>
-  allocations.reduce((sum, a) => sum + a.creneaux.reduce((s, c) => s + c.impressions, 0), 0);
 
 const windowDaysCount = (c: EstimateCampaign): number | null =>
   c.startDate && c.endDate ? buildWindowDays(c.startDate, c.endDate).length : null;

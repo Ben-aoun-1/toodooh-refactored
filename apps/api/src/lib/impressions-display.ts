@@ -29,6 +29,21 @@ export interface InFlightAllocation {
   creneaux: readonly { date: string; hour: number; impressions: number }[];
 }
 
+/**
+ * « Prédites » for ONE allocation: Σ créneau.impressions — the FULL plan promise, PHYSICAL.
+ * THE sum itself, so the in-flight display below and every other caller (IMP-EST1's dry-run
+ * estimate, lib/impressions-estimate.ts) read the same definition: should « prédites » ever stop
+ * counting a créneau class, it changes HERE and both move together.
+ */
+export const predictedImpressionsOf = (allocation: {
+  creneaux: readonly { impressions: number }[];
+}): number => allocation.creneaux.reduce((sum, c) => sum + c.impressions, 0);
+
+/** « Prédites » for a whole plan (simulated or frozen): Σ allocations Σ créneau.impressions. */
+export const predictedImpressions = (
+  allocations: readonly { creneaux: readonly { impressions: number }[] }[],
+): number => allocations.reduce((sum, a) => sum + predictedImpressionsOf(a), 0);
+
 export interface InFlightDisplay {
   screenhostId: string;
   /** Σ créneau.impressions — the FULL plan promise (future créneaux still count). */
@@ -61,7 +76,7 @@ export const displayImpressionsInFlight = (
   const detected = detectMissedSlots(detectorInput, nowSlot);
   const missedBySh = new Map(detected.perScreenhost.map((m) => [m.screenhost_id, m.imp_physical]));
   return allocations.map((a) => {
-    const predictedImp = a.creneaux.reduce((sum, c) => sum + c.impressions, 0);
+    const predictedImp = predictedImpressionsOf(a);
     const missedImp = missedBySh.get(a.screenhostId) ?? 0;
     return {
       screenhostId: a.screenhostId,
