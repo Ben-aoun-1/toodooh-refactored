@@ -2,20 +2,18 @@ import { ArrowRight, Banknote, Loader2, MapPin, ShoppingCart, Tags } from 'lucid
 import { useEffect, useState } from 'react';
 
 import PillButton from '@/components/PillButton';
+import ImpressionsEstimateText from '@/features/campaigns/components/ImpressionsEstimateText';
 import {
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
 } from '@/features/campaigns/hooks/new-campaign/cart-budget';
-import { useCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
-import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
-import { campaignCpm } from '@/features/campaigns/lib/campaign-impressions';
+import { useImpressionsEstimate } from '@/features/campaigns/hooks/useImpressionsEstimate';
 import {
   CMAX_PULLBACK_NOTICE,
   clampBudgetToCmax,
   isInventoryInsufficient,
 } from '@/features/campaigns/lib/cmax-budget';
-import { estimateImpressions } from '@/features/campaigns/lib/impressions';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
 import { htTtcLabel, ttcParenthetical } from '@/lib/money';
@@ -24,7 +22,6 @@ import { formatEventDate, formatEventHours } from '../lib/event-display';
 import type { EventItemView } from '../services/events.api';
 
 const tnd = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
-const int = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
 
 interface EventRecapStepProps {
   campaignId: string;
@@ -57,9 +54,6 @@ export default function EventRecapStep({
   onBack,
 }: EventRecapStepProps) {
   const cmax = useCampaignCmax(campaignId);
-  const pricing = usePricingConfig();
-  // CPM-1 — the positioning already exists here: it carries its own event CPM (its screencaster's).
-  const positioning = useCampaign(campaignId);
   const [pullbackNotice, setPullbackNotice] = useState(false);
 
   const value = requestedBudget;
@@ -77,10 +71,12 @@ export default function EventRecapStep({
     }
   }, [cMaxTnd, value, setRequestedBudget]);
 
-  // The event estimate prices at CPM_evt (the event engine's CPM — never the standard one): the
-  // positioning's own, the live pricing-config only until its row is loaded.
-  const cpm = campaignCpm('event', positioning.data, pricing.data);
-  const impressions = value == null ? null : estimateImpressions(value, cpm);
+  // IMP-EST1 (Q3 A) — the dry-run of the EVENT dispatch for this cursor (debounced): the blocs
+  // the bloc engine would place now (A_max × 20 per 20-min bloc), priced at the positioning's CPM.
+  const estimate = useImpressionsEstimate(campaignId, {
+    budgetTnd: value,
+    inputs: { zones: zoneNames, extra: event?.id ?? null },
+  });
 
   const approvedNotice = approvedSpotNotice(spotValidationStatus ?? undefined);
 
@@ -156,7 +152,7 @@ export default function EventRecapStep({
               <div className="rounded-2xl bg-brand-accent/10 p-4">
                 <p className="text-sm text-gray-600">Impressions potentielles</p>
                 <p className="mt-0.5 text-lg font-bold text-brand-accent">
-                  {impressions == null ? '—' : int.format(impressions)}
+                  <ImpressionsEstimateText view={estimate} />
                 </p>
               </div>
             </div>

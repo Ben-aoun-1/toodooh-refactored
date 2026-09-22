@@ -15,7 +15,7 @@ export interface CampaignView {
   requested_budget: number | null;
   /**
    * CPM-1 — the campaign's OWN CPMs (TND/1000). CPM-3: its screencaster's — realigned by an admin
-   * change while a draft not yet frozen, kept otherwise. Its type picks one (campaignCpm).
+   * change while a draft not yet frozen, kept otherwise. Its type picks one (api cpmForCampaign).
    */
   standard_cpm_tnd: number;
   event_cpm_tnd: number;
@@ -91,6 +91,31 @@ export interface CampaignCmaxRead {
   targeted_count?: number;
 }
 
+/**
+ * IMP-EST1 — GET /:id/impressions-estimate: « Impressions estimées », the server's read-only dry-run
+ * of the real dispatch over the live semaine type (PHYSICAL impressions — what « prédites » would
+ * read if the campaign were dispatched now). Not ok = no estimate, with the reason as a status.
+ */
+export type ImpressionsEstimateStatus =
+  | 'ok'
+  | 'no_dates'
+  | 'no_budget'
+  | 'budget_too_low'
+  | 'no_creative'
+  | 'no_eligible'
+  | 'saturated'
+  | 'too_thin'
+  | 'event_cancelled';
+
+export interface ImpressionsEstimateRead {
+  status: ImpressionsEstimateStatus;
+  /** simulation = the dry-run; plan = already dispatched (its real plan). null unless ok. */
+  source: 'simulation' | 'plan' | null;
+  impressions: number | null;
+  venues_count: number | null;
+  days_count: number | null;
+}
+
 export const campaignsApi = {
   create(input: CreateCampaignInput): Promise<CampaignView> {
     return apiClient.post<CampaignView>('/campaigns', input);
@@ -102,6 +127,12 @@ export const campaignsApi = {
    */
   cmax(id: string): Promise<CampaignCmaxRead> {
     return apiClient.get<CampaignCmaxRead>(`/campaigns/${id}/cmax`);
+  },
+  /** IMP-EST1 — the dry-run estimate; `budgetTnd` sizes it with the unsaved cursor (else the
+   * stored requested_budget). */
+  impressionsEstimate(id: string, budgetTnd?: number): Promise<ImpressionsEstimateRead> {
+    const query = budgetTnd === undefined ? '' : `?budget_tnd=${encodeURIComponent(budgetTnd)}`;
+    return apiClient.get<ImpressionsEstimateRead>(`/campaigns/${id}/impressions-estimate${query}`);
   },
   /** MAP-2 — the campaign's COVERED établissements (the dispatch-eligible set): the plottable
    * ones as `screenhosts`, the total as `covered_count`, the unplottable remainder counted. */
