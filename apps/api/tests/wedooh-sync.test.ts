@@ -152,6 +152,40 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 
+  // LEARN-1 T1 — the hub learns only inside a venue's declared hours, so the location push carries
+  // them, verbatim (Tunis clock ints 0–23). Keys ALWAYS present (explicit null = no hours), the
+  // business_sector convention of the hub's .strict() receiver.
+  it('LEARN-1 T1: carries opening_hour / closing_hour verbatim; null when the venue has none', async () => {
+    const { ownerId, hostId } = await seedOwnerWithScreenhost();
+    await db
+      .update(screenhosts)
+      .set({ openingHour: 8, closingHour: 1 }) // overnight: 08h → 01h
+      .where(eq(screenhosts.id, hostId));
+    const [bare] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place Sans Horaires', ownerId })
+      .returning({ id: screenhosts.id });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 200 }));
+
+    await pushApprovedOwnerLocations(ownerId, logger, CFG);
+
+    const payloads = fetchSpy.mock.calls.map(
+      ([, opts]) => JSON.parse((opts as RequestInit).body as string) as Record<string, unknown>,
+    );
+    const byId = new Map(payloads.map((p) => [p['location_id'], p]));
+    expect(byId.get(hostId)).toMatchObject({ opening_hour: 8, closing_hour: 1 });
+    expect(byId.get(bare!.id)).toHaveProperty('opening_hour', null);
+    expect(byId.get(bare!.id)).toHaveProperty('closing_hour', null);
+    // CROSS-BOUNDARY guard — the hub's H1 fields (spec §4 H1). MUST stay in sync with the hub.
+    const hubHours = z.object({
+      opening_hour: z.number().int().min(0).max(23).nullable().optional(),
+      closing_hour: z.number().int().min(0).max(23).nullable().optional(),
+    });
+    for (const payload of payloads) expect(() => hubHours.parse(payload)).not.toThrow();
+  });
+
   describe('pushAgentToHub (agent provisioning)', () => {
     const AGENT = {
       toodooh_user_id: 'u1',

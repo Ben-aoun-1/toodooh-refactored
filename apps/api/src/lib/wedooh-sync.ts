@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -95,6 +95,11 @@ export const buildLocationPayload = (
   // canonical 5 strings (identity mapping, no id translation). Explicit null when the venue has
   // no sector, per the locked keys-always-present convention of wedooh's .strict() receiver.
   business_sector: businessSectorName,
+  // LEARN-1 T1 — the venue's declared opening hours, VERBATIM (Tunis clock ints 0–23; closing ≤
+  // opening = closes the next day, HOURS-X1). The hub stores them latest-wins (H1) and learns only
+  // inside them. Keys always present — explicit null = no hours (the hub then counts all 48 slots).
+  opening_hour: s.openingHour,
+  closing_hour: s.closingHour,
   wifi_ssid: s.wifiSsid,
   wifi_password: decryptWifi(s.wifiPasswordEncrypted),
   // The referring agent's code (agents.code) if this owner signed up via an agent referral, else
@@ -202,6 +207,64 @@ export const sweepUnexported = async (
   for (const { id } of rows) {
     await pushOneLocation(id, cfg, logger);
   }
+};
+
+// ── LEARN-1 T1 — the ONE full re-sync ───────────────────────────────────────────────────────────
+// The payload gained opening_hour / closing_hour, but the sweep only re-pushes pending/failed rows,
+// so an already-exported venue would never carry its hours to the hub. This pushes EVERY approved
+// owner's venue once, whatever its export_status. Operator-run after the deploy
+// (scripts/learn1-resync-locations.ts). Same per-venue failure isolation as the sweep: a refusal
+// stamps 'failed' and the 10-min sweep retries it; nothing throws per venue.
+
+export interface ResyncTarget {
+  id: string;
+  name: string;
+  openingHour: number | null;
+  closingHour: number | null;
+  exportStatus: ScreenhostRow['exportStatus'];
+}
+
+export interface ResyncReport {
+  exported: number;
+  failed: number;
+  skipped: number;
+}
+
+/** Every screenhost whose owner is approved — the only locations the hub may hold — by name. */
+export const listResyncTargets = async (): Promise<ResyncTarget[]> => {
+  const rows = await db
+    .select({
+      id: screenhosts.id,
+      name: screenhosts.name,
+      openingHour: screenhosts.openingHour,
+      closingHour: screenhosts.closingHour,
+      exportStatus: screenhosts.exportStatus,
+    })
+    .from(screenhosts)
+    .innerJoin(users, eq(screenhosts.ownerId, users.id))
+    .where(eq(users.status, 'approved'))
+    .orderBy(asc(screenhosts.name));
+  return rows;
+};
+
+/** Push every target once. null when the sync env is unset (nothing pushed). */
+export const resyncAllLocations = async (
+  logger: Logger,
+  override?: Partial<SyncConfig>,
+): Promise<ResyncReport | null> => {
+  const cfg = resolveConfig(override);
+  if (!cfg) return null;
+  const report: ResyncReport = { exported: 0, failed: 0, skipped: 0 };
+  for (const target of await listResyncTargets()) {
+    const outcome = await pushOneLocation(target.id, cfg, logger);
+    if (outcome === true) report.exported += 1;
+    else if (outcome === false) report.failed += 1;
+    else report.skipped += 1;
+  }
+  logger.info(
+    `wedooh LEARN-1 resync: ${report.exported} exported, ${report.failed} failed, ${report.skipped} skipped`,
+  );
+  return report;
 };
 
 // S-T1 Edge — provision a newly-created AGENT to wedooh's hub on admin creation, so the agent can

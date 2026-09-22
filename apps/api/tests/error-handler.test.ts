@@ -29,6 +29,7 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       STORAGE_REGION: 'us-east-1',
       SIMULATOR_ENABLED: false,
       SIMULATOR_MAX_SANDBOXES: 5,
+      LEARNED_AFFLUENCE_ENABLED: false,
     }),
   );
   app.setNotFoundHandler(buildNotFoundHandler());

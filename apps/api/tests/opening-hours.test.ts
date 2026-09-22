@@ -5,6 +5,7 @@ import {
   broadcastableHours,
   hoursSpan,
   isOpenAt,
+  isOpenSlot,
   openingHours,
   shiftDayOfWeek,
 } from '../src/lib/opening-hours.js';
@@ -50,5 +51,24 @@ describe('opening-hours helper (HOURS-X1)', () => {
     expect(shiftDayOfWeek(7, 1)).toBe(1);
     expect(shiftDayOfWeek(1, 1)).toBe(2);
     expect(shiftDayOfWeek(3, 0)).toBe(3);
+  });
+
+  // LEARN-1 §3 — the learned-affluence rule, mirrored by the hub's isOpenSlot (keep the fixtures
+  // identical on both sides). Unlike isOpenAt, NO hours means OPEN everywhere.
+  it('LEARN-1: isOpenSlot — a slot is open when its clock hour is; NULL hours = all 48 open', () => {
+    expect(isOpenSlot(16, 8, 22)).toBe(true); // 08h00
+    expect(isOpenSlot(43, 8, 22)).toBe(true); // 21h30
+    expect(isOpenSlot(44, 8, 22)).toBe(false); // 22h00 — closing is exclusive
+    expect(isOpenSlot(15, 8, 22)).toBe(false); // 07h30
+    expect(isOpenSlot(1, 8, 1)).toBe(true); // 00h30 — overnight 08 → 01
+    expect(isOpenSlot(2, 8, 1)).toBe(false); // 01h00
+    expect(isOpenSlot(47, 8, 1)).toBe(true); // 23h30
+    expect(isOpenSlot(0, null, null)).toBe(true);
+    expect(isOpenSlot(47, null, 22)).toBe(true); // either side null = no hours = open
+    expect(isOpenSlot(20, 9, 9)).toBe(false); // zero-width (refused by every writer) = closed
+    const open = Array.from({ length: 48 }, (_, slot) => slot).filter((slot) =>
+      isOpenSlot(slot, 8, 1),
+    );
+    expect(open).toHaveLength(34); // 17 hours × 2
   });
 });

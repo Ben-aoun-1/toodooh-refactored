@@ -36,7 +36,7 @@ import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { decideEventAllocation } from '../lib/event-allocation-decision.js';
-import { SLOTS_PER_DAY } from '../lib/half-hour-slots.js';
+import { SLOTS_PER_DAY, inEffectSql } from '../lib/half-hour-slots.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { ownerSensorStatuses } from '../lib/owner-sensors.js';
@@ -847,6 +847,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     if (!updated) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
+    // LEARN-1 T1 — the hub learns only inside a venue's hours: re-push the location so it holds the
+    // new window. The WiFi-edit idiom: approved owners only (an unapproved owner's location reaches
+    // the hub at approval, carrying its hours), fire-and-forget — a hub outage stamps
+    // export_status='failed' and the 10-min sweep retries; it NEVER fails this PATCH.
+    if (request.user?.status === 'approved') {
+      void pushApprovedOwnerLocations(userId, request.log).catch((err: unknown) => {
+        request.log.warn({ err }, 'wedooh hours re-push (owner edit) failed to start');
+      });
+    }
     return reply.status(200).send({
       id: updated.id,
       name: updated.name,
@@ -989,7 +998,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
           source: screenhostAffluence.source,
         })
         .from(screenhostAffluence)
-        .where(eq(screenhostAffluence.screenhostId, owned.id));
+        // LEARN-1 / OFF-1 — a withdrawn or suspended key is ABSENT here, as it is for every
+        // money-path reader: the hub's full-grid write sends in_effect:false for every key the
+        // learned rule does not produce, and that must never read as « Estimation 0 ».
+        .where(
+          and(
+            eq(screenhostAffluence.screenhostId, owned.id),
+            inEffectSql(screenhostAffluence.inEffect),
+          ),
+        );
       for (const cell of slots) {
         const row = grid[cell.dayOfWeek - 1];
         const sourceRow = sources[cell.dayOfWeek - 1];
@@ -1871,8 +1888,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         id: screenhosts.id,
         openingHour: screenhosts.openingHour,
         closingHour: screenhosts.closingHour,
+        // LEARN-1 T1 — who to re-push for, and whether the hub may know this venue yet.
+        ownerId: screenhosts.ownerId,
+        ownerStatus: users.status,
       })
       .from(screenhosts)
+      .leftJoin(users, eq(screenhosts.ownerId, users.id))
       .where(eq(screenhosts.id, parsedParams.data.id))
       .limit(1);
     if (!existing) {
@@ -1938,6 +1959,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .set(buildEligibilityPatch(parsed.data))
       .where(eq(screenhosts.id, existing.id))
       .returning(eligibilitySelection);
+    // LEARN-1 T1 — an hours CHANGE re-pushes the location (the admin WiFi-edit idiom: approved owner
+    // only, fire-and-forget, the sweep retries). A patch that leaves the window as it was is silent.
+    const hoursChanged =
+      effectiveOpening !== existing.openingHour || effectiveClosing !== existing.closingHour;
+    if (hoursChanged && existing.ownerId && existing.ownerStatus === 'approved') {
+      void pushApprovedOwnerLocations(existing.ownerId, request.log).catch((err: unknown) => {
+        request.log.warn({ err }, 'wedooh hours re-push (admin eligibility edit) failed to start');
+      });
+    }
     return reply.status(200).send(eligibilityView(updated as EligibilityRow));
   });
 

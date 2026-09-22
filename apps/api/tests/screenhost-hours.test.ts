@@ -221,6 +221,82 @@ describe('owner opening-hours PATCH (H2, real Postgres)', () => {
     expect(await hoursOf(id)).toEqual({ open: 7, close: 18 });
   });
 
+  // ── LEARN-1 T1 — the hub learns only inside the hours, so a change re-pushes the location ─────
+  // pushSpy keeps its implementation across tests (restoreAllMocks does not reset a vi.fn), so each
+  // case clears its call log first.
+  it('LEARN-1 T1: an approved owner’s hours PATCH re-pushes their locations to the hub', async () => {
+    pushSpy.mockClear();
+    const owner = await seedUser();
+    const id = await seedVenue(owner, { open: 9, close: 18 });
+    mockSession(owner);
+    const res = await patchHours(app, id, { opening_hour: 8, closing_hour: 1 });
+    expect(res.statusCode).toBe(200);
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(pushSpy.mock.calls[0]?.[0]).toBe(owner);
+  });
+
+  it('LEARN-1 T1: a PENDING owner’s hours PATCH stays off the hub (it syncs at approval)', async () => {
+    pushSpy.mockClear();
+    const owner = await seedUser({ status: 'pending' });
+    const id = await seedVenue(owner);
+    mockSession(owner, 'individual_owner', 'pending');
+    const res = await patchHours(app, id, { opening_hour: 8, closing_hour: 22 });
+    expect(res.statusCode).toBe(200);
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
+  it('LEARN-1 T1: a refused hours PATCH (400 / foreign 404) pushes nothing', async () => {
+    pushSpy.mockClear();
+    const owner = await seedUser();
+    const other = await seedUser();
+    const mine = await seedVenue(owner, { open: 9, close: 18 });
+    const foreign = await seedVenue(other, { open: 9, close: 18 });
+    mockSession(owner);
+    expect((await patchHours(app, mine, { opening_hour: 8, closing_hour: 8 })).statusCode).toBe(
+      400,
+    );
+    expect((await patchHours(app, foreign, { opening_hour: 8, closing_hour: 22 })).statusCode).toBe(
+      404,
+    );
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
+  it('LEARN-1 T1: the admin eligibility PATCH re-pushes when the hours CHANGE, not otherwise', async () => {
+    pushSpy.mockClear();
+    const owner = await seedUser();
+    const admin = await seedUser({ role: 'admin' });
+    const id = await seedVenue(owner, { open: 9, close: 18 });
+    mockSession(admin, 'admin');
+    const patchEligibility = (payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/api/admin/screenhosts/${id}/eligibility`,
+        payload,
+      });
+    expect((await patchEligibility({ class: 'moyen' })).statusCode).toBe(200);
+    expect(pushSpy).not.toHaveBeenCalled(); // hours untouched
+    expect((await patchEligibility({ opening_hour: 9 })).statusCode).toBe(200);
+    expect(pushSpy).not.toHaveBeenCalled(); // the same value — nothing changed
+    expect((await patchEligibility({ opening_hour: 7, closing_hour: 23 })).statusCode).toBe(200);
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(pushSpy.mock.calls[0]?.[0]).toBe(owner);
+  });
+
+  it('LEARN-1 T1: an admin hours change on a PENDING owner’s venue stays off the hub', async () => {
+    pushSpy.mockClear();
+    const owner = await seedUser({ status: 'pending' });
+    const admin = await seedUser({ role: 'admin' });
+    const id = await seedVenue(owner, { open: 9, close: 18 });
+    mockSession(admin, 'admin');
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/screenhosts/${id}/eligibility`,
+      payload: { opening_hour: 7 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
   // ── frozen-plan untouchability ────────────────────────────────────────────────
   it('an hours change NEVER rewrites already-frozen plans/créneaux', async () => {
     const owner = await seedUser();

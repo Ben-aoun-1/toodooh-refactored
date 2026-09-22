@@ -121,4 +121,34 @@ describe('parseEnv', () => {
       }),
     ).toThrowError(/WIFI_ENC_KEY must be a base64 string decoding to exactly 32 bytes/);
   });
+
+  it('LEARN-1: LEARNED_AFFLUENCE_ENABLED is OFF by default and ON only when set', () => {
+    const base = {
+      DATABASE_URL: DB,
+      AUTH_SECRET: SECRET,
+      WIFI_ENC_KEY: WIFI_KEY,
+      ...SMTP,
+      ...STORAGE,
+    };
+    expect(parseEnv(base).LEARNED_AFFLUENCE_ENABLED).toBe(false);
+    expect(parseEnv({ ...base, LEARNED_AFFLUENCE_ENABLED: 'true' }).LEARNED_AFFLUENCE_ENABLED).toBe(
+      true,
+    );
+    expect(
+      parseEnv({ ...base, LEARNED_AFFLUENCE_ENABLED: 'false' }).LEARNED_AFFLUENCE_ENABLED,
+    ).toBe(false);
+  });
+
+  it('LEARN-1: a malformed LEARNED_AFFLUENCE_ENABLED fails the boot — never silently on or off', () => {
+    expect(() =>
+      parseEnv({
+        DATABASE_URL: DB,
+        AUTH_SECRET: SECRET,
+        WIFI_ENC_KEY: WIFI_KEY,
+        ...SMTP,
+        ...STORAGE,
+        LEARNED_AFFLUENCE_ENABLED: 'maybe',
+      }),
+    ).toThrowError(/LEARNED_AFFLUENCE_ENABLED/);
+  });
 });

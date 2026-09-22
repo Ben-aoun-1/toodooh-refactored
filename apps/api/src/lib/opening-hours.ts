@@ -1,3 +1,5 @@
+import { hourOfSlot } from './half-hour-slots.js';
+
 // HOURS-X1 (Mejri 09/09 point 4 + 11/09 point 3, operator ruling 2026-09-12) — the ONE place that
 // turns a venue's (opening_hour, closing_hour) pair into its list of open hours, WRAP INCLUDED.
 //
@@ -52,6 +54,22 @@ export const isOpenAt = (
     ? hour >= openingHour && hour < closingHour
     : hour >= openingHour || hour < closingHour;
 };
+
+/**
+ * LEARN-1 (spec §3) — is this half-hour slot (0–47, Tunis) inside the venue's window? Its clock
+ * hour through `isOpenAt`, wrap included — EXCEPT that a venue with no hours (either side NULL) is
+ * open all 48 slots: the learned-affluence rule, which the hub's own `isOpenSlot` mirrors. `isOpenAt`
+ * answers false for NULL bounds on purpose (dispatch: « no hours = not broadcastable »), so the two
+ * are deliberately NOT the same function. The venue's CURRENT hours apply to all of its history.
+ */
+export const isOpenSlot = (
+  slot: number,
+  openingHour: number | null,
+  closingHour: number | null,
+): boolean =>
+  openingHour === null || closingHour === null
+    ? true
+    : isOpenAt(hourOfSlot(slot), openingHour, closingHour);
 
 /** ISO YYYY-MM-DD + n days, calendar arithmetic (no timezone involved). */
 export const addIsoDays = (isoDate: string, days: number): string => {

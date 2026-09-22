@@ -575,6 +575,14 @@ export const screenhostAffluenceHourly = pgTable(
      * The merge reads it as Mejri ruled: manual values apply ONLY while the sensor is off.
      */
     deviceOnline: boolean('device_online'),
+    /**
+     * LEARN-1 T2 — the hub's READY-MADE value for a slot it did NOT measure: its learned average of
+     * that weekday × half-hour as of this date, else the typed seed. Sent only beside
+     * `value = NULL`, in its OWN column so an estimate can never be read as a measurement — every
+     * measured-only reader reads `value`. Read only by periodAudience under
+     * LEARNED_AFFLUENCE_ENABLED. NULL = the hub offered nothing; a later push without it clears it.
+     */
+    estimate: integer('estimate'),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -594,6 +602,7 @@ export const screenhostAffluenceHourly = pgTable(
     ),
     check('screenhost_affluence_hourly_hour_matches_slot', sql`${table.hour} = ${table.slot} / 2`),
     check('screenhost_affluence_hourly_value_nonneg', sql`${table.value} >= 0`), // NULL passes
+    check('screenhost_affluence_hourly_estimate_nonneg', sql`${table.estimate} >= 0`), // NULL passes
   ],
 );
 

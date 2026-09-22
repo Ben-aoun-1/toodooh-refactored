@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNotNull, lte } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, lte, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -7,6 +7,7 @@ import {
   screenhostMonthlyStats,
   screenhosts,
 } from '../db/schema.js';
+import { env } from '../env.js';
 
 import { tunisDateOf } from './campaign-dates.js';
 import { SLOTS_PER_DAY, inEffectSql, tunisSlotOf } from './half-hour-slots.js';
@@ -110,6 +111,57 @@ export const firstMeasuredDay = async (venueId: string): Promise<string | null> 
   return first?.date ?? null;
 };
 
+/**
+ * LEARN-1 T3 amendment (Task 9's review, Important 1) — under the flag, the floor is the first
+ * date holding a measured cell (`value IS NOT NULL`) in a slot OPEN for the venue's CURRENT hours
+ * — `isOpenSlot` semantics, done in SQL: either bound NULL = all open, `opening === closing` =
+ * nothing open, wrap-around included. A legacy per-date row can hold a closed-hour measured cell
+ * (a sensor installed at 23:00 after a 22:00 close, stored before the flag); such a row must not
+ * set the floor, or « Depuis le début » counts a full estimated day the hub itself shows blank.
+ * Read only when `learned !== null` — flag off keeps `estimationFloor` byte for byte.
+ */
+export const firstOpenMeasuredDay = async (
+  venueId: string,
+  hours: { openingHour: number | null; closingHour: number | null },
+): Promise<string | null> => {
+  const { openingHour, closingHour } = hours;
+  if (openingHour !== null && closingHour !== null && openingHour === closingHour) return null;
+  const hour = sql`(${screenhostAffluenceHourly.slot} / 2)`;
+  const openFilter =
+    openingHour === null || closingHour === null
+      ? sql`true`
+      : openingHour < closingHour
+        ? sql`(${hour} >= ${openingHour} AND ${hour} < ${closingHour})`
+        : // Parenthesised: drizzle's and() does not wrap its operands, and a bare OR would escape
+          // the venue filter (any venue's 00h row, measured or not, would set this floor).
+          sql`(${hour} >= ${openingHour} OR ${hour} < ${closingHour})`;
+  const [first] = await db
+    .select({ date: screenhostAffluenceHourly.date })
+    .from(screenhostAffluenceHourly)
+    .where(
+      and(
+        eq(screenhostAffluenceHourly.screenhostId, venueId),
+        isNotNull(screenhostAffluenceHourly.value),
+        openFilter,
+      ),
+    )
+    .orderBy(asc(screenhostAffluenceHourly.date))
+    .limit(1);
+  return first?.date ?? null;
+};
+
+/** LEARN-1 — the flag-on floor: max(creation day, first OPEN measured day), as `estimationFloor`. */
+const learnedFloor = async (
+  venueId: string,
+  hours: { openingHour: number | null; closingHour: number | null },
+  venue: { createdAt: Date } | undefined,
+): Promise<string | null> => {
+  const firstOpen = await firstOpenMeasuredDay(venueId, hours);
+  if (!venue) return firstOpen;
+  const createdIso = tunisDateOf(venue.createdAt);
+  return firstOpen !== null && firstOpen > createdIso ? firstOpen : createdIso;
+};
+
 export interface PeriodSourceParams {
   venueId: string;
   range: DateRange;
@@ -121,14 +173,20 @@ export interface PeriodSourceParams {
    * what « not yet » means.
    */
   nowSlot?: number;
+  /**
+   * LEARN-1 T3 — which merge to run. Defaults to env.LEARNED_AFFLUENCE_ENABLED, THE switch; every
+   * production surface takes the default. Tests pass it to pin either side without the environment.
+   */
+  learnedAffluence?: boolean;
 }
 
 export async function loadPeriodAudienceInput(
   params: PeriodSourceParams,
 ): Promise<PeriodAudienceInput> {
   const { venueId, range, todayIso } = params;
+  const learnedAffluence = params.learnedAffluence ?? env.LEARNED_AFFLUENCE_ENABLED;
 
-  const [months, hourlyRows, grid, onboardedIso] = await Promise.all([
+  const [months, hourlyRows, grid, defaultFloor, venueRows] = await Promise.all([
     // Month rows overlapping the range — the day-granularity history older than the hourly window.
     db
       .select({ month: screenhostMonthlyStats.month, daily: screenhostMonthlyStats.daily })
@@ -143,11 +201,13 @@ export async function loadPeriodAudienceInput(
     // The MEASURED hourly cells. The (screenhost_id, date, hour) unique index serves this range
     // read on its leading prefix — the reason slice A shipped one index rather than two.
     // Slice C — periodAudience keys its cells on (date, SLOT); no collapse on this path.
+    // LEARN-1 — `estimate` rides along; periodAudience reads it only under the flag.
     db
       .select({
         date: screenhostAffluenceHourly.date,
         slot: screenhostAffluenceHourly.slot,
         value: screenhostAffluenceHourly.value,
+        estimate: screenhostAffluenceHourly.estimate,
         deviceOnline: screenhostAffluenceHourly.deviceOnline,
       })
       .from(screenhostAffluenceHourly)
@@ -159,8 +219,30 @@ export async function loadPeriodAudienceInput(
         ),
       ),
     loadBackupGrid(venueId),
-    estimationFloor(venueId),
+    // Under the flag the floor is learnedFloor's (below) — skip the flag-off derivation's 2 queries.
+    learnedAffluence ? Promise.resolve(null) : estimationFloor(venueId),
+    // LEARN-1 T3 — the venue's CURRENT hours: under the flag every slot outside them is ignored,
+    // across the whole history (spec §3, « the venue's current hours apply to all of its history »).
+    db
+      .select({
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+        createdAt: screenhosts.createdAt,
+      })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, venueId))
+      .limit(1),
   ]);
+  const venue = venueRows[0];
+  const learned = learnedAffluence
+    ? { openingHour: venue?.openingHour ?? null, closingHour: venue?.closingHour ?? null }
+    : null;
+  // LEARN-1 T3 amendment — under the flag the floor is max(creation day, first OPEN measured day):
+  // estimationFloor's shape, but a closed-hour reading stored before the flag cannot drag it earlier.
+  // Never measured inside the hours → the creation day (rule 6: typed from creation); null only
+  // for a missing venue, which every caller has already answered with a 404.
+  const onboardedIso =
+    learned !== null ? await learnedFloor(venueId, learned, venue) : defaultFloor;
 
   return {
     months,
@@ -170,5 +252,6 @@ export async function loadPeriodAudienceInput(
     todayIso,
     nowSlot: params.nowSlot ?? tunisSlotOf(new Date()),
     onboardedIso,
+    learned,
   };
 }
