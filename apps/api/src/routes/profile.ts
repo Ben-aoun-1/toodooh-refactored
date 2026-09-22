@@ -13,10 +13,10 @@ import { validatePhone } from '../validation/phone.js';
 import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
 // Section-scoped partial update of the authenticated user's business fields. All fields
-// optional; at least one required (empty PATCH → 400). Deferred owner-extras
-// (number_of_screens/number_of_rooms) are stripped by zod (.strip default) — the frontend sends
-// them; we ignore, not error. `company_size` is STORED since SIZE-PERSIST1 (0069): one of the two
-// scales' literals, or null to clear. role/status are NOT in this schema (admin-controlled).
+// optional; at least one required (empty PATCH → 400). Unknown keys are stripped by zod (.strip
+// default), not refused. The declared screens / rooms are per VENUE, never here (SCR-DECL1: PATCH
+// /api/screenhosts/:id/declaration). `company_size` is STORED since SIZE-PERSIST1 (0069): one of the
+// two scales' literals, or null to clear. role/status are NOT in this schema (admin-controlled).
 const businessPatchSchema = z
   .object({
     business_name: z.string().min(1).max(200).optional(),

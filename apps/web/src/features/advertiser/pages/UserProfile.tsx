@@ -59,8 +59,6 @@ export default function UserProfile() {
       business_sector_id,
       // SIZE-PERSIST1 — hydrated from GET /api/me since the column exists (was hard-coded '').
       company_size: profile.company_size ?? '',
-      number_of_screens: '',
-      number_of_rooms: '',
       street_address: profile.street_address ?? '',
       city: profile.city ?? '',
       postal_code: profile.postal_code ?? '',
@@ -102,7 +100,7 @@ export default function UserProfile() {
           onChanged={() => void invalidateProfile()}
         />
       }
-      fields={{ companySize: 'company', numberOfScreens: false, numberOfRooms: false, zone: false }}
+      fields={{ companySize: 'company', zone: false }}
       copy={{
         remindersText: 'Recevez des rappels pour vos événements, échéances et rendez-vous à venir.',
         addressLabel: 'Adresse',

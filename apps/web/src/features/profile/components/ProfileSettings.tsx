@@ -110,8 +110,6 @@ interface ProfileSettingsProps {
      * owner stores a parc count, and Settings must offer whichever set signup wrote.
      */
     companySize: CompanySizeScale | false;
-    numberOfScreens: boolean;
-    numberOfRooms: boolean;
     zone: boolean;
   };
   copy: {
@@ -127,6 +125,9 @@ interface ProfileSettingsProps {
   /** H2 — owner-only « Horaires d'ouverture » sub-tab content (per-screenhost hours editor). */
   hoursSlot?: ReactNode;
   hoursSubLabel?: string;
+  /** SCR-DECL1 — owner-only per-venue declared screens / rooms, shown under « Informations sur
+   *  l'entreprise » where the Figma puts « Nombre d'écrans » / « Nombre de salles ». */
+  screensSlot?: ReactNode;
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -207,6 +208,7 @@ export default function ProfileSettings({
   wifiSubLabel,
   hoursSlot,
   hoursSubLabel,
+  screensSlot,
 }: ProfileSettingsProps) {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabId>('responsable');
@@ -225,8 +227,6 @@ export default function ProfileSettings({
     tax_number: '',
     business_sector_id: '',
     company_size: '',
-    number_of_screens: '',
-    number_of_rooms: '',
   });
   const [adresseForm, setAdresseForm] = useState({
     street_address: '',
@@ -768,40 +768,6 @@ export default function ProfileSettings({
                       </select>
                     </div>
                   )}
-                  {fields.numberOfScreens && (
-                    <div>
-                      <label
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                        htmlFor="number-of-screens"
-                      >
-                        Nombre d&apos;écrans (bientôt disponible)
-                      </label>
-                      <input
-                        id="number-of-screens"
-                        type="text"
-                        value={entrepriseForm.number_of_screens}
-                        disabled
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed opacity-60"
-                      />
-                    </div>
-                  )}
-                  {fields.numberOfRooms && (
-                    <div>
-                      <label
-                        className="block text-sm font-medium text-gray-700 mb-1"
-                        htmlFor="number-of-rooms"
-                      >
-                        Nombre de salles (bientôt disponible)
-                      </label>
-                      <input
-                        id="number-of-rooms"
-                        type="text"
-                        value={entrepriseForm.number_of_rooms}
-                        disabled
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed opacity-60"
-                      />
-                    </div>
-                  )}
                 </div>
 
                 <div className="flex gap-3 pt-2">
@@ -818,6 +784,7 @@ export default function ProfileSettings({
                 </div>
               </form>
             )}
+            {entrepriseSub === 'informations' && screensSlot}
 
             {entrepriseSub === 'adresse' && (
               <form onSubmit={handleSaveAdresse} className="p-6 space-y-4 max-w-2xl">

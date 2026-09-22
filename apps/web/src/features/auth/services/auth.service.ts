@@ -250,8 +250,8 @@ export const authService = {
   // Phase-1f F4 — section-scoped profile saves (the forms already save per-section → 1:1 to the
   // PATCH endpoints). apiClient JSON.stringify DROPS `undefined` keys (so an empty uuid optional is
   // omitted → unchanged, not a null-400) and SENDS `null` (clears the nullable fonction/zone).
-  // Owner-extras (number_of_screens/rooms) are accepted here and STRIPPED by the backend;
-  // company_size is STORED (SIZE-PERSIST1), null clears it.
+  // company_size is STORED (SIZE-PERSIST1), null clears it. The declared screens / rooms are
+  // per VENUE (SCR-DECL1) — screenhostService.updateDeclaration, never this per-user PATCH.
   async updateProfileContact(patch: {
     contact_name?: string;
     contact_phone?: string;
@@ -269,8 +269,6 @@ export const authService = {
     tax_number?: string;
     business_sector_id?: string;
     business_type?: string;
-    number_of_screens?: number | null;
-    number_of_rooms?: number | null;
     company_size?: string | null;
   }): Promise<void> {
     try {

@@ -38,8 +38,6 @@ const saved: ProfileFormInitialValues = {
   tax_number: '1234567AAA000',
   business_sector_id: 'sector-uuid',
   company_size: '50 - 100',
-  number_of_screens: '4',
-  number_of_rooms: '2',
   street_address: '12 rue de la Paix',
   city: 'Tunis',
   postal_code: '1000',
@@ -63,8 +61,6 @@ describe('the Paramètres cancel mapping', () => {
       tax_number: '1234567AAA000',
       business_sector_id: 'sector-uuid',
       company_size: '50 - 100',
-      number_of_screens: '4',
-      number_of_rooms: '2',
     });
     expect(adresseFormFrom(saved)).toEqual({
       street_address: '12 rue de la Paix',

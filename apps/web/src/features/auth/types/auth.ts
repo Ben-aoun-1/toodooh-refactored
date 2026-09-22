@@ -16,8 +16,6 @@ export interface BusinessProfile {
   zone?: string;
   formule?: string;
   agent_toodooh?: string;
-  number_of_screens?: number;
-  number_of_rooms?: number;
   company_size?: string;
   logo_url?: string;
   registration_doc_url?: string;

@@ -22,3 +22,8 @@ export const parseDeclaredCount = (raw: string): number | null => {
   const value = Number(trimmed);
   return value >= DECLARED_COUNT_MIN && value <= DECLARED_COUNT_MAX ? value : null;
 };
+
+/** A stored count → the input's text: a declaration below the minimum (0 = never declared) is
+ *  shown EMPTY, so the field reads « to fill in », never « 0 ». */
+export const declaredCountInput = (value: number | null): string =>
+  value !== null && value >= DECLARED_COUNT_MIN ? String(value) : '';

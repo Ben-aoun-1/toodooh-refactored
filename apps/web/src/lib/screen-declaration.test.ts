@@ -7,6 +7,7 @@ import {
   DECLARED_COUNT_ERROR,
   DECLARED_COUNT_MAX,
   DECLARED_COUNT_MIN,
+  declaredCountInput,
   parseDeclaredCount,
 } from './screen-declaration';
 
@@ -53,6 +54,14 @@ describe('parseDeclaredCount', () => {
     for (const raw of ['', '   ', '0', '100', '2.5', '-1', '6-10', '10+', 'abc', '1e2']) {
       expect(parseDeclaredCount(raw)).toBeNull();
     }
+  });
+});
+
+describe('declaredCountInput', () => {
+  it('shows a declaration, and leaves « never declared » (0 or null) empty — never « 0 »', () => {
+    expect(declaredCountInput(3)).toBe('3');
+    expect(declaredCountInput(0)).toBe('');
+    expect(declaredCountInput(null)).toBe('');
   });
 });
 
