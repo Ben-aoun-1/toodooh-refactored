@@ -109,7 +109,7 @@ export const measureEventDelivery = async (
     .where(eq(eventAllocations.campaignId, positioningId));
 
   // The proofs: VIDEO_ENDED for THIS positioning (video_id-as-sent = campaign id, so the
-  // proof rows carry campaign_id = the positioning — the shared ingest needed no change).
+  // proof rows carry campaign_id = the positioning — written by ingest's event branch, H1).
   const proofs = await db
     .select({ screenhostId: proofOfPlay.screenhostId, receivedAt: proofOfPlay.receivedAt })
     .from(proofOfPlay)

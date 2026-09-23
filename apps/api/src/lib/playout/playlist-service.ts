@@ -51,3 +51,22 @@ export const computeScreenPlaylist = async (
   }
   return buildPlaylist(sources);
 };
+
+/**
+ * H1 — the proof side of the same composition: resolve a reported video_id (= the campaign id we
+ * sent) through the SAME two gates computeScreenPlaylist reads — a classic campaign first, else an
+ * event positioning whose bloc covers `now`. The event branch was missing from ingest, so every
+ * real event report was dropped and EV5's settlement refunded every positioning in full. ONE `now`
+ * for both gates, so an accepted event proof's received_at falls inside the bloc the settlement
+ * buckets it into.
+ */
+export const resolveAirableVideo = async (
+  screenhostId: string,
+  videoId: string,
+  now: Date,
+): Promise<{ campaignId: string; creativeId: string; durationSeconds: number | null } | null> => {
+  const [allocation] = await activeAllocationsForScreenhost(screenhostId, now, videoId);
+  if (allocation) return allocation;
+  const spot = (await activeEventSpots(screenhostId, now)).find((s) => s.campaignId === videoId);
+  return spot ?? null;
+};
