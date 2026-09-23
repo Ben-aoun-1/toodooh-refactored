@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { proofOfPlay, screens } from '../../db/schema.js';
 
-import { activeAllocationsForScreenhost } from './active-allocations.js';
+import { resolveAirableVideo } from './playlist-service.js';
 import { type ScreenEventMessage } from './ws-protocol.js';
 
 export interface ScreenContext {
@@ -33,9 +33,9 @@ export const boundDurationMs = (
 };
 
 // Resolve the played video_id (= the campaign id we sent) back to its campaign + creative through the
-// SAME airability gate the playlist uses (activeAllocationsForScreenhost) — a screen only records
-// proof for content the server authorized it to air (ACCEPTE + campaign active + creative approved +
-// window covers now). Unresolvable or malformed events are logged + ignored (no orphan proof, no
+// SAME airability gates the playlist composes (resolveAirableVideo, playlist-service.ts) — a screen
+// only records proof for content the server authorized it to air, classic campaign or event
+// positioning alike. Unresolvable or malformed events are logged + ignored (no orphan proof, no
 // crash). VIDEO_ENDED carries played_duration_ms (bounded); VIDEO_STARTED records null duration.
 const recordProof = async (
   msg: ScreenEventMessage,
@@ -52,7 +52,7 @@ const recordProof = async (
     return;
   }
 
-  const [resolved] = await activeAllocationsForScreenhost(ctx.screenhostId, new Date(), videoId);
+  const resolved = await resolveAirableVideo(ctx.screenhostId, videoId, new Date());
   if (!resolved) {
     log.warn(
       { event: eventType, videoId, screenhostId: ctx.screenhostId },
