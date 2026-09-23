@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { plannedPrevues } from '@/features/campaigns/lib/campaign-impressions';
 import { campaignsApi } from '@/features/campaigns/services/campaigns.api';
 import { walletService } from '@/features/wallet/services/wallet.service';
 
@@ -50,7 +51,8 @@ interface UseDashboardStatsResult {
 export async function fetchDashboardStats(): Promise<DashboardStatsResult> {
   const campaigns: DashboardStatsCampaignRow[] = (await campaignsApi.mine()).map((c) => ({
     status: c.status,
-    views: c.planned_impressions ?? 0,
+    // IMP-FACT1 — the tile sums the dispatched campaigns' OBJECTIVES (the card's own figure).
+    views: plannedPrevues(c) ?? 0,
     budget: c.requested_budget,
     created_at: c.created_at,
   }));

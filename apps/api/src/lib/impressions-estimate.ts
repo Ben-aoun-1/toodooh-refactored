@@ -16,6 +16,7 @@ import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
 import { buildWindowDays } from './dispatch/window.js';
 import { assembleEventPool, fillEventBlocs } from './event-dispatch/dispatch.js';
 import { predictedImpressions } from './impressions-display.js';
+import { impressionsObjectif } from './impressions-objectif.js';
 import { eventPrevuesByCampaign, planPrevuesByCampaign } from './planned-impressions.js';
 
 // IMP-EST1 (operator 2026-09-22, ruled Q1 A · Q2 A · Q3 A) — « Impressions estimées » is a
@@ -72,7 +73,14 @@ export type ImpressionsEstimate =
       status: 'OK';
       /** SIMULATION = the dry-run; PLAN = the campaign is already dispatched (its real plan). */
       source: 'SIMULATION' | 'PLAN';
+      /** PHYSICAL — the real audience of the (simulated or frozen) plan. */
       impressions: number;
+      /**
+       * IMP-FACT1 — the BILLABLE objective ⌊budget × 1000 ÷ CPM⌋ (lib/impressions-objectif.ts): the
+       * advertiser-facing « Impressions prévues », identical on both sides of dispatch. A PLAN reads
+       * the stored budget (the cursor cannot move a paid objective); a SIMULATION, the cursor's.
+       */
+      objectif: number | null;
       /** Venues the (simulated or real) dispatch places the campaign on. */
       venuesCount: number;
       /** Calendar days of the window (inclusive); null for a positioning (the event's window). */
@@ -99,6 +107,7 @@ const frozenPlanEstimate = async (c: EstimateCampaign): Promise<ImpressionsEstim
     status: 'OK',
     source: 'PLAN',
     impressions: planned.impressions,
+    objectif: impressionsObjectif(c),
     venuesCount: planned.venuesCount,
     daysCount: windowDaysCount(c),
   };
@@ -141,6 +150,7 @@ const classicEstimate = async (
     status: 'OK',
     source: 'SIMULATION',
     impressions: predictedImpressions(planned.built.allocations),
+    objectif: iCible,
     venuesCount: planned.built.allocations.length,
     daysCount: assembled.windowDays.length,
   };
@@ -159,6 +169,7 @@ const eventEstimate = async (
       status: 'OK',
       source: 'PLAN',
       impressions: placed.impressions,
+      objectif: impressionsObjectif(c),
       venuesCount: placed.venuesCount,
       daysCount: null,
     };
@@ -180,6 +191,7 @@ const eventEstimate = async (
     status: 'OK',
     source: 'SIMULATION',
     impressions: fill.placedImpressions,
+    objectif: impressionsObjectif(c, budget),
     venuesCount: fill.placements.length,
     daysCount: null,
   };

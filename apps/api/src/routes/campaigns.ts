@@ -28,6 +28,7 @@ import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { validateEventSpot } from '../lib/event-pricing/spot.js';
+import { eventChargeableImpressions, impressionsObjectif } from '../lib/impressions-objectif.js';
 import { eventPrevuesOf, plannedPrevuesByCampaign } from '../lib/planned-impressions.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -384,6 +385,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         reconciled_at: r.reconciledAt ?? null,
         targeting: targetingByCampaign.get(r.id) ?? [],
         planned_impressions: plannedByCampaign.get(r.id)?.impressions ?? null,
+        // IMP-FACT1 — the advertiser's « Impressions prévues »: the BILLABLE objective paid for,
+        // identical before and after dispatch (lib/impressions-objectif.ts). planned_impressions
+        // above stays the PHYSICAL plan read (the real audience), for the surfaces that ask it.
+        impressions_objectif: impressionsObjectif(r),
       })),
     );
   });
@@ -641,7 +646,14 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [own] = await db
-      .select({ id: campaigns.id, eventId: campaigns.eventId })
+      .select({
+        id: campaigns.id,
+        eventId: campaigns.eventId,
+        campaignType: campaigns.campaignType,
+        requestedBudget: campaigns.requestedBudget,
+        standardCpmTnd: campaigns.standardCpmTnd,
+        eventCpmTnd: campaigns.eventCpmTnd,
+      })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
@@ -689,6 +701,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       // included, each with its own statut badge. `montant_total_tnd` is MONEY and this ruling is
       // display-only, so it keeps summing every row — it is not rendered next to this figure.
       impressions_total: eventPrevuesOf(rows).impressions,
+      // IMP-FACT1 — the header the web prints as « impressions prévues »: the positioning's BILLABLE
+      // objective, the same figure /mine serves for it (one drawer, one « prévues »). The PHYSICAL
+      // impressions_total above stays on the wire for the other readers.
+      impressions_objectif: impressionsObjectif(own),
       montant_total_tnd:
         Math.round(rows.reduce((sum, r) => sum + Number(r.montantTnd) * 1000, 0)) / 1000,
       allocations: rows.map((r) => {
@@ -698,6 +714,11 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           screenhost_name: r.screenhostName,
           blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
           impressions_total: r.impressionsTotal,
+          // IMP-FACT1 — the venue's CHARGEABLE share (billable), derived from the money it carries.
+          impressions_facturables: eventChargeableImpressions(
+            Number(r.montantTnd),
+            Number(own.eventCpmTnd),
+          ),
           montant_tnd: Number(r.montantTnd),
           statut: r.statut,
           // Null until the settlement runs (a live positioning shows no verdict).

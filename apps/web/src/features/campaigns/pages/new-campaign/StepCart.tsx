@@ -244,7 +244,7 @@ export default function StepCart({
           <section className="min-w-0 rounded-2xl border border-gray-200 p-5 sm:p-6">
             <h3 className="text-lg font-bold text-gray-900">Ajuster votre impact</h3>
             <p className="mt-1 text-sm text-gray-600">
-              Déplacez le curseur pour ajuster votre budget et vos impressions estimées
+              Déplacez le curseur pour ajuster votre budget et vos impressions prévues
             </p>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
@@ -262,7 +262,7 @@ export default function StepCart({
                 <span className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white">
                   <TrendingUp className="h-4 w-4 text-brand-accent" />
                 </span>
-                <p className="text-sm text-gray-600">Impressions potentielles</p>
+                <p className="text-sm text-gray-600">Impressions prévues</p>
                 <p className="mt-0.5 text-lg font-bold text-brand-accent">
                   <ImpressionsEstimateText view={estimate} />
                 </p>
@@ -398,9 +398,11 @@ export default function StepCart({
                 <Info className="h-3.5 w-3.5 text-slate-600" />
               </div>
               <p className="text-sm text-gray-600">
-                <strong>Note :</strong> Les impressions sont estimées sur la semaine type des
-                établissements éligibles, comme si la campagne était diffusée maintenant ; elles
-                évoluent avec l’inventaire disponible et les éventuelles indisponibilités.
+                {/* IMP-FACT1 — the figure is the objective paid for; the semaine type only confirms it
+                    can be delivered (the dry-run), it does not size it. */}
+                <strong>Note :</strong> Les impressions prévues sont l’objectif de votre campagne :
+                elles découlent de votre budget. La semaine type des établissements éligibles
+                confirme qu’elles peuvent être diffusées sur vos dates.
               </p>
             </div>
           </section>

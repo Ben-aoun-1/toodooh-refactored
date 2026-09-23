@@ -74,12 +74,14 @@ export const estimateView = (state: EstimateQueryState): EstimateView => {
   const data = state.data;
   if (state.isError || data === undefined) return none(ESTIMATE_ERROR_REASON);
   if (data.status !== 'ok') return none(ESTIMATE_REASONS[data.status]);
-  if (data.impressions === null) return none(ESTIMATE_ERROR_REASON);
+  // IMP-FACT1 — the BILLABLE objective when the api serves it; the physical dry-run otherwise.
+  const value = data.objectif ?? data.impressions;
+  if (value === null) return none(ESTIMATE_ERROR_REASON);
   return {
     kind: 'value',
-    text: formatImpressions(data.impressions),
+    text: formatImpressions(value),
     reason: null,
-    impressions: data.impressions,
+    impressions: value,
   };
 };
 

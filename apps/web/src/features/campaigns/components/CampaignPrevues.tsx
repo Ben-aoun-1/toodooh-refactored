@@ -9,6 +9,7 @@ export interface PrevuesCampaign {
   /** The stored status — only a PRE-DISPATCH one is worth (and costs) a dry-run. */
   status: string;
   planned_impressions: number | null;
+  impressions_objectif?: number | null;
   start_date: string | null;
   end_date: string | null;
   requested_budget: number | null;

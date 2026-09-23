@@ -49,6 +49,8 @@ export interface MyCampaignRow {
   raw: CampaignView;
   /** CF-HF3 + IMP-UNIT1 — the frozen plan's PHYSICAL « Impressions prévues »; null pre-plan. */
   planned_impressions: number | null;
+  /** IMP-FACT1 — the billable objective (« Impressions prévues »). */
+  impressions_objectif: number | null;
 }
 
 // Targeting chip labels come from the shared lib (`toChipLabel`) so this list and the wizard's
@@ -84,6 +86,7 @@ function toRow(c: CampaignView): MyCampaignRow {
     selected_categories: (c.targeting ?? []).map(toChipLabel),
     selected_zones: (c.zones ?? []).map((z) => z.name),
     planned_impressions: c.planned_impressions ?? null,
+    impressions_objectif: c.impressions_objectif ?? null,
     raw: c,
   };
 }
