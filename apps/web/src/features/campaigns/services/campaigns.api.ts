@@ -45,6 +45,12 @@ export interface CampaignView {
    * null until a plan exists, and the surface then asks for the dry-run estimate.
    */
   planned_impressions?: number | null;
+  /**
+   * IMP-FACT1 (2026-09-23) — the BILLABLE objective ⌊budget × 1000 ÷ CPM⌋ the screencaster paid
+   * for: the advertiser's « Impressions prévues », identical before and after dispatch. Optional so
+   * a pre-IMP-FACT1 api keeps rendering (the display falls back to planned_impressions).
+   */
+  impressions_objectif?: number | null;
 }
 
 export interface CreateCampaignInput {
@@ -115,7 +121,10 @@ export interface ImpressionsEstimateRead {
   status: ImpressionsEstimateStatus;
   /** simulation = the dry-run; plan = already dispatched (its real plan). null unless ok. */
   source: 'simulation' | 'plan' | null;
+  /** PHYSICAL — the real audience of the (simulated or frozen) plan. */
   impressions: number | null;
+  /** IMP-FACT1 — the BILLABLE objective, shown as « Impressions prévues ». Absent on an older api. */
+  objectif?: number | null;
   venues_count: number | null;
   days_count: number | null;
 }

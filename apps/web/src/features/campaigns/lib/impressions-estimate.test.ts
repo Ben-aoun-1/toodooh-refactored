@@ -172,3 +172,27 @@ describe('the query key recomputes the estimate live', () => {
     );
   });
 });
+
+// IMP-FACT1 (operator, 2026-09-23) — the cursor and every pre-dispatch card show the BILLABLE
+// objective (⌊budget × 1000 ÷ CPM⌋) the api serves as `objectif`, not the dry-run's physical
+// audience; the dry-run still decides deliverability (a refused status stays « — » + its reason).
+describe('IMP-FACT1 — the estimate shows the objective', () => {
+  it('objectif wins over the physical dry-run figure', () => {
+    expect(estimateView({ ...settled, data: { ...ok(16_000), objectif: 10_000 } })).toEqual({
+      kind: 'value',
+      text: '10\u202f000',
+      reason: null,
+      impressions: 10_000,
+    });
+  });
+
+  it('an older api (no objectif) still renders its physical figure', () => {
+    expect(estimateView({ ...settled, data: ok(16_000) }).text).toBe('16\u202f000');
+  });
+
+  it('an undeliverable dry-run never shows an objective', () => {
+    expect(
+      estimateView({ ...settled, data: { ...refused('saturated'), objectif: null } }).kind,
+    ).toBe('none');
+  });
+});

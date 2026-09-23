@@ -29,6 +29,8 @@ export interface LastCampaign {
   selected_zones: string[];
   /** NULL until the admin reconcile writes delivered (null ≠ 0). */
   planned_impressions: number | null;
+  /** IMP-FACT1 — the billable objective (« Impressions prévues »). */
+  impressions_objectif: number | null;
 }
 
 const toLastCampaign = (c: CampaignView): LastCampaign => ({
@@ -46,6 +48,7 @@ const toLastCampaign = (c: CampaignView): LastCampaign => ({
   selected_categories: (c.targeting ?? []).map(toChipLabel),
   selected_zones: (c.zones ?? []).map((z) => z.name),
   planned_impressions: c.planned_impressions ?? null,
+  impressions_objectif: c.impressions_objectif ?? null,
 });
 
 interface UseLastCampaignsResult {

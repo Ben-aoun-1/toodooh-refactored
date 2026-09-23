@@ -15,16 +15,36 @@
 // PHYSICAL impressions. The post-dispatch figure was the plan's facturable (Σ ii_potentiel = the
 // physical × T), so the same label used to drop by ~T the moment the campaign was dispatched.
 
+// IMP-FACT1 (operator, 2026-09-23) — « estimé et prévu should be the same »: the figure is the
+// BILLABLE OBJECTIVE the screencaster pays for, ⌊budget × 1000 ÷ CPM⌋ (api
+// lib/impressions-objectif.ts), identical before and after dispatch and never moved by a refusal.
+// Supersedes IMP-UNIT1's PHYSICAL figure for this label only — « prédites » / « affichées » stay the
+// real audience. Each read falls back to the physical field while an older api is still serving.
 export const PREVUES_LABEL = 'Impressions prévues';
 
 /** A campaign row as the display rule reads it. */
 export interface PrevuesSource {
   planned_impressions?: number | null;
+  impressions_objectif?: number | null;
 }
 
 /** The frozen plan's figure, or null: no plan yet — the surface shows the dry-run estimate. */
 export const plannedPrevues = (row: PrevuesSource): number | null =>
-  row.planned_impressions ?? null;
+  row.planned_impressions === null || row.planned_impressions === undefined
+    ? null
+    : (row.impressions_objectif ?? row.planned_impressions);
+
+/** The event drawer's header — the positioning's objective (the same figure /mine serves). */
+export const eventPlacementPrevues = (view: {
+  impressions_total: number;
+  impressions_objectif?: number | null;
+}): number => view.impressions_objectif ?? view.impressions_total;
+
+/** One venue line of the event drawer — its CHARGEABLE (billable) share of the positioning. */
+export const eventLinePrevues = (line: {
+  impressions_total: number;
+  impressions_facturables?: number | null;
+}): number => line.impressions_facturables ?? line.impressions_total;
 
 const intFr = new Intl.NumberFormat('fr-FR');
 

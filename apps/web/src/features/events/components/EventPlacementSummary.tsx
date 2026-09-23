@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
+import {
+  eventLinePrevues,
+  eventPlacementPrevues,
+} from '@/features/campaigns/lib/campaign-impressions';
 import { apiClient } from '@/lib/api-client';
 
 // EV4 — the positioning's placement summary (GET /api/campaigns/:id/event-allocations):
@@ -11,6 +15,8 @@ export interface EventPlacementLine {
   screenhost_name: string;
   blocs_count: number;
   impressions_total: number;
+  /** IMP-FACT1 — the venue's chargeable (billable) share; absent on an older api. */
+  impressions_facturables?: number | null;
   montant_tnd: number;
   statut: string;
   /** EV5 — null until the positioning settles; then the per-venue livré/manqué verdict. */
@@ -30,6 +36,8 @@ export interface EventSettlementView {
 export interface EventPlacementView {
   count: number;
   impressions_total: number;
+  /** IMP-FACT1 — the positioning's billable objective; absent on an older api. */
+  impressions_objectif?: number | null;
   montant_total_tnd: number;
   allocations: EventPlacementLine[];
   settlement: EventSettlementView | null;
@@ -69,7 +77,7 @@ export default function EventPlacementSummary({ campaignId }: { campaignId: stri
     <div className="space-y-2">
       <p className="text-sm font-semibold text-[#171717]">
         {data.count} établissement{data.count > 1 ? 's' : ''} ·{' '}
-        {data.impressions_total.toLocaleString('fr-FR')} impressions prévues
+        {eventPlacementPrevues(data).toLocaleString('fr-FR')} impressions prévues
       </p>
       {settlement && (
         <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
@@ -101,7 +109,7 @@ export default function EventPlacementSummary({ campaignId }: { campaignId: stri
             <span className="shrink-0 text-[#7A7A7A]">
               {/* EV5 — once settled, the line speaks livré/manqué instead of the plan alone. */}
               {line.blocs_delivered === null
-                ? `${line.blocs_count} bloc${line.blocs_count > 1 ? 's' : ''} · ${line.impressions_total.toLocaleString('fr-FR')} imp.`
+                ? `${line.blocs_count} bloc${line.blocs_count > 1 ? 's' : ''} · ${eventLinePrevues(line).toLocaleString('fr-FR')} imp.`
                 : `${line.blocs_delivered}/${line.blocs_count} bloc${line.blocs_count > 1 ? 's' : ''} diffusé${line.blocs_delivered > 1 ? 's' : ''}${
                     line.refund_tnd && line.refund_tnd > 0
                       ? ` · ${line.refund_tnd.toLocaleString('fr-FR')} TND remboursés`

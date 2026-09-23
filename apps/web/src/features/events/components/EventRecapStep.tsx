@@ -139,7 +139,7 @@ export default function EventRecapStep({
           <section className="min-w-0 rounded-2xl border border-gray-200 p-5 sm:p-6">
             <h3 className="text-lg font-bold text-gray-900">Ajuster votre impact</h3>
             <p className="mt-1 text-sm text-gray-600">
-              Déplacez le curseur pour ajuster votre budget et vos impressions estimées
+              Déplacez le curseur pour ajuster votre budget et vos impressions prévues
             </p>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
@@ -150,7 +150,7 @@ export default function EventRecapStep({
                 </p>
               </div>
               <div className="rounded-2xl bg-brand-accent/10 p-4">
-                <p className="text-sm text-gray-600">Impressions potentielles</p>
+                <p className="text-sm text-gray-600">Impressions prévues</p>
                 <p className="mt-0.5 text-lg font-bold text-brand-accent">
                   <ImpressionsEstimateText view={estimate} />
                 </p>
