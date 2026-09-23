@@ -34,7 +34,10 @@ export interface ImpressionsEstimateWire {
     | 'too_thin'
     | 'event_cancelled';
   source: 'simulation' | 'plan' | null;
+  /** PHYSICAL — the real audience of the (simulated or frozen) plan. */
   impressions: number | null;
+  /** IMP-FACT1 — the BILLABLE objective, the advertiser's « Impressions prévues »; null unless ok. */
+  objectif: number | null;
   venues_count: number | null;
   days_count: number | null;
 }
@@ -56,6 +59,7 @@ export const toEstimateWire = (e: ImpressionsEstimate): ImpressionsEstimateWire 
         status: 'ok',
         source: e.source === 'PLAN' ? 'plan' : 'simulation',
         impressions: e.impressions,
+        objectif: e.objectif,
         venues_count: e.venuesCount,
         days_count: e.daysCount,
       }
@@ -63,6 +67,7 @@ export const toEstimateWire = (e: ImpressionsEstimate): ImpressionsEstimateWire 
         status: WIRE_REFUSAL[e.status],
         source: null,
         impressions: null,
+        objectif: null,
         venues_count: null,
         days_count: null,
       };

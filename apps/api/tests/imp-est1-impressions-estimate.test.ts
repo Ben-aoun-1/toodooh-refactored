@@ -244,10 +244,13 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
       status: 'ok',
       source: 'simulation',
       impressions: 16 * 10 * (10 + 20 + 30 + 40), // 16 000 — no Fri/Sat/Sun cell leaks in
+      // IMP-FACT1 — the billable objective rides beside the physical dry-run (⌊150 × 1000 ÷ 15⌋).
+      objectif: 10_000,
       venues_count: 1,
       days_count: 4,
     });
-    // Never the retired CPM formula (⌊150 × 1000 ÷ 15⌋ = 10 000 BILLABLE impressions).
+    // The PHYSICAL field is never the billable objective (⌊150 × 1000 ÷ 15⌋ = 10 000) — that one
+    // is `objectif` since IMP-FACT1 (2026-09-23).
     expect(body.impressions).not.toBe(10_000);
   });
 
@@ -321,6 +324,7 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
       status: 'ok',
       source: 'plan',
       impressions: predites,
+      objectif: iCible,
       venues_count: 2,
       days_count: 2,
     });
@@ -373,6 +377,7 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
       status: 'no_eligible',
       source: null,
       impressions: null,
+      objectif: null,
       venues_count: null,
       days_count: null,
     });
