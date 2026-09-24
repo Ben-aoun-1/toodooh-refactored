@@ -5,6 +5,7 @@ import {
   columnLabels,
   exclusionLabel,
   exclusionSummary,
+  shareText,
 } from './eligible-hosts';
 
 describe('ELIG-1 — eligible-hosts labels', () => {
@@ -79,5 +80,20 @@ describe('ELIG-1 — eligible-hosts labels', () => {
   it('names the columns after the engine that answered', () => {
     expect(columnLabels('event').hours).toBe('Blocs dispo');
     expect(columnLabels('standard').hours).toBe('Heures diffusables');
+  });
+});
+
+// ELIG-3 — the « part attribuée » column: one label, « — » when there is nothing to show.
+describe('ELIG-3 — part attribuée', () => {
+  it('the column label is the same on both engines', () => {
+    expect(columnLabels('standard').share).toBe('Part attribuée');
+    expect(columnLabels('event').share).toBe('Part attribuée');
+  });
+
+  it('renders the share fr-grouped, and « — » for no budget, an event or an older api', () => {
+    expect(shareText(8484)).toBe((8484).toLocaleString('fr-FR'));
+    expect(shareText(0)).toBe('0');
+    expect(shareText(null)).toBe('—');
+    expect(shareText(undefined)).toBe('—');
   });
 });
