@@ -13,6 +13,7 @@ import {
 } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { upsertEventAttestation } from '../lib/event-playout/attestation.js';
 import { remapEventPositionings, voidEventPositionings } from '../lib/event-playout/reschedule.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
@@ -367,51 +368,27 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
           .status(401)
           .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
       }
-      const [event] = await db.select().from(events).where(eq(events.id, params.data.id)).limit(1);
-      if (!event) return sendNotFound(reply);
-      // The venue must actually hold an allocation for this event — an attestation on an
-      // unrelated venue is meaningless (and would silently dent its SPS).
-      const [allocated] = await db
-        .select({ id: eventAllocations.id })
-        .from(eventAllocations)
-        .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
-        .where(
-          and(
-            eq(campaigns.eventId, params.data.id),
-            eq(eventAllocations.screenhostId, params.data.screenhost_id),
-          ),
-        )
-        .limit(1);
-      if (!allocated) {
+      // SIM-6 — the write lives in lib/event-playout/attestation.ts (shared with the simulator).
+      const written = await upsertEventAttestation({
+        eventId: params.data.id,
+        screenhostId: params.data.screenhost_id,
+        authorId,
+        respecte: body.data.respecte,
+        note: body.data.note ?? null,
+      });
+      if (written.status === 'EVENT_NOT_FOUND') return sendNotFound(reply);
+      if (written.status === 'NOT_ALLOCATED') {
         return reply.status(404).send({
           error: 'NOT_FOUND',
           message: 'Cet établissement ne diffuse pas cet événement.',
         });
       }
-      const [saved] = await db
-        .insert(eventAttestations)
-        .values({
-          eventId: params.data.id,
-          screenhostId: params.data.screenhost_id,
-          authorId,
-          respecte: body.data.respecte,
-          note: body.data.note ?? null,
-        })
-        .onConflictDoUpdate({
-          target: [eventAttestations.eventId, eventAttestations.screenhostId],
-          set: {
-            authorId,
-            respecte: body.data.respecte,
-            note: body.data.note ?? null,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
-      if (!saved) {
+      if (written.status === 'SAVE_FAILED') {
         return reply
           .status(500)
           .send({ error: 'INTERNAL', message: "L'attestation n'a pas pu être enregistrée." });
       }
+      const { saved } = written;
       // The respect variable moves with the verdict — recompute this venue's SPS now.
       try {
         await recomputeVenueSps(params.data.screenhost_id);

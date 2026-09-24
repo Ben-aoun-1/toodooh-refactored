@@ -31,6 +31,7 @@ const HIGHLIGHTS: { key: keyof TickCounters; label: string }[] = [
   { key: 'accepted', label: 'acceptées' },
   { key: 'refused', label: 'refusées' },
   { key: 'proofs', label: 'diffusions' },
+  { key: 'event_proofs', label: 'diffusions événement' },
   { key: 'activated', label: 'activées' },
   { key: 'completed', label: 'terminées' },
   { key: 'redispatch_rounds', label: 'rattrapages' },

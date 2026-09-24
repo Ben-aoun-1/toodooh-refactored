@@ -7,6 +7,7 @@ import {
   campaigns,
   creatives,
   eventAllocations,
+  events,
   proofOfPlay,
   screenhostAffluence,
   screenhostAffluenceHourly,
@@ -15,6 +16,7 @@ import {
 } from '../../db/schema.js';
 import { decideAllocation } from '../../lib/allocation-decision.js';
 import { decideEventAllocation } from '../../lib/event-allocation-decision.js';
+import { activeEventSpots, parseBlocs } from '../../lib/event-playout/spots.js';
 import { collapseHalvesSql, inEffectSql } from '../../lib/half-hour-slots.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
 import { activeAllocationsForScreenhost } from '../../lib/playout/active-allocations.js';
@@ -332,5 +334,84 @@ export const runPlayout = async (input: {
     airing.add(row.screenhostId);
   }
   result.venuesAiring = airing.size;
+  return result;
+};
+
+export interface EventPlayoutResult {
+  proofs: number;
+  /** (venue, bloc) pairs that aired at least one spot this hour. */
+  blocsAired: number;
+  /** (venue, bloc) pairs due this hour on a venue with no lit screen. */
+  skippedOffline: number;
+}
+
+/**
+ * SIM-6 — the screens play the EVENT spots too. An event spot airs only inside its allocation's
+ * 20-minute blocs (never during the match), so for every ACCEPTE allocation of an active,
+ * non-cancelled positioning, each bloc overlapping this virtual hour gets proofs inside the overlap,
+ * at the event cadence (activeEventSpots' repsPerHour = 900 ÷ S), pro-rata to the overlap. Like the
+ * standard playout, a proof exists ONLY if the REAL event airability gate (activeEventSpots at that
+ * instant) lets the spot air, and a venue with no lit screen airs nothing. Without this actor every
+ * simulated event settled as a full refund: the settlement found no proof in any bloc.
+ */
+export const runEventPlayout = async (input: {
+  moment: VirtualMoment;
+  onlineByVenue: Map<string, string[]>;
+}): Promise<EventPlayoutResult> => {
+  const hourStart = input.moment.at.getTime();
+  const hourEnd = hourStart + 60 * 60 * 1000;
+  const rows = await db
+    .select({
+      screenhostId: eventAllocations.screenhostId,
+      campaignId: eventAllocations.campaignId,
+      blocs: eventAllocations.blocs,
+    })
+    .from(eventAllocations)
+    .innerJoin(campaigns, eq(campaigns.id, eventAllocations.campaignId))
+    .innerJoin(events, eq(events.id, campaigns.eventId))
+    .where(
+      and(
+        eq(eventAllocations.statut, 'ACCEPTE'),
+        eq(campaigns.status, 'active'),
+        eq(events.annule, false),
+      ),
+    );
+
+  const result: EventPlayoutResult = { proofs: 0, blocsAired: 0, skippedOffline: 0 };
+  for (const row of rows) {
+    for (const bloc of parseBlocs(row.blocs)) {
+      const from = Math.max(new Date(bloc.start).getTime(), hourStart);
+      const to = Math.min(new Date(bloc.end).getTime(), hourEnd);
+      if (to <= from) continue;
+      const lit = input.onlineByVenue.get(row.screenhostId) ?? [];
+      if (lit.length === 0) {
+        result.skippedOffline += 1;
+        continue;
+      }
+      const span = to - from;
+      const spot = (await activeEventSpots(row.screenhostId, new Date(from + span / 2))).find(
+        (s) => s.campaignId === row.campaignId,
+      );
+      if (!spot) continue;
+      const reps = Math.max(1, Math.floor((spot.repsPerHour * span) / (60 * 60 * 1000)));
+      const proofs = Array.from({ length: reps }, (_, i) => {
+        const at = new Date(from + Math.floor(((i + 0.5) * span) / reps));
+        return {
+          screenId: lit[0]!,
+          screenhostId: row.screenhostId,
+          campaignId: spot.campaignId,
+          creativeId: spot.creativeId,
+          videoIdAsSent: spot.campaignId,
+          eventType: 'VIDEO_ENDED' as const,
+          playedDurationMs: (spot.durationSeconds ?? 10) * 1000,
+          eventTs: at,
+          receivedAt: at,
+        };
+      });
+      await db.insert(proofOfPlay).values(proofs);
+      result.proofs += proofs.length;
+      result.blocsAired += 1;
+    }
+  }
   return result;
 };
