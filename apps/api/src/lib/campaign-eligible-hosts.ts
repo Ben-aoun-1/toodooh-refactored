@@ -12,6 +12,7 @@ import {
   screenhosts,
 } from '../db/schema.js';
 
+import { deriveICible } from './activation-service.js';
 import { ownerApprovedSql } from './approved-owner.js';
 import {
   campaignCpmRates,
@@ -19,8 +20,9 @@ import {
   cpmForCampaign,
   getDispatchConfig,
 } from './dispatch/config.js';
+import { planFromPool } from './dispatch/plan-outcome.js';
 import { assemblePool } from './dispatch/pool.js';
-import { tForDuration } from './dispatch/thresholds.js';
+import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
 import type { EngineTrace } from './engine-journal/trace.js';
 import { isEventSwitchOn } from './event-pricing/event-switch.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
@@ -83,6 +85,13 @@ export interface EligibleHost {
   capacity: number;
   days_available: number | null;
   allocation: { statut: string; impressions: number } | null;
+  /**
+   * ELIG-3 — the « part attribuée »: the facturable impressions THIS venue carries of the campaign.
+   * Dispatched: its allocation (0 for a venue not retained or a REFUSE). Not dispatched: the share the
+   * real selection gives it at the campaign's stored budget (the same dry-run as the estimate), 0 when
+   * the selection does not retain it. null = no budget yet, or an event positioning.
+   */
+  share: number | null;
 }
 
 export interface ExcludedHost {
@@ -210,6 +219,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       startDate: campaigns.startDate,
       endDate: campaigns.endDate,
       eventId: campaigns.eventId,
+      requestedBudget: campaigns.requestedBudget,
       standardCpmTnd: campaigns.standardCpmTnd,
       eventCpmTnd: campaigns.eventCpmTnd,
       t10s: campaigns.t10s,
@@ -271,6 +281,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
         allocation: allocation
           ? { statut: allocation.statut, impressions: allocation.impressions }
           : null,
+        share: null,
       };
     });
     const excluded: ExcludedHost[] = [...labels.values()]
@@ -343,12 +354,29 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
   const t = tForDuration(spotSeconds, campaignTTiers(row));
   const cpm = cpmForCampaign(row.campaignType, rates);
   const { trace, excluded: reasons } = collectingTrace();
-  const { pool } = await assemblePool(
+  const assembled = await assemblePool(
     db,
     { id: row.id, startDate: row.startDate, endDate: row.endDate },
     { s: spotSeconds, t, fMaxSeconds: config.fMaxSeconds },
     { excludeAllocationIds: ownAllocations.map((a) => a.id), trace },
   );
+  const { pool } = assembled;
+
+  // ELIG-3 — the « part attribuée » of a campaign not dispatched yet: the REAL selection over this
+  // very pool at the stored budget (planFromPool — the estimate's dry-run), nothing saved.
+  const budget = row.requestedBudget === null ? null : Number(row.requestedBudget);
+  const iCible = plan ? null : deriveICible(budget, cpm);
+  const simulatedShare = new Map<string, number>();
+  if (iCible !== null) {
+    const planned = planFromPool(
+      { iCible, cpm, s: spotSeconds, t, seuil: seuilImpressions(cpm) },
+      config,
+      assembled,
+    );
+    if (planned.status === 'OK') {
+      for (const a of planned.built.allocations) simulatedShare.set(a.screenhostId, a.iiPotentiel);
+    }
+  }
 
   const eligible: EligibleHost[] = pool.map((entry) => {
     const label = labels.get(entry.id);
@@ -359,13 +387,22 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       sector: label?.sector ?? null,
       class: label?.class ?? null,
       sps: entry.sps,
-      affluence: Math.round(entry.avgAffluence * 10) / 10,
+      // ELIG-3 — two decimals: the exact value the capacity is computed from (not the 1-decimal
+      // rounding that made a hand check miss the engine by a few dozen impressions).
+      affluence: Math.round(entry.avgAffluence * 100) / 100,
       hours: entry.hours,
       capacity: entry.residualCapacity,
       days_available: entry.days.length,
       allocation: allocation
         ? { statut: allocation.statut, impressions: allocation.impressions }
         : null,
+      share: plan
+        ? allocation && allocation.statut !== 'REFUSE'
+          ? allocation.impressions
+          : 0
+        : iCible === null
+          ? null
+          : (simulatedShare.get(entry.id) ?? 0),
     };
   });
   const inPool = new Set(pool.map((p) => p.id));
