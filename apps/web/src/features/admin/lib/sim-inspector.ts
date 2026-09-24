@@ -3,6 +3,7 @@
 // page shows (no render harness in apps/web: the rules live here, the TSX only lays them out).
 
 export interface InspectionAllocation {
+  allocation_id: string;
   venue: string;
   screenhost_id: string;
   statut: string;
@@ -16,6 +17,7 @@ export interface InspectionAllocation {
 }
 
 export interface InspectionEventPlacement {
+  allocation_id: string;
   venue: string;
   screenhost_id: string;
   statut: string;

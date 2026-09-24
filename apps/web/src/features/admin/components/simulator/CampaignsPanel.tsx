@@ -1,9 +1,9 @@
-import { CalendarClock, Megaphone, Plus } from 'lucide-react';
+import { Megaphone } from 'lucide-react';
 import { useState } from 'react';
 
 import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
 import { SimulationCampaignInspector } from '@/features/admin/components/simulator/SimulationCampaignInspector';
-import { useLaunchCampaign, useLaunchEvent } from '@/features/admin/hooks/useAdminSimulator';
+import { SimulationLaunchForm } from '@/features/admin/components/simulator/SimulationLaunchForm';
 import type { BoardCampaign } from '@/features/admin/services/admin-simulator.service';
 
 const STATUS_CLASS: Record<string, string> = {
@@ -22,11 +22,6 @@ export function CampaignsPanel({
   simulationId: string;
   campaigns: BoardCampaign[];
 }) {
-  const launch = useLaunchCampaign(simulationId);
-  const bookEvent = useLaunchEvent(simulationId);
-  const [days, setDays] = useState(7);
-  const [spot, setSpot] = useState(10);
-  const [share, setShare] = useState(40);
   const [eligibleFor, setEligibleFor] = useState<{ id: string; name: string } | null>(null);
   const [inspectId, setInspectId] = useState<string | null>(null);
 
@@ -37,85 +32,7 @@ export function CampaignsPanel({
         <h2 className="text-sm font-semibold text-gray-700">Campagnes</h2>
       </header>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg bg-gray-50 p-3">
-        <label className="text-sm">
-          <span className="block text-xs text-gray-600">Durée (jours)</span>
-          <input
-            type="number"
-            min={1}
-            max={90}
-            className="mt-1 w-24 rounded-lg border px-2 py-1"
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value))}
-          />
-        </label>
-        <label className="text-sm">
-          <span className="block text-xs text-gray-600">Spot (s)</span>
-          <input
-            type="number"
-            min={5}
-            max={30}
-            className="mt-1 w-20 rounded-lg border px-2 py-1"
-            value={spot}
-            onChange={(e) => setSpot(Number(e.target.value))}
-          />
-        </label>
-        <label className="text-sm">
-          <span className="block text-xs text-gray-600">Budget (% du C_max)</span>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            className="mt-1 w-24 rounded-lg border px-2 py-1"
-            value={share}
-            onChange={(e) => setShare(Number(e.target.value))}
-          />
-        </label>
-        <button
-          type="button"
-          disabled={launch.isPending}
-          onClick={() =>
-            launch.mutate({ duration_days: days, spot_seconds: spot, budget_share: share / 100 })
-          }
-          className="flex items-center gap-1 rounded-lg bg-brand-primary px-3 py-2 text-sm font-medium text-brand-deep disabled:opacity-50"
-        >
-          <Plus className="h-4 w-4" />
-          {launch.isPending ? 'Lancement…' : 'Lancer une campagne'}
-        </button>
-        <button
-          type="button"
-          disabled={bookEvent.isPending}
-          onClick={() => bookEvent.mutate({ spot_seconds: spot, budget_share: share / 100 })}
-          className="flex items-center gap-1 rounded-lg border border-brand-deep px-3 py-2 text-sm font-medium text-brand-deep disabled:opacity-50"
-        >
-          <CalendarClock className="h-4 w-4" />
-          {bookEvent.isPending ? 'Réservation…' : 'Réserver un match'}
-        </button>
-      </div>
-
-      {launch.isError && (
-        <p className="text-sm text-red-600">
-          {launch.error instanceof Error ? launch.error.message : 'Lancement impossible.'}
-        </p>
-      )}
-      {bookEvent.isError && (
-        <p className="text-sm text-red-600">
-          {bookEvent.error instanceof Error ? bookEvent.error.message : 'Réservation impossible.'}
-        </p>
-      )}
-      {bookEvent.data && (
-        <p className="text-sm text-gray-600">
-          « {bookEvent.data.name} » — {bookEvent.data.allocations} établissements réservés, budget{' '}
-          {bookEvent.data.budget_tnd} TND sur un plafond événement de {bookEvent.data.c_max_tnd}{' '}
-          TND.
-        </p>
-      )}
-      {launch.data && (
-        <p className="text-sm text-gray-600">
-          « {launch.data.name} » — {launch.data.allocations} établissements retenus, budget{' '}
-          {launch.data.budget_tnd} TND sur un plafond de {launch.data.c_max_tnd} TND.
-        </p>
-      )}
+      <SimulationLaunchForm simulationId={simulationId} />
 
       {campaigns.length === 0 ? (
         <p className="text-sm text-gray-500">Aucune campagne pour l&apos;instant.</p>
