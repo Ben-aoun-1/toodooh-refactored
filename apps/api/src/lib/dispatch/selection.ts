@@ -12,6 +12,10 @@
 //    started), as a STABLE partition (their SPS order is preserved).
 //  • Jamais de miette — never open an allocation < seuil_diffusable; a sub-seuil reliquat is pushed
 //    onto the last retained screenhost that still has residual headroom (à capacité), then ARRÊT.
+//  • Too full = skipped (CAP-F1, operator ruling 2026-09-24) — a screenhost whose residual capacity
+//    cannot host even one seuil share, while at least a seuil share remains to place, is SKIPPED and
+//    the queue continues. The literal A.3 stopped there, so ONE nearly full top-SPS venue emptied the
+//    whole selection (prod 24/09: toodooh 568 < seuil 2000 → 0 retained → SATURATED).
 //  • Jamais de survente — a_i never exceeds residualCapacity (no phantom impressions).
 
 export interface EligibleScreenhost {
@@ -68,6 +72,8 @@ export const selection = (
   for (const sh of queue) {
     if (couvert >= V) break; // concentration — pas un de plus
     const remaining = V - couvert;
+    // CAP-F1 — too full to take a share while a share remains: next screenhost, not ARRÊT.
+    if (sh.residualCapacity < seuilDiffusable && remaining >= seuilDiffusable) continue;
     const ai = Math.min(sh.residualCapacity, remaining);
     if (ai < seuilDiffusable) {
       // Sub-seuil: never open a miette. Push the reliquat onto the last retained screenhost that

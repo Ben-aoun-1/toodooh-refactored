@@ -211,7 +211,7 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
     it('a NON-overlapping engagement engages NOTHING (the September-vs-July fingerprint)', async () => {
       const { shId } = await seedVenue();
       const july = await seedCampaign({ ...JULY, status: 'active' });
-      await seedEngagement(july.campaignId, shId, { rI: 30, s: 10 }); // 300 s = the whole F budget
+      await seedEngagement(july.campaignId, shId, { rI: 360, s: 10 }); // 3600 s = the whole screen hour (CAP-F1)
 
       // Pricing SEPTEMBER: the July engagement is invisible — full residual, full reps.
       const sept = await assemblePool(
@@ -234,7 +234,7 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
     it('a PARTIAL overlap engages (per-window granularity — conservative, never overselling)', async () => {
       const { shId } = await seedVenue();
       const july = await seedCampaign({ start: '2026-07-06', end: '2026-09-07', status: 'active' });
-      await seedEngagement(july.campaignId, shId, { rI: 30, s: 10 });
+      await seedEngagement(july.campaignId, shId, { rI: 360, s: 10 }); // the whole screen hour
       const sept = await assemblePool(
         db,
         { id: FAKE_ID, startDate: SEPT.start, endDate: SEPT.end },
@@ -246,7 +246,7 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
     it('terminal release: an ended (completed) campaign engages nothing even in-window', async () => {
       const { shId } = await seedVenue();
       const done = await seedCampaign({ ...JULY, status: 'completed' });
-      await seedEngagement(done.campaignId, shId, { rI: 30, s: 10 });
+      await seedEngagement(done.campaignId, shId, { rI: 360, s: 10 }); // would fill the hour
       const julyPool = await assemblePool(
         db,
         { id: FAKE_ID, startDate: JULY.start, endDate: JULY.end },
@@ -258,7 +258,7 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
     it('a REFUSE allocation releases its seconds; EN_ATTENTE within-window still engages (as-found, kept)', async () => {
       const { shId } = await seedVenue();
       const refused = await seedCampaign({ ...JULY, status: 'active' });
-      await seedEngagement(refused.campaignId, shId, { rI: 30, s: 10, statut: 'REFUSE' });
+      await seedEngagement(refused.campaignId, shId, { rI: 360, s: 10, statut: 'REFUSE' });
       let pool = await assemblePool(
         db,
         { id: FAKE_ID, startDate: JULY.start, endDate: JULY.end },
@@ -267,14 +267,15 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
       expect(pool.pool.find((p) => p.id === shId)?.repsCap).toBe(30); // released
 
       const pending = await seedCampaign({ ...JULY, status: 'active' });
-      await seedEngagement(pending.campaignId, shId, { rI: 12, s: 10, statut: 'EN_ATTENTE' });
+      await seedEngagement(pending.campaignId, shId, { rI: 348, s: 10, statut: 'EN_ATTENTE' });
       pool = await assemblePool(
         db,
         { id: FAKE_ID, startDate: JULY.start, endDate: JULY.end },
         POOL_INPUTS,
       );
-      // 120 s held → residual 180 → rEff 18: the undecided allocation still holds its antenna.
-      expect(pool.pool.find((p) => p.id === shId)?.repsCap).toBe(18);
+      // CAP-F1 — 3480 s held → the screen has 120 s left → rEff 12: the undecided allocation still
+      // holds its antenna. (Before CAP-F1: 120 s held of a SHARED 300 → rEff 18.)
+      expect(pool.pool.find((p) => p.id === shId)?.repsCap).toBe(12);
     });
 
     it('a September cmax is UNAFFECTED by July engagements (pinned)', async () => {
@@ -340,7 +341,7 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
     it('dispatch: saturated inventory vs nothing-matches carry different flags', async () => {
       const { shId } = await seedVenue();
       const july = await seedCampaign({ ...JULY, status: 'active' });
-      await seedEngagement(july.campaignId, shId, { rI: 30, s: 10 });
+      await seedEngagement(july.campaignId, shId, { rI: 360, s: 10 }); // the whole screen hour
       const saturated = await seedCampaign({ ...JULY, status: 'pending', creative: 'approved' });
       const result = await runDispatch(
         { id: saturated.campaignId, name: 'HF4 sature', startDate: JULY.start, endDate: JULY.end },

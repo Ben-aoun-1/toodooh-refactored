@@ -156,7 +156,7 @@ describe('E3 occupancy locking (US-4.4, real Postgres)', () => {
     expect(await totalSecondsOn(shId)).toBeLessThanOrEqual(300);
   });
 
-  it('two dispatches RACING over a shared screen cannot jointly exceed the 300s/hour budget', async () => {
+  it('two dispatches RACING for the last 300 s of a screen cannot jointly exceed its 3600 s/hour', async () => {
     const advA = await seedUser({ role: 'advertiser' });
     const advB = await seedUser({ role: 'advertiser' });
     const owner = await seedUser({ role: 'individual_owner' });
@@ -167,8 +167,40 @@ describe('E3 occupancy locking (US-4.4, real Postgres)', () => {
     const b = await seedCampaign(advB, 'Race B');
     await db.insert(campaignTargeting).values({ campaignId: b, categoryId: cat, class: null });
 
+    // CAP-F1 — F (300 s) is per campaign; the SCREEN holds 3600 s. For the race to contend, a filler
+    // campaign already holds 3300 s (330 × 10 s): only 300 s of the hour are left for A and B.
+    const filler = await seedCampaign(advA, 'Filler');
+    const [fillerPlan] = await db
+      .insert(campaignDispatchPlan)
+      .values({
+        campaignId: filler,
+        iCible: 10_000,
+        cpm: '10',
+        sSpotSeconds: 10,
+        tTierCoef: '0.6',
+        seuilDiffusable: 1000,
+        sMin: '20',
+        gJour: '3.3333',
+        fMaxSeconds: 300,
+        rMinEfficace: 2,
+        couvert: 10_000,
+        nMin: 1,
+        nMax: 10,
+        nRetenus: 1,
+      })
+      .returning();
+    await db.insert(campaignDispatchAllocation).values({
+      planId: fillerPlan?.id ?? '',
+      screenhostId: shId,
+      iiPotentiel: 1000,
+      rI: 330,
+      revenuPrevisionnel: '10',
+      creneaux: [],
+      statutAcceptation: 'ACCEPTE',
+    });
+
     // A (s=30) wants the whole hour (i_cible ≥ capacity → r_i 10 → 300s); B (s=10) wants 160s.
-    // Pre-E3, both read zero engagement outside any tx → 300s + 160s = 460s on one screen. With
+    // Pre-E3, both read zero engagement outside any tx → 3300s + 300s + 160s = 3760s on one screen. With
     // the advisory lock the loser blocks until the winner commits, then nets the winner's seconds.
     // The tiers are read BEFORE the race so both dispatches start together.
     const [tiersA, tiersB] = [await campaignTiersOf(a), await campaignTiersOf(b)];
@@ -183,8 +215,8 @@ describe('E3 occupancy locking (US-4.4, real Postgres)', () => {
       ),
     ]);
 
-    // Whichever order the lock imposed, the INVARIANT holds: Σ(r_i × S) ≤ 300 on the shared screen…
-    expect(await totalSecondsOn(shId)).toBeLessThanOrEqual(300);
+    // Whichever order the lock imposed, the INVARIANT holds: Σ(r_i × S) ≤ 3600 on the screen…
+    expect(await totalSecondsOn(shId)).toBeLessThanOrEqual(3600);
     // …and the loser either fit into the residual (OK) or hit a clôture: NO_ELIGIBLE (some pool,
     // no allocation) or TOO_THIN (a fully-consumed screen drops out → EMPTY pool → clôture 2).
     // Never a double-booked hour.

@@ -19,6 +19,7 @@ import { venueHasInstalledScreenSql } from '../installed-screen.js';
 import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
 import { spsObservationsFor } from '../sps-observations.js';
 import { SPS_NEUTRAL, spsComputable } from '../sps-score.js';
+import { SCREEN_SECONDS_PER_HOUR } from '../vf-constants.js';
 
 import {
   capaciteUtile,
@@ -71,7 +72,7 @@ export const OCCUPANCY_LOCK_NAMESPACE = 44_004;
 export interface AssemblePoolInputs {
   s: number; // spot duration (seconds)
   t: number; // E1 attention index (duration-derived by the caller)
-  fMaxSeconds: number; // F — hourly broadcast cap
+  fMaxSeconds: number; // F — this campaign's hourly broadcast cap on a screen (CAP-F1: per campaign)
 }
 
 // E5.1 — the NO_TARGETING refusal RETIRED (VF US-2.1): zero targeting lines = the whole network,
@@ -304,6 +305,7 @@ export const assemblePool = async (
     ? await executor
         .select({
           screenhostId: campaignDispatchAllocation.screenhostId,
+          campaignId: campaignDispatchPlan.campaignId,
           rI: campaignDispatchAllocation.rI,
           spotSeconds: campaignDispatchPlan.sSpotSeconds,
         })
@@ -338,14 +340,19 @@ export const assemblePool = async (
   // (At dispatch time this campaign has no allocations yet — ALREADY_DISPATCHED is rejected
   // upstream. At CASCADE time it does, and they count: a retained screenhost's own allocation
   // consumes its budget, so its residual is genuinely what it can still absorb.) Seconds, not
-  // impressions: the cross-campaign cap is the 300s/hour broadcast budget, and a 30s spot and a
-  // 10s spot cost it differently — impression accounting can't see that.
+  // impressions: a 30s spot and a 10s spot cost the screen hour differently — impression
+  // accounting can't see that. CAP-F1: they are read against the SCREEN's physical hour (3600 s),
+  // not against F — F is each campaign's own cap.
   const engagedSecondsById = new Map<string, number>();
-  for (const e of engagementRows)
-    engagedSecondsById.set(
-      e.screenhostId,
-      (engagedSecondsById.get(e.screenhostId) ?? 0) + e.rI * e.spotSeconds,
-    );
+  // CAP-F1 — THIS campaign's own engaged seconds per screen (non-zero at cascade / boost time):
+  // they count against its OWN F as well as the screen hour.
+  const ownSecondsById = new Map<string, number>();
+  for (const e of engagementRows) {
+    const seconds = e.rI * e.spotSeconds;
+    engagedSecondsById.set(e.screenhostId, (engagedSecondsById.get(e.screenhostId) ?? 0) + seconds);
+    if (e.campaignId === campaign.id)
+      ownSecondsById.set(e.screenhostId, (ownSecondsById.get(e.screenhostId) ?? 0) + seconds);
+  }
 
   const pool: PoolEntry[] = [];
   for (const sh of candidates) {
@@ -388,11 +395,21 @@ export const assemblePool = async (
     // Floor to whole impressions: capaciteUtile round-trips through FP (avgAffluence = total/hours
     // → ×hours), so non-uniform affluence yields e.g. 60030.0000000007. Flooring at the source keeps
     // residual/ai/couvert/ii_potentiel integers (the persisted columns are `integer`).
-    // Per-screen F-second cap: the residual broadcast budget after OTHER campaigns → R_eff. The
-    // cross-campaign cap is SECONDS-based (residual ÷ S), so screens shared by campaigns with
-    // different spot durations never exceed 300s/hour. (First campaign on a screen: engaged 0 →
-    // residual F → R_eff = the unconstrained MIN[(3600/S)·T, F/S] — unchanged behavior.)
-    const residualSeconds = Math.max(0, inputs.fMaxSeconds - (engagedSecondsById.get(sh.id) ?? 0));
+    // CAP-F1 (operator ruling 2026-09-24) — F is a PER-CAMPAIGN cap (pricing-model-v3: « caps spot
+    // repetition rate per hour »): this campaign may use up to F seconds of the screen hour. The only
+    // SHARED limit is the physical hour, 3600 s. So residual = min(F − own, 3600 − own − others):
+    // at cascade / boost time this campaign's own allocations use up its own F first. Before, the 300 s was the screen's shared budget: one
+    // campaign at 280 s left every other campaign one rep/hour (the prod « — » of 24/09).
+    // engaged = every campaign's seconds on the screen, this one's included (own).
+    const ownSeconds = ownSecondsById.get(sh.id) ?? 0;
+    const screenFreeSeconds = Math.max(
+      0,
+      SCREEN_SECONDS_PER_HOUR - (engagedSecondsById.get(sh.id) ?? 0),
+    );
+    const residualSeconds = Math.min(
+      Math.max(0, inputs.fMaxSeconds - ownSeconds),
+      screenFreeSeconds,
+    );
     const rEff = computeR(inputs.s, residualSeconds); // PHYSICAL MIN[3600/S, ⌊residual/S⌋]
     // E1 (VF) — Ii = Ii_brut × T: the pool carries FACTURABLE capacity (what the screen is worth
     // to the campaign), floored to whole impressions; the physical rep ceiling stays in repsCap.

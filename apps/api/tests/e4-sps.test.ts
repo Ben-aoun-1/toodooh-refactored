@@ -297,23 +297,24 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
     });
   });
 
-  describe('remplissage — engaged seconds ÷ available F-seconds, current Tunis week', () => {
+  describe('remplissage — engaged seconds ÷ the screen hour (3600 s) × open hours, current Tunis week', () => {
     it('sums reps × the plan S over the week; zero engagement → 0', async () => {
       const { shId } = await seedVenue();
       expect((await computeSps(shId, NOW)).variables.remplissage).toBe(0);
 
       const { planId } = await seedCampaignWithPlan(10); // S = 10 s
-      // 7 slots × 30 reps × 10 s = 2 100 engaged seconds; available = 300 × 10 h × 7 = 21 000.
+      // 7 slots × 30 reps × 10 s = 2 100 engaged seconds; available = 3600 × 10 h × 7 = 252 000
+      // (CAP-F1, ruled F3 A: the SCREEN hour, not F — F caps each campaign).
       await seedAllocation(planId, shId, {
         statut: 'ACCEPTE',
         creneaux: Array.from({ length: 7 }, (_, i) => cren(plusDays(WEEK_START, i % 5), 9 + i)),
       });
       const { variables } = await computeSps(shId, NOW);
-      expect(variables.remplissage).toBe(10); // 2 100 ÷ 21 000 = 10 %
+      expect(variables.remplissage).toBe(0.83); // 2 100 ÷ 252 000 = 0,83 %
     });
 
     it('E2-declared days leave the denominator — a declarer NEVER scores lower for declaring', async () => {
-      // Ratification amendment: available F-seconds = fMax × bHours × the week's NON-declared
+      // Ratification amendment: available seconds = 3600 × bHours × the week's NON-declared
       // days. As first built the denominator counted all 7 days, silently denting the score of
       // an owner who honestly declared — inverting E2's promise.
       const { shId } = await seedVenue();
@@ -323,7 +324,7 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
         creneaux: Array.from({ length: 7 }, (_, i) => cren(plusDays(WEEK_START, i % 5), 9 + i)),
       });
       const before = (await computeSps(shId, NOW)).variables.remplissage;
-      expect(before).toBe(10); // 2 100 ÷ (300 × 10 × 7)
+      expect(before).toBe(0.83); // 2 100 ÷ (3600 × 10 × 7)
 
       // Declare 2 of the 7 week days (créneau-free days — dispatch never scheduled there).
       await db.insert(screenhostUnavailability).values([
@@ -331,7 +332,7 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
         { screenhostId: shId, day: plusDays(WEEK_START, 6) },
       ]);
       const after = (await computeSps(shId, NOW)).variables.remplissage;
-      expect(after).toBe(14); // 2 100 ÷ (300 × 10 × 5) — the denominator shrank exactly ∝
+      expect(after).toBe(1.17); // 2 100 ÷ (3600 × 10 × 5) — the denominator shrank exactly ∝
       expect(after).toBeGreaterThan(before); // declaring never drops the score
     });
   });

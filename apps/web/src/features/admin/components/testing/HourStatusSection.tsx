@@ -66,9 +66,10 @@ export function HourStatusSection({ r }: { r: TestingReport }) {
         </h2>
         <p className="mt-1 text-xs text-gray-500">
           engagé = Σ (répétitions × durée du spot) des parts ACCEPTÉES et EN ATTENTE (le dispatch
-          les tient toutes les deux) ; libre = F − engagé
-          {f === null ? '' : `, F = ${f} s par heure`} ; réservée = heure tenue par un événement,
-          hors vente classique ; répétitions = nombre de passages prévus dans l’heure.
+          les tient toutes les deux) ; libre = 3600 s (l’heure de l’écran, partagée par toutes les
+          campagnes) − engagé ; chaque campagne est plafonnée à F
+          {f === null ? '' : ` = ${f} s par heure`} ; réservée = heure tenue par un événement, hors
+          vente classique ; répétitions = nombre de passages prévus dans l’heure.
         </p>
       </div>
       <HourStatusTable

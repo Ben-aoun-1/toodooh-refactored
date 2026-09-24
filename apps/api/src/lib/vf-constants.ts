@@ -21,6 +21,13 @@
 //                                        delivered × cpm/1000 formula is UNTOUCHED until then).
 
 export const S_MIN_TND = 20;
+
+/**
+ * CAP-F1 (operator ruling 2026-09-24) — a screen's shared broadcast limit: the physical hour. F
+ * (dispatch_config.f_max_seconds, 300 s) is each CAMPAIGN's own hourly cap on a screen, so up to
+ * 3600 ÷ F campaigns at their full F may share one screen hour.
+ */
+export const SCREEN_SECONDS_PER_HOUR = 3600;
 export const SEUIL_DIFFUSABLE = 5000;
 export const G_MOIS_TND = 100;
 export const VALEUR_MIN_SH_TND = 20;

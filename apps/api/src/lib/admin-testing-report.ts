@@ -31,6 +31,7 @@ import {
   spsObservationsInRange,
 } from './sps-observations.js';
 import { SPS_NEUTRAL, computeSps, spsComputable } from './sps-score.js';
+import { SCREEN_SECONDS_PER_HOUR } from './vf-constants.js';
 
 // ADM-OBS1 — the « Tests » report, extracted VERBATIM from routes/admin-testing.ts (SIM-5,
 // 2026-09-16) so the same report can be read on a simulation's VIRTUAL clock. The only change is
@@ -236,7 +237,8 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
   for (const r of reservations) if (r.day > lastPlanned) lastPlanned = r.day;
   const futureDays = daysBetween(todayIso, lastPlanned);
   const statusOf = (days: readonly string[]) =>
-    hourStatuses(days, hours, unavailableSet, reservedSet, allocations, config.fMaxSeconds);
+    // CAP-F1 — an hour is « plein » when the SCREEN hour is (3600 s); F caps each campaign only.
+    hourStatuses(days, hours, unavailableSet, reservedSet, allocations, SCREEN_SECONDS_PER_HOUR);
 
   // Item 4 — the hour values FLOW-4 sums into the day; item 5 — each day's cells by source.
   const hourValues = periodHours(merged.cells);

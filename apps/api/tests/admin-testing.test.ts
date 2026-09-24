@@ -270,14 +270,15 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
     expect(r.config).toHaveProperty('spsWeightAcceptation');
 
     // « Historique »: one row per (elapsed day, open hour) of the période; the unavailable day is
-    // « indisponible », a day without any share is « libre » with the full F (in SECONDS) free.
+    // « indisponible », a day without any share is « libre » with the whole SCREEN hour free (CAP-F1:
+    // 3600 s — F caps each campaign, not the hour).
     expect(r.status_hours.past).toHaveLength(2 * 12);
     expect(
       r.status_hours.past.filter((h) => h.date === d2).every((h) => h.state === 'indisponible'),
     ).toBe(true);
     expect(r.status_hours.past.find((h) => h.date === d1 && h.hour === 8)).toMatchObject({
       state: 'libre',
-      seconds_free: r.config['fMaxSeconds'],
+      seconds_free: 3600,
       reps: 0,
     });
     // « À venir » with nothing planned: only today's hours that have not started yet.
@@ -370,7 +371,7 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
       state: 'partiel',
       engaged_seconds: 60,
       pending_seconds: 60,
-      seconds_free: 240,
+      seconds_free: 3600 - 60, // CAP-F1: the screen hour (3600 s), not F, minus the 60 s engaged
       reps: 6,
       campaigns: 1,
     });

@@ -73,7 +73,8 @@ export const hourStatuses = (
   unavailableDays: ReadonlySet<string>,
   reservedHours: ReadonlySet<string>, // 'date:hour' held in hour_reservations
   allocations: readonly AllocationForStatus[],
-  fMaxSeconds: number,
+  /** The hour's shared limit. CAP-F1: the SCREEN hour (3600 s) — F caps each campaign, not the hour. */
+  capSeconds: number,
 ): HourStatus[] => {
   const engaged = new Map<
     string,
@@ -113,7 +114,7 @@ export const hourStatuses = (
         out.push({ ...base, state: 'reservee_evenement', seconds_free: null });
         continue;
       }
-      const free = Math.max(0, fMaxSeconds - base.engaged_seconds);
+      const free = Math.max(0, capSeconds - base.engaged_seconds);
       out.push({
         ...base,
         state: base.engaged_seconds === 0 ? 'libre' : free <= 0 ? 'plein' : 'partiel',

@@ -408,7 +408,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
       .where(eq(campaignDispatchAllocation.planId, plan?.id ?? ''));
   };
 
-  it('a 30s campaign filling the hour (300s) blocks a 10s campaign on the same screen', async () => {
+  it('CAP-F1 — a 30s campaign at its full F (300s) no longer blocks a 10s campaign on the same screen', async () => {
     const admin = await seedUser({ role: 'admin' });
     const advA = await seedUser({ role: 'advertiser' });
     const advB = await seedUser({ role: 'advertiser' });
@@ -428,12 +428,16 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect(aAlloc?.rI).toBe(10);
     expect((aAlloc?.rI ?? 0) * 30).toBe(300);
 
-    // B: S=10 → the screen's residual budget is 0 → no eligible screenhost → 422 (NOT double-booked
-    // onto the full hour, which the old impression-based residual would have allowed).
-    expect((await dispatch(b, { i_cible: 20000, cpm: 10, s: 10 })).statusCode).toBe(422);
+    // B: S=10 — CAP-F1 (operator ruling 2026-09-24): F is PER CAMPAIGN, the screen holds 3600 s.
+    // A's 300 s leave 3300 s, so B keeps its own F: R_eff = MIN[360, 300/10] = 30; fact capacity
+    // 100·20·30·0.6 = 36 000 ≥ 20 000 → physical 33 334 over Hi 20 × Ai 100 → r_i 16 (160 s).
+    // (Before CAP-F1 the 300 s was shared: A's full hour answered 422 here.)
+    expect((await dispatch(b, { i_cible: 20000, cpm: 10, s: 10 })).statusCode).toBe(201);
+    const [bAlloc] = await allocsFor(b);
+    expect(bAlloc?.rI).toBe(16);
   });
 
-  it('mixed durations on a shared screen honour the invariant Σ(r_i × S) ≤ 300', async () => {
+  it('mixed durations on a shared screen: each campaign ≤ F (300s), the screen ≤ 3600s (CAP-F1)', async () => {
     const admin = await seedUser({ role: 'admin' });
     const advA = await seedUser({ role: 'advertiser' });
     const advB = await seedUser({ role: 'advertiser' });
@@ -453,17 +457,19 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const [aAlloc] = await allocsFor(a);
     expect(aAlloc?.rI).toBe(6); // 6×30 = 180s
 
-    // B: S=10 → T=0.6. Engaged 180s → residual 120s → R_eff = MIN[360, ⌊120/10⌋=12] = 12; a huge
-    // I_cible fills the screen: fact = ⌊100·20·12 × 0.6⌋ = 14400 → physical 24000 → r_i 12
-    // (the old impression-residual would have given 24 → 240s → 420s/hr total — the bug).
+    // B: S=10 → T=0.6. CAP-F1: A's 180 s leave the screen 3420 s, so B's cap is its OWN F:
+    // R_eff = MIN[360, ⌊300/10⌋] = 30; a huge I_cible takes all of it → r_i 30 (300 s).
+    // (Before CAP-F1 the 300 s was shared: B got the 120 s A left → r_i 12.)
     expect((await dispatch(b, { i_cible: 10_000_000, cpm: 10, s: 10 })).statusCode).toBe(201);
     const [bAlloc] = await allocsFor(b);
-    expect(bAlloc?.rI).toBe(12); // 12×10 = 120s
+    expect(bAlloc?.rI).toBe(30); // 30×10 = 300s — its full F
 
-    // INVARIANT: Σ over both campaigns of (reps/hr × S) ≤ 300s/hr on the shared screen.
+    // INVARIANTS: each campaign ≤ F (300 s/h) on the screen; the screen ≤ 3600 s/h in total.
+    expect((aAlloc?.rI ?? 0) * 30).toBeLessThanOrEqual(300);
+    expect((bAlloc?.rI ?? 0) * 10).toBeLessThanOrEqual(300);
     const totalSeconds = (aAlloc?.rI ?? 0) * 30 + (bAlloc?.rI ?? 0) * 10;
-    expect(totalSeconds).toBe(300);
-    expect(totalSeconds).toBeLessThanOrEqual(300);
+    expect(totalSeconds).toBe(480);
+    expect(totalSeconds).toBeLessThanOrEqual(3600);
   });
 
   // ── PRODUCER — dispatch notifies each allocated screenhost owner ─────────────

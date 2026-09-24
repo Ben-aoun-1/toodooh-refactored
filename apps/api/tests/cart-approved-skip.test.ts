@@ -27,6 +27,7 @@ import { cartRoutes } from '../src/routes/cart.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
+import { seedScreenFiller } from './helpers/screen-filler.js';
 
 // CF-SK1 (spec §2.1, ruling #9) — the approved-spot SKIP: « la campagne saute En attente et passe
 // à À venir (ou Active) dès la confirmation du panier ». Real Postgres; session mocked. One venue
@@ -308,7 +309,10 @@ describe('CF-SK1 — the approved-spot skip at cart confirm (real Postgres)', ()
     const advertiser = await seedUser();
     const owner = await seedUser({ role: 'individual_owner' });
     const sector = await ownerSectorId();
-    await seedVenue(owner, sector);
+    const venue = await seedVenue(owner, sector);
+    // CAP-F1 — F is per campaign, so item 1 alone no longer fills the screen: a filler holds 3300 s
+    // and item 1's full F takes the last 300 s (its ceiling is still 540 — its own F is intact).
+    await seedScreenFiller(venue);
     await fund(advertiser, '5000.00');
     const first = await seedDraft(advertiser, sector, {
       creativeStatus: 'approved',
