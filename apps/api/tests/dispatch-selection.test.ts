@@ -99,11 +99,10 @@ describe('SÉLECTION — jamais de miette (no sub-seuil allocation)', () => {
     expect(couvert).toBe(950);
   });
 
-  it('a sub-seuil screenhost triggers ARRÊT (concentration) rather than reaching lower-SPS venues', () => {
-    // C's residual (80) is below seuil(100); per A.3 a_i < seuil → ARRÊT. The reliquat can't be
-    // absorbed (A,B are residual-capped → no headroom), so couvert stays 800 (partial) and the
-    // lower-SPS D is NOT reached — concentration on the top of the pool. (Flagged in CF-9: the
-    // literal A.3 stops here rather than "skipping" C.)
+  it('a TOO-FULL screenhost is SKIPPED, not a stop: lower-SPS venues are still reached (CAP-F1)', () => {
+    // C's residual (80) cannot host even one seuil(100) share while 200 remain to place. The
+    // literal A.3 stopped here (the old pin: couvert 800, D never reached). Operator ruling
+    // 2026-09-24: a venue too full to take a share is skipped — the queue continues to D.
     const { retenus, couvert } = selection(
       [sh('A', 9, 400), sh('B', 8, 400), sh('C', 7, 80), sh('D', 6, 500)],
       1000,
@@ -112,8 +111,38 @@ describe('SÉLECTION — jamais de miette (no sub-seuil allocation)', () => {
     expect(retenus).toEqual([
       { id: 'A', ai: 400 },
       { id: 'B', ai: 400 },
+      { id: 'D', ai: 200 },
     ]);
-    expect(couvert).toBe(800);
+    expect(couvert).toBe(1000);
+  });
+
+  it('THE PROD CASE (24/09): a nearly full TOP-SPS venue no longer empties the whole selection', () => {
+    // toodooh (SPS 94) had 568 left under « Test Mariem »; seuil 2000 at CPM 10. The old ARRÊT
+    // retained NOBODY → SATURATED → « — » on the draft, while resto and fffrfr had ~21 000 each.
+    const E = [sh('toodooh', 94, 568), sh('resto', 72.67, 20_958), sh('fffrfr', 63.5, 21_861)];
+    const th = { seuilDiffusable: 2_000, gJour: 0 };
+    expect(selection(E, 15_700, th)).toEqual({
+      retenus: [{ id: 'resto', ai: 15_700 }],
+      couvert: 15_700,
+    });
+    expect(selection(E, 43_300, th).retenus.map((r) => r.id)).toEqual(['resto', 'fffrfr']);
+  });
+
+  it('a sub-seuil REMAINDER still stops the selection — a roomy venue is not opened for a miette', () => {
+    // A takes 400, B 590 (both capacity-capped): 10 remain, below seuil(100). C has room but a
+    // 10-impression line would be a miette → C is NOT opened; nobody has headroom to absorb the
+    // 10, so couvert stays 990. The skip rule applies only to a too-FULL venue, never to a small
+    // remainder (the tail rule is unchanged).
+    const { retenus, couvert } = selection(
+      [sh('A', 9, 400), sh('B', 8, 590), sh('C', 7, 500)],
+      1000,
+      TH,
+    );
+    expect(retenus).toEqual([
+      { id: 'A', ai: 400 },
+      { id: 'B', ai: 590 },
+    ]);
+    expect(couvert).toBe(990);
   });
 
   it('never allocates a screenhost more than its residual capacity (no survente)', () => {
