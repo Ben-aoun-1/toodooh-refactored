@@ -21,6 +21,7 @@ import {
   tunisDateOf,
   tunisWeekStart,
 } from './sps-observations.js';
+import { SCREEN_SECONDS_PER_HOUR } from './vf-constants.js';
 
 // E4 — the SPS score engine (Mejri 2026-07-27, Kais-validated): 40 % taux d'acceptation des
 // campagnes + 30 % respect des événements acceptés + 20 % activité de l'écran + 10 % taux de
@@ -39,7 +40,7 @@ import {
 //                     VIDEO_ENDED proof received in the créneau's Tunis hour), trailing 30 d,
 //                     ACCEPTE allocations only. Nothing scheduled → 100.
 //  - remplissage:     engaged broadcast seconds (Σ créneau reps × the plan's S) ÷ the venue's
-//                     available F-seconds (fMax × broadcastable hours × the week's NON-DECLARED
+//                     available SCREEN seconds (CAP-F1: 3600 × broadcastable hours × the week's NON-DECLARED
 //                     days — an honest E2 declaration never dents the score; ratification
 //                     amendment), current Tunis week. Zero engagement → 0.
 //
@@ -169,7 +170,9 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
   }
   const activite = scheduled === 0 ? 100 : round2((proven / scheduled) * 100);
 
-  // ── remplissage: engaged seconds ÷ available F-seconds, current Tunis week ──
+  // ── remplissage: engaged seconds ÷ the SCREEN's available seconds, current Tunis week ──
+  // CAP-F1 (ruled F3 A, 2026-09-24): F caps each campaign; the screen hour is 3600 s, shared by
+  // every campaign, so the fill of the screen is measured against 3600 × open hours × days.
   const weekStart = tunisWeekStart(now);
   // Pure CALENDAR arithmetic in UTC space — a +01:00 anchor sliced through toISOString would
   // land a day early and silently drop Sunday from the week.
@@ -197,7 +200,7 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
       ),
     );
   const availableDays = 7 - declaredRows.length;
-  const availableSeconds = cfg.fMaxSeconds * bHours.length * availableDays;
+  const availableSeconds = SCREEN_SECONDS_PER_HOUR * bHours.length * availableDays;
   let engagedSeconds = 0;
   for (const a of allocations) {
     for (const c of a.creneaux) {
