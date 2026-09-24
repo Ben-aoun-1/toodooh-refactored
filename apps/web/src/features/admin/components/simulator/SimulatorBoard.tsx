@@ -1,6 +1,6 @@
 import { Monitor, MonitorOff, Radio, Search, Users } from 'lucide-react';
 
-import { usePokeActor } from '@/features/admin/hooks/useAdminSimulator';
+import { useAttestEvent, usePokeActor } from '@/features/admin/hooks/useAdminSimulator';
 import type { BoardState, BoardVenue } from '@/features/admin/services/admin-simulator.service';
 
 const CLASS_DOT: Record<string, string> = {
@@ -13,10 +13,12 @@ function VenueCard({
   venue,
   onToggleScreen,
   onInspect,
+  onAttest,
 }: {
   venue: BoardVenue;
   onToggleScreen: (screenId: string, online: boolean) => void;
   onInspect: () => void;
+  onAttest: (eventId: string, respecte: boolean) => void;
 }) {
   const airing = venue.airing.length > 0;
   return (
@@ -89,6 +91,30 @@ function VenueCard({
         <Search className="h-3 w-3" /> Inspecter les variables
       </button>
 
+      {(venue.events ?? []).length > 0 && (
+        <ul className="mt-2 space-y-1 text-xs">
+          {(venue.events ?? []).map((e) => (
+            <li key={e.campaign_id} className="flex items-center justify-between gap-2">
+              <span className="truncate">
+                ⚽ {e.name} · {e.statut}
+              </span>
+              <button
+                type="button"
+                onClick={() => onAttest(e.event_id, e.respecte === false)}
+                className={`shrink-0 rounded px-1.5 py-0.5 ${
+                  e.respecte === false
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-emerald-50 text-emerald-700'
+                }`}
+                title="Attestation de l'agent : bascule respecté / non respecté"
+              >
+                {e.respecte === false ? 'Non respecté' : 'Respecté'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {airing && (
         <p className="mt-2 truncate rounded bg-brand-primary/20 px-2 py-1 text-xs">
           ▶ {venue.airing.map((a) => `${a.name} ×${a.reps}`).join(' · ')}
@@ -108,6 +134,7 @@ export function SimulatorBoard({
   onInspect: (venue: { id: string; name: string }) => void;
 }) {
   const poke = usePokeActor(simulationId);
+  const attest = useAttestEvent(simulationId);
   const toggle = (screenId: string, online: boolean) =>
     poke.mutate({ entityId: screenId, params: { offline_probability: online ? 1 : 0 } });
 
@@ -136,6 +163,9 @@ export function SimulatorBoard({
             venue={venue}
             onToggleScreen={toggle}
             onInspect={() => onInspect({ id: venue.id, name: venue.name })}
+            onAttest={(eventId, respecte) =>
+              attest.mutate({ eventId, screenhostId: venue.id, respecte })
+            }
           />
         ))}
       </div>

@@ -98,6 +98,9 @@ export interface TickCounters {
   proofs: number;
   venues_airing: number;
   missed_offline: number;
+  /** SIM-6 — event spot proofs this tick, and the (venue, bloc) pairs that aired. */
+  event_proofs?: number;
+  event_blocs_aired?: number;
   activated: number;
   completed: number;
   redispatch_rounds: number;
@@ -128,6 +131,14 @@ export interface BoardVenue {
   accepted: number;
   refused: number;
   proofs_today: number;
+  /** SIM-6 — the venue's event allocations and the agent's verdict (null = never attested). */
+  events?: {
+    event_id: string;
+    campaign_id: string;
+    name: string;
+    statut: string;
+    respecte: boolean | null;
+  }[];
 }
 
 export interface BoardCampaign {
@@ -241,6 +252,12 @@ export const adminSimulatorService = {
   campaignEligibleHosts: (id: string, campaignId: string) =>
     apiClient.get<EligibleHostsReport>(
       `/admin/simulations/${id}/campaigns/${campaignId}/eligible-hosts`,
+    ),
+  /** SIM-6 — the agent's « respecté / non respecté » verdict on a venue for a simulated event. */
+  attest: (id: string, eventId: string, screenhostId: string, respecte: boolean) =>
+    apiClient.post<{ event_id: string; screenhost_id: string; respecte: boolean }>(
+      `/admin/simulations/${id}/events/${eventId}/attestations/${screenhostId}`,
+      { respecte },
     ),
   poke: (id: string, entityId: string, params: ActorParams) =>
     apiClient.patch<{ kind: string; entity_id: string; params: ActorParams }>(

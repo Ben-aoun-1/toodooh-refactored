@@ -127,6 +127,16 @@ export function usePokeActor(id: string) {
   });
 }
 
+/** SIM-6 — record an agent's verdict on a venue for a simulated event (the board refreshes). */
+export function useAttestEvent(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { eventId: string; screenhostId: string; respecte: boolean }) =>
+      adminSimulatorService.attest(id, input.eventId, input.screenhostId, input.respecte),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) }),
+  });
+}
+
 export function useLaunchEvent(id: string) {
   const qc = useQueryClient();
   return useMutation({
