@@ -69,9 +69,23 @@ export const screenWsRoutes: FastifyPluginAsync = async (app) => {
         request.log.warn('screen-ws: malformed message ignored');
         return;
       }
-      void handleScreenEvent(msg, { screenId, screenhostId }, request.log).catch((err: unknown) =>
-        request.log.warn({ err }, 'screen-ws: event handler error'),
-      );
+      void handleScreenEvent(msg, { screenId, screenhostId }, request.log)
+        .then((outcome) => {
+          // PROOF-R1 (K1 A) — ack every SETTLED proof that carries a play_id, so the player drops it
+          // from its outbox; a thrown (transient) failure sends none and the player replays it. The
+          // event rides along: a play's START and END share one play_id, and acking one must never
+          // drop the other.
+          if (outcome?.playId && socket.readyState === socket.OPEN) {
+            socket.send(
+              serverMessage('PROOF_ACK', {
+                play_id: outcome.playId,
+                event: msg.event,
+                status: outcome.status,
+              }),
+            );
+          }
+        })
+        .catch((err: unknown) => request.log.warn({ err }, 'screen-ws: event handler error'));
     });
     const cleanup = (): void => screenRegistry.remove(screenId, socket);
     socket.on('close', cleanup);

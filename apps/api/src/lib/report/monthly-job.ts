@@ -176,7 +176,7 @@ async function hasMonthScopedData(
               WHERE s.screenhost_id = ${screenhosts.id} AND s.month = ${month})
           OR EXISTS (SELECT 1 FROM proof_of_play pp
               WHERE pp.screenhost_id = ${screenhosts.id}
-              AND to_char(pp.received_at at time zone 'Africa/Tunis', 'YYYY-MM-DD')
+              AND to_char(coalesce(pp.played_at, pp.received_at) at time zone 'Africa/Tunis', 'YYYY-MM-DD')
                 BETWEEN ${from} AND ${to})
           OR EXISTS (SELECT 1 FROM screenhost_affluence_hourly h
               WHERE h.screenhost_id = ${screenhosts.id}

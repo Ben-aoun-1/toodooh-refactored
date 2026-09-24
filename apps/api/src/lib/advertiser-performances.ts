@@ -19,6 +19,7 @@ import { tunisDateOf } from './campaign-dates.js';
 import { ttcFromHt } from './facture.js';
 import { collapseHalvesSql, inEffectSql } from './half-hour-slots.js';
 import { displayImpressionsSettled } from './impressions-display.js';
+import { proofInstantSql } from './playout/proof-instant.js';
 import { sectorDisplayName } from './report/sector-display-name.js';
 
 // SC-P — « Mes performances » for the SCREENCASTER (Mejri, UserStories_Mes_Performances_v2,
@@ -382,8 +383,9 @@ interface ProofSlot {
 /** VIDEO_ENDED proofs bucketed per (campaign, venue, Tunis date, Tunis hour) — FIX A grid. */
 const loadProofSlots = async (campaignIds: readonly string[]): Promise<ProofSlot[]> => {
   if (campaignIds.length === 0) return [];
-  const tunisDate = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
-  const tunisHour = sql<number>`extract(hour from ${proofOfPlay.receivedAt} at time zone 'Africa/Tunis')::int`;
+  // PROOF-R1 — bucketed on the PLAY instant (a replayed proof credits the hour it aired).
+  const tunisDate = sql<string>`to_char(${proofInstantSql} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+  const tunisHour = sql<number>`extract(hour from ${proofInstantSql} at time zone 'Africa/Tunis')::int`;
   const rows = await db
     .select({
       campaignId: proofOfPlay.campaignId,
