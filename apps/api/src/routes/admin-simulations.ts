@@ -31,6 +31,7 @@ import { upsertEventAttestation } from '../lib/event-playout/attestation.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { requireSimulator } from '../middleware/require-simulator.js';
 import { runInSandbox } from '../simulator/context.js';
+import { inspectCampaign } from '../simulator/inspect/campaign.js';
 import { mainDatabaseName, sandboxDatabaseName } from '../simulator/naming.js';
 import { sandboxHandleFor } from '../simulator/pools.js';
 import { deleteSimulation, provisionSimulation } from '../simulator/provisioning.js';
@@ -489,6 +490,22 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
     }
     return reply.status(201).send(result);
   });
+
+  // SIM-6 phase 2 — the campaign inspector: pricing (C_max, objective, estimate, rates and config),
+  // the frozen plan and its allocations (or the event placement), the redispatch rounds, the engine
+  // journal and the settlement — one read inside the sandbox (simulator/inspect/campaign.ts).
+  app.get(
+    '/api/admin/simulations/:id/campaigns/:campaignId/inspect',
+    routed,
+    async (request, reply) => {
+      const { campaignId } = request.params as { campaignId: string };
+      if (!z.uuid().safeParse(campaignId).success)
+        return invalid(reply, 'campaignId', 'must be a uuid');
+      const report = await inspectCampaign(campaignId);
+      if (!report) return notFound(reply);
+      return report;
+    },
+  );
 
   // SIM-6 — an agent's « respecté / non respecté » verdict on a venue for a simulated event, so the
   // EV5 settlement's negation path can be exercised. Written INSIDE the sandbox through the same
