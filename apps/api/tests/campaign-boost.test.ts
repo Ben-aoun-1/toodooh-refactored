@@ -28,6 +28,7 @@ import { campaignBoostRoutes } from '../src/routes/campaign-boost.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
+import { seedScreenFiller } from './helpers/screen-filler.js';
 
 // CF-B1 (spec §3.3) — « Booster »: strictly additive on Active/À venir; the complementary budget
 // dispatches over the MERGED perimeter under the same rules. Real Postgres; session mocked. The
@@ -438,6 +439,10 @@ describe('CF-B1 — Booster (real Postgres)', () => {
 
     it('ATOMICITY: a TOO_THIN boost persists NOTHING (end/zones/targeting/budget unchanged)', async () => {
       const f = await fixture();
+      // CAP-F1 — F is per campaign: the screens are pre-filled to 3300 s so each eater's F takes the
+      // last 300 s, exactly as one eater used to take the whole shared 300 s.
+      await seedScreenFiller(f.venueA);
+      await seedScreenFiller(f.venueB);
       // Saturate venue B entirely with a second campaign so the added-category pool has zero
       // residual → the boost's own dispatch refuses.
       const other = await seedUser();

@@ -269,11 +269,12 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
   });
 
   // ── engagement netting (the dispatch-truth requirement) ────────────────────
-  it("an existing campaign's engagement SHRINKS the ceiling: rI=15×10s engaged → 540 → 270", async () => {
+  it('a nearly full SCREEN hour shrinks the ceiling: 3450 s engaged → 540 → 270 (CAP-F1)', async () => {
     const f = await fullFixture();
-    // A neighbour's frozen allocation on the same venue: engaged 150s → residual 150s →
-    // R = ⌊150/10⌋ = 15 → brute 100×20×15 = 30 000 → facturable 18 000 → C_max 270.
-    await seedEngagement(f.advertiser, f.venueIds[0] ?? '', 15);
+    // CAP-F1 — F (300 s) is per campaign; only the screen hour (3600 s) is shared. A neighbour
+    // holding 3450 s leaves 150 s → R = ⌊150/10⌋ = 15 → brute 100×20×15 = 30 000 → facturable
+    // 18 000 → C_max 270. (Before CAP-F1, 150 s engaged of a SHARED 300 did the same.)
+    await seedEngagement(f.advertiser, f.venueIds[0] ?? '', 345);
     mockSession(f.advertiser);
     const res = await getCmax(f.campaignId);
     expect(res.json()).toEqual({
