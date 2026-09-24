@@ -11,6 +11,7 @@ import {
   screenhosts,
 } from '../db/schema.js';
 import { ownerApprovedSql } from '../lib/approved-owner.js';
+import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
 import {
   broadcastableHours,
   screenhostMatchesTargeting,
@@ -159,6 +160,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   // retired with it).
   // CAP-EVT1 — an EVENT positioning draft (event_id set) answers with its match's EVENT POOL
   // instead (lib/event-pricing/coverage.ts): the event rules, none of the above.
+  // CAP-F1 — and REMAINING CAPACITY: with a window, only the venues « Hosts éligibles » lists.
   // The response shape (screenhosts / covered_count / without_coordinates) is unchanged.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
@@ -237,6 +239,16 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       eligible = matched.filter(
         (v) => availableWindowDays(windowDays, unavailable.get(v.id)).length > 0,
       );
+      // CAP-F1 (operator ruling 2026-09-24) — « the map needs to check remaining capacity »: with a
+      // window, the map is exactly « Hosts éligibles » — the real pool, read-only
+      // (lib/campaign-eligible-hosts.ts), so a venue whose screen hour is already held is no dot
+      // and no count, and the two views can never disagree. Without a window there is no capacity
+      // to price, so the static gates above stand alone (as for availability).
+      const hosts = await campaignEligibleHosts(campaign.id);
+      if (hosts.status === 'OK') {
+        const placeable = new Set(hosts.report.eligible.map((h) => h.id));
+        eligible = eligible.filter((v) => placeable.has(v.id));
+      }
     }
 
     return reply.status(200).send(coverageBody(eligible));

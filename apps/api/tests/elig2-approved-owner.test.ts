@@ -435,7 +435,10 @@ describe('ELIG-2 — only approved owners count (real Postgres)', () => {
     it('hides a venue with no affluence: none, all zero, or only a suspended cell', async () => {
       const sector = await eventSector();
       const advertiser = await seedUser({ role: 'advertiser' });
-      const campaignId = await seedCampaign(advertiser);
+      // CAP-F1 — WITH a window the map is « Hosts éligibles » (the pool prices capacity, and a venue
+      // with no typical-week audience inside the window has none). This pins the STATIC affluence
+      // gate, which is what a draft WITHOUT dates shows — so the draft has no window.
+      const campaignId = await seedCampaign(advertiser, { start: null, end: null });
       const owner = await seedApprovedOwner();
 
       const none = await seedVenue({
@@ -509,7 +512,10 @@ describe('ELIG-2 — only approved owners count (real Postgres)', () => {
     it('shows a venue with a SINGLE manual value, or a SINGLE live value', async () => {
       const sector = await eventSector();
       const advertiser = await seedUser({ role: 'advertiser' });
-      const campaignId = await seedCampaign(advertiser);
+      // CAP-F1 — WITH a window the map is « Hosts éligibles » (the pool prices capacity, and a venue
+      // with no typical-week audience inside the window has none). This pins the STATIC affluence
+      // gate, which is what a draft WITHOUT dates shows — so the draft has no window.
+      const campaignId = await seedCampaign(advertiser, { start: null, end: null });
       const owner = await seedApprovedOwner();
 
       const oneManual = await seedVenue({
