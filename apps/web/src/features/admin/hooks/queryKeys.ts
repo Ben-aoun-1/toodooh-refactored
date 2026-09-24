@@ -33,6 +33,8 @@ export const adminKeys = {
   simulationBoard: (id: string) => [...adminKeys.all, 'simulations', id, 'board'] as const,
   simulationVenueReport: (id: string, venueId: string, from: string, to: string) =>
     [...adminKeys.all, 'simulations', id, 'venueReport', venueId, from, to] as const,
+  simulationCampaignInspection: (id: string, campaignId: string) =>
+    [...adminKeys.all, 'simulations', id, 'inspect', campaignId] as const,
   simulationEligibleHosts: (id: string, campaignId: string) =>
     [...adminKeys.all, 'simulations', id, 'eligibleHosts', campaignId] as const,
 

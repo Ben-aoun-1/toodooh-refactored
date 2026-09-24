@@ -2,6 +2,7 @@ import { CalendarClock, Megaphone, Plus } from 'lucide-react';
 import { useState } from 'react';
 
 import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
+import { SimulationCampaignInspector } from '@/features/admin/components/simulator/SimulationCampaignInspector';
 import { useLaunchCampaign, useLaunchEvent } from '@/features/admin/hooks/useAdminSimulator';
 import type { BoardCampaign } from '@/features/admin/services/admin-simulator.service';
 
@@ -27,6 +28,7 @@ export function CampaignsPanel({
   const [spot, setSpot] = useState(10);
   const [share, setShare] = useState(40);
   const [eligibleFor, setEligibleFor] = useState<{ id: string; name: string } | null>(null);
+  const [inspectId, setInspectId] = useState<string | null>(null);
 
   return (
     <section className="space-y-3 rounded-xl border bg-white p-4">
@@ -162,12 +164,28 @@ export function CampaignsPanel({
                     >
                       Hosts éligibles
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setInspectId(c.id)}
+                      className="ml-2 whitespace-nowrap text-xs text-brand-deep underline"
+                    >
+                      Inspecter
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {inspectId && (
+        <SimulationCampaignInspector
+          key={inspectId}
+          simulationId={simulationId}
+          campaignId={inspectId}
+          onClose={() => setInspectId(null)}
+        />
       )}
 
       {eligibleFor && (

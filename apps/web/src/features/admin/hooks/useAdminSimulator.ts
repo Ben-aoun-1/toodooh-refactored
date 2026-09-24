@@ -172,3 +172,13 @@ export function useSimulationCampaignEligibleHosts(
     retry: false,
   });
 }
+
+/** SIM-6 phase 2 — the campaign inspector (refetched with the board after each tick). */
+export function useSimulationCampaignInspection(id: string, campaignId: string | null) {
+  return useQuery({
+    queryKey: adminKeys.simulationCampaignInspection(id, campaignId ?? ''),
+    queryFn: () => adminSimulatorService.inspectCampaign(id, campaignId ?? ''),
+    enabled: Boolean(campaignId),
+    retry: false,
+  });
+}
