@@ -52,6 +52,7 @@ interface Report {
     capacity: number;
     days_available: number | null;
     allocation: unknown;
+    share?: number | null;
   }[];
   excluded: { id: string; name: string; reason: string }[];
   totals: { eligible: number; excluded: number; capacity: number; c_max_tnd: number };
@@ -123,6 +124,7 @@ const seedCampaign = async (
     end?: string | null;
     status?: string;
     creativeSeconds?: number;
+    budget?: string;
   } = {},
 ): Promise<string> => {
   let creativeId: string | null = null;
@@ -148,6 +150,7 @@ const seedCampaign = async (
       startDate: opts.start === undefined ? '2024-01-01' : opts.start, // Monday
       endDate: opts.end === undefined ? '2024-01-02' : opts.end, // Tuesday
       creativeId,
+      requestedBudget: opts.budget ?? null,
     })
     .returning();
   return c?.id ?? '';
@@ -275,6 +278,41 @@ describe('ELIG-1 — GET /api/admin/campaigns/:id/eligible-hosts (real Postgres)
       expect(report.spot_seconds).toBe(10);
       expect(report.spot_source).toBe('default');
     }
+  });
+
+  it("ELIG-3 — each venue's « part attribuée » at the draft's budget (the real selection), exact affluence", async () => {
+    // Two identical venues (8–23 over Mon+Tue = 30 h, affluence 100, a 15 s spot → R 20, T 0.7):
+    // capacity 100 × 30 × 20 × 0.7 = 42 000 each. A budget worth MORE than one venue splits.
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const admin = await seedUser({ role: 'admin' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const sector = await ownerSector();
+    for (const name of ['Alpha', 'Beta']) {
+      await seedVenue({ name, ownerId: owner, sectorId: sector.id, cls: 'premium' });
+    }
+    const campaignId = await seedCampaign(advertiser, { creativeSeconds: 15, budget: '900.00' });
+    mockSession(admin);
+    const res = await get(campaignId);
+    expect(res.statusCode).toBe(200);
+    const report = res.json<Report>();
+    const objective = Math.floor((900 * 1000) / report.cpm_tnd);
+    const shares = report.eligible.map((v) => v.share ?? 0);
+    expect(shares.reduce((a, b) => a + b, 0)).toBe(Math.min(objective, report.totals.capacity));
+    for (const v of report.eligible) expect(v.share ?? 0).toBeLessThanOrEqual(v.capacity);
+    expect(shares.filter((x) => x > 0)).toHaveLength(2); // more than one venue's capacity → split
+    expect(report.eligible[0]?.affluence).toBe(100); // exact (2 decimals), not rounded to 1
+  });
+
+  it('ELIG-3 — a draft without a budget has no « part attribuée » yet', async () => {
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const admin = await seedUser({ role: 'admin' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const sector = await ownerSector();
+    await seedVenue({ name: 'Alpha', ownerId: owner, sectorId: sector.id, cls: 'premium' });
+    const campaignId = await seedCampaign(advertiser, { creativeSeconds: 15 });
+    mockSession(admin);
+    const report = (await get(campaignId)).json<Report>();
+    expect(report.eligible.map((v) => v.share)).toEqual([null]);
   });
 
   it('a draft without dates answers 409 NO_DATES; an unknown id 404; a bad id 400', async () => {

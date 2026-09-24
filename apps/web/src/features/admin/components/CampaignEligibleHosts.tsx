@@ -8,6 +8,7 @@ import {
   columnLabels,
   exclusionLabel,
   exclusionSummary,
+  shareText,
 } from '@/features/admin/lib/eligible-hosts';
 import { ApiError } from '@/lib/api-client';
 
@@ -92,6 +93,7 @@ export function CampaignEligibleHosts({
                         <th className="py-1 pr-2 font-medium">{cols.affluence}</th>
                         <th className="py-1 pr-2 font-medium">{cols.hours}</th>
                         <th className="py-1 pr-2 font-medium">{cols.capacity}</th>
+                        <th className="py-1 pr-2 font-medium">{cols.share}</th>
                         <th className="py-1 font-medium">Proposition</th>
                       </tr>
                     </thead>
@@ -110,6 +112,7 @@ export function CampaignEligibleHosts({
                             )}
                           </td>
                           <td className="py-1 pr-2">{nf(v.capacity)}</td>
+                          <td className="py-1 pr-2">{shareText(v.share)}</td>
                           <td className="py-1">
                             {v.allocation
                               ? `${ALLOCATION_STATUT_LABEL[v.allocation.statut] ?? v.allocation.statut} (${nf(v.allocation.impressions)})`
