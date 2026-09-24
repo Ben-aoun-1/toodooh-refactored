@@ -15,6 +15,7 @@ import {
   runEventOwnerAnswers,
   runOwnerAnswers,
   runPax,
+  runEventPlayout,
   runPlayout,
   runScreenLiveness,
 } from './actors.js';
@@ -40,6 +41,9 @@ export interface TickCounters {
   proofs: number;
   venues_airing: number;
   missed_offline: number;
+  /** SIM-6 — event spot proofs written this tick, and the (venue, bloc) pairs that aired. */
+  event_proofs: number;
+  event_blocs_aired: number;
   activated: number;
   completed: number;
   redispatch_rounds: number;
@@ -67,6 +71,8 @@ const zero = (): TickCounters => ({
   proofs: 0,
   venues_airing: 0,
   missed_offline: 0,
+  event_proofs: 0,
+  event_blocs_aired: 0,
   activated: 0,
   completed: 0,
   redispatch_rounds: 0,
@@ -150,6 +156,11 @@ export const runOneHour = async (input: {
   counters.proofs += playout.proofs;
   counters.venues_airing = playout.venuesAiring;
   counters.missed_offline += playout.skippedOffline;
+  // SIM-6 — the event spots air in their blocs (the event settlement needs these proofs).
+  const eventPlayout = await runEventPlayout({ moment, onlineByVenue: liveness.onlineByVenue });
+  counters.event_proofs += eventPlayout.proofs;
+  counters.event_blocs_aired += eventPlayout.blocsAired;
+  counters.missed_offline += eventPlayout.skippedOffline;
 
   // 3. Rattrapage — reads this hour's manquements against the frozen plan.
   const redispatch = await runCampaignRedispatchTick(log, moment.at);

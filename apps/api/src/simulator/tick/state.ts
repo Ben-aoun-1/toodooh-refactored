@@ -7,12 +7,16 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaigns,
+  creatives,
+  eventAllocations,
+  eventAttestations,
   proofOfPlay,
   recharges,
   screenhostAffluenceHourly,
   screenhosts,
   screens,
 } from '../../db/schema.js';
+import { blocCoversInstant, eventRepsPerHour, parseBlocs } from '../../lib/event-playout/spots.js';
 import { collapseHalvesSql } from '../../lib/half-hour-slots.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
 
@@ -39,6 +43,14 @@ export interface VenueState {
   accepted: number;
   refused: number;
   proofs_today: number;
+  /** SIM-6 — the venue's event allocations, with the agent's recorded verdict. */
+  events: {
+    event_id: string;
+    campaign_id: string;
+    name: string;
+    statut: string;
+    respecte: boolean | null;
+  }[];
 }
 
 export interface SimulationState {
@@ -142,6 +154,43 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
     .innerJoin(campaignDispatchPlan, eq(campaignDispatchPlan.id, campaignDispatchAllocation.planId))
     .innerJoin(campaigns, eq(campaigns.id, campaignDispatchPlan.campaignId));
 
+  // SIM-6 — the EVENT allocations count too (pending / accepted / refused, and airing inside a bloc):
+  // before, the board read only campaign_dispatch_allocation, so a booked match was invisible here.
+  const eventRows = await db
+    .select({
+      screenhostId: eventAllocations.screenhostId,
+      statut: eventAllocations.statut,
+      blocs: eventAllocations.blocs,
+      campaignId: campaigns.id,
+      campaignName: campaigns.name,
+      campaignStatus: campaigns.status,
+      eventId: campaigns.eventId,
+      spotSeconds: creatives.durationSeconds,
+    })
+    .from(eventAllocations)
+    .innerJoin(campaigns, eq(campaigns.id, eventAllocations.campaignId))
+    .leftJoin(creatives, eq(creatives.id, campaigns.creativeId));
+  // The recorded « respecté / non respecté » verdicts (SIM-6 attestation switch).
+  const verdictRows = await db
+    .select({
+      eventId: eventAttestations.eventId,
+      screenhostId: eventAttestations.screenhostId,
+      respecte: eventAttestations.respecte,
+    })
+    .from(eventAttestations);
+  const verdictOf = new Map(verdictRows.map((v) => [`${v.eventId}:${v.screenhostId}`, v.respecte]));
+  const allAllocations = [
+    ...allocationRows.map((a) => ({ ...a, kind: 'standard' as const })),
+    ...eventRows.map((e) => ({
+      screenhostId: e.screenhostId,
+      statut: e.statut,
+      campaignId: e.campaignId,
+      campaignName: e.campaignName,
+      campaignStatus: e.campaignStatus,
+      kind: 'event' as const,
+    })),
+  ];
+
   // Two different questions: a venue shows TODAY's diffusions (the Tunis day, not a UTC one — an
   // 01h spot belongs to the night that is still running), a campaign shows its total since launch.
   const dayStart = fromZonedTime(`${moment.date}T00:00:00`, TZ);
@@ -158,13 +207,41 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
   const proofsByCampaign = new Map(campaignProofRows.map((r) => [r.campaignId, r.n]));
 
   const venues: VenueState[] = venueRows.map((venue) => {
-    const mine = allocationRows.filter((a) => a.screenhostId === venue.id);
-    const airing = mine
-      .filter((a) => a.statut === 'ACCEPTE' && a.campaignStatus === 'active')
+    const mine = allAllocations.filter((a) => a.screenhostId === venue.id);
+    const standardAiring = allocationRows
+      .filter(
+        (a) =>
+          a.screenhostId === venue.id && a.statut === 'ACCEPTE' && a.campaignStatus === 'active',
+      )
       .flatMap((a) => {
         const slot = a.creneaux.find((c) => c.date === moment.date && c.hour === moment.hour);
         return slot ? [{ campaign_id: a.campaignId, name: a.campaignName, reps: slot.reps }] : [];
       });
+    // An event spot airs NOW iff one of its blocs covers this instant (the playout's own rule).
+    const eventAiring = eventRows
+      .filter(
+        (e) =>
+          e.screenhostId === venue.id &&
+          e.statut === 'ACCEPTE' &&
+          e.campaignStatus === 'active' &&
+          parseBlocs(e.blocs).some((b) => blocCoversInstant(b, moment.at)),
+      )
+      .map((e) => ({
+        campaign_id: e.campaignId,
+        name: e.campaignName,
+        reps: eventRepsPerHour(e.spotSeconds ?? 0),
+      }));
+    const airing = [...standardAiring, ...eventAiring];
+    const venueEvents = eventRows
+      .filter((e) => e.screenhostId === venue.id && e.eventId !== null)
+      .map((e) => ({
+        event_id: e.eventId ?? '',
+        campaign_id: e.campaignId,
+        name: e.campaignName,
+        statut: e.statut,
+        /** true / false = the agent's verdict; null = never attested (counts as respected). */
+        respecte: verdictOf.get(`${e.eventId}:${venue.id}`) ?? null,
+      }));
     return {
       id: venue.id,
       name: venue.name,
@@ -186,6 +263,7 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
       accepted: mine.filter((a) => a.statut === 'ACCEPTE').length,
       refused: mine.filter((a) => a.statut === 'REFUSE').length,
       proofs_today: proofsByVenue.get(venue.id) ?? 0,
+      events: venueEvents,
     };
   });
 
@@ -210,7 +288,7 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
     clock: { at: moment.at.toISOString(), date: moment.date, hour: moment.hour },
     venues,
     campaigns: campaignRows.map((c) => {
-      const mine = allocationRows.filter((a) => a.campaignId === c.id);
+      const mine = allAllocations.filter((a) => a.campaignId === c.id);
       return {
         id: c.id,
         name: c.name,

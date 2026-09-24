@@ -27,6 +27,7 @@ import { env } from '../env.js';
 import { buildTestingReport, listTestingScreenhosts } from '../lib/admin-testing-report.js';
 import { isCalendarDate } from '../lib/calendar-date.js';
 import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
+import { upsertEventAttestation } from '../lib/event-playout/attestation.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { requireSimulator } from '../middleware/require-simulator.js';
 import { runInSandbox } from '../simulator/context.js';
@@ -114,6 +115,8 @@ const launchBodySchema = z.object({
   budget_tnd: z.int().min(1).max(1_000_000).optional(),
   budget_share: z.number().min(0.01).max(1).optional(),
 });
+
+const attestationBodySchema = z.object({ respecte: z.boolean() });
 
 const eventBodySchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
@@ -486,6 +489,55 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
     }
     return reply.status(201).send(result);
   });
+
+  // SIM-6 — an agent's « respecté / non respecté » verdict on a venue for a simulated event, so the
+  // EV5 settlement's negation path can be exercised. Written INSIDE the sandbox through the same
+  // function as the admin route (lib/event-playout/attestation.ts); the author is one of the world's
+  // agents (the sandbox has its own users — the real admin does not exist there).
+  app.post(
+    '/api/admin/simulations/:id/events/:eventId/attestations/:screenhostId',
+    routed,
+    async (request, reply) => {
+      const { eventId, screenhostId } = request.params as { eventId: string; screenhostId: string };
+      if (!z.uuid().safeParse(eventId).success) return invalid(reply, 'eventId', 'must be a uuid');
+      if (!z.uuid().safeParse(screenhostId).success) {
+        return invalid(reply, 'screenhostId', 'must be a uuid');
+      }
+      const body = attestationBodySchema.safeParse(request.body ?? {});
+      if (!body.success) return invalid(reply, 'respecte', 'must be a boolean');
+      const [agent] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(inArray(users.role, ['screenhost_agent', 'screencast_agent', 'admin', 'superadmin']))
+        .limit(1);
+      if (!agent) {
+        return reply.status(409).send({
+          error: 'NO_AGENT',
+          message: 'Le monde simulé n’a aucun agent pour signer l’attestation.',
+          statusCode: 409,
+        });
+      }
+      const written = await upsertEventAttestation({
+        eventId,
+        screenhostId,
+        authorId: agent.id,
+        respecte: body.data.respecte,
+      });
+      if (written.status === 'EVENT_NOT_FOUND' || written.status === 'NOT_ALLOCATED') {
+        return notFound(reply);
+      }
+      if (written.status === 'SAVE_FAILED') {
+        return reply
+          .status(500)
+          .send({ error: 'INTERNAL', message: 'Attestation non enregistrée.' });
+      }
+      return {
+        event_id: written.saved.eventId,
+        screenhost_id: written.saved.screenhostId,
+        respecte: written.saved.respecte,
+      };
+    },
+  );
 
   // A poke: make a screen go dark (offline_probability 1), bring it back, or change how an owner
   // answers. The behaviours live in MAIN, so this never touches the sandbox.
