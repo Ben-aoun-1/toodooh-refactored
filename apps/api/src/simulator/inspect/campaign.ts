@@ -115,6 +115,7 @@ export const inspectCampaign = async (campaignId: string) => {
           .from(campaignDispatchAllocation)
           .where(eq(campaignDispatchAllocation.planId, plan.id))
       ).map((a) => ({
+        allocation_id: a.id,
         venue: venueName.get(a.screenhostId) ?? a.screenhostId,
         screenhost_id: a.screenhostId,
         statut: a.statutAcceptation,
@@ -206,6 +207,7 @@ export const inspectCampaign = async (campaignId: string) => {
       : null,
     event_placement: c.eventId
       ? eventRows.map((e) => ({
+          allocation_id: e.id,
           venue: venueName.get(e.screenhostId) ?? e.screenhostId,
           screenhost_id: e.screenhostId,
           statut: e.statut,

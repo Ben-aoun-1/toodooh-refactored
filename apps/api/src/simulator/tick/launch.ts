@@ -1,8 +1,10 @@
+import { fromZonedTime } from 'date-fns-tz';
 import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import {
   type Campaign,
+  campaignTargeting,
   campaigns,
   creatives,
   eventAllocations,
@@ -19,7 +21,7 @@ import { walletSpendable } from '../../lib/recharges.js';
 import { screencasterCpmRates } from '../../lib/screencaster-cpm.js';
 import { createRng } from '../world/rng.js';
 
-import { type VirtualMoment } from './clock.js';
+import { TZ, type VirtualMoment } from './clock.js';
 
 // SIM-4 (folded into SIM-2) — « an advertiser launches a campaign ». Everything load-bearing is
 // the product's own code: the ceiling comes from computeCampaignCmax, the funding gate and the
@@ -42,6 +44,11 @@ export interface LaunchInput {
   budgetTnd?: number;
   /** Share of C_max to spend when no budget is given. */
   budgetShare?: number;
+  /**
+   * SIM-6 phase 3 — the targeting lines (category × class; null = « toutes »), written before the
+   * ceiling is priced so C_max, the estimate and the dispatch all see them. Absent = whole network.
+   */
+  targeting?: { categoryId: string | null; cls: 'populaire' | 'moyen' | 'premium' | null }[];
 }
 
 export interface LaunchResult {
@@ -116,6 +123,15 @@ export const launchCampaign = async (
     })
     .returning();
   if (!draft) return { error: 'CAMPAIGN_FAILED' };
+  if (input.targeting && input.targeting.length > 0) {
+    await db.insert(campaignTargeting).values(
+      input.targeting.map((line) => ({
+        campaignId: draft.id,
+        categoryId: line.categoryId,
+        class: line.cls,
+      })),
+    );
+  }
 
   // The ceiling the wizard shows, from the real engine over the real (synthetic) inventory —
   // priced at the CPM and the T tiers the draft captured at its insert (CPM-1, CPM-2).
@@ -223,6 +239,8 @@ export interface LaunchEventInput {
   spotSeconds?: number;
   budgetTnd?: number;
   budgetShare?: number;
+  /** SIM-6 phase 3 — the kickoff's Tunis clock hour (default 20h). */
+  kickoffHour?: number;
 }
 
 export interface LaunchEventResult {
@@ -247,7 +265,12 @@ export const launchEvent = async (
 
   // Kickoff at 20h Tunis on the chosen day — the hour a match actually starts here.
   const kickoffDate = plusCalendarDays(input.moment.date, inDays);
-  const kickoffAt = new Date(`${kickoffDate}T19:00:00Z`);
+  // Tunis wall-clock kickoff (default 20h — Tunis is UTC+1 all year, so the historical 19:00Z).
+  const kickoffHour = input.kickoffHour ?? 20;
+  const kickoffAt = fromZonedTime(
+    `${kickoffDate}T${String(kickoffHour).padStart(2, '0')}:00:00`,
+    TZ,
+  );
   const endsAt = new Date(kickoffAt.getTime() + durationHours * 3600 * 1000);
 
   const [event] = await db
