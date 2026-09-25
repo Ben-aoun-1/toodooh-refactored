@@ -32,6 +32,12 @@ export interface EligibleHost {
   capacity: number;
   days_available: number | null;
   allocation: { statut: string; impressions: number } | null;
+  /**
+   * ELIG-3 — the « part attribuée » (facturable impressions this venue carries of the campaign):
+   * its allocation once dispatched, else the real selection's share at the stored budget. null = no
+   * budget yet or an event positioning; absent on an older api.
+   */
+  share?: number | null;
 }
 
 export interface ExcludedHost {
@@ -102,11 +108,21 @@ export const exclusionSummary = (
 /** What the « capacité » and « heures » columns mean differs between the two engines. */
 export const columnLabels = (
   kind: EligibleHostsKind,
-): { affluence: string; hours: string; capacity: string } =>
+): { affluence: string; hours: string; capacity: string; share: string } =>
   kind === 'event'
-    ? { affluence: 'A_max (pers/h)', hours: 'Blocs dispo', capacity: 'Impressions max' }
+    ? {
+        affluence: 'A_max (pers/h)',
+        hours: 'Blocs dispo',
+        capacity: 'Impressions max',
+        share: 'Part attribuée',
+      }
     : {
         affluence: 'Affluence moy./h',
         hours: 'Heures diffusables',
         capacity: 'Capacité facturable',
+        share: 'Part attribuée',
       };
+
+/** ELIG-3 — the « part attribuée » cell: « — » when there is none to show (no budget, event, old api). */
+export const shareText = (share: number | null | undefined): string =>
+  share === null || share === undefined ? '—' : share.toLocaleString('fr-FR');
