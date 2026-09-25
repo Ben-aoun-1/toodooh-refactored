@@ -80,6 +80,8 @@ export const EXCLUSION_REASON_LABELS: Record<string, string> = {
   owner_not_approved: 'propriétaire non validé',
   // MAP-TV1 (operator ruling 2026-09-21) — right after the owner: the venue has no installed TV.
   no_installed_screen: 'aucun écran installé',
+  // TW-SNAP (operator ruling Q2 B, 2026-09-25) — absent from the week frozen at cart add.
+  not_in_frozen_week: 'absent de la semaine type gelée',
 };
 
 /** The refusal reasons a rolled-back run can carry (fallback: the raw reason). */

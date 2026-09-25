@@ -15,6 +15,8 @@ import {
 //   no_installed_screen — MAP-TV1: nor until it has a TV that ever ran (lib/installed-screen.ts);
 //   excluded           — the caller removed it (the cascade's refusers, redispatch's defaulters
 //                        and dead screens);
+//   not_in_frozen_week — TW-SNAP (ruled Q2 B): the campaign's typical week was frozen at cart add
+//                        and this venue was not in it (it joined the network afterwards);
 //   hours_missing      — the venue's own opening hours;
 //   targeting_mismatch — category × class (E5.1: no line = the whole network);
 //   zone_mismatch      — CF-Z1 (no zone on the campaign = the whole network).
@@ -31,6 +33,7 @@ export type PoolExclusionReason =
   | 'owner_not_approved'
   | 'no_installed_screen'
   | 'excluded'
+  | 'not_in_frozen_week'
   | 'hours_missing'
   | 'targeting_mismatch'
   | 'zone_mismatch';
@@ -53,6 +56,8 @@ export interface PoolFilterContext {
   lines: readonly TargetingLineLite[];
   zoneIds: readonly string[];
   excluded: ReadonlySet<string>;
+  /** TW-SNAP — the venues of the campaign's frozen typical week; null = no freeze (live week). */
+  frozenVenues?: ReadonlySet<string> | null;
 }
 
 /** The first hard filter the venue fails, or null when it is a pool candidate. */
@@ -63,6 +68,7 @@ export const poolExclusionReason = (
   if (!sh.ownerApproved) return 'owner_not_approved';
   if (!sh.installedScreen) return 'no_installed_screen';
   if (ctx.excluded.has(sh.id)) return 'excluded';
+  if (ctx.frozenVenues && !ctx.frozenVenues.has(sh.id)) return 'not_in_frozen_week';
   if (broadcastableHours(sh.openingHour, sh.closingHour).length === 0) return 'hours_missing';
   const venue = { businessSectorId: sh.businessSectorId, class: sh.class };
   if (!screenhostMatchesTargeting(venue, ctx.lines)) return 'targeting_mismatch';

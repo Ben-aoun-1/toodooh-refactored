@@ -1127,6 +1127,52 @@ export const cartItems = pgTable(
 
 export type CartItem = typeof cartItems.$inferSelect;
 
+// ── campaign_typical_week (TW-SNAP, operator ruling Z-A 2026-09-25) ─────────
+// Each venue's TYPICAL WEEK as it stood when the campaign was ADDED TO THE CART. From then on the
+// campaign's pool (C_max at confirm, dispatch, cascade, E6, boost, estimate, eligible hosts) reads
+// its audience HERE instead of the live screenhost_affluence the hub keeps rewriting — the
+// objective the screencaster paid for rests on the week it was priced on. Capacity (other
+// campaigns' seconds, unavailability, reservations, opening state) stays live.
+//   • the HEADER row marks that a freeze exists (a venue with no cells at the freeze still counts
+//     as « frozen with nothing », and a venue absent from the rows joined AFTER the freeze — ruled
+//     Q2 B: excluded from that campaign);
+//   • removing the campaign from the cart DROPS the freeze; the next add takes a new one (Q1 B);
+//   • no backfill: a campaign without a header keeps the live week (Q4 B); events are out of scope.
+// The rows are a byte copy of screenhost_affluence's cells (same slot/hour/in_effect contract), so
+// the pool reads them through the SAME collapse and in-effect predicate.
+export const campaignTypicalWeekFreezes = pgTable('campaign_typical_week_freezes', {
+  campaignId: uuid('campaign_id')
+    .primaryKey()
+    .references(() => campaigns.id, { onDelete: 'cascade' }),
+  frozenAt: timestamp('frozen_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const campaignTypicalWeek = pgTable(
+  'campaign_typical_week',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaignTypicalWeekFreezes.campaignId, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    dayOfWeek: integer('day_of_week').notNull(), // 1=Mon … 7=Sun, Tunis (as screenhost_affluence)
+    hour: integer('hour').notNull(), // = slot / 2
+    slot: integer('slot').notNull(), // 0–47
+    estimatedImpressions: integer('estimated_impressions').notNull(),
+    inEffect: boolean('in_effect'), // copied verbatim: NULL = in effect
+  },
+  (table) => [
+    uniqueIndex('campaign_typical_week_cell_uq').on(
+      table.campaignId,
+      table.screenhostId,
+      table.dayOfWeek,
+      table.slot,
+    ),
+  ],
+);
+
 export const campaignTargeting = pgTable(
   'campaign_targeting',
   {

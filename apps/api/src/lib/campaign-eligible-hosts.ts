@@ -69,7 +69,8 @@ export type ExclusionReason =
   | 'no_bloc_available'
   | 'no_sector'
   | 'owner_not_approved'
-  | 'no_installed_screen';
+  | 'no_installed_screen'
+  | 'not_in_frozen_week';
 
 export interface EligibleHost {
   id: string;
@@ -133,6 +134,7 @@ const KNOWN_REASONS = new Set<string>([
   'no_residual_capacity',
   'owner_not_approved',
   'no_installed_screen',
+  'not_in_frozen_week',
 ]);
 
 /** An in-memory journal: listens to the pool's own `venue_excluded` events, writes nothing. */

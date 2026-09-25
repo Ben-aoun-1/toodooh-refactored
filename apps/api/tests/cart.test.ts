@@ -8,6 +8,8 @@ import {
   type NewUser,
   businessSectors,
   campaignTargeting,
+  campaignTypicalWeek,
+  campaignTypicalWeekFreezes,
   campaigns,
   cartItems,
   creatives,
@@ -190,6 +192,42 @@ describe('CF-C1 — the cart (real Postgres)', () => {
     expect(again.statusCode).toBe(200);
     const rows = await db.select().from(cartItems).where(eq(cartItems.campaignId, id));
     expect(rows).toHaveLength(1);
+  });
+
+  // TW-SNAP (operator ruling Z-A, 2026-09-25) — the add freezes the typical week; a re-add of a
+  // campaign still in the cart keeps it; removal drops it; the next add takes a new one (Q1 B).
+  it('TW-SNAP — the add freezes the week, removal drops it, a new add re-freezes', async () => {
+    const f = await fullFixture();
+    const id = await seedLaunchable(f.advertiser, f.sector);
+    mockSession(f.advertiser);
+    const freezeOf = async () =>
+      (
+        await db
+          .select({ frozenAt: campaignTypicalWeekFreezes.frozenAt })
+          .from(campaignTypicalWeekFreezes)
+          .where(eq(campaignTypicalWeekFreezes.campaignId, id))
+      )[0]?.frozenAt;
+    const cells = async () =>
+      (await db.select().from(campaignTypicalWeek).where(eq(campaignTypicalWeek.campaignId, id)))
+        .length;
+    const liveCells = (await db.select().from(screenhostAffluence)).length;
+
+    expect((await add(id)).statusCode).toBe(200);
+    const first = await freezeOf();
+    expect(first).toBeInstanceOf(Date);
+    expect(await cells()).toBe(liveCells); // a byte copy of the whole network's live week
+
+    expect((await add(id)).statusCode).toBe(200); // still in the cart: the freeze is kept
+    expect(await freezeOf()).toEqual(first);
+
+    expect((await remove(id)).statusCode).toBe(200);
+    expect(await freezeOf()).toBeUndefined();
+    expect(await cells()).toBe(0);
+
+    expect((await add(id)).statusCode).toBe(200);
+    const second = await freezeOf();
+    expect(second).toBeInstanceOf(Date);
+    expect(second?.getTime()).toBeGreaterThanOrEqual(first?.getTime() ?? 0);
   });
 
   it.each([
