@@ -25,6 +25,7 @@ describe('ELIG-1 — eligible-hosts labels', () => {
       'no_sector',
       'owner_not_approved',
       'no_installed_screen',
+      'not_in_frozen_week',
     ];
     for (const code of apiCodes) {
       expect(EXCLUSION_REASON_LABEL).toHaveProperty(code);

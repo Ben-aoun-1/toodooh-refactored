@@ -19,7 +19,8 @@ export type ExclusionReason =
   | 'no_bloc_available'
   | 'no_sector'
   | 'owner_not_approved'
-  | 'no_installed_screen';
+  | 'no_installed_screen'
+  | 'not_in_frozen_week';
 
 export interface EligibleHost {
   id: string;
@@ -83,6 +84,9 @@ export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
   owner_not_approved: 'Propriétaire non validé',
   // MAP-TV1 (operator ruling 2026-09-21) — only a venue with a TV that ever ran is sold.
   no_installed_screen: 'Aucun écran installé',
+  // TW-SNAP (operator ruling Q2 B, 2026-09-25) — the campaign's typical week was frozen at cart
+  // add; a venue that joined the network afterwards is not part of it.
+  not_in_frozen_week: 'Arrivé après la mise au panier (semaine type gelée)',
 };
 
 export const exclusionLabel = (reason: string): string =>

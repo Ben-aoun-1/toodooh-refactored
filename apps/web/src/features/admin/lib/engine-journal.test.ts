@@ -53,6 +53,7 @@ describe('label coverage — every emitted event_type has a French label', () =>
       'no_residual_capacity',
       'owner_not_approved',
       'no_installed_screen',
+      'not_in_frozen_week',
     ]) {
       expect(EXCLUSION_REASON_LABELS[reason]).toBeTruthy();
     }
