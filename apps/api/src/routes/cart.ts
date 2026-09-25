@@ -12,6 +12,7 @@ import { startDateViolation } from '../lib/campaign-dates.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { walletSpendable } from '../lib/recharges.js';
+import { dropTypicalWeekFreeze, freezeTypicalWeek } from '../lib/typical-week-freeze.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -150,11 +151,20 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    // Idempotent add: the UNIQUE(campaign_id) makes the second insert a no-op.
-    await db
-      .insert(cartItems)
-      .values({ userId, campaignId: row.campaign.id })
-      .onConflictDoNothing();
+    // Idempotent add: the UNIQUE(campaign_id) makes the second insert a no-op. TW-SNAP (Z-A) — a
+    // NEW add freezes the campaign's typical week in the same transaction (a re-add of a campaign
+    // still in the cart keeps its freeze; one removed and added again re-freezes, Q1 B). Events
+    // price on A_max, not on the typical week: out of scope.
+    await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(cartItems)
+        .values({ userId, campaignId: row.campaign.id })
+        .onConflictDoNothing()
+        .returning({ campaignId: cartItems.campaignId });
+      if (inserted.length > 0 && row.campaign.eventId === null) {
+        await freezeTypicalWeek(tx, row.campaign.id);
+      }
+    });
     const [item] = await db
       .select({ campaignId: cartItems.campaignId, addedAt: cartItems.addedAt })
       .from(cartItems)
@@ -178,10 +188,15 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     }
     const userId = request.user?.id;
     if (!userId) return sendUnauthenticated(reply);
-    const [removed] = await db
-      .delete(cartItems)
-      .where(and(eq(cartItems.campaignId, parsed.data.campaign_id), eq(cartItems.userId, userId)))
-      .returning({ campaignId: cartItems.campaignId });
+    // TW-SNAP — back to a plain draft: its freeze goes too (the next add takes a new one, Q1 B).
+    const removed = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .delete(cartItems)
+        .where(and(eq(cartItems.campaignId, parsed.data.campaign_id), eq(cartItems.userId, userId)))
+        .returning({ campaignId: cartItems.campaignId });
+      if (row) await dropTypicalWeekFreeze(tx, row.campaignId);
+      return row;
+    });
     if (!removed) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such cart item.' });
     }

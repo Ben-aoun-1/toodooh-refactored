@@ -5,6 +5,7 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignTargeting,
+  campaignTypicalWeek,
   campaignZones,
   campaigns,
   hourReservations,
@@ -19,6 +20,7 @@ import { venueHasInstalledScreenSql } from '../installed-screen.js';
 import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
 import { spsObservationsFor } from '../sps-observations.js';
 import { SPS_NEUTRAL, spsComputable } from '../sps-score.js';
+import { frozenVenueIds, hasTypicalWeekFreeze } from '../typical-week-freeze.js';
 import { SCREEN_SECONDS_PER_HOUR } from '../vf-constants.js';
 
 import {
@@ -161,7 +163,12 @@ export const assemblePool = async (
     })
     .from(screenhosts)
     .where(eq(screenhosts.isActive, true));
-  const filterContext = { lines, zoneIds: campaignZoneIds, excluded };
+  // TW-SNAP — a campaign frozen at cart add prices and places on THAT week: its venues bound the
+  // candidates (Q2 B) and its cells replace the live grid below. No freeze = the live week.
+  const frozenVenues = (await hasTypicalWeekFreeze(executor, campaign.id))
+    ? await frozenVenueIds(executor, campaign.id)
+    : null;
+  const filterContext = { lines, zoneIds: campaignZoneIds, excluded, frozenVenues };
   const verdicts = activeRows.map((sh) => ({ sh, reason: poolExclusionReason(sh, filterContext) }));
   const candidates = verdicts.flatMap(({ sh, reason }) => (reason === null ? [sh] : []));
 
@@ -226,28 +233,50 @@ export const assemblePool = async (
   // is its correct input, and it returns the old value exactly whenever the halves agree.
   // (Slice C removed the collapse from the READ paths that went slot-shaped — period-audience and
   // the /affluence wire. This one, event-pricing's A_max and monthly-audience stay by design.)
-  const affluenceRows = candidateIds.length
-    ? await executor
-        .select({
-          screenhostId: screenhostAffluence.screenhostId,
-          dayOfWeek: screenhostAffluence.dayOfWeek,
-          hour: screenhostAffluence.hour,
-          estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
-        })
-        .from(screenhostAffluence)
-        // OFF-1 — a suspended manual cell is ABSENT for Ai. Filtered HERE, before the collapse.
-        .where(
-          and(
-            inArray(screenhostAffluence.screenhostId, candidateIds),
-            inEffectSql(screenhostAffluence.inEffect),
-          ),
-        )
-        .groupBy(
-          screenhostAffluence.screenhostId,
-          screenhostAffluence.dayOfWeek,
-          screenhostAffluence.hour,
-        )
-    : [];
+  const affluenceRows = !candidateIds.length
+    ? []
+    : frozenVenues
+      ? // TW-SNAP — the frozen copy, read through the SAME in-effect filter and collapse.
+        await executor
+          .select({
+            screenhostId: campaignTypicalWeek.screenhostId,
+            dayOfWeek: campaignTypicalWeek.dayOfWeek,
+            hour: campaignTypicalWeek.hour,
+            estimatedImpressions: collapseHalvesSql(campaignTypicalWeek.estimatedImpressions),
+          })
+          .from(campaignTypicalWeek)
+          .where(
+            and(
+              eq(campaignTypicalWeek.campaignId, campaign.id),
+              inArray(campaignTypicalWeek.screenhostId, candidateIds),
+              inEffectSql(campaignTypicalWeek.inEffect),
+            ),
+          )
+          .groupBy(
+            campaignTypicalWeek.screenhostId,
+            campaignTypicalWeek.dayOfWeek,
+            campaignTypicalWeek.hour,
+          )
+      : await executor
+          .select({
+            screenhostId: screenhostAffluence.screenhostId,
+            dayOfWeek: screenhostAffluence.dayOfWeek,
+            hour: screenhostAffluence.hour,
+            estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
+          })
+          .from(screenhostAffluence)
+          // OFF-1 — a suspended manual cell is ABSENT for Ai. Filtered HERE, before the collapse.
+          .where(
+            and(
+              inArray(screenhostAffluence.screenhostId, candidateIds),
+              inEffectSql(screenhostAffluence.inEffect),
+            ),
+          )
+          .groupBy(
+            screenhostAffluence.screenhostId,
+            screenhostAffluence.dayOfWeek,
+            screenhostAffluence.hour,
+          );
   const excludedAllocationIds = [
     ...(opts.excludeAllocationId === undefined ? [] : [opts.excludeAllocationId]),
     ...(opts.excludeAllocationIds ?? []),
