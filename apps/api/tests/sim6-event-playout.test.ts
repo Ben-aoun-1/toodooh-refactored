@@ -17,11 +17,12 @@ import { env } from '../src/env.js';
 import { upsertEventAttestation } from '../src/lib/event-playout/attestation.js';
 import { measureEventDelivery } from '../src/lib/event-playout/settlement.js';
 import { runInSandbox } from '../src/simulator/context.js';
+import { inspectCampaign } from '../src/simulator/inspect/campaign.js';
 import { mainDatabaseName, sandboxDatabaseName, sandboxUrl } from '../src/simulator/naming.js';
 import { closeAllSandboxes, sandboxHandleFor } from '../src/simulator/pools.js';
 import { createSandboxDatabase, dropSandboxDatabase } from '../src/simulator/provisioning.js';
 import { momentOf } from '../src/simulator/tick/clock.js';
-import { launchEvent } from '../src/simulator/tick/launch.js';
+import { launchCampaign, launchEvent } from '../src/simulator/tick/launch.js';
 import { runTick } from '../src/simulator/tick/run.js';
 import { simulationState } from '../src/simulator/tick/state.js';
 import { generateWorld } from '../src/simulator/world/spec.js';
@@ -122,6 +123,20 @@ describe('SIM-6 — events live in the simulator (playout in blocs → settlemen
     if ('error' in booked) throw new Error(booked.error);
     expect(booked.allocations).toBeGreaterThan(1);
 
+    // A STANDARD campaign runs beside the match (Wednesday, one day) — the inspector covers both.
+    const standard = await inSandbox(() =>
+      launchCampaign({
+        moment: momentOf(new Date(START)),
+        seed: SEED,
+        name: 'Campagne SIM-6',
+        durationDays: 1,
+        spotSeconds: 10,
+        startInDays: 2,
+        budgetShare: 0.4,
+      }),
+    );
+    if ('error' in standard) throw new Error(standard.error);
+
     // The owners said yes (the refusal cascade is not what this test is about).
     const allocated = await inSandbox(async () => {
       await db
@@ -191,5 +206,26 @@ describe('SIM-6 — events live in the simulator (playout in blocs → settlemen
     expect(lineOf(attested)?.attestationNegated).toBe(true);
     expect(lineOf(attested)?.deliveredTnd).toBe(0);
     for (const id of kept) expect(lineOf(id)?.blocsDelivered).toBeGreaterThan(0);
+
+    // ── SIM-6 phase 2 — the inspector reads every stage for both kinds ──────────
+    const eventView = await inSandbox(() => inspectCampaign(booked.campaign_id));
+    expect(eventView?.campaign.kind).toBe('event');
+    expect(eventView?.pricing.c_max_tnd).toBeGreaterThan(0);
+    expect(eventView?.event_placement?.length).toBe(allocated.length);
+    expect(eventView?.event_placement?.[0]?.blocs.length).toBeGreaterThan(0);
+    expect(eventView?.settlement?.spend_tnd).toBeGreaterThan(0);
+    expect(eventView?.settlement?.event_delivery?.some((v) => v.attestation_negated)).toBe(true);
+
+    const standardView = await inSandbox(() => inspectCampaign(standard.campaign_id));
+    expect(standardView?.campaign.kind).toBe('standard');
+    expect(standardView?.pricing.objectif).toBe(
+      Math.floor(
+        (standard.budget_tnd * 1000) / (standardView?.pricing.campaign_rates.standard_cpm_tnd ?? 1),
+      ),
+    );
+    expect(standardView?.plan?.allocations.length).toBe(standard.allocations);
+    expect(standardView?.plan?.i_cible).toBe(standardView?.pricing.objectif);
+    expect(standardView?.journal.some((r) => r.phase === 'dispatch')).toBe(true);
+    expect(standardView?.settlement).not.toBeNull();
   }, 900_000);
 });

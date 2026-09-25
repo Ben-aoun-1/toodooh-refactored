@@ -1,4 +1,5 @@
 import type { EligibleHostsReport } from '@/features/admin/lib/eligible-hosts';
+import type { CampaignInspection } from '@/features/admin/lib/sim-inspector';
 import type { TestingReport } from '@/features/admin/services/admin-testing.service';
 import { ApiError, apiClient } from '@/lib/api-client';
 
@@ -253,6 +254,9 @@ export const adminSimulatorService = {
     apiClient.get<EligibleHostsReport>(
       `/admin/simulations/${id}/campaigns/${campaignId}/eligible-hosts`,
     ),
+  /** SIM-6 phase 2 — everything about one simulated campaign: pricing, plan, rounds, journal, settlement. */
+  inspectCampaign: (id: string, campaignId: string) =>
+    apiClient.get<CampaignInspection>(`/admin/simulations/${id}/campaigns/${campaignId}/inspect`),
   /** SIM-6 — the agent's « respecté / non respecté » verdict on a venue for a simulated event. */
   attest: (id: string, eventId: string, screenhostId: string, respecte: boolean) =>
     apiClient.post<{ event_id: string; screenhost_id: string; respecte: boolean }>(
