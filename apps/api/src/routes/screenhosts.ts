@@ -42,6 +42,7 @@ import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { ownerSensorStatuses } from '../lib/owner-sensors.js';
 import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
+import { proofInstantSql } from '../lib/playout/proof-instant.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { buildPistes } from '../lib/report/pistes.js';
@@ -1326,7 +1327,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
-    const tunisDay = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+    const tunisDay = sql<string>`to_char(${proofInstantSql} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
     const rows = await db
       .select({ date: tunisDay, impressions: count() })
       .from(proofOfPlay)

@@ -7,6 +7,7 @@ import { proofOfPlay, screenhosts, screenhostUnavailability } from '../db/schema
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
+import { proofInstantSql } from './playout/proof-instant.js';
 import { proofSlotKey } from './reconcile/delivered-slots.js';
 import { slotKey } from './reconcile/valuation.js';
 import {
@@ -142,7 +143,7 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
     ? await db
         .select({
           campaignId: proofOfPlay.campaignId,
-          receivedAt: proofOfPlay.receivedAt,
+          playedAt: proofInstantSql,
         })
         .from(proofOfPlay)
         .where(
@@ -150,14 +151,15 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
             eq(proofOfPlay.screenhostId, screenhostId),
             eq(proofOfPlay.eventType, 'VIDEO_ENDED'),
             inArray(proofOfPlay.campaignId, campaignIds),
+            // A raw SQL expression: the bound is passed as an ISO string (the driver's timestamp wire).
             gte(
-              proofOfPlay.receivedAt,
-              new Date(now.getTime() - (ACTIVITE_WINDOW_DAYS + 1) * DAY_MS),
+              proofInstantSql,
+              new Date(now.getTime() - (ACTIVITE_WINDOW_DAYS + 1) * DAY_MS).toISOString(),
             ),
           ),
         )
     : [];
-  const provenKeys = new Set(proofRows.map((p) => `${p.campaignId}:${proofSlotKey(p.receivedAt)}`));
+  const provenKeys = new Set(proofRows.map((p) => `${p.campaignId}:${proofSlotKey(p.playedAt)}`));
   let scheduled = 0;
   let proven = 0;
   for (const a of allocations) {

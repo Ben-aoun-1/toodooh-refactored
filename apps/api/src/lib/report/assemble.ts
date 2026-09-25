@@ -18,6 +18,7 @@ import { displayImpressionsSettled } from '../impressions-display.js';
 import { broadcastableHours, isOpenAt } from '../opening-hours.js';
 import { loadBackupGrid, loadPeriodAudienceInput } from '../period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../period-audience.js';
+import { proofInstantSql } from '../playout/proof-instant.js';
 import { computeSps, spsComputable } from '../sps-score.js';
 
 import {
@@ -316,7 +317,7 @@ export async function assembleReportData(
   const grid = backupGrid.values;
 
   // 4) delivered impressions per Tunis-local day in range — mirror of GET /:id/impressions-daily.
-  const tunisDay = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+  const tunisDay = sql<string>`to_char(${proofInstantSql} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
   const dayRows = await db
     .select({ date: tunisDay, impressions: sqlCount() })
     .from(proofOfPlay)

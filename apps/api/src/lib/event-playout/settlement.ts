@@ -18,6 +18,7 @@ import {
 import { campaignReportReadyNotification } from '../campaign-report-notification.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { fenetreDiffusion } from '../fenetre-diffusion.js';
+import { proofInstantSql } from '../playout/proof-instant.js';
 import { computeReversement, millimesToTnd, tndToMillimes } from '../reversement/split.js';
 
 import { parseBlocs } from './spots.js';
@@ -26,11 +27,12 @@ import { parseBlocs } from './spots.js';
 // measured PER (venue, bloc) on the DUAL PROOF:
 //
 //   delivered(venue, bloc) ⇔ ≥ 1 VIDEO_ENDED proof for this positioning, from this venue, whose
-//                            SERVER received_at falls inside [bloc.start, bloc.end)
+//                            PLAY instant (PROOF-R1: coalesce(played_at, received_at)) falls inside
+//                            [bloc.start, bloc.end)
 //                            AND the venue carries NO respecte=false attestation for the event.
 //
-// The proof column is `received_at` — the SAME server-truth evidence E6's proofSlotKey uses (never
-// the client event_ts); only the bucket differs: a 20-minute bloc instead of a Tunis hour, because
+// The proof instant is proofInstantSql — the SAME instant E6's proofSlotKey buckets (PROOF-R1: the
+// player's timestamp inside a 24 h bound, else the receipt); only the bucket differs: a 20-minute bloc instead of a Tunis hour, because
 // the bloc IS the event's unit of delivery. An ABSENT attestation is RESPECTED (the ruled default:
 // no inspection is never a sanction); a NEGATIVE one negates every bloc of that venue, whatever
 // the screen reported — a screen can report VIDEO_ENDED to a wall nobody sees.
@@ -111,7 +113,7 @@ export const measureEventDelivery = async (
   // The proofs: VIDEO_ENDED for THIS positioning (video_id-as-sent = campaign id, so the
   // proof rows carry campaign_id = the positioning — written by ingest's event branch, H1).
   const proofs = await db
-    .select({ screenhostId: proofOfPlay.screenhostId, receivedAt: proofOfPlay.receivedAt })
+    .select({ screenhostId: proofOfPlay.screenhostId, playedAt: proofInstantSql })
     .from(proofOfPlay)
     .where(
       and(eq(proofOfPlay.campaignId, positioningId), eq(proofOfPlay.eventType, 'VIDEO_ENDED')),
@@ -119,7 +121,7 @@ export const measureEventDelivery = async (
   const proofsByVenue = new Map<string, number[]>();
   for (const p of proofs) {
     const list = proofsByVenue.get(p.screenhostId) ?? [];
-    list.push(p.receivedAt.getTime());
+    list.push(p.playedAt.getTime());
     proofsByVenue.set(p.screenhostId, list);
   }
 

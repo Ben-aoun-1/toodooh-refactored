@@ -19,6 +19,7 @@ import {
 import { blocCoversInstant, eventRepsPerHour, parseBlocs } from '../../lib/event-playout/spots.js';
 import { collapseHalvesSql } from '../../lib/half-hour-slots.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
+import { proofInstantSql } from '../../lib/playout/proof-instant.js';
 
 import { TZ, type VirtualMoment, advance, momentOf } from './clock.js';
 
@@ -197,7 +198,7 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
   const venueProofRows = await db
     .select({ screenhostId: proofOfPlay.screenhostId, n: sql<number>`count(*)::int` })
     .from(proofOfPlay)
-    .where(gte(proofOfPlay.receivedAt, dayStart))
+    .where(gte(proofInstantSql, dayStart.toISOString())) // raw SQL: the bound as an ISO string
     .groupBy(proofOfPlay.screenhostId);
   const campaignProofRows = await db
     .select({ campaignId: proofOfPlay.campaignId, n: sql<number>`count(*)::int` })

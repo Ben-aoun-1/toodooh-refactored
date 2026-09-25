@@ -1808,8 +1808,18 @@ export const proofOfPlay = pgTable(
     playedDurationMs: integer('played_duration_ms'), // null for VIDEO_STARTED; set on VIDEO_ENDED
     eventTs: timestamp('event_ts', { withTimezone: true }), // player client timestamp (nullable)
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    // PROOF-R1 (migration 0079) — the player's id for ONE play (a resend after a lost ack repeats it;
+    // unique per screen × event). NULL = a legacy player: never deduplicated, as before.
+    playId: uuid('play_id'),
+    // PROOF-R1 — the PLAY INSTANT (lib/playout/proof-instant.ts): the player's timestamp when within
+    // [received − 24 h, received + 2 min], else received. NULL on legacy rows — every reader buckets
+    // on coalesce(played_at, received_at) (proofInstantSql), never on a bare column.
+    playedAt: timestamp('played_at', { withTimezone: true }),
   },
   (table) => [
+    uniqueIndex('proof_of_play_screen_play_event_uq')
+      .on(table.screenId, table.playId, table.eventType)
+      .where(sql`${table.playId} IS NOT NULL`),
     index('proof_of_play_screenhost_id_idx').on(table.screenhostId),
     index('proof_of_play_campaign_id_idx').on(table.campaignId),
     index('proof_of_play_screen_id_idx').on(table.screenId),
