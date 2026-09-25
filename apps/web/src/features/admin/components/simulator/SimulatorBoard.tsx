@@ -1,5 +1,6 @@
 import { Monitor, MonitorOff, Radio, Search, Users } from 'lucide-react';
 
+import { VenueScreensControl } from '@/features/admin/components/simulator/VenueScreensControl';
 import { useAttestEvent, usePokeActor } from '@/features/admin/hooks/useAdminSimulator';
 import type { BoardState, BoardVenue } from '@/features/admin/services/admin-simulator.service';
 
@@ -10,11 +11,13 @@ const CLASS_DOT: Record<string, string> = {
 };
 
 function VenueCard({
+  simulationId,
   venue,
   onToggleScreen,
   onInspect,
   onAttest,
 }: {
+  simulationId: string;
   venue: BoardVenue;
   onToggleScreen: (screenId: string, online: boolean) => void;
   onInspect: () => void;
@@ -59,6 +62,11 @@ function VenueCard({
           </button>
         ))}
       </div>
+      <VenueScreensControl
+        simulationId={simulationId}
+        venueId={venue.id}
+        anyOnline={venue.screens.some((screen) => screen.online)}
+      />
 
       <dl className="mt-2 grid grid-cols-3 gap-1 text-xs">
         <div>
@@ -160,6 +168,7 @@ export function SimulatorBoard({
         {board.venues.map((venue) => (
           <VenueCard
             key={venue.id}
+            simulationId={simulationId}
             venue={venue}
             onToggleScreen={toggle}
             onInspect={() => onInspect({ id: venue.id, name: venue.name })}

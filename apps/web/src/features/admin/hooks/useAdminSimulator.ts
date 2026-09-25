@@ -6,6 +6,8 @@ import {
   type GenerateWorldInput,
   type LaunchCampaignInput,
   type LaunchEventInput,
+  type SandboxPricing,
+  type VenueScreensInput,
   adminSimulatorService,
   isNoWorld,
 } from '@/features/admin/services/admin-simulator.service';
@@ -180,5 +182,60 @@ export function useSimulationCampaignInspection(id: string, campaignId: string |
     queryFn: () => adminSimulatorService.inspectCampaign(id, campaignId ?? ''),
     enabled: Boolean(campaignId),
     retry: false,
+  });
+}
+
+// ── SIM-6 phase 3 — scenario controls ────────────────────────────────────────
+
+export function useSimulationLaunchOptions(id: string) {
+  return useQuery({
+    queryKey: adminKeys.simulationLaunchOptions(id),
+    queryFn: () => adminSimulatorService.launchOptions(id),
+  });
+}
+
+/** Force an owner's answer (the REAL decision): the board and the inspectors refresh. */
+export function useForceDecision(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { allocationId: string; statut: 'ACCEPTE' | 'REFUSE' }) =>
+      adminSimulatorService.decide(id, input.allocationId, input.statut),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulation(id) }),
+  });
+}
+
+export function useVenueScreens(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { venueId: string } & VenueScreensInput) => {
+      const { venueId, ...body } = input;
+      return adminSimulatorService.venueScreens(id, venueId, body);
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) }),
+  });
+}
+
+export function useSimulationPricing(id: string) {
+  return useQuery({
+    queryKey: adminKeys.simulationPricing(id),
+    queryFn: () => adminSimulatorService.pricing(id),
+  });
+}
+
+export function useUpdateSimulationPricing(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Partial<SandboxPricing>) => adminSimulatorService.updatePricing(id, input),
+    onSuccess: (data) => qc.setQueryData(adminKeys.simulationPricing(id), data),
+  });
+}
+
+/** Change how an owner answers (acceptance rate, response delay) — the behaviour lives in MAIN. */
+export function useOwnerBehaviour(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ownerId, params }: { ownerId: string; params: ActorParams }) =>
+      adminSimulatorService.poke(id, ownerId, params),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.worldVenues(id) }),
   });
 }

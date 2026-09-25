@@ -179,6 +179,8 @@ export interface LaunchCampaignInput {
   start_in_days?: number;
   budget_tnd?: number;
   budget_share?: number;
+  advertiser_id?: string;
+  targeting?: { category_id: string | null; class: 'populaire' | 'moyen' | 'premium' | null }[];
 }
 
 export interface LaunchedCampaign {
@@ -199,7 +201,9 @@ export interface LaunchEventInput {
   in_days?: number;
   duration_hours?: number;
   spot_seconds?: number;
+  budget_tnd?: number;
   budget_share?: number;
+  kickoff_hour?: number;
 }
 
 export interface BookedEvent {
@@ -218,6 +222,27 @@ export interface ActorParams {
   acceptance_rate?: number;
   response_delay_hours?: number;
   offline_probability?: number;
+}
+
+/** SIM-6 phase 3 — who can pay and what can be targeted in the sandbox. */
+export interface LaunchOptions {
+  sectors: { id: string; name: string }[];
+  advertisers: { id: string; name: string }[];
+}
+
+/** SIM-6 phase 3 — the SANDBOX pricing (dispatch_config of the sandbox, never prod's). */
+export interface SandboxPricing {
+  standard_cpm_tnd: number;
+  event_cpm_tnd: number;
+  t_10s: number;
+  t_20s: number;
+  t_30s: number;
+  f_max_seconds: number;
+}
+
+export interface VenueScreensInput {
+  online: boolean;
+  dead_days?: number;
 }
 
 export const isNoWorld = (err: unknown): boolean =>
@@ -263,6 +288,22 @@ export const adminSimulatorService = {
       `/admin/simulations/${id}/events/${eventId}/attestations/${screenhostId}`,
       { respecte },
     ),
+  /** SIM-6 phase 3 — the scenario controls. */
+  launchOptions: (id: string) =>
+    apiClient.get<LaunchOptions>(`/admin/simulations/${id}/world/options`),
+  decide: (id: string, allocationId: string, statut: 'ACCEPTE' | 'REFUSE') =>
+    apiClient.post<{ kind: 'standard' | 'event' }>(
+      `/admin/simulations/${id}/allocations/${allocationId}/decision`,
+      { statut },
+    ),
+  venueScreens: (id: string, venueId: string, input: VenueScreensInput) =>
+    apiClient.post<{ venue_id: string; screens: number }>(
+      `/admin/simulations/${id}/venues/${venueId}/screens`,
+      input,
+    ),
+  pricing: (id: string) => apiClient.get<SandboxPricing>(`/admin/simulations/${id}/pricing`),
+  updatePricing: (id: string, input: Partial<SandboxPricing>) =>
+    apiClient.patch<SandboxPricing>(`/admin/simulations/${id}/pricing`, input),
   poke: (id: string, entityId: string, params: ActorParams) =>
     apiClient.patch<{ kind: string; entity_id: string; params: ActorParams }>(
       `/admin/simulations/${id}/actors/${entityId}`,

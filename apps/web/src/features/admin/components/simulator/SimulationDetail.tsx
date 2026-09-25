@@ -15,6 +15,7 @@ import {
 import { CampaignsPanel } from './CampaignsPanel';
 import { ClockBar } from './ClockBar';
 import { GenerateWorldForm } from './GenerateWorldForm';
+import { SimulationPricingEditor } from './SimulationPricingEditor';
 import { SimulationStatusBadge } from './SimulationStatusBadge';
 import { SimulationVenueInspector } from './SimulationVenueInspector';
 import { SimulatorBoard } from './SimulatorBoard';
@@ -147,6 +148,7 @@ export function SimulationDetail({ id, onDeleted }: Props) {
             />
           )}
           {board.data && <CampaignsPanel simulationId={id} campaigns={board.data.campaigns} />}
+          <SimulationPricingEditor simulationId={id} />
         </>
       )}
 
@@ -159,7 +161,7 @@ export function SimulationDetail({ id, onDeleted }: Props) {
           >
             {showVenues ? 'Masquer' : 'Voir'} la fiche des établissements
           </button>
-          {showVenues && <VenuesTable venues={venues.data.venues} />}
+          {showVenues && <VenuesTable simulationId={id} venues={venues.data.venues} />}
         </div>
       )}
     </section>

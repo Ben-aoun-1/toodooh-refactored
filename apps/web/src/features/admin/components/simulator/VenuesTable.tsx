@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 
+import { OwnerBehaviourEditor } from '@/features/admin/components/simulator/OwnerBehaviourEditor';
 import type { WorldVenue } from '@/features/admin/services/admin-simulator.service';
 
 type SortKey = 'name' | 'sector' | 'class' | 'sps' | 'acceptance';
@@ -15,7 +16,13 @@ const hours = (v: WorldVenue): string =>
     ? '—'
     : `${String(v.opening_hour).padStart(2, '0')}h — ${String(v.closing_hour).padStart(2, '0')}h`;
 
-export function VenuesTable({ venues }: { venues: WorldVenue[] }) {
+export function VenuesTable({
+  simulationId,
+  venues,
+}: {
+  simulationId: string;
+  venues: WorldVenue[];
+}) {
   const [sort, setSort] = useState<SortKey>('name');
   const rows = useMemo(() => {
     const copy = [...venues];
@@ -63,6 +70,7 @@ export function VenuesTable({ venues }: { venues: WorldVenue[] }) {
               {header('sps', 'SPS')}
               <th className="px-3 py-2 text-left font-medium text-gray-600">Propriétaire</th>
               {header('acceptance', 'Acceptation')}
+              <th className="px-3 py-2 text-left font-medium text-gray-600">Comportement</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -92,6 +100,18 @@ export function VenuesTable({ venues }: { venues: WorldVenue[] }) {
                 </td>
                 <td className="px-3 py-2">
                   {v.acceptance_rate === null ? '—' : `${Math.round(v.acceptance_rate * 100)} %`}
+                </td>
+                <td className="px-3 py-2">
+                  {v.owner.id ? (
+                    <OwnerBehaviourEditor
+                      simulationId={simulationId}
+                      ownerId={v.owner.id}
+                      acceptanceRate={v.acceptance_rate}
+                      responseDelayHours={v.response_delay_hours}
+                    />
+                  ) : (
+                    '—'
+                  )}
                 </td>
               </tr>
             ))}

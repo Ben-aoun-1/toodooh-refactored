@@ -43,6 +43,8 @@ import { upgradeSandbox } from '../simulator/upgrade.js';
 import { type WorldParams, generateWorld } from '../simulator/world/spec.js';
 import { actorParams, sandboxIsEmpty, writeWorld } from '../simulator/world/write.js';
 
+import { registerSimulationControls } from './admin-simulation-controls.js';
+
 // SIM-0 — the admin « Simulateur » registry endpoints. A simulation is a sandbox DATABASE on the
 // same server; the routes under /:id/* enter its async context in the LAST preHandler (after the
 // auth guards, so an unauthenticated request never resolves a pool), and from there every engine
@@ -115,6 +117,16 @@ const launchBodySchema = z.object({
   start_in_days: z.int().min(2).max(60).optional(),
   budget_tnd: z.int().min(1).max(1_000_000).optional(),
   budget_share: z.number().min(0.01).max(1).optional(),
+  // SIM-6 phase 3 — targeting lines (category × class; null = « toutes »).
+  targeting: z
+    .array(
+      z.object({
+        category_id: z.uuid().nullable(),
+        class: z.enum(['populaire', 'moyen', 'premium']).nullable(),
+      }),
+    )
+    .max(20)
+    .optional(),
 });
 
 const attestationBodySchema = z.object({ respecte: z.boolean() });
@@ -126,6 +138,8 @@ const eventBodySchema = z.object({
   spot_seconds: z.int().min(5).max(30).optional(),
   budget_tnd: z.int().min(1).max(1_000_000).optional(),
   budget_share: z.number().min(0.01).max(1).optional(),
+  // SIM-6 phase 3 — the kickoff's Tunis hour (default 20h).
+  kickoff_hour: z.int().min(0).max(23).optional(),
 });
 
 const isoDay = z
@@ -338,6 +352,9 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
   // ── SIM-1 — the world generator ──────────────────────────────────────────────
   const routed = { preHandler: [...guards, enterSimulation] };
 
+  // SIM-6 phase 3 — the scenario controls (forced decisions, venue screens, sectors, sandbox pricing).
+  registerSimulationControls(app, { routed, invalid, notFound, loadSimulation });
+
   app.post('/api/admin/simulations/:id/world', routed, async (request, reply) => {
     const parsedBody = worldBodySchema.safeParse(request.body ?? {});
     if (!parsedBody.success) {
@@ -438,6 +455,11 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
       ...(body.start_in_days ? { startInDays: body.start_in_days } : {}),
       ...(body.budget_tnd ? { budgetTnd: body.budget_tnd } : {}),
       ...(body.budget_share ? { budgetShare: body.budget_share } : {}),
+      ...(body.targeting
+        ? {
+            targeting: body.targeting.map((l) => ({ categoryId: l.category_id, cls: l.class })),
+          }
+        : {}),
     });
     if ('error' in result) {
       return reply.status(409).send({
@@ -477,6 +499,7 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
       ...(body.spot_seconds ? { spotSeconds: body.spot_seconds } : {}),
       ...(body.budget_tnd ? { budgetTnd: body.budget_tnd } : {}),
       ...(body.budget_share ? { budgetShare: body.budget_share } : {}),
+      ...(body.kickoff_hour !== undefined ? { kickoffHour: body.kickoff_hour } : {}),
     });
     if ('error' in result) {
       return reply.status(409).send({

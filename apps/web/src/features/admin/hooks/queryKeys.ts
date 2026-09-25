@@ -31,6 +31,9 @@ export const adminKeys = {
   world: (id: string) => [...adminKeys.all, 'simulations', id, 'world'] as const,
   worldVenues: (id: string) => [...adminKeys.all, 'simulations', id, 'world', 'venues'] as const,
   simulationBoard: (id: string) => [...adminKeys.all, 'simulations', id, 'board'] as const,
+  simulationLaunchOptions: (id: string) =>
+    [...adminKeys.all, 'simulations', id, 'launchOptions'] as const,
+  simulationPricing: (id: string) => [...adminKeys.all, 'simulations', id, 'pricing'] as const,
   simulationVenueReport: (id: string, venueId: string, from: string, to: string) =>
     [...adminKeys.all, 'simulations', id, 'venueReport', venueId, from, to] as const,
   simulationCampaignInspection: (id: string, campaignId: string) =>

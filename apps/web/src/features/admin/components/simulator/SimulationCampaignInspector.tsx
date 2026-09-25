@@ -1,3 +1,4 @@
+import { ForceDecisionButtons } from '@/features/admin/components/simulator/ForceDecisionButtons';
 import { useSimulationCampaignInspection } from '@/features/admin/hooks/useAdminSimulator';
 import { runLine, settlementLine } from '@/features/admin/lib/sim-inspector';
 
@@ -94,7 +95,13 @@ export function SimulationCampaignInspector({
                   {r.plan.allocations.map((a) => (
                     <tr key={a.screenhost_id}>
                       <td className="py-1 pr-2">{a.venue}</td>
-                      <td className="py-1 pr-2">{a.statut}</td>
+                      <td className="py-1 pr-2">
+                        <ForceDecisionButtons
+                          simulationId={simulationId}
+                          allocationId={a.allocation_id}
+                          statut={a.statut}
+                        />
+                      </td>
                       <td className="py-1 pr-2">{a.r_i}</td>
                       <td className="py-1 pr-2">{nf(a.share)}</td>
                       <td className="py-1 pr-2">
@@ -113,8 +120,15 @@ export function SimulationCampaignInspector({
               <ul className="space-y-1">
                 {r.event_placement.map((e) => (
                   <li key={e.screenhost_id}>
-                    <span className="font-medium">{e.venue}</span> · {e.statut} · {e.blocs.length}{' '}
-                    blocs · {nf(e.impressions)} imp. · {nf(e.montant_tnd)} TND
+                    <span className="flex flex-wrap items-center gap-1">
+                      <span className="font-medium">{e.venue}</span> ·
+                      <ForceDecisionButtons
+                        simulationId={simulationId}
+                        allocationId={e.allocation_id}
+                        statut={e.statut}
+                      />
+                      · {e.blocs.length} blocs · {nf(e.impressions)} imp. · {nf(e.montant_tnd)} TND
+                    </span>
                     <span className="block text-gray-400">
                       {e.blocs.map((b) => `${hm(b.start)}→${b.end.slice(11, 16)}`).join(' · ')}
                     </span>
