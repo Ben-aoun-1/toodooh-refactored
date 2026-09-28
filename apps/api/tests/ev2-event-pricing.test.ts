@@ -397,6 +397,28 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       vi.restoreAllMocks();
     });
 
+    it('SUGG-1 — GET /api/events/:id/cmax lists the DISTINCT sectors of the event pool, sorted', async () => {
+      const eligible = await db
+        .select({ id: businessSectors.id, name: businessSectors.name })
+        .from(businessSectors)
+        .where(and(eq(businessSectors.audience, 'owner'), eq(businessSectors.eventEligible, true)))
+        .orderBy(businessSectors.name);
+      const [a, b] = eligible;
+      if (!a || !b) throw new Error('fixture: needs two event-eligible owner sectors');
+      await seedVenue({ sector: b.id, affluence: [80] });
+      await seedVenue({ sector: a.id, affluence: [60] });
+      await seedVenue({ sector: b.id, affluence: [40] }); // same sector twice → listed once
+      const eventId = await seedEvent();
+      mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
+
+      const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().eligible_count).toBe(3);
+      expect(res.json().sectors).toEqual([a.name, b.name]);
+      await app.close();
+      vi.restoreAllMocks();
+    });
+
     it('CPM-3 — GET /api/events/:id/cmax prices the match at the CALLER’s own event CPM', async () => {
       const sectors = await ownerSectors();
       await seedVenue({ sector: sectors[0] ?? '', affluence: [120] });

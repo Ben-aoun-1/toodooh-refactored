@@ -236,6 +236,8 @@ export interface EventCmaxResult {
   eligibleCount: number;
   cpmEvtTnd: number;
   venues: EventVenuePricing[];
+  /** SUGG-1 — the DISTINCT business sectors of the event pool, sorted (the card's tags). */
+  sectors: string[];
 }
 
 export interface EventEligibleVenue {
@@ -247,6 +249,8 @@ export interface EventEligibleVenue {
   createdAtMs: number;
   /** The venue's AVAILABLE blocs for this match (D1) — never empty. */
   blocs: BlocDiffusion[];
+  /** SUGG-1 — the venue's business sector name (stored name; display labels live in the web). */
+  sectorName: string;
 }
 
 /**
@@ -277,6 +281,7 @@ export const eventEligibleVenues = async (
       createdAt: screenhosts.createdAt,
       openingHour: screenhosts.openingHour,
       closingHour: screenhosts.closingHour,
+      sectorName: businessSectors.name,
     })
     .from(screenhosts)
     .innerJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
@@ -357,6 +362,7 @@ export const eventEligibleVenues = async (
       sps: Number(venue.sps),
       createdAtMs: venue.createdAt.getTime(),
       blocs: available,
+      sectorName: venue.sectorName,
     });
   }
   return venues;
@@ -391,5 +397,6 @@ export const computeEventCmax = async (
     eligibleCount: venues.length,
     cpmEvtTnd,
     venues,
+    sectors: [...new Set(pool.map((v) => v.sectorName))].sort((x, y) => x.localeCompare(y, 'fr')),
   };
 };
