@@ -8,7 +8,7 @@ import {
   creatives,
 } from '../../db/schema.js';
 
-import { isWindowActive } from './playlist.js';
+import { campaignWindowValidUntil, isWindowActive } from './playlist.js';
 
 export interface ActiveAllocation {
   campaignId: string;
@@ -19,6 +19,8 @@ export interface ActiveAllocation {
   repsPerHour: number; // R_i — planned reps/hour at this screenhost (cadence hint for the player)
   /** EV4 rider — 'video' | 'photo' from the creatives join (the player renders images too). */
   creativeType: string;
+  /** FRESH-1 — the Tunis midnight after the campaign's end date (the window's close). */
+  validUntil: Date;
 }
 
 // THE single authorization gate for what a screen may air AND what it may bill proof-of-play for.
@@ -62,15 +64,20 @@ export const activeAllocationsForScreenhost = async (
     .innerJoin(creatives, eq(campaigns.creativeId, creatives.id))
     .where(and(...conditions));
 
-  return rows
-    .filter((row) => isWindowActive(row.startDate, row.endDate, now))
-    .map((row) => ({
-      campaignId: row.campaignId,
-      campaignName: row.campaignName,
-      creativeId: row.creativeId,
-      storageKey: row.storageKey,
-      durationSeconds: row.durationSeconds,
-      repsPerHour: row.repsPerHour,
-      creativeType: row.creativeType,
-    }));
+  return rows.flatMap((row) =>
+    row.endDate !== null && isWindowActive(row.startDate, row.endDate, now)
+      ? [
+          {
+            campaignId: row.campaignId,
+            campaignName: row.campaignName,
+            creativeId: row.creativeId,
+            storageKey: row.storageKey,
+            durationSeconds: row.durationSeconds,
+            repsPerHour: row.repsPerHour,
+            creativeType: row.creativeType,
+            validUntil: campaignWindowValidUntil(row.endDate),
+          },
+        ]
+      : [],
+  );
 };

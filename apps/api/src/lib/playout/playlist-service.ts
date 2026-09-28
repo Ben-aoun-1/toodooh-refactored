@@ -33,6 +33,7 @@ export const computeScreenPlaylist = async (
       repsPerHour: allocation.repsPerHour,
       // EV4 rider — the media kind rides the wire ('photo' maps to 'image' at build).
       creativeType: allocation.creativeType === 'photo' ? 'photo' : 'video',
+      validUntil: allocation.validUntil,
     });
   }
 
@@ -47,6 +48,7 @@ export const computeScreenPlaylist = async (
       durationSeconds: spot.durationSeconds,
       repsPerHour: spot.repsPerHour,
       creativeType: spot.creativeType === 'photo' ? 'photo' : 'video',
+      validUntil: spot.validUntil,
     });
   }
   return buildPlaylist(sources);
