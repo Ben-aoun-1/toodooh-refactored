@@ -12,6 +12,7 @@ import {
   creatives,
   eventAllocations,
   events,
+  proofOfPlay,
   screenhosts,
   screens,
   users,
@@ -21,6 +22,8 @@ import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { computeScreenPlaylist, resolveAirableVideo } from '../src/lib/playout/playlist-service.js';
 import { screenRegistry } from '../src/lib/playout/registry.js';
 import { adminEventsRoutes } from '../src/routes/admin-events.js';
+import { runPlayout } from '../src/simulator/tick/actors.js';
+import { momentOf } from '../src/simulator/tick/clock.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
@@ -284,5 +287,45 @@ describe('EVT-STOP — playout (real Postgres)', () => {
       await app.close();
       vi.restoreAllMocks();
     }
+  });
+
+  it('SIM — the simulator never writes a classic proof inside a bloc (S7)', async () => {
+    const venue = await seedVenue();
+    const classic = await seedClassic(venue.shId);
+    // A bloc covering the first 20 minutes of a past hour H; the classic créneau plans 6 reps in H.
+    const hourStart = new Date(Math.floor((Date.now() - 3 * 60 * MIN) / (60 * MIN)) * 60 * MIN);
+    const moment = momentOf(hourStart);
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ creneaux: [{ date: moment.date, hour: moment.hour, reps: 6, impressions: 600 }] })
+      .where(eq(campaignDispatchAllocation.screenhostId, venue.shId));
+    // kickoff 20 min into H: the bloc [H, H+20) is its last pre-match one (inside the window).
+    const { positioningId } = await seedEvent(new Date(hourStart.getTime() + 20 * MIN), venue.shId);
+    await db
+      .update(eventAllocations)
+      .set({
+        blocs: [
+          {
+            start: hourStart.toISOString(),
+            end: new Date(hourStart.getTime() + 20 * MIN).toISOString(),
+            impressions: 1000,
+          },
+        ],
+      })
+      .where(eq(eventAllocations.campaignId, positioningId));
+
+    const result = await runPlayout({
+      moment,
+      onlineByVenue: new Map([[venue.shId, [venue.screenId]]]),
+    });
+    // 6 reps at minutes 0, 10, 20, 30, 40, 50 → the two inside [0, 20) never air.
+    expect(result.proofs).toBe(4);
+    const proofs = await db
+      .select({ at: proofOfPlay.eventTs })
+      .from(proofOfPlay)
+      .where(eq(proofOfPlay.campaignId, classic));
+    expect(proofs.every((p) => (p.at?.getTime() ?? 0) >= hourStart.getTime() + 20 * MIN)).toBe(
+      true,
+    );
   });
 });
