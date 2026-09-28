@@ -55,12 +55,16 @@ interface CampaignWindow {
  * kickoff falls INSIDE the campaign's window, or within 7 days AFTER its end. Windows are Tunis
  * calendar dates; the kickoff instant is compared against the day bounds in +01:00 (no DST).
  */
-export const eventSuggestedForWindow = (kickoffIso: string, window: CampaignWindow): boolean => {
+export const eventSuggestedForWindow = (
+  kickoffIso: string,
+  window: CampaignWindow,
+  afterEndDays: number = SUGGESTION_AFTER_END_DAYS,
+): boolean => {
   if (!window.start_date || !window.end_date) return false;
   const kickoff = new Date(kickoffIso).getTime();
   const windowStart = new Date(`${window.start_date}T00:00:00+01:00`).getTime();
   const windowEnd = new Date(`${window.end_date}T00:00:00+01:00`).getTime() + DAY_MS;
-  return kickoff >= windowStart && kickoff < windowEnd + SUGGESTION_AFTER_END_DAYS * DAY_MS;
+  return kickoff >= windowStart && kickoff < windowEnd + afterEndDays * DAY_MS;
 };
 
 /**
@@ -77,12 +81,14 @@ export function suggestEventsForCampaigns(
   events: EventItemView[],
   now: Date = new Date(),
   ownPositionedEventIds: ReadonlySet<string> = new Set(),
+  /** SUGG-1 — the tail after the end; the panier block keeps 7, the cart-add page passes 0. */
+  afterEndDays: number = SUGGESTION_AFTER_END_DAYS,
 ): EventItemView[] {
   const nowMs = now.getTime();
   return events
     .filter((e) => e.statut === 'a_venir')
     .filter((e) => !ownPositionedEventIds.has(e.id))
-    .filter((e) => campaigns.some((c) => eventSuggestedForWindow(e.kickoff_at, c)))
+    .filter((e) => campaigns.some((c) => eventSuggestedForWindow(e.kickoff_at, c, afterEndDays)))
     .sort(
       (a, b) =>
         Math.abs(new Date(a.kickoff_at).getTime() - nowMs) -

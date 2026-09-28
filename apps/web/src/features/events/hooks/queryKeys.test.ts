@@ -14,6 +14,7 @@ describe('eventsKeys (EV1)', () => {
     expect(eventsKeys.catalogue()).toEqual(['events', 'catalogue']);
     expect(eventsKeys.suggested()).toEqual(['events', 'suggested']);
     expect(eventsKeys.imageUrl('e1')).toEqual(['events', 'imageUrl', 'e1']);
+    expect(eventsKeys.cmax('e1')).toEqual(['events', 'cmax', 'e1']);
   });
 
   it('distinguishes image keys by event so presigned caches stay isolated', () => {

@@ -18,6 +18,7 @@ const AdvertiserLayout = lazy(() => import('@/features/advertiser/components/Adv
 const AdvertiserDashboard = lazy(() => import('@/features/advertiser/pages/AdvertiserDashboard'));
 const UserProfile = lazy(() => import('@/features/advertiser/pages/UserProfile'));
 const NewCampaign = lazy(() => import('@/features/campaigns/pages/NewCampaign'));
+const CampaignAddedToCart = lazy(() => import('@/features/campaigns/pages/CampaignAddedToCart'));
 const MyCampaigns = lazy(() => import('@/features/campaigns/pages/MyCampaigns'));
 const Events = lazy(() => import('@/features/events/pages/Events'));
 const EventPositioning = lazy(() => import('@/features/events/pages/EventPositioning'));
@@ -351,6 +352,16 @@ export default function App() {
                 <AdvertiserRoute>
                   <AdvertiserLayout>
                     <NewCampaign />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/new-campaign/ajoutee/:campaignId"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <CampaignAddedToCart />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }
