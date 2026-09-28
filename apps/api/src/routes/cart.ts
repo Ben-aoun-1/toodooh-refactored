@@ -11,6 +11,7 @@ import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
+import { pushPlaylistToAllConnected } from '../lib/playout/push.js';
 import { walletSpendable } from '../lib/recharges.js';
 import { dropTypicalWeekFreeze, freezeTypicalWeek } from '../lib/typical-week-freeze.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
@@ -422,6 +423,13 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
             : `${n} campagnes de ${await accountLabel(userId)} attendent votre validation.`,
         campaignId: n === 1 ? (result.updated[0]?.id ?? null) : null,
       }).catch((err: unknown) => request.log.warn({ err }, 'admin notice failed (cart)'));
+    }
+    if (result.launched.some((row) => row.campaignType === 'event')) {
+      // EVT-STOP — an event positioning launched at confirm (sold): the network's blackout set may have changed, so every
+      // connected venue re-pushes (classic entries carry the windows). Failure never blocks.
+      await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
+        request.log.warn({ err }, 'network playlist re-push failed'),
+      );
     }
     // The response splits the two outcomes so the FE can word the mixed toast (CF-SK1).
     return reply.status(200).send({

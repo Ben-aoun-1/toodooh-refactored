@@ -21,13 +21,30 @@ export interface ReconCreneau {
   date: string; // YYYY-MM-DD (Africa/Tunis)
   hour: number; // 0–23 (Africa/Tunis)
   impressions: number; // potential impressions for the slot
+  /** EVT-STOP — blackout minutes already priced out at plan time (absent = 0). */
+  blackoutMin?: number;
 }
+
+/**
+ * EVT-STOP (R5, ruling Q2 A) — THE ONE HOME of the late-blackout arithmetic: the share (0..1) of a
+ * créneau lost to blackout minutes that appeared AFTER its plan (an event sold later). The
+ * créneau was priced for (60 − blackoutMin) minutes; `blackoutNowMin` of the hour are now blacked
+ * out. Never negative: a cancelled event gives nothing back to a frozen plan.
+ */
+export const lateBlackoutShare = (c: { blackoutMin?: number }, blackoutNowMin: number): number => {
+  const planned = c.blackoutMin ?? 0;
+  if (planned >= 60) return 0;
+  const lost = Math.max(0, Math.min(60, blackoutNowMin) - planned);
+  return lost / (60 - planned);
+};
 
 export interface AllocationInput {
   screenhostId: string;
   creneaux: readonly ReconCreneau[];
   // The set of slotKey(date,hour) the SH actually aired (≥1 VIDEO_ENDED whose received_at is in it).
   deliveredSlots: ReadonlySet<string>;
+  /** EVT-STOP — the blackout minutes NOW, per slotKey (absent = none: pre-EVT-STOP math). */
+  blackoutNow?: ReadonlyMap<string, number>;
 }
 
 export interface AllocationValuation {
@@ -49,7 +66,12 @@ export const valueAllocation = (a: AllocationInput, cpm: number, t = 1): Allocat
   let deliveredImp = 0;
   for (const c of a.creneaux) {
     expectedImp += c.impressions;
-    if (a.deliveredSlots.has(slotKey(c.date, c.hour))) deliveredImp += c.impressions;
+    const key = slotKey(c.date, c.hour);
+    if (!a.deliveredSlots.has(key)) continue;
+    // EVT-STOP — a proven hour is delivered MINUS the share a late blackout took (never aired,
+    // never paid, refunded through the NET settlement). Whole impressions per créneau.
+    const lost = lateBlackoutShare(c, a.blackoutNow?.get(key) ?? 0);
+    deliveredImp += lost > 0 ? Math.round(c.impressions * (1 - lost)) : c.impressions;
   }
   return {
     screenhostId: a.screenhostId,

@@ -1,3 +1,4 @@
+import { fromZonedTime } from 'date-fns-tz';
 import { and, eq, gte, inArray, lte, ne, notInArray, sql } from 'drizzle-orm';
 
 import { type DrizzleDb } from '../../db/client.js';
@@ -15,6 +16,7 @@ import {
 } from '../../db/schema.js';
 import { ownerApprovedSql } from '../approved-owner.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
+import { blackoutMinutesInHour, soldEventBlackouts } from '../event-blackout.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 import { venueHasInstalledScreenSql } from '../installed-screen.js';
 import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
@@ -309,6 +311,14 @@ export const assemblePool = async (
           ),
         )
     : [];
+  // EVT-STOP — the network-wide event blackouts over the window (sold events' blocs): a
+  // classic créneau is priced pro rata of the minutes left. The window's Tunis days are padded by
+  // a day each side so an overnight post-midnight hour is covered.
+  const blackouts = await soldEventBlackouts(
+    fromZonedTime(`${addIsoDays(windowStart, -1)}T00:00:00`, 'Africa/Tunis'),
+    fromZonedTime(`${addIsoDays(windowEnd, 2)}T00:00:00`, 'Africa/Tunis'),
+    executor,
+  );
   const reservedBySh = new Map<string, Set<string>>();
   for (const r of reservationRows) {
     const set = reservedBySh.get(r.screenhostId) ?? new Set<string>();
@@ -409,15 +419,26 @@ export const assemblePool = async (
     // Hi — broadcastable slots over the AVAILABLE days, minus any reserved (day, hour) cells
     // (EV1 seam — with no reservations this counts exactly days.length × oHours.length as before).
     const reserved = reservedBySh.get(sh.id);
+    // EVT-STOP — per cell, the unsellable minutes (60 = the whole hour: reserved, or fully covered
+    // by blocs; 1–59 = blackout minutes, the hour counts pro rata). buildCreneaux reads the SAME
+    // map, so capacity (Hi) and the créneaux can never disagree.
+    const blackoutByCell = new Map<string, number>();
     let hours = 0;
     let totalAffluence = 0;
     for (const day of days) {
       for (const { hour, dayOffset } of oHours) {
         const cellDate = dayOffset ? addIsoDays(day.date, dayOffset) : day.date;
-        if (reserved?.has(`${cellDate}:${hour}`)) continue;
-        hours += 1;
+        const cellKey = `${cellDate}:${hour}`;
+        const blackout = reserved?.has(cellKey)
+          ? 60
+          : Math.min(60, blackoutMinutesInHour(blackouts, cellDate, hour));
+        if (blackout > 0) blackoutByCell.set(cellKey, blackout);
+        if (blackout >= 60) continue;
+        const share = (60 - blackout) / 60;
+        hours += share;
         totalAffluence +=
-          affByKey.get(`${sh.id}:${shiftDayOfWeek(day.dayOfWeek, dayOffset)}:${hour}`) ?? 0;
+          share *
+          (affByKey.get(`${sh.id}:${shiftDayOfWeek(day.dayOfWeek, dayOffset)}:${hour}`) ?? 0);
       }
     }
     const avgAffluence = hours > 0 ? totalAffluence / hours : 0;
@@ -487,6 +508,7 @@ export const assemblePool = async (
       repsCap: rEff,
       slots,
       days,
+      blackoutByCell,
     });
   }
 

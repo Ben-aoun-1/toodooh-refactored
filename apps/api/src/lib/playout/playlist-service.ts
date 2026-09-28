@@ -1,4 +1,10 @@
 import { storage } from '../../storage/s3-storage.js';
+import {
+  BLACKOUT_HORIZON_MS,
+  isInBlackout,
+  soldEventBlackouts,
+  upcomingBlackouts,
+} from '../event-blackout.js';
 import { activeEventSpots } from '../event-playout/spots.js';
 
 import { activeAllocationsForScreenhost } from './active-allocations.js';
@@ -19,7 +25,14 @@ export const computeScreenPlaylist = async (
   screenhostId: string,
   now: Date,
 ): Promise<PlaylistMessage> => {
-  const allocations = await activeAllocationsForScreenhost(screenhostId, now);
+  // EVT-STOP — inside a sold event's bloc NO classic entry airs on any screen; outside, every
+  // classic entry carries the next 48 h of windows so an offline player honours them too.
+  const windows = upcomingBlackouts(
+    await soldEventBlackouts(now, new Date(now.getTime() + BLACKOUT_HORIZON_MS)),
+    now,
+  );
+  const blackedOut = isInBlackout(windows, now);
+  const allocations = blackedOut ? [] : await activeAllocationsForScreenhost(screenhostId, now);
 
   const sources: PlaylistSource[] = [];
   for (const allocation of allocations) {
@@ -34,6 +47,7 @@ export const computeScreenPlaylist = async (
       // EV4 rider — the media kind rides the wire ('photo' maps to 'image' at build).
       creativeType: allocation.creativeType === 'photo' ? 'photo' : 'video',
       validUntil: allocation.validUntil,
+      blackouts: windows,
     });
   }
 
@@ -68,7 +82,12 @@ export const resolveAirableVideo = async (
   now: Date,
 ): Promise<{ campaignId: string; creativeId: string; durationSeconds: number | null } | null> => {
   const [allocation] = await activeAllocationsForScreenhost(screenhostId, now, videoId);
-  if (allocation) return allocation;
+  // EVT-STOP — a classic play inside a sold event's bloc is not airable: never recorded, so
+  // never delivered, billed or paid (the SAME gate the playlist applies).
+  if (allocation) {
+    const blackout = await soldEventBlackouts(now, new Date(now.getTime() + 1));
+    return isInBlackout(blackout, now) ? null : allocation;
+  }
   const spot = (await activeEventSpots(screenhostId, now)).find((s) => s.campaignId === videoId);
   return spot ?? null;
 };

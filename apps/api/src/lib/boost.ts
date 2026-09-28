@@ -366,7 +366,7 @@ export const runBoost = async (
           p.repsCap,
         );
         // E2 — the venue's own available days (one day source with its priced capacity).
-        const futureDelta = buildCreneaux(p.days, p.slots, rIAdd).filter((c) =>
+        const futureDelta = buildCreneaux(p.days, p.slots, rIAdd, p.blackoutByCell).filter((c) =>
           isFuture(c, nowSlot),
         );
         if (futureDelta.length === 0) continue;

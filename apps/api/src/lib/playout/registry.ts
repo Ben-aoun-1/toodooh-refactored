@@ -22,4 +22,8 @@ export const screenRegistry = {
   has(screenId: string): boolean {
     return (sockets.get(screenId)?.size ?? 0) > 0;
   },
+  /** EVT-STOP — every screen with ≥ 1 open socket (a network-wide blackout edge re-pushes all). */
+  connectedScreenIds(): string[] {
+    return [...sockets.keys()];
+  },
 };

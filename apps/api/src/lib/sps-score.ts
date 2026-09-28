@@ -4,9 +4,16 @@ import type { FastifyBaseLogger } from 'fastify';
 import { db } from '../db/client.js';
 import { proofOfPlay, screenhosts, screenhostUnavailability } from '../db/schema.js';
 
+import { plusCalendarDays } from './campaign-dates.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
+import {
+  blackoutMinutesByCell,
+  blackoutMinutesInHour,
+  soldEventBlackouts,
+} from './event-blackout.js';
+import { openingHours } from './opening-hours.js';
 import { proofInstantSql } from './playout/proof-instant.js';
 import { proofSlotKey } from './reconcile/delivered-slots.js';
 import { slotKey } from './reconcile/valuation.js';
@@ -19,6 +26,7 @@ import {
   loadAcceptedAllocations,
   loadAttested,
   loadDecided,
+  spsBlackoutMin,
   tunisDateOf,
   tunisWeekStart,
 } from './sps-observations.js';
@@ -160,12 +168,20 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
         )
     : [];
   const provenKeys = new Set(proofRows.map((p) => `${p.campaignId}:${proofSlotKey(p.playedAt)}`));
+  // EVT-STOP (P2 A) — SPS never counts a minute the venue could not air (spsBlackoutMin).
+  const weekStartForBlackout = tunisWeekStart(now);
+  const firstBlackoutDate =
+    activiteSinceDate < weekStartForBlackout ? activiteSinceDate : weekStartForBlackout;
+  const blackoutNow = await blackoutMinutesByCell(
+    allocations.flatMap((a) => a.creneaux).filter((c) => c.date >= firstBlackoutDate),
+  );
   let scheduled = 0;
   let proven = 0;
   for (const a of allocations) {
     for (const c of a.creneaux) {
       if (c.date < activiteSinceDate) continue;
       if (!isElapsed(c, nowSlot)) continue;
+      if (spsBlackoutMin(c, blackoutNow) >= 60) continue; // a fully blacked-out hour
       scheduled += 1;
       if (provenKeys.has(`${a.campaignId}:${slotKey(c.date, c.hour)}`)) proven += 1;
     }
@@ -202,12 +218,34 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
       ),
     );
   const availableDays = 7 - declaredRows.length;
-  const availableSeconds = SCREEN_SECONDS_PER_HOUR * bHours.length * availableDays;
+  // EVT-STOP (P2 A) — the blacked-out open minutes of the week's available days were never the
+  // screen's to fill: they leave the denominator (and their share leaves engaged seconds).
+  const declaredDays = new Set(declaredRows.map((r) => r.day));
+  const weekWindows = await soldEventBlackouts(
+    new Date(`${weekStart}T00:00:00+01:00`),
+    new Date(`${plusCalendarDays(weekEnd, 1)}T00:00:00+01:00`),
+  );
+  let blackoutSeconds = 0;
+  if (weekWindows.length > 0) {
+    const open = openingHours(venue?.openingHour ?? null, venue?.closingHour ?? null);
+    for (let d = weekStart; d < weekEnd; d = plusCalendarDays(d, 1)) {
+      if (declaredDays.has(d)) continue;
+      for (const { hour, dayOffset } of open) {
+        const cellDate = dayOffset ? plusCalendarDays(d, 1) : d;
+        blackoutSeconds += blackoutMinutesInHour(weekWindows, cellDate, hour) * 60;
+      }
+    }
+  }
+  const availableSeconds = Math.max(
+    0,
+    SCREEN_SECONDS_PER_HOUR * bHours.length * availableDays - blackoutSeconds,
+  );
   let engagedSeconds = 0;
   for (const a of allocations) {
     for (const c of a.creneaux) {
       if (c.date < weekStart || c.date >= weekEnd) continue;
-      engagedSeconds += c.reps * a.sSpotSeconds;
+      const blackout = spsBlackoutMin(c, blackoutNow);
+      engagedSeconds += (c.reps * a.sSpotSeconds * (60 - blackout)) / 60;
     }
   }
   const remplissage =

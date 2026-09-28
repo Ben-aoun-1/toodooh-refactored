@@ -43,7 +43,7 @@ import { ownerSensorStatuses } from '../lib/owner-sensors.js';
 import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
 import { proofInstantSql } from '../lib/playout/proof-instant.js';
-import { pushPlaylistToVenue } from '../lib/playout/push.js';
+import { pushPlaylistToAllConnected, pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { buildPistes } from '../lib/report/pistes.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
@@ -2525,6 +2525,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
           'playlist re-push on event accept failed',
         );
       }
+    }
+    // EVT-STOP — a REFUSE releases the venue's blocs (the cascade may re-place them): the
+    // network's blackout set may have changed, so every connected venue re-pushes.
+    if (outcome.changed && statut === 'REFUSE') {
+      await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
+        request.log.warn({ err }, 'network playlist re-push failed'),
+      );
     }
     return reply.status(200).send({
       id: outcome.id,

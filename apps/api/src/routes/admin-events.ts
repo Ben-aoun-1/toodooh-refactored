@@ -17,6 +17,7 @@ import { upsertEventAttestation } from '../lib/event-playout/attestation.js';
 import { remapEventPositionings, voidEventPositionings } from '../lib/event-playout/reschedule.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
+import { pushPlaylistToAllConnected } from '../lib/playout/push.js';
 import { recomputeVenueSps } from '../lib/sps-score.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -247,6 +248,11 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
       return { flagged, voided };
     });
     if (!outcome) return sendNotFound(reply);
+    // EVT-STOP — annulé: its blocs no longer black the network out: the network's blackout set may have changed, so every
+    // connected venue re-pushes (classic entries carry the windows). Failure never blocks.
+    await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
+      request.log.warn({ err }, 'network playlist re-push failed'),
+    );
     return reply.status(200).send({
       ...eventView(outcome.flagged, new Date()),
       annule: outcome.flagged.annule,
@@ -302,6 +308,10 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
       return { moved, remapped };
     });
     if (!outcome) return sendNotFound(reply);
+    // EVT-STOP — reported: its blackout windows moved with the blocs. Failure never blocks.
+    await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
+      request.log.warn({ err }, 'network playlist re-push failed'),
+    );
     return reply.status(200).send({
       ...eventView(outcome.moved, new Date()),
       positionnements_recalcules: outcome.remapped.positionings,

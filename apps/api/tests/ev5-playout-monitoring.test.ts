@@ -420,7 +420,9 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
       if (!first) throw new Error('grid');
       const once = await runBlocPushTick(silentLog, first.start);
       const twice = await runBlocPushTick(silentLog, first.start);
-      expect(once).toEqual({ venues: 1, pushed: 0 }); // no socket registered → 0 pushed
+      // EVT-STOP — the positioning is SOLD (active, ACCEPTE): its bloc edge is a NETWORK edge,
+      // so the tick re-pushes every connected venue (none here → 0), not the per-venue scan.
+      expect(once).toEqual({ venues: 0, pushed: 0, network: true });
       expect(twice).toEqual(once); // idempotent
     });
   });

@@ -21,6 +21,12 @@ export interface PlaylistVideo {
    * has since stopped. ABSENT = no bound known (older senders; the player keeps the entry).
    */
   valid_until?: string;
+  /**
+   * EVT-STOP — ADDITIVE, classic entries only: the event blackout windows of the next 48 h
+   * ([start, end) ISO). The player never airs the entry inside one — offline included (S3 A).
+   * ABSENT = no known blackout (older senders; older players ignore it).
+   */
+  blackouts?: { start: string; end: string }[];
 }
 
 export interface PlaylistMessage {
@@ -39,6 +45,8 @@ export interface PlaylistSource {
   creativeType?: 'video' | 'photo';
   /** FRESH-1 — when this entry stops being airable (campaign window end / event bloc end). */
   validUntil?: Date;
+  /** EVT-STOP — the blackout windows this (classic) entry must not air in. */
+  blackouts?: readonly { start: Date; end: Date }[];
 }
 
 // A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule), with "today"
@@ -76,6 +84,14 @@ export const buildPlaylist = (sources: readonly PlaylistSource[]): PlaylistMessa
       ? { creative_type: source.creativeType === 'photo' ? ('image' as const) : ('video' as const) }
       : {}),
     ...(source.validUntil !== undefined ? { valid_until: source.validUntil.toISOString() } : {}),
+    ...(source.blackouts !== undefined && source.blackouts.length > 0
+      ? {
+          blackouts: source.blackouts.map((b) => ({
+            start: b.start.toISOString(),
+            end: b.end.toISOString(),
+          })),
+        }
+      : {}),
   })),
   loop: true,
 });

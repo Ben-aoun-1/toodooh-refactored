@@ -12,6 +12,7 @@ import {
 
 import { plusCalendarDays } from './campaign-dates.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
+import { blackoutMinutesByCell } from './event-blackout.js';
 import { PLAYOUT_TZ } from './reconcile/delivered-slots.js';
 
 export const ACCEPTATION_WINDOW_DAYS = 90;
@@ -121,6 +122,18 @@ export const loadAttested = (screenhostId: string, w: CreatedWindow) =>
       ),
     );
 
+/**
+ * EVT-STOP (P2 A) — the blackout minutes of a créneau's hour, for SPS: the larger of what the
+ * plan priced out (blackoutMin) and what is blacked out NOW, capped at 60. SPS never counts a
+ * minute the venue could not air: a fully blacked-out hour leaves activité, and engaged seconds
+ * keep only the (60 − minutes)/60 share. ONE rule for computeSps and both observation readers.
+ */
+export const spsBlackoutMin = (
+  c: { date: string; hour: number; blackoutMin?: number },
+  blackoutNow: ReadonlyMap<string, number>,
+): number =>
+  Math.min(60, Math.max(c.blackoutMin ?? 0, blackoutNow.get(`${c.date}:${c.hour}`) ?? 0));
+
 /** 00:00 of a Tunis calendar day, as an instant (UTC+1, no DST since 2008 — tunisWeekStart). */
 const tunisDayStart = (isoDay: string): Date => new Date(`${isoDay}T00:00:00+01:00`);
 
@@ -150,13 +163,18 @@ export const spsObservationsInRange = async (
     loadAcceptedAllocations(screenhostId),
   ]);
   const nowSlot = tunisNowSlot(now);
+  const blackoutNow = await blackoutMinutesByCell(
+    allocations.flatMap((a) => a.creneaux).filter((c) => c.date >= from && c.date <= to),
+  );
   let scheduledElapsed = 0;
   let engagedSeconds = 0;
   for (const a of allocations) {
     for (const c of a.creneaux) {
       if (c.date < from || c.date > to) continue;
+      const blackout = spsBlackoutMin(c, blackoutNow);
+      if (blackout >= 60) continue; // EVT-STOP — an hour the venue could not air at all
       if (isElapsed(c, nowSlot)) scheduledElapsed += 1;
-      engagedSeconds += c.reps * a.sSpotSeconds;
+      engagedSeconds += (c.reps * a.sSpotSeconds * (60 - blackout)) / 60;
     }
   }
   return { decided: decided.length, attested: attested.length, scheduledElapsed, engagedSeconds };
@@ -252,12 +270,19 @@ export const spsObservationsFor = async (
   const weekEnd = new Date(new Date(`${weekStart}T00:00:00Z`).getTime() + 7 * DAY_MS)
     .toISOString()
     .slice(0, 10);
+  const firstDate = activiteSinceDate < weekStart ? activiteSinceDate : weekStart;
+  const blackoutNow = await blackoutMinutesByCell(
+    allocations.flatMap((a) => a.creneaux).filter((c) => c.date >= firstDate && c.date < weekEnd),
+  );
   for (const a of allocations) {
     const o = result.get(a.screenhostId);
     if (!o) continue;
     for (const c of a.creneaux) {
+      const blackout = spsBlackoutMin(c, blackoutNow);
+      if (blackout >= 60) continue; // EVT-STOP — the same rule as computeSps
       if (c.date >= activiteSinceDate && isElapsed(c, nowSlot)) o.scheduledElapsed += 1;
-      if (c.date >= weekStart && c.date < weekEnd) o.engagedSeconds += c.reps * a.sSpotSeconds;
+      if (c.date >= weekStart && c.date < weekEnd)
+        o.engagedSeconds += (c.reps * a.sSpotSeconds * (60 - blackout)) / 60;
     }
   }
   return result;
