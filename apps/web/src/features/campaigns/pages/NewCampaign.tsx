@@ -334,7 +334,11 @@ export default function NewCampaign() {
       if (state.draftCampaignId) clearResumeStep(state.draftCampaignId); // CF-Q2 key hygiene
       armedRef.current = false; // CF-W1 — no orphan intercept after a successful add
       toast.success('Campagne ajoutée au panier.');
-      navigate('/my-cart');
+      // SUGG-1 — the cart-add page (Figma): the confirmation + the period's events; it forwards
+      // to the panier itself when the period holds none (P4 A).
+      navigate(
+        state.draftCampaignId ? `/new-campaign/ajoutee/${state.draftCampaignId}` : '/my-cart',
+      );
     } else if (isBudgetBelowMinimum(result.error)) {
       // CF-U3 — the server floor refusal, in French (the slider min already enforces it for any
       // fresh drag; this catches legacy sub-floor drafts).

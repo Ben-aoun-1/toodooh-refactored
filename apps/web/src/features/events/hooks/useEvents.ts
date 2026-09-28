@@ -59,3 +59,11 @@ export function useEventImageUrl(eventId: string, hasImage: boolean) {
     enabled: hasImage,
   });
 }
+
+/** SUGG-1 — a match's I_max and venue-pool sectors, for the cart-add suggestion card. */
+export function useEventCmax(eventId: string) {
+  return useQuery({
+    queryKey: eventsKeys.cmax(eventId),
+    queryFn: () => eventsApi.cmax(eventId),
+  });
+}

@@ -46,6 +46,16 @@ export interface PositioningCreatedView {
   end_date: string | null;
 }
 
+/** SUGG-1 — GET /api/events/:id/cmax (the match's ceiling for the caller + its venue pool). */
+export interface EventCmaxView {
+  c_max_evt_tnd: number;
+  i_max: number;
+  eligible_count: number;
+  min_budget_tnd: number;
+  /** The DISTINCT stored sector names of the event pool (display labels map at render). */
+  sectors: string[];
+}
+
 export const eventsApi = {
   /** EV3 — « Je me positionne »: create the positioning draft (409 annulé/terminé). */
   positionner(eventId: string): Promise<PositioningCreatedView> {
@@ -59,6 +69,9 @@ export const eventsApi = {
   },
   suggest(input: SuggestMatchInput): Promise<EventItemView> {
     return apiClient.post('/events/suggest', input);
+  },
+  cmax(eventId: string): Promise<EventCmaxView> {
+    return apiClient.get(`/events/${eventId}/cmax`);
   },
   imageUrl(eventId: string): Promise<{ url: string }> {
     return apiClient.get(`/events/${eventId}/image-url`);

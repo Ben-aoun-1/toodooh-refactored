@@ -16,4 +16,7 @@ export const eventsKeys = {
 
   /** A single event's presigned affiche URL. */
   imageUrl: (eventId: string) => [...eventsKeys.all, 'imageUrl', eventId] as const,
+
+  /** SUGG-1 — a match's ceiling + venue pool for the caller (I_max, sectors). */
+  cmax: (eventId: string) => [...eventsKeys.all, 'cmax', eventId] as const,
 };
