@@ -1,4 +1,5 @@
-import { formatInTimeZone } from 'date-fns-tz';
+import { addDays, format, parseISO } from 'date-fns';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 
 // The network is Grand-Tunis; "today" for the playout window is pinned to Africa/Tunis so a campaign
 // window doesn't slip a day at the server-local midnight boundary.
@@ -14,6 +15,12 @@ export interface PlaylistVideo {
   reps_per_hour: number; // R_i — planned plays/hour, so the player can space (cadence) the spot
   /** EV4 rider — ADDITIVE: 'video' | 'image'; ABSENT = video (the TV-C3 backcompat contract). */
   creative_type?: 'video' | 'image';
+  /**
+   * FRESH-1 — ADDITIVE: the instant this entry stops being airable (ISO). The player drops an
+   * expired entry from a persisted playlist, so a TV restarting OFFLINE never airs what the server
+   * has since stopped. ABSENT = no bound known (older senders; the player keeps the entry).
+   */
+  valid_until?: string;
 }
 
 export interface PlaylistMessage {
@@ -30,6 +37,8 @@ export interface PlaylistSource {
   repsPerHour?: number; // R_i for this (campaign, screenhost); a spot with no allocation rI → 0
   /** EV4 rider — the media kind; omitted = video (legacy senders stay valid). */
   creativeType?: 'video' | 'photo';
+  /** FRESH-1 — when this entry stops being airable (campaign window end / event bloc end). */
+  validUntil?: Date;
 }
 
 // A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule), with "today"
@@ -45,6 +54,13 @@ export const isWindowActive = (
   return startDate <= today && today <= endDate;
 };
 
+/**
+ * FRESH-1 — the instant a campaign window closes: the Tunis midnight AFTER its end date, i.e. the
+ * first instant isWindowActive stops covering (pinned against it in tests).
+ */
+export const campaignWindowValidUntil = (endDate: string): Date =>
+  fromZonedTime(`${format(addDays(parseISO(endDate), 1), 'yyyy-MM-dd')}T00:00:00`, PLAYOUT_TZ);
+
 // Map resolved sources → the playlist. id = campaign id (the proof-of-play resolution key); priority
 // defaults to 0 (TAKEOVER deferred). loop is always true (the player cycles the list).
 export const buildPlaylist = (sources: readonly PlaylistSource[]): PlaylistMessage => ({
@@ -59,6 +75,7 @@ export const buildPlaylist = (sources: readonly PlaylistSource[]): PlaylistMessa
     ...(source.creativeType !== undefined
       ? { creative_type: source.creativeType === 'photo' ? ('image' as const) : ('video' as const) }
       : {}),
+    ...(source.validUntil !== undefined ? { valid_until: source.validUntil.toISOString() } : {}),
   })),
   loop: true,
 });

@@ -63,6 +63,8 @@ export interface ActiveEventSpot {
   durationSeconds: number | null;
   creativeType: string;
   repsPerHour: number;
+  /** FRESH-1 — the end of the bloc airing now: the spot stops being airable there. */
+  validUntil: Date;
 }
 
 /**
@@ -101,7 +103,8 @@ export const activeEventSpots = async (
 
   const spots: ActiveEventSpot[] = [];
   for (const row of rows) {
-    if (!parseBlocs(row.blocs).some((bloc) => blocCoversInstant(bloc, now))) continue;
+    const airing = parseBlocs(row.blocs).find((bloc) => blocCoversInstant(bloc, now));
+    if (!airing) continue;
     spots.push({
       campaignId: row.campaignId,
       campaignName: row.campaignName,
@@ -110,6 +113,7 @@ export const activeEventSpots = async (
       durationSeconds: row.durationSeconds,
       creativeType: row.creativeType,
       repsPerHour: eventRepsPerHour(row.durationSeconds ?? 0),
+      validUntil: new Date(airing.end),
     });
   }
   return spots;

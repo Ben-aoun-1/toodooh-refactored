@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildPlaylist, isWindowActive } from '../src/lib/playout/playlist.js';
+import {
+  buildPlaylist,
+  campaignWindowValidUntil,
+  isWindowActive,
+} from '../src/lib/playout/playlist.js';
 
 describe('isWindowActive — campaign window covers now (V1 active rule, Africa/Tunis)', () => {
   // Anchored to a UTC instant (firmly 2026-07-15 in Africa/Tunis, UTC+1) so the assertion is
@@ -60,5 +64,34 @@ describe('buildPlaylist — sources → UPDATE_PLAYLIST.data', () => {
 
   it('empty sources → empty playlist (still loop true)', () => {
     expect(buildPlaylist([])).toEqual({ videos: [], loop: true });
+  });
+});
+
+// FRESH-1 — every entry tells the player when it stops being airable, so a TV that restarts
+// OFFLINE on its persisted playlist can drop what the server has since stopped (a finished bloc,
+// an ended campaign) instead of airing it until it reconnects. ADDITIVE: a source without a bound
+// emits no field (older players ignore it either way).
+describe('FRESH-1 — valid_until on the wire', () => {
+  const base = { campaignId: 'c1', campaignName: 'A', url: 'http://x/a.mp4', durationSeconds: 15 };
+
+  it('emits valid_until as an ISO instant when the source carries a bound', () => {
+    const pl = buildPlaylist([{ ...base, validUntil: new Date('2026-09-25T21:45:00.000Z') }]);
+    expect(pl.videos[0]?.valid_until).toBe('2026-09-25T21:45:00.000Z');
+  });
+
+  it('omits the field when the source has no bound (backcompat shape)', () => {
+    const pl = buildPlaylist([base]);
+    expect(pl.videos[0]).not.toHaveProperty('valid_until');
+  });
+
+  it('a campaign window ends at the Tunis midnight AFTER its end date', () => {
+    // Tunis is UTC+1 with no DST: the 2026-09-30 Tunis day ends at 2026-09-30T23:00:00Z.
+    expect(campaignWindowValidUntil('2026-09-30').toISOString()).toBe('2026-09-30T23:00:00.000Z');
+  });
+
+  it('the bound agrees with isWindowActive on both sides of it', () => {
+    const until = campaignWindowValidUntil('2026-09-30');
+    expect(isWindowActive('2026-09-01', '2026-09-30', new Date(until.getTime() - 1))).toBe(true);
+    expect(isWindowActive('2026-09-01', '2026-09-30', until)).toBe(false);
   });
 });

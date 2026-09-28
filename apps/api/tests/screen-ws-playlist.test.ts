@@ -145,6 +145,7 @@ interface PlaylistData {
     campaign_name: string;
     duration_seconds: number | null;
     reps_per_hour: number;
+    valid_until?: string;
   }[];
   loop: boolean;
 }
@@ -249,6 +250,8 @@ describe('screen WebSocket — UPDATE_PLAYLIST from dispatch allocations', () =>
     expect(data.videos[0]?.duration_seconds).toBe(30);
     expect(data.videos[0]?.reps_per_hour).toBe(5); // R_i from the allocation (cadence hint)
     expect(data.videos[0]?.url).toContain('http'); // presigned MinIO url
+    // FRESH-1 — the entry expires at the Tunis midnight after the campaign's end date.
+    expect(data.videos[0]?.valid_until).toBe('2999-12-31T23:00:00.000Z');
   }, 10_000);
 
   it('pushes an empty playlist when the screenhost has no active allocation', async () => {

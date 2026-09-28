@@ -2513,6 +2513,19 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // FRESH-1 — the classic accept's CF-HF4 re-push, for events: an ACCEPTE made while one of
+    // the allocation's blocs is airing makes the spot airable NOW (the bloc pusher only fires at
+    // edges). Outside a bloc the re-push sends the unchanged playlist — harmless. Failure-warn.
+    if (outcome.changed && statut === 'ACCEPTE') {
+      try {
+        await pushPlaylistToVenue(outcome.screenhostId, request.log);
+      } catch (err) {
+        request.log.warn(
+          { err, screenhostId: outcome.screenhostId },
+          'playlist re-push on event accept failed',
+        );
+      }
+    }
     return reply.status(200).send({
       id: outcome.id,
       statut,
