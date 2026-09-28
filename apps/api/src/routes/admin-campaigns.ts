@@ -16,7 +16,7 @@ import { activateCampaign } from '../lib/activation-service.js';
 import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
 import { campaignCpmRates, cpmForCampaign } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
-import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
+import { pushPlaylistToAllConnected, pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
 import { walletSpendable } from '../lib/recharges.js';
 import { userLabel } from '../lib/user-label.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -355,6 +355,13 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       await pushPlaylistToCampaignVenues(activated.id, request.log);
     } catch (err) {
       request.log.warn({ err, campaignId: activated.id }, 'playlist re-push on activate failed');
+    }
+    if (activated.campaignType === 'event') {
+      // EVT-STOP — an event positioning just became sold: the network's blackout set may have changed, so every
+      // connected venue re-pushes (classic entries carry the windows). Failure never blocks.
+      await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
+        request.log.warn({ err }, 'network playlist re-push failed'),
+      );
     }
     return reply.status(200).send({
       campaign: adminCampaignView(activated, contentValidationStatus, advertiserLabel),

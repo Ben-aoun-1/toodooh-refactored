@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../../db/client.js';
@@ -37,6 +37,30 @@ export const pushPlaylistToVenue = async (
       sent += 1;
     } catch (err) {
       log?.warn({ err, screenhostId }, 'playlist re-push failed for a socket');
+    }
+  }
+  return sent;
+};
+
+/**
+ * EVT-STOP — re-push EVERY venue with a connected screen: a blackout starts or ends on the whole
+ * network at once (bloc edges of a sold event), and a change of the blackout SET (an event
+ * sold, annulé, reported, a bloc released) changes every classic playlist's `blackouts`.
+ * Returns the number of sockets reached. Never throws.
+ */
+export const pushPlaylistToAllConnected = async (log?: FastifyBaseLogger): Promise<number> => {
+  const screenIds = screenRegistry.connectedScreenIds();
+  if (screenIds.length === 0) return 0;
+  const rows = await db
+    .selectDistinct({ screenhostId: screens.screenhostId })
+    .from(screens)
+    .where(inArray(screens.id, screenIds));
+  let sent = 0;
+  for (const r of rows) {
+    try {
+      sent += await pushPlaylistToVenue(r.screenhostId, log);
+    } catch (err) {
+      log?.warn({ err, screenhostId: r.screenhostId }, 'network playlist re-push failed');
     }
   }
   return sent;

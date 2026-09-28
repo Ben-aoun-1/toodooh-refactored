@@ -201,7 +201,7 @@ describe('FRESH-1 — event playlist freshness (real Postgres)', () => {
     }
   });
 
-  it('a refusal pushes nothing (the venue plays what it played)', async () => {
+  it('EVT-STOP — a refusal re-pushes the network (it may release blacked-out blocs)', async () => {
     const app = Fastify({ logger: false });
     await app.register(screenhostsRoutes);
     await app.ready();
@@ -215,7 +215,9 @@ describe('FRESH-1 — event playlist freshness (real Postgres)', () => {
         url: `/api/screenhosts/event-allocations/${chain.allocationId}/refuse`,
       });
       expect(res.statusCode).toBe(200);
-      expect(socket.send).not.toHaveBeenCalled();
+      // FRESH-1 pinned « nothing pushed »; EVT-STOP supersedes it: a REFUSE releases the venue's
+      // blocs, which can change the network's blackout set, so every connected venue re-pushes.
+      expect(socket.send).toHaveBeenCalledTimes(1);
     } finally {
       screenRegistry.remove(chain.screenId, socket as never);
       await app.close();

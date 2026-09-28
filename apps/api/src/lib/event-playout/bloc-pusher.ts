@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 
-import { pushPlaylistToVenue } from '../playout/push.js';
+import { soldEventBlackouts } from '../event-blackout.js';
+import { pushPlaylistToAllConnected, pushPlaylistToVenue } from '../playout/push.js';
 
 import { venuesAtBlocEdge } from './spots.js';
 
@@ -24,6 +25,8 @@ export const BLOC_PUSH_TICK_MS = 60 * 1000;
 export interface BlocPushResult {
   venues: number;
   pushed: number;
+  /** EVT-STOP — a network-wide blackout edge fell in the window: every connected venue re-pushed. */
+  network: boolean;
 }
 
 /**
@@ -36,6 +39,26 @@ export const runBlocPushTick = async (
   windowMs: number = BLOC_PUSH_TICK_MS,
 ): Promise<BlocPushResult> => {
   const since = new Date(now.getTime() - windowMs);
+  // EVT-STOP — a sold event's bloc edge is a NETWORK edge: classic stops (start) or resumes
+  // (end) on every screen, so every connected venue re-pushes — the per-venue scan below is then
+  // redundant. Edges are those of the MERGED windows (back-to-back blocs push once).
+  const windows = await soldEventBlackouts(
+    new Date(since.getTime() - 1),
+    new Date(now.getTime() + 1),
+  );
+  const sinceMs = since.getTime();
+  const nowMs = now.getTime();
+  const networkEdge = windows.some((w) =>
+    [w.start.getTime(), w.end.getTime()].some((edge) => edge > sinceMs && edge <= nowMs),
+  );
+  if (networkEdge) {
+    const pushed = await pushPlaylistToAllConnected(log);
+    log.info(
+      { pushed, since: since.toISOString(), until: now.toISOString() },
+      'event blackout edge: network playlist push applied',
+    );
+    return { venues: 0, pushed, network: true };
+  }
   const venues = await venuesAtBlocEdge(since, now);
   let pushed = 0;
   for (const screenhostId of venues) {
@@ -51,7 +74,7 @@ export const runBlocPushTick = async (
       'event bloc edge push applied',
     );
   }
-  return { venues: venues.length, pushed };
+  return { venues: venues.length, pushed, network: false };
 };
 
 /** Boot tick + per-minute unref'd interval — the campaign-lifecycle job posture. */
