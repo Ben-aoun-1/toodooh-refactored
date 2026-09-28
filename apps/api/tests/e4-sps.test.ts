@@ -12,6 +12,8 @@ import {
   campaignDispatchPlan,
   campaigns,
   creatives,
+  eventAllocations,
+  events,
   proofOfPlay,
   screenhostUnavailability,
   screenhosts,
@@ -21,7 +23,7 @@ import {
 import type { EligibleScreenhost } from '../src/lib/dispatch/selection.js';
 import { orderedQueue } from '../src/lib/dispatch/selection.js';
 import { DISPATCH_CONFIG_DEFAULTS } from '../src/lib/dispatch/thresholds.js';
-import { spsObservationsFor, tunisWeekStart } from '../src/lib/sps-observations.js';
+import { spsBlackoutMin, spsObservationsFor, tunisWeekStart } from '../src/lib/sps-observations.js';
 import {
   EVENT_RESPECT_DEFAULT,
   computeSps,
@@ -228,6 +230,43 @@ const cren = (date: string, hour: number, reps = 30): DispatchCreneau => ({
   impressions: 100 * reps,
 });
 
+/** EVT-STOP — a SOLD event (active positioning) whose allocation elsewhere holds these blocs. */
+const seedSoldBlackout = async (blocs: { start: string; end: string }[]): Promise<void> => {
+  const { advertiserId, creativeId } = await seedCampaignWithPlan(10);
+  const [event] = await db
+    .insert(events)
+    .values({
+      name: `E4 blackout ${seq}`,
+      kickoffAt: new Date(blocs[0]?.start ?? ''),
+      endsAt: new Date(new Date(blocs[blocs.length - 1]?.end ?? '').getTime() + 60 * 60 * 1000),
+      source: 'official',
+    })
+    .returning();
+  const [positioning] = await db
+    .insert(campaigns)
+    .values({
+      advertiserId,
+      name: 'Positionnement',
+      campaignType: 'event',
+      status: 'active',
+      startDate: MONDAY,
+      endDate: MONDAY,
+      requestedBudget: '200',
+      eventId: event?.id,
+      creativeId,
+    })
+    .returning();
+  const { shId: elsewhere } = await seedVenue();
+  await db.insert(eventAllocations).values({
+    campaignId: positioning?.id ?? '',
+    screenhostId: elsewhere,
+    blocs: blocs.map((b) => ({ ...b, impressions: 1000 })),
+    impressionsTotal: 1000,
+    montantTnd: '100.000',
+    statut: 'ACCEPTE',
+  });
+};
+
 describe('E4 — the SPS score engine (real Postgres)', () => {
   beforeEach(async () => {
     await resetAuthTables();
@@ -294,6 +333,39 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
 
       const { variables } = await computeSps(shId, NOW);
       expect(variables.activite).toBe(50); // 1 proven ÷ 2 scheduled elapsed
+    });
+  });
+
+  describe('EVT-STOP (P2 A) — SPS never counts a minute the venue could not air', () => {
+    it('spsBlackoutMin: the larger of the priced and the current minutes, capped at 60', () => {
+      const c = { date: MONDAY, hour: 9 };
+      expect(spsBlackoutMin(c, new Map())).toBe(0);
+      expect(spsBlackoutMin({ ...c, blackoutMin: 20 }, new Map([[`${MONDAY}:9`, 40]]))).toBe(40);
+      expect(spsBlackoutMin({ ...c, blackoutMin: 20 }, new Map())).toBe(20);
+      expect(spsBlackoutMin(c, new Map([[`${MONDAY}:9`, 90]]))).toBe(60);
+    });
+
+    it('a fully blacked-out hour leaves activité; blackout minutes leave both sides of remplissage', async () => {
+      const { shId } = await seedVenue();
+      const { planId, campaignId, creativeId } = await seedCampaignWithPlan(10);
+      await seedAllocation(planId, shId, {
+        statut: 'ACCEPTE',
+        creneaux: [cren(MONDAY, 9), cren(MONDAY, 10)],
+      });
+      // h10 proven (Tunis 10:15 = 09:15 Z); h9 never — but h9 is now FULLY blacked out.
+      await seedProof(campaignId, shId, creativeId, new Date(`${MONDAY}T09:15:00Z`));
+      await seedSoldBlackout([
+        { start: `${MONDAY}T08:00:00.000Z`, end: `${MONDAY}T08:20:00.000Z` },
+        { start: `${MONDAY}T08:20:00.000Z`, end: `${MONDAY}T08:40:00.000Z` },
+        { start: `${MONDAY}T08:40:00.000Z`, end: `${MONDAY}T09:00:00.000Z` },
+        { start: `${MONDAY}T09:00:00.000Z`, end: `${MONDAY}T09:20:00.000Z` },
+      ]);
+      const { variables } = await computeSps(shId, NOW);
+      // activité: h9 out (0 minutes airable), h10 proven → 1/1 (it read 1/2 = 50 before).
+      expect(variables.activite).toBe(100);
+      // remplissage: engaged = h10's 30 reps × 10 s × 40/60 = 200 s; available = 252 000 − the
+      // 80 blacked-out open minutes (4 800 s) = 247 200 → 0,08 % (it read 600/252 000 = 0,24).
+      expect(variables.remplissage).toBe(0.08);
     });
   });
 
