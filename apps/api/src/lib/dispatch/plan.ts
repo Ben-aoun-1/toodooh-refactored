@@ -30,6 +30,12 @@ export interface PoolEntry {
   // unavailability). The ONE day source: capacity was computed over these, and every créneaux
   // builder MUST iterate these (never the global windowDays) so placements and capacity agree.
   days: WindowDay[];
+  /**
+   * EVT-STOP — per 'date:hour' cell, the minutes that cannot be sold: 1–59 = event-blackout minutes
+   * (the créneau is priced pro rata), 60 = the whole hour (an hour_reservations cell, or a cell
+   * fully covered by blocs) — no créneau. Absent cell = a full hour. Absent map = none (pure tests).
+   */
+  blackoutByCell?: ReadonlyMap<string, number>;
 }
 
 export interface WindowDay {
@@ -98,6 +104,7 @@ export const buildCreneaux = (
   windowDays: readonly WindowDay[],
   slots: readonly { dayOfWeek: number; hour: number; affluence: number; dayOffset?: number }[],
   rI: number,
+  blackoutByCell: ReadonlyMap<string, number> = new Map(),
 ): DispatchCreneau[] => {
   const byDow = new Map<number, { hour: number; affluence: number; dayOffset: number }[]>();
   for (const slot of slots) {
@@ -108,13 +115,20 @@ export const buildCreneaux = (
   const creneaux: DispatchCreneau[] = [];
   for (const day of windowDays) {
     for (const slot of byDow.get(day.dayOfWeek) ?? []) {
+      // HOURS-X1 — a post-midnight hour of an overnight window is dated on the NEXT day, the
+      // day the proofs will actually be bucketed on (reconcile/delivered-slots proofSlotKey).
+      const date = slot.dayOffset ? addIsoDays(day.date, slot.dayOffset) : day.date;
+      // EVT-STOP — the unsellable minutes of this cell: a whole hour (a reserved cell — before,
+      // it still got a full créneau although capacity excluded it — or a cell covered by blocs)
+      // gets NO créneau; a partly blacked-out hour is priced pro rata and remembers its minutes.
+      const blackout = blackoutByCell.get(`${date}:${slot.hour}`) ?? 0;
+      if (blackout >= 60) continue;
       creneaux.push({
-        // HOURS-X1 — a post-midnight hour of an overnight window is dated on the NEXT day, the
-        // day the proofs will actually be bucketed on (reconcile/delivered-slots proofSlotKey).
-        date: slot.dayOffset ? addIsoDays(day.date, slot.dayOffset) : day.date,
+        date,
         hour: slot.hour,
         reps: rI,
-        impressions: Math.round(slot.affluence * rI), // whole impressions
+        impressions: Math.round((slot.affluence * rI * (60 - blackout)) / 60), // whole impressions
+        ...(blackout > 0 ? { blackoutMin: blackout } : {}),
       });
     }
   }
@@ -163,7 +177,7 @@ export const buildPlan = (input: BuildPlanInput): BuiltPlan => {
       rI,
       revenuPrevisionnel: (ret.ai * cpm) / 1000,
       // E2 — the venue's OWN available days, not the global window (one day source).
-      creneaux: buildCreneaux(p.days, p.slots, rI),
+      creneaux: buildCreneaux(p.days, p.slots, rI, p.blackoutByCell),
     });
   }
 

@@ -154,7 +154,7 @@ export const runRefusalCascade = async (
           iiPotentiel: totalAi,
           rI,
           revenuPrevisionnel: String((totalAi * cpm) / 1000),
-          creneaux: buildCreneaux(p.days, p.slots, rI),
+          creneaux: buildCreneaux(p.days, p.slots, rI, p.blackoutByCell),
           statutAcceptation: 'EN_ATTENTE',
         })
         .where(eq(campaignDispatchAllocation.id, existing.id));
@@ -179,7 +179,7 @@ export const runRefusalCascade = async (
         iiPotentiel: ret.ai,
         rI,
         revenuPrevisionnel: String((ret.ai * cpm) / 1000),
-        creneaux: buildCreneaux(p.days, p.slots, rI),
+        creneaux: buildCreneaux(p.days, p.slots, rI, p.blackoutByCell),
       });
       createdAllocations += 1;
       trace.event(

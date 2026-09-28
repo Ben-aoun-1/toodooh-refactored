@@ -15,8 +15,9 @@ import {
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
+import { blackoutMinutesByCell } from '../event-blackout.js';
 import { PLAYOUT_TZ, loadDeliveredSlots } from '../reconcile/delivered-slots.js';
-import { slotKey } from '../reconcile/valuation.js';
+import { lateBlackoutShare, slotKey } from '../reconcile/valuation.js';
 import { S_MIN_TND } from '../vf-constants.js';
 
 import { computeR, computeRi, physicalFromFacturable } from './eligibility.js';
@@ -67,8 +68,10 @@ export const isFuture = (
 
 export interface DetectorAllocation {
   screenhostId: string;
-  creneaux: readonly { date: string; hour: number; impressions: number }[];
+  creneaux: readonly { date: string; hour: number; impressions: number; blackoutMin?: number }[];
   deliveredSlots: ReadonlySet<string>;
+  /** EVT-STOP — the blackout minutes NOW, per slotKey (absent = none: pre-EVT-STOP math). */
+  blackoutNow?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -88,7 +91,16 @@ export const detectMissedSlots = (
     let imp = 0;
     for (const c of a.creneaux) {
       if (!isElapsed(c, nowSlot)) continue;
-      if (a.deliveredSlots.has(slotKey(c.date, c.hour))) continue;
+      const key = slotKey(c.date, c.hour);
+      if (a.deliveredSlots.has(key)) {
+        // EVT-STOP — a proven hour still misses the share a LATE blackout took (valueAllocation's
+        // rule, the SAME rounding): it counts as a (partly) missed slot.
+        const lost = lateBlackoutShare(c, a.blackoutNow?.get(key) ?? 0);
+        if (lost <= 0) continue;
+        slots += 1;
+        imp += c.impressions - Math.round(c.impressions * (1 - lost));
+        continue;
+      }
       slots += 1;
       imp += c.impressions;
     }
@@ -169,11 +181,17 @@ export const runRedispatchRound = async (
 
       // Gross manquement: elapsed ∧ undelivered, the shared FIX A bucketing.
       const deliveredBySh = await loadDeliveredSlots(campaign.id);
+      // EVT-STOP (R5) — a blackout added after the freeze takes its share of a proven hour.
+      const blackoutNow = await blackoutMinutesByCell(
+        allocations.flatMap((a) => a.creneaux),
+        tx,
+      );
       const detected = detectMissedSlots(
         allocations.map((a) => ({
           screenhostId: a.screenhostId,
           creneaux: a.creneaux,
           deliveredSlots: deliveredBySh.get(a.screenhostId) ?? new Set<string>(),
+          blackoutNow,
         })),
         nowSlot,
       );
@@ -291,7 +309,7 @@ export const runRedispatchRound = async (
         // already-started hours. An empty result (e.g. the window ends within the current hour)
         // means this placement cannot air — skip it (its volume stays unplaced).
         // E2 — p.days: the replacement venue's OWN declared days are skipped here too.
-        const futureDelta = buildCreneaux(p.days, p.slots, rIAdd).filter((c) =>
+        const futureDelta = buildCreneaux(p.days, p.slots, rIAdd, p.blackoutByCell).filter((c) =>
           isFuture(c, nowSlot),
         );
         if (futureDelta.length === 0) continue;

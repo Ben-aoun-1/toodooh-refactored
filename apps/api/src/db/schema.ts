@@ -1352,6 +1352,12 @@ export interface DispatchCreneau {
   hour: number; // 0–23
   reps: number; // R_i for the hour
   impressions: number; // potential impressions for the slot (affluence × reps)
+  /**
+   * EVT-STOP — the event-blackout minutes of this hour ALREADY priced out at plan time
+   * (impressions = affluence × reps × (60 − blackoutMin)/60). Absent = 0 (plans before EVT-STOP).
+   * The missed-slot detector counts only the minutes blacked out LATER than this.
+   */
+  blackoutMin?: number;
 }
 
 export const campaignDispatchAllocation = pgTable(

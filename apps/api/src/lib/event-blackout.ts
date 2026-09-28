@@ -81,13 +81,44 @@ export const upcomingBlackouts = (
 };
 
 /**
+ * EVT-STOP (R5) — the blackout minutes NOW of each given (date, hour) cell, keyed like
+ * slotKey ('date:hour'); only non-zero cells are listed. The missed-slot detector and the NET
+ * settlement read this to find the minutes a LATE blackout took from a frozen plan.
+ */
+export const blackoutMinutesByCell = async (
+  cells: readonly { date: string; hour: number }[],
+  executor: Pick<typeof db, 'select'> = db,
+): Promise<Map<string, number>> => {
+  const byCell = new Map<string, number>();
+  if (cells.length === 0) return byCell;
+  const dates = cells.map((c) => c.date).sort();
+  const first = dates[0] ?? '';
+  const last = dates[dates.length - 1] ?? first;
+  const windows = await soldEventBlackouts(
+    fromZonedTime(`${first}T00:00:00`, TUNIS),
+    new Date(fromZonedTime(`${last}T00:00:00`, TUNIS).getTime() + 24 * HOUR_MS),
+    executor,
+  );
+  if (windows.length === 0) return byCell;
+  for (const c of cells) {
+    const minutes = blackoutMinutesInHour(windows, c.date, c.hour);
+    if (minutes > 0) byCell.set(`${c.date}:${c.hour}`, minutes);
+  }
+  return byCell;
+};
+
+/**
  * The merged blackout windows overlapping [from, to): the placed blocs of every live allocation
  * of every sold positioning of every non-annulé event.
  */
-export const soldEventBlackouts = async (from: Date, to: Date): Promise<BlackoutWindow[]> => {
+export const soldEventBlackouts = async (
+  from: Date,
+  to: Date,
+  executor: Pick<typeof db, 'select'> = db,
+): Promise<BlackoutWindow[]> => {
   // Every bloc lies in [kickoff − 1 h, end + 1 h] (lib/fenetre-diffusion), so the event row
   // bounds the scan before the jsonb is read.
-  const rows = await db
+  const rows = await executor
     .select({ blocs: eventAllocations.blocs })
     .from(eventAllocations)
     .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
