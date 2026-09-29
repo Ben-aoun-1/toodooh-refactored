@@ -22,7 +22,6 @@ import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessS
 import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
-import { OwnerAffluenceSection } from '@/features/screenhost/components/OwnerAffluenceSection';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useOwnerDevices } from '@/features/screenhost/hooks/useOwnerDevices';
@@ -631,11 +630,6 @@ export default function OwnerDashboard() {
                     {accountLoading ? '...' : formatDuration(ownerKpi.totalDurationSeconds)}
                   </p>
                 </div>
-              </div>
-
-              {/* Votre audience (affluence — L-aff-view) */}
-              <div className="mt-6">
-                <OwnerAffluenceSection />
               </div>
 
               {/* Pour bien commencer (propriétaire) */}
