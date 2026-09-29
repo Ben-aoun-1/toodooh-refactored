@@ -15,6 +15,15 @@ const RIB = '12345678901234567890';
 const IBAN = 'TN5912345678901234567890';
 
 describe('versementsService (REV3 — the owner payment history)', () => {
+  it('revenueSummary → GET /screenhosts/revenue-summary (OWN-REV1)', async () => {
+    spies.get.mockResolvedValue({ a_encaisser_ttc: 0, encaisse_ttc: 5000 });
+    await expect(versementsService.revenueSummary()).resolves.toEqual({
+      a_encaisser_ttc: 0,
+      encaisse_ttc: 5000,
+    });
+    expect(spies.get).toHaveBeenCalledWith('/screenhosts/revenue-summary');
+  });
+
   it('list → GET /screenhosts/versements', async () => {
     spies.get.mockResolvedValue([]);
     await versementsService.list();

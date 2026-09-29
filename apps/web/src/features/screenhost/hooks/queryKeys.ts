@@ -28,6 +28,9 @@ export const screenhostKeys = {
   /** REV3 — the owner's « Historique des versements » (GET /api/screenhosts/versements). */
   versements: (userId: string) => [...screenhostKeys.all, 'versements', userId] as const,
 
+  /** OWN-REV1 — « Revenus » + « Revenu encaissé » (GET /api/screenhosts/revenue-summary). */
+  revenueSummary: (userId: string) => [...screenhostKeys.all, 'revenueSummary', userId] as const,
+
   /** The owner's screenhosts WiFi list (GET /api/screenhosts/mine). */
   screenhostsMine: (userId: string) => [...screenhostKeys.all, 'screenhostsMine', userId] as const,
 

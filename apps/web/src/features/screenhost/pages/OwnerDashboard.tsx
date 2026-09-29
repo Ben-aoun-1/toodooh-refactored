@@ -26,6 +26,7 @@ import DecisionModal from '@/features/screenhost/components/decision/DecisionMod
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useOwnerDevices } from '@/features/screenhost/hooks/useOwnerDevices';
+import { useOwnerRevenueSummary } from '@/features/screenhost/hooks/useOwnerRevenueSummary';
 import {
   useOwnerEarnings,
   useOwnerPlayoutSummary,
@@ -104,6 +105,14 @@ export default function OwnerDashboard() {
   // one source, real liveness).
   const { devices, loading: screensLoading, isError: screensError } = useOwnerDevices(user?.id);
   const { stats: revenueStats, isError: revenueError } = useRevenueStats(user?.id);
+  // OWN-REV1 — the two money cards: « Revenus » = owed, « Revenu encaissé » = paid (both TTC).
+  // A facture validation moves its amount from the first to the second.
+  const revenueSummary = useOwnerRevenueSummary(user?.id);
+  const formatCardTnd = (n: number | undefined, digits: number) =>
+    (n ?? 0).toLocaleString('fr-FR', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
   // PERF-QA1 R11 — the KPI tiles read REAL wires: earnings (campagnes + impressions, through
   // the R10 display home) and the playout summary (durée totale, all-time Σ played_duration_ms).
   const ownerEarnings = useOwnerEarnings(user?.id);
@@ -159,10 +168,10 @@ export default function OwnerDashboard() {
   // Surface l'échec d'un des chargements (parité avec l'ancien toast unique
   // du `loadDashboardData` séquentiel).
   useEffect(() => {
-    if (profileError || sectorsError || screensError || revenueError) {
+    if (profileError || sectorsError || screensError || revenueError || revenueSummary.isError) {
       toast.error('Erreur lors du chargement des données');
     }
-  }, [profileError, sectorsError, screensError, revenueError]);
+  }, [profileError, sectorsError, screensError, revenueError, revenueSummary.isError]);
 
   // Régénère les alertes dérivées (écrans + revenus) une fois les données
   // chargées. NB : `_alerts` n'est consommé nulle part — état mort conservé
@@ -404,7 +413,7 @@ export default function OwnerDashboard() {
                   <p className="text-3xl sm:text-4xl font-bold text-white tracking-tight tabular-nums font-sans">
                     {accountLoading
                       ? '...'
-                      : `${(stats.totalRevenue ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND`}
+                      : `${formatCardTnd(revenueSummary.data?.a_encaisser_ttc, 3)} TND`}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[#E1E4EA] bg-white p-6 sm:p-8 shadow-lg min-h-[160px] sm:min-h-[180px] flex flex-row items-center gap-5 sm:gap-6">
@@ -579,22 +588,17 @@ export default function OwnerDashboard() {
                 )}
               </div>
 
-              {/* KPIs (Revenus cumulés, Campagnes diffusées, Impressions, Durée) — style annonceur */}
+              {/* KPIs (Revenu encaissé, Campagnes diffusées, Impressions, Durée) — style annonceur */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#fdfaed] border border-[#edcc7a]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
                     <span className="text-xs font-semibold text-[#c9a227] whitespace-nowrap truncate min-w-0">
-                      Revenus cumulés
+                      Revenu encaissé
                     </span>
                     <Banknote className="h-5 w-5 text-[#c9a227] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                    {accountLoading
-                      ? '...'
-                      : (stats.totalRevenue ?? 0).toLocaleString('fr-FR', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                    {accountLoading ? '...' : formatCardTnd(revenueSummary.data?.encaisse_ttc, 2)}
                   </p>
                   {/* PERF-QA1 R11 (ruled): NO année-précédente line until real prior-year data exists. */}
                 </div>

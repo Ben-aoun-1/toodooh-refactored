@@ -27,9 +27,22 @@ export interface OwnerVersementRow {
   mode_label_masked: string;
 }
 
+/**
+ * OWN-REV1 — the owner dashboard's two money cards, both TTC (SH-TTC1):
+ * `a_encaisser_ttc` = « Revenus » (owed), `encaisse_ttc` = « Revenu encaissé » (Σ versements).
+ */
+export interface OwnerRevenueSummary {
+  a_encaisser_ttc: number;
+  encaisse_ttc: number;
+}
+
 export const versementsService = {
   /** The caller's versements, newest first. */
   list(): Promise<OwnerVersementRow[]> {
     return apiClient.get<OwnerVersementRow[]>('/screenhosts/versements');
+  },
+  /** OWN-REV1 — owed vs paid, TTC. */
+  revenueSummary(): Promise<OwnerRevenueSummary> {
+    return apiClient.get<OwnerRevenueSummary>('/screenhosts/revenue-summary');
   },
 };
