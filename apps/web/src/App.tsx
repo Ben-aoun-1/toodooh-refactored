@@ -41,7 +41,6 @@ const CorrectDocuments = lazy(() => import('@/features/auth/pages/CorrectDocumen
 const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens'));
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
 const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampaigns'));
-const OwnerAllocations = lazy(() => import('@/features/screenhost/pages/OwnerAllocations'));
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
 const OwnerCalendarDevices = lazy(() => import('@/features/screenhost/pages/OwnerCalendarDevices'));
 const OwnerFacturesPage = lazy(() => import('@/features/screenhost/pages/OwnerFacturesPage'));
@@ -464,14 +463,9 @@ export default function App() {
                 </OwnerRoute>
               }
             />
-            <Route
-              path="/owner-allocations"
-              element={
-                <OwnerRoute>
-                  <OwnerAllocations />
-                </OwnerRoute>
-              }
-            />
+            {/* NOTIF-D2 (ruling A) — accept/refuse lives in the notification popup only; the old
+                « Campagnes à valider » URL (legacy notification links) lands on the dashboard. */}
+            <Route path="/owner-allocations" element={<Navigate to="/owner-dashboard" replace />} />
             {/* CAL-1 — the diffusion calendar merged into « Mon calendrier de diffusion »; the old
                 URL keeps resolving. */}
             <Route

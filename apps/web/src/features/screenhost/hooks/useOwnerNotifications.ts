@@ -31,7 +31,8 @@ const toDate = (value?: string | null): Date => {
 // everything else falls back to the owner campaigns page.
 export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath: string } => {
   if (n.type === 'dispatch_pending_acceptance')
-    return { actionLabel: 'Consulter', actionPath: '/owner-allocations' };
+    // NOTIF-D2 — the bell opens the popup in place; this path is only the no-campaign fallback.
+    return { actionLabel: 'Consulter', actionPath: '/owner-dashboard' };
   if (n.type === 'monthly_report_ready')
     return { actionLabel: 'Consulter', actionPath: '/owner-performance' };
   // REV2 — every facture notification lands on « Mes factures ». THREE types, ONE destination:

@@ -22,8 +22,6 @@ import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useOwnerCampaigns } from '@/features/screenhost/hooks/useOwnerCampaigns';
 import {
-  DECIDE_CTA_LABEL,
-  DECIDE_ROUTE,
   EMPTY_STATE_DETAIL,
   EMPTY_STATE_TITLE,
   LOAD_ERROR_MESSAGE,
@@ -35,7 +33,7 @@ import {
   fmtDateRange,
   matchesSearch,
   matchesStatusFilter,
-  needsDecision,
+  listedOnOwnerCampaigns,
   statusUi,
   venuesLabel,
 } from '@/features/screenhost/lib/owner-campaigns.lib';
@@ -48,7 +46,7 @@ type ViewMode = 'grid' | 'list';
  * CAMP-E1 / SUPA-1 slice 1 — the owner's « Mes campagnes », on the api (GET
  * /api/screenhosts/campaigns). Oversight only: every campaign the dispatch placed on the owner's
  * venues, ANY decision state, grouped per campaign with the owner's totals and their decision.
- * The accept/reject surface stays /owner-allocations (« Décider » navigates there).
+ * NOTIF-D2 — undecided campaigns are not listed: the owner decides from the notification popup.
  *
  * The previous read was a Supabase composite that THREW in production (env unset), so every
  * owner — with or without campaigns — saw « Impossible de charger les campagnes » and an empty
@@ -95,7 +93,8 @@ export default function OwnerCampaigns() {
 
   const { data, loading, isError } = useOwnerCampaigns(user?.id);
   // Memoised `?? []` so dependent memos keep a stable reference (CF-16).
-  const campaigns = useMemo(() => data ?? [], [data]);
+  // NOTIF-D2 — undecided campaigns live in the notification popup only, never on this page.
+  const campaigns = useMemo(() => (data ?? []).filter(listedOnOwnerCampaigns), [data]);
 
   // A REAL fetch failure keeps a toast; an empty list never does (that is the empty state below).
   useEffect(() => {
@@ -161,7 +160,6 @@ export default function OwnerCampaigns() {
 
   const statTiles: { key: OwnerCampaignStatusFilter; label: string; color: string }[] = [
     { key: 'all', label: 'Total campagnes', color: 'text-[#171717]' },
-    { key: 'to_decide', label: 'À valider', color: 'text-[#B47A00]' },
     { key: 'active', label: 'Actives', color: 'text-[#1FC16B]' },
     { key: 'upcoming', label: 'À venir', color: 'text-[#335CFF]' },
     { key: 'pending', label: 'En attente', color: 'text-[#F6B51E]' },
@@ -344,21 +342,6 @@ export default function OwnerCampaigns() {
                               </p>
                             </div>
                           </div>
-
-                          {needsDecision(campaign.owner_decision) && (
-                            <div className="mt-auto pt-3">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(DECIDE_ROUTE);
-                                }}
-                                className="w-full h-9 rounded-lg bg-brand-primary text-sm font-semibold text-[#101010] hover:bg-brand-primary/90"
-                              >
-                                {DECIDE_CTA_LABEL}
-                              </button>
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -429,15 +412,6 @@ export default function OwnerCampaigns() {
                                 >
                                   Consulter la campagne
                                 </button>
-                                {needsDecision(campaign.owner_decision) && (
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(DECIDE_ROUTE)}
-                                    className="w-full text-left px-3 py-2 text-sm text-[#1F1F1F] hover:bg-[#F8F8F8]"
-                                  >
-                                    {DECIDE_CTA_LABEL}
-                                  </button>
-                                )}
                               </div>
                             )}
                           </div>
@@ -495,32 +469,13 @@ export default function OwnerCampaigns() {
           onClose={closeDetails}
           campaign={selectedCampaign}
           footerSlot={
-            needsDecision(selectedCampaign.owner_decision) ? (
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={closeDetails}
-                  className="h-10 rounded-lg border border-[#EBEBEB] bg-white text-[#5C5C5C] font-medium hover:bg-gray-50"
-                >
-                  Fermer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate(DECIDE_ROUTE)}
-                  className="h-10 rounded-lg bg-brand-primary text-[#101010] font-semibold hover:bg-brand-primary/90"
-                >
-                  {DECIDE_CTA_LABEL}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={closeDetails}
-                className="w-full h-10 rounded-lg border border-[#EBEBEB] bg-white text-[#5C5C5C] font-medium hover:bg-gray-50"
-              >
-                Fermer
-              </button>
-            )
+            <button
+              type="button"
+              onClick={closeDetails}
+              className="w-full h-10 rounded-lg border border-[#EBEBEB] bg-white text-[#5C5C5C] font-medium hover:bg-gray-50"
+            >
+              Fermer
+            </button>
           }
         />
       )}

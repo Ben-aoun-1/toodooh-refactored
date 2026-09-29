@@ -8,17 +8,10 @@ import type {
  * status/decision mapping, the tab predicates and the copy are pinned here).
  */
 
-export type OwnerCampaignStatusFilter =
-  | 'all'
-  | 'to_decide'
-  | 'active'
-  | 'upcoming'
-  | 'pending'
-  | 'completed';
+export type OwnerCampaignStatusFilter = 'all' | 'active' | 'upcoming' | 'pending' | 'completed';
 
 export const STATUS_FILTERS: readonly { key: OwnerCampaignStatusFilter; label: string }[] = [
   { key: 'all', label: 'Tous' },
-  { key: 'to_decide', label: 'À valider' },
   { key: 'active', label: 'Actives' },
   { key: 'upcoming', label: 'À venir' },
   { key: 'pending', label: 'En attente' },
@@ -33,20 +26,20 @@ export const EMPTY_STATE_DETAIL =
 /** A real fetch failure keeps a toast — distinct from the empty state. */
 export const LOAD_ERROR_MESSAGE = 'Impossible de charger les campagnes';
 
-/** The decision CTA — accept/reject lives on /owner-allocations (never duplicated here). */
-export const DECIDE_CTA_LABEL = 'Décider';
-export const DECIDE_ROUTE = '/owner-allocations';
-
-/** « À valider » = the owner still has at least one allocation awaiting their decision. */
-export const needsDecision = (decision: OwnerDecision): boolean =>
-  decision === 'EN_ATTENTE' || decision === 'MIXTE';
+/**
+ * NOTIF-D2 (operator, 2026-09-29): a campaign the owner has NOT decided yet is not listed here —
+ * it reaches them only as a notification and its « Consulter » popup. It joins « Mes campagnes »
+ * once decided. MIXTE (some venues decided, some pending — a pre-popup per-venue history) stays
+ * listed: part of it is already the owner's.
+ */
+export const listedOnOwnerCampaigns = (campaign: Pick<OwnerCampaign, 'owner_decision'>): boolean =>
+  campaign.owner_decision !== 'EN_ATTENTE';
 
 export const matchesStatusFilter = (
   campaign: Pick<OwnerCampaign, 'status' | 'owner_decision'>,
   filter: OwnerCampaignStatusFilter,
 ): boolean => {
   if (filter === 'all') return true;
-  if (filter === 'to_decide') return needsDecision(campaign.owner_decision);
   return campaign.status === filter;
 };
 
@@ -66,7 +59,6 @@ export const countByFilter = (
   campaigns: readonly Pick<OwnerCampaign, 'status' | 'owner_decision'>[],
 ): Record<OwnerCampaignStatusFilter, number> => ({
   all: campaigns.length,
-  to_decide: campaigns.filter((c) => matchesStatusFilter(c, 'to_decide')).length,
   active: campaigns.filter((c) => matchesStatusFilter(c, 'active')).length,
   upcoming: campaigns.filter((c) => matchesStatusFilter(c, 'upcoming')).length,
   pending: campaigns.filter((c) => matchesStatusFilter(c, 'pending')).length,

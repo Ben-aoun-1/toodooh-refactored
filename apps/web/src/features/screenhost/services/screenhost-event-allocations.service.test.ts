@@ -26,30 +26,28 @@ describe('the §11.1 proposal copies (ONE home)', () => {
   });
 });
 
-describe('the proposal render matrix (source pins — event vs campaign)', () => {
-  const card = read('../components/EventAllocationCard.tsx');
-  const page = read('../pages/OwnerAllocations.tsx');
+describe('the proposal render matrix (source pins — NOTIF-D2: the popup is the one surface)', () => {
+  const body = read('../components/decision/EventDecisionDetails.tsx');
+  const modal = read('../components/decision/DecisionModal.tsx');
+  const app = read('../../../App.tsx');
 
-  it('the event card shows match, période, montant HT (TTC), blocs and the spot (images incl.)', () => {
-    expect(card).toContain('match_name');
-    expect(card).toContain('EVENT_PERIODE_LINE');
-    expect(card).toContain('htTtcLabel'); // montant HT (TTC) via lib/money
-    expect(card).toContain('blocs_count');
-    expect(card).toContain('CreativePreviewTile'); // video AND image render (the wizard tile)
+  it('the event popup body shows match, période, venues, blocs and the spot (images incl.)', () => {
+    expect(body).toContain('match_name');
+    expect(body).toContain('EVENT_PERIODE_LINE');
+    expect(body).toContain('blocs_count');
+    expect(body).toContain('CreativePreviewTile'); // video AND image render (the wizard tile)
   });
 
-  it('the owner page mounts the ÉVÉNEMENTS section as a SIBLING — campaign rendering untouched', () => {
-    expect(page).toContain('useScreenhostEventAllocations');
-    expect(page).toContain('EventAllocationCard');
-    // The campaign card markup keeps its own service + components (pinned by their own suite);
-    // the event section never reuses the campaign decision path.
-    expect(page).toContain('useScreenhostAllocations');
-    expect(page).toContain('AllocationSpotViewer');
+  it('the popup decides events through the event path, campaigns through the campaign path', () => {
+    expect(modal).toContain('useScreenhostEventAllocations');
+    expect(modal).toContain('useScreenhostAllocations');
   });
 
-  it('accept speaks the API reminder; refuse confirms with the event copy', () => {
-    expect(page).toContain('EVENT_REFUSE_CONFIRM');
-    expect(page).toMatch(/reminder \?\? 'Événement accepté\.'/);
+  it('the old « Campagnes à valider » page is gone — its URL redirects to the dashboard', () => {
+    expect(app).not.toContain('OwnerAllocations');
+    expect(app).toMatch(
+      /path="\/owner-allocations" element={<Navigate to="\/owner-dashboard" replace \/>}/,
+    );
   });
 });
 
