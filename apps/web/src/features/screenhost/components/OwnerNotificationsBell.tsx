@@ -2,7 +2,15 @@ import { Bell, CalendarDays, FileText, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import DecisionModal from '@/features/screenhost/components/decision/DecisionModal';
 import { useOwnerNotifications } from '@/features/screenhost/hooks/useOwnerNotifications';
+import { useScreenhostAllocations } from '@/features/screenhost/hooks/useScreenhostAllocations';
+import { useScreenhostEventAllocations } from '@/features/screenhost/hooks/useScreenhostEventAllocations';
+import {
+  isDecisionNotification,
+  pendingCampaignIds,
+  splitNotifications,
+} from '@/features/screenhost/lib/decision-notifications';
 import { shouldAutoOpen } from '@/lib/popover-auto-open';
 
 const relativeTime = (date: Date) => {
@@ -23,6 +31,8 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
   const navigate = useNavigate();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'active' | 'history'>('active');
+  const [decisionCampaignId, setDecisionCampaignId] = useState<string | null>(null);
 
   // Feed + mark-read via React Query (Commit 8 — D5). Optimistic-with-rollback
   // mutation; the 60 s poll is the hook's `refetchInterval`.
@@ -33,11 +43,32 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
     () => items.filter((n) => !readIdSet.has(n.id)).length,
     [items, readIdSet],
   );
-  // NOTIF-H1 (Mejri 11/09 point 4): a consulted notification STAYS listed — read state, muted,
-  // unread first. Before this the list hid read rows, so « Consulter » made the row vanish.
+  // NOTIF-D1 (ruling 5A, supersedes NOTIF-H1's single list): an accept/refuse notification stays in
+  // the main list — read or not — until the owner decides; every other one moves to « Historique »
+  // once read. Main list: unread first.
+  const pendingAllocations = useScreenhostAllocations(userId);
+  const pendingEvents = useScreenhostEventAllocations(userId);
+  const pendingKnown =
+    !pendingAllocations.loading &&
+    !pendingEvents.loading &&
+    !pendingAllocations.isError &&
+    !pendingEvents.isError;
+  const { active, history } = useMemo(
+    () =>
+      splitNotifications(
+        items.map((n) => ({ ...n, campaignId: n.campaignId ?? null })),
+        readIdSet,
+        pendingCampaignIds(pendingAllocations.allocations, pendingEvents.proposals),
+        pendingKnown,
+      ),
+    [items, readIdSet, pendingAllocations.allocations, pendingEvents.proposals, pendingKnown],
+  );
   const visibleItems = useMemo(
-    () => [...items].sort((a, b) => Number(readIdSet.has(a.id)) - Number(readIdSet.has(b.id))),
-    [items, readIdSet],
+    () =>
+      tab === 'history'
+        ? history
+        : [...active].sort((a, b) => Number(readIdSet.has(a.id)) - Number(readIdSet.has(b.id))),
+    [tab, active, history, readIdSet],
   );
 
   useEffect(() => {
@@ -87,7 +118,28 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
       {open ? (
         <div className="absolute right-0 mt-2 w-[560px] max-w-[calc(100vw-24px)] rounded-2xl border border-gray-200 bg-white shadow-xl z-[90] overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-xl leading-none font-semibold text-[#171717]">Notifications</h3>
+            <div className="flex items-center gap-4">
+              <h3 className="text-xl leading-none font-semibold text-[#171717]">Notifications</h3>
+              <div className="flex rounded-lg border border-gray-200 p-0.5 text-sm">
+                {(
+                  [
+                    ['active', `À traiter (${active.length})`],
+                    ['history', `Historique (${history.length})`],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setTab(key)}
+                    className={`rounded-md px-3 py-1 font-medium ${
+                      tab === key ? 'bg-[#EFF5F2] text-[#171717]' : 'text-[#5C5C5C]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -101,7 +153,11 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
             {loading ? (
               <div className="px-5 py-8 text-sm text-gray-500">Chargement...</div>
             ) : visibleItems.length === 0 ? (
-              <div className="px-5 py-8 text-sm text-gray-500">Aucune notification à afficher.</div>
+              <div className="px-5 py-8 text-sm text-gray-500">
+                {tab === 'history'
+                  ? 'Aucune notification dans l’historique.'
+                  : 'Aucune notification à afficher.'}
+              </div>
             ) : (
               visibleItems.map((item) => {
                 const isRead = readIdSet.has(item.id);
@@ -148,7 +204,13 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                             onClick={() => {
                               markRead(item.id);
                               setOpen(false);
-                              navigate(item.actionPath);
+                              // NOTIF-D1 — an accept/refuse notification opens the popup in place.
+                              const target = { ...item, campaignId: item.campaignId ?? null };
+                              if (isDecisionNotification(target) && target.campaignId) {
+                                setDecisionCampaignId(target.campaignId);
+                              } else {
+                                navigate(item.actionPath);
+                              }
                             }}
                             className="h-10 px-4 rounded-xl bg-brand-primary text-sm leading-none text-[#101010] font-semibold hover:bg-brand-primary/90"
                           >
@@ -196,6 +258,12 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
             </button>
           </div>
         </div>
+      ) : null}
+      {decisionCampaignId ? (
+        <DecisionModal
+          campaignId={decisionCampaignId}
+          onClose={() => setDecisionCampaignId(null)}
+        />
       ) : null}
     </div>
   );

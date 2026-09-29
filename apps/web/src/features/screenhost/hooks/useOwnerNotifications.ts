@@ -80,6 +80,7 @@ const toFeed = (rows: ApiNotification[]): NotificationFeed<string> => ({
     title: n.title,
     timestamp: toDate(n.created_at),
     detail: detailFor(n),
+    campaignId: n.campaign_id,
     ...actionFor(n),
   })),
   // read_at non-null ⇒ already read; the bell filters unread by `!readIds.has(id)`.

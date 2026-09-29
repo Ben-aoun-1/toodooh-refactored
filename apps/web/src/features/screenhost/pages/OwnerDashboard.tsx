@@ -22,6 +22,7 @@ import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessS
 import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
+import DecisionModal from '@/features/screenhost/components/decision/DecisionModal';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useOwnerDevices } from '@/features/screenhost/hooks/useOwnerDevices';
@@ -58,7 +59,7 @@ interface OwnerDashboardNotification {
   title: string;
   createdAt: Date;
   actionLabel: string;
-  actionPath: string;
+  campaignId: string;
 }
 
 /** Mettre à true pour réafficher Mes écrans, Mes revenus et Rewards sur le dashboard */
@@ -90,6 +91,8 @@ export default function OwnerDashboard() {
     'active',
   );
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
+  // NOTIF-D1 — « Consulter » opens the accept/refuse popup in place (no navigation).
+  const [decisionCampaignId, setDecisionCampaignId] = useState<string | null>(null);
 
   const { profile, loading: profileLoading, error: profileError } = useBusinessProfile(user?.id);
   const { data: sectors, isError: sectorsError } = useSectors();
@@ -121,7 +124,7 @@ export default function OwnerDashboard() {
             : 'Nouvelle campagne à diffuser sur votre parc',
           createdAt: new Date(c.campaign_start_date || Date.now()),
           actionLabel: 'Consulter',
-          actionPath: '/owner-campaigns',
+          campaignId: c.campaign_id,
         })),
     [pendingApprovalCampaigns],
   );
@@ -739,7 +742,9 @@ export default function OwnerDashboard() {
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4">
                           <button
                             type="button"
-                            onClick={() => navigate(latestOwnerNotification.actionPath)}
+                            onClick={() =>
+                              setDecisionCampaignId(latestOwnerNotification.campaignId)
+                            }
                             className="px-4 py-2 rounded-full text-sm font-medium text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
                           >
                             {latestOwnerNotification.actionLabel}
@@ -961,6 +966,12 @@ export default function OwnerDashboard() {
           </div>
         </div>
       </div>
+      {decisionCampaignId ? (
+        <DecisionModal
+          campaignId={decisionCampaignId}
+          onClose={() => setDecisionCampaignId(null)}
+        />
+      ) : null}
     </div>
   );
 }
