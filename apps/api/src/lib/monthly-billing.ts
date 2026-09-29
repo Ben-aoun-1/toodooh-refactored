@@ -16,7 +16,7 @@ import {
 import { storage } from '../storage/s3-storage.js';
 
 import { factureLinesByVenue, sumLinesTtc } from './facture-lines.js';
-import { htFromTtc, tvaFromHt, ttcFromHt } from './facture.js';
+import { screenhostFactureMoney, tvaFromHt, ttcFromHt } from './facture.js';
 import { renderMonthlyInvoicePdf } from './monthly-invoice-pdf.js';
 import { monthLabelFr, previousClosedMonth } from './report/monthly-job.js';
 import { renderScreenhostFacturePdf } from './screenhost-facture-pdf.js';
@@ -239,9 +239,7 @@ export async function runMonthlyBillingSweep(
       const reference = makeBillingReference('FS', id);
       // SH-TTC1 (operator ruling 2026-09-29): the owner's share IS the TTC total — HT and TVA are
       // carved OUT of it, never added on top (the pre-ruling « HT + 19 % » overpaid by 19 %).
-      const totalTtc = totalSh;
-      const subtotalHt = htFromTtc(totalTtc);
-      const tva = round4(totalTtc - subtotalHt);
+      const { subtotalHt, tva, totalTtc } = screenhostFactureMoney(totalSh);
       const pdf = await renderScreenhostFacturePdf({
         reference,
         month,

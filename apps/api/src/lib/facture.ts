@@ -41,6 +41,17 @@ export const ttcFromHt = (amountHt: number): number =>
 export const htFromTtc = (amountTtc: number): number =>
   Math.round((amountTtc / (1 + TVA_RATE)) * 100) / 100;
 
+/**
+ * The screenhost facture's money trio from its stored total (Σ share = TTC, SH-TTC1). ONE home:
+ * the monthly sweep and the SH-TTC1 regeneration script both print exactly these three figures.
+ */
+export const screenhostFactureMoney = (
+  totalTtc: number,
+): { subtotalHt: number; tva: number; totalTtc: number } => {
+  const subtotalHt = htFromTtc(totalTtc);
+  return { subtotalHt, tva: Math.round((totalTtc - subtotalHt) * 1e4) / 1e4, totalTtc };
+};
+
 /** The TVA line amount, additive-consistent: HT + TVA always equals the printed TTC. */
 export const tvaFromHt = (amountHt: number): number =>
   Math.round((ttcFromHt(amountHt) - amountHt) * 100) / 100;
