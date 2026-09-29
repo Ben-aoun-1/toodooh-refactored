@@ -193,7 +193,7 @@ export default function OwnerFactureDetailPage() {
                     <thead>
                       <tr className="text-xs uppercase tracking-wide text-gray-500 border-b border-gray-200">
                         <th className="text-left font-normal pb-2">Désignation</th>
-                        <th className="text-right font-normal pb-2">Montant HT</th>
+                        <th className="text-right font-normal pb-2">Montant TTC</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -201,7 +201,7 @@ export default function OwnerFactureDetailPage() {
                         <tr key={line.label}>
                           <td className="py-3 text-sm text-gray-900">{line.label}</td>
                           <td className="py-3 text-sm text-gray-900 text-right tabular-nums">
-                            {formatTnd(line.amountHtTnd)}
+                            {formatTnd(line.amountTtcTnd)}
                           </td>
                         </tr>
                       ))}

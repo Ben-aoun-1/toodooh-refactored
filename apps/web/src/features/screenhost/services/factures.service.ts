@@ -35,7 +35,7 @@ export interface OwnerFactureLine {
   /** 'campaign' | 'event' — the reversement_lines.source bucket. */
   source: string;
   /** Σ sh_amount_tnd for that source in the month (HT). */
-  amount_ht_tnd: number;
+  amount_ttc_tnd: number;
 }
 
 /**

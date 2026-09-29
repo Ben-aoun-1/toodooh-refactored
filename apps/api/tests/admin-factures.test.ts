@@ -13,7 +13,6 @@ import {
   screenhosts,
   users,
 } from '../src/db/schema.js';
-import { ttcFromHt } from '../src/lib/facture.js';
 import { VERSEMENT_MODE_UNKNOWN, isMaskedSafe } from '../src/lib/versement-mode.js';
 import { adminFacturesRoutes } from '../src/routes/admin-factures.js';
 import { ownerStatementsRoutes } from '../src/routes/owner-statements.js';
@@ -192,9 +191,8 @@ describe('REV3 — admin facture transitions, versements + trace (real Postgres)
 
       const rows = await db.select().from(screenhostVersements);
       expect(rows).toHaveLength(1);
-      // 42.50 HT → 50.58 TTC, the same figure the document and the owner's screen show.
-      expect(Number(rows[0]?.montantTtc)).toBe(ttcFromHt(42.5));
-      expect(Number(rows[0]?.montantTtc)).toBe(50.58);
+      // SH-TTC1: the stored 42.50 share IS the facture's TTC — paid as is, nothing added on top.
+      expect(Number(rows[0]?.montantTtc)).toBe(42.5);
       expect(rows[0]?.designation).toBe('Facture juillet 2026');
       expect(rows[0]?.userId).toBe(f.ownerId);
       expect(rows[0]?.createdBy).toBe(f.adminId);
@@ -274,7 +272,7 @@ describe('REV3 — admin facture transitions, versements + trace (real Postgres)
       expect(facture?.status).toBe('payee');
       const rows = await db.select().from(screenhostVersements);
       expect(rows).toHaveLength(1);
-      expect(Number(rows[0]?.montantTtc)).toBe(50.58);
+      expect(Number(rows[0]?.montantTtc)).toBe(42.5);
     });
 
     it('refuser writes NO versement line', async () => {
@@ -421,7 +419,7 @@ describe('REV3 — admin facture transitions, versements + trace (real Postgres)
         'mode_label_masked',
         'montant_ttc',
       ]);
-      expect(rows[0]?.['montant_ttc']).toBe(50.58);
+      expect(rows[0]?.['montant_ttc']).toBe(42.5);
       // No status, no facture_id, no admin, no coordinates.
       for (const forbidden of ['status', 'facture_id', 'created_by', 'en_paiement', RIB, IBAN]) {
         expect(res.body).not.toContain(forbidden);
@@ -471,7 +469,7 @@ describe('REV3 — admin facture transitions, versements + trace (real Postgres)
         })
         .then((r) => r.json())) as Record<string, unknown>[];
       expect(row?.['status']).toBe('en_verification');
-      expect(row?.['montant_ttc']).toBe(50.58);
+      expect(row?.['montant_ttc']).toBe(42.5);
       expect(row?.['designation']).toBe('Facture juillet 2026');
 
       await seedFacture({ status: 'payee' });

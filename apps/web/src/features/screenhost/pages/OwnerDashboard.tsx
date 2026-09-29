@@ -22,10 +22,11 @@ import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessS
 import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
-import { OwnerAffluenceSection } from '@/features/screenhost/components/OwnerAffluenceSection';
+import DecisionModal from '@/features/screenhost/components/decision/DecisionModal';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useOwnerDevices } from '@/features/screenhost/hooks/useOwnerDevices';
+import { useOwnerRevenueSummary } from '@/features/screenhost/hooks/useOwnerRevenueSummary';
 import {
   useOwnerEarnings,
   useOwnerPlayoutSummary,
@@ -59,7 +60,7 @@ interface OwnerDashboardNotification {
   title: string;
   createdAt: Date;
   actionLabel: string;
-  actionPath: string;
+  campaignId: string;
 }
 
 /** Mettre à true pour réafficher Mes écrans, Mes revenus et Rewards sur le dashboard */
@@ -91,6 +92,8 @@ export default function OwnerDashboard() {
     'active',
   );
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
+  // NOTIF-D1 — « Consulter » opens the accept/refuse popup in place (no navigation).
+  const [decisionCampaignId, setDecisionCampaignId] = useState<string | null>(null);
 
   const { profile, loading: profileLoading, error: profileError } = useBusinessProfile(user?.id);
   const { data: sectors, isError: sectorsError } = useSectors();
@@ -102,6 +105,14 @@ export default function OwnerDashboard() {
   // one source, real liveness).
   const { devices, loading: screensLoading, isError: screensError } = useOwnerDevices(user?.id);
   const { stats: revenueStats, isError: revenueError } = useRevenueStats(user?.id);
+  // OWN-REV1 — the two money cards: « Revenus » = owed, « Revenu encaissé » = paid (both TTC).
+  // A facture validation moves its amount from the first to the second.
+  const revenueSummary = useOwnerRevenueSummary(user?.id);
+  const formatCardTnd = (n: number | undefined, digits: number) =>
+    (n ?? 0).toLocaleString('fr-FR', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
   // PERF-QA1 R11 — the KPI tiles read REAL wires: earnings (campagnes + impressions, through
   // the R10 display home) and the playout summary (durée totale, all-time Σ played_duration_ms).
   const ownerEarnings = useOwnerEarnings(user?.id);
@@ -122,7 +133,7 @@ export default function OwnerDashboard() {
             : 'Nouvelle campagne à diffuser sur votre parc',
           createdAt: new Date(c.campaign_start_date || Date.now()),
           actionLabel: 'Consulter',
-          actionPath: '/owner-campaigns',
+          campaignId: c.campaign_id,
         })),
     [pendingApprovalCampaigns],
   );
@@ -157,10 +168,10 @@ export default function OwnerDashboard() {
   // Surface l'échec d'un des chargements (parité avec l'ancien toast unique
   // du `loadDashboardData` séquentiel).
   useEffect(() => {
-    if (profileError || sectorsError || screensError || revenueError) {
+    if (profileError || sectorsError || screensError || revenueError || revenueSummary.isError) {
       toast.error('Erreur lors du chargement des données');
     }
-  }, [profileError, sectorsError, screensError, revenueError]);
+  }, [profileError, sectorsError, screensError, revenueError, revenueSummary.isError]);
 
   // Régénère les alertes dérivées (écrans + revenus) une fois les données
   // chargées. NB : `_alerts` n'est consommé nulle part — état mort conservé
@@ -402,7 +413,7 @@ export default function OwnerDashboard() {
                   <p className="text-3xl sm:text-4xl font-bold text-white tracking-tight tabular-nums font-sans">
                     {accountLoading
                       ? '...'
-                      : `${(stats.totalRevenue ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND`}
+                      : `${formatCardTnd(revenueSummary.data?.a_encaisser_ttc, 3)} TND`}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[#E1E4EA] bg-white p-6 sm:p-8 shadow-lg min-h-[160px] sm:min-h-[180px] flex flex-row items-center gap-5 sm:gap-6">
@@ -577,22 +588,17 @@ export default function OwnerDashboard() {
                 )}
               </div>
 
-              {/* KPIs (Revenus cumulés, Campagnes diffusées, Impressions, Durée) — style annonceur */}
+              {/* KPIs (Revenu encaissé, Campagnes diffusées, Impressions, Durée) — style annonceur */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#fdfaed] border border-[#edcc7a]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
                     <span className="text-xs font-semibold text-[#c9a227] whitespace-nowrap truncate min-w-0">
-                      Revenus cumulés
+                      Revenu encaissé
                     </span>
                     <Banknote className="h-5 w-5 text-[#c9a227] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                    {accountLoading
-                      ? '...'
-                      : (stats.totalRevenue ?? 0).toLocaleString('fr-FR', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
+                    {accountLoading ? '...' : formatCardTnd(revenueSummary.data?.encaisse_ttc, 2)}
                   </p>
                   {/* PERF-QA1 R11 (ruled): NO année-précédente line until real prior-year data exists. */}
                 </div>
@@ -631,11 +637,6 @@ export default function OwnerDashboard() {
                     {accountLoading ? '...' : formatDuration(ownerKpi.totalDurationSeconds)}
                   </p>
                 </div>
-              </div>
-
-              {/* Votre audience (affluence — L-aff-view) */}
-              <div className="mt-6">
-                <OwnerAffluenceSection />
               </div>
 
               {/* Pour bien commencer (propriétaire) */}
@@ -745,7 +746,9 @@ export default function OwnerDashboard() {
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4">
                           <button
                             type="button"
-                            onClick={() => navigate(latestOwnerNotification.actionPath)}
+                            onClick={() =>
+                              setDecisionCampaignId(latestOwnerNotification.campaignId)
+                            }
                             className="px-4 py-2 rounded-full text-sm font-medium text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
                           >
                             {latestOwnerNotification.actionLabel}
@@ -967,6 +970,12 @@ export default function OwnerDashboard() {
           </div>
         </div>
       </div>
+      {decisionCampaignId ? (
+        <DecisionModal
+          campaignId={decisionCampaignId}
+          onClose={() => setDecisionCampaignId(null)}
+        />
+      ) : null}
     </div>
   );
 }

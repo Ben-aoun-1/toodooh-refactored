@@ -18,6 +18,13 @@ export const formatTnd = (amount: number): string => fr.format(amount);
 export const ttcFromHt = (amountHt: number): number =>
   Math.round(amountHt * (1 + TVA_RATE) * 100) / 100;
 
+/**
+ * The HT inside a TTC amount, rounded to the centime — the reverse of ttcFromHt, identical to the
+ * api's lib/facture htFromTtc. SH-TTC1: the screenhost's share is TTC, its facture carves HT out.
+ */
+export const htFromTtc = (amountTtc: number): number =>
+  Math.round((amountTtc / (1 + TVA_RATE)) * 100) / 100;
+
 /** « 1 000 TND HT (1 190 TND TTC) » — the full label every advertiser montant renders. */
 export const htTtcLabel = (amountHt: number): string =>
   `${formatTnd(amountHt)} TND HT (${formatTnd(ttcFromHt(amountHt))} TND TTC)`;

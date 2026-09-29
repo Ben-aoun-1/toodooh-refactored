@@ -14,6 +14,7 @@ import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { MAX_JUSTIFICATIF_BYTES, signedFactureKey } from '../lib/facture-deposit.js';
 import { factureLinesFor } from '../lib/facture-lines.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
+import { ownerRevenueSummary } from '../lib/owner-revenue-summary.js';
 import { monthLabelFr } from '../lib/report/monthly-job.js';
 import { requireActiveAccount, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -48,6 +49,18 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   const ownerGuard = { preHandler: [requireAuth, requireActiveAccount] };
+
+  // GET /api/screenhosts/revenue-summary — OWN-REV1: the dashboard's « Revenus » (owed) and
+  // « Revenu encaissé » (paid), both TTC. The computation lives in lib/owner-revenue-summary.
+  app.get('/api/screenhosts/revenue-summary', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+    const summary = await ownerRevenueSummary(userId);
+    return reply.status(200).send({
+      a_encaisser_ttc: summary.aEncaisserTtc,
+      encaisse_ttc: summary.encaisseTtc,
+    });
+  });
 
   // GET /api/screenhosts/statements — every facture across the caller's venues, newest month
   // first. NOTE the deliberate absence of `status` in the projection (see the header).
@@ -168,7 +181,7 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
       total_sh_tnd: Number(row.total_sh_tnd),
       designation: factureDesignation(row.month),
       deposited_at: row.deposited_at ? row.deposited_at.toISOString() : null,
-      lines: lines.map((l) => ({ source: l.source, amount_ht_tnd: l.amountHtTnd })),
+      lines: lines.map((l) => ({ source: l.source, amount_ttc_tnd: l.amountTtcTnd })),
     });
   });
 

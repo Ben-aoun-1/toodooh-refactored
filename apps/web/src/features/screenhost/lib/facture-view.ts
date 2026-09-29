@@ -1,4 +1,4 @@
-import { TVA_RATE, ttcFromHt } from '@/lib/money';
+import { TVA_RATE, htFromTtc } from '@/lib/money';
 
 import type { OwnerFactureRow } from '../services/factures.service';
 
@@ -43,23 +43,22 @@ export interface FactureMoney {
 }
 
 /**
- * The money trio from the one HT figure the wire carries.
+ * The money trio from the one figure the wire carries.
  *
- * `total_sh_tnd` IS the facture's sous-total HT — the sweep stores Σ sh_amount_tnd and hands that
- * same number to the PDF as `subtotalHtTnd`. TTC rides `lib/money`'s `ttcFromHt` (identical
- * implementation to the api's, by explicit convention), and TVA is the difference rather than a
- * second independent computation, so the three figures always add up on screen exactly as they do
- * on the printed document.
+ * SH-TTC1 (operator ruling 2026-09-29): `total_sh_tnd` — Σ sh_amount_tnd, the owner's share — IS
+ * the facture's TOTAL TTC. HT rides `lib/money`'s `htFromTtc` (identical implementation to the
+ * api's, by explicit convention), and TVA is the difference rather than a second independent
+ * computation, so the three figures always add up on screen exactly as they do on the PDF.
  */
 export const factureMoney = (totalShTnd: number): FactureMoney => {
-  const htTnd = totalShTnd;
-  const ttcTnd = ttcFromHt(htTnd);
+  const ttcTnd = totalShTnd;
+  const htTnd = htFromTtc(ttcTnd);
   return { htTnd, tvaTnd: Math.round((ttcTnd - htTnd) * 100) / 100, ttcTnd };
 };
 
 export interface FactureLine {
   label: string;
-  amountHtTnd: number;
+  amountTtcTnd: number;
 }
 
 /** The neutral wording, for a source the document cannot name. Mirrors the api's own fallback. */
@@ -89,11 +88,11 @@ export const sourceLabelFr = (source: string): string => {
  */
 export const factureLines = (detail: {
   total_sh_tnd: number;
-  lines: readonly { source: string; amount_ht_tnd: number }[];
+  lines: readonly { source: string; amount_ttc_tnd: number }[];
 }): FactureLine[] =>
   detail.lines.length === 0
-    ? [{ label: SOURCE_LABEL_FALLBACK, amountHtTnd: detail.total_sh_tnd }]
-    : detail.lines.map((l) => ({ label: sourceLabelFr(l.source), amountHtTnd: l.amount_ht_tnd }));
+    ? [{ label: SOURCE_LABEL_FALLBACK, amountTtcTnd: detail.total_sh_tnd }]
+    : detail.lines.map((l) => ({ label: sourceLabelFr(l.source), amountTtcTnd: l.amount_ttc_tnd }));
 
 export interface FactureDepositEntry {
   id: string;

@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { OwnerCampaign } from '@/features/screenhost/services/screenhost-campaigns.service';
 
 import {
-  DECIDE_ROUTE,
   EMPTY_STATE_DETAIL,
   EMPTY_STATE_TITLE,
   LOAD_ERROR_MESSAGE,
@@ -15,7 +14,7 @@ import {
   fmtDateRange,
   matchesSearch,
   matchesStatusFilter,
-  needsDecision,
+  listedOnOwnerCampaigns,
   statusUi,
   venuesLabel,
 } from './owner-campaigns.lib';
@@ -41,21 +40,18 @@ const campaign = (overrides: Partial<OwnerCampaign> = {}): OwnerCampaign => ({
   ...overrides,
 });
 
-describe('needsDecision (« À valider »)', () => {
-  it('is EN_ATTENTE or MIXTE — a partial decision still needs the owner', () => {
-    expect(needsDecision('EN_ATTENTE')).toBe(true);
-    expect(needsDecision('MIXTE')).toBe(true);
-    expect(needsDecision('ACCEPTE')).toBe(false);
-    expect(needsDecision('REFUSE')).toBe(false);
+describe('listedOnOwnerCampaigns (NOTIF-D2)', () => {
+  it('hides an undecided campaign — it lives in the notification popup only', () => {
+    expect(listedOnOwnerCampaigns({ owner_decision: 'EN_ATTENTE' })).toBe(false);
+  });
+  it('lists it once decided, including a partial (MIXTE) history', () => {
+    expect(listedOnOwnerCampaigns({ owner_decision: 'ACCEPTE' })).toBe(true);
+    expect(listedOnOwnerCampaigns({ owner_decision: 'REFUSE' })).toBe(true);
+    expect(listedOnOwnerCampaigns({ owner_decision: 'MIXTE' })).toBe(true);
   });
 });
 
 describe('matchesStatusFilter (the tabs)', () => {
-  it('« À valider » is on the owner-decision axis regardless of campaigns.status', () => {
-    expect(matchesStatusFilter(campaign({ status: 'completed' }), 'to_decide')).toBe(true);
-    expect(matchesStatusFilter(campaign({ owner_decision: 'ACCEPTE' }), 'to_decide')).toBe(false);
-  });
-
   it('the other tabs map onto campaigns.status', () => {
     for (const status of ['active', 'upcoming', 'pending', 'completed'] as const) {
       expect(matchesStatusFilter(campaign({ status }), status)).toBe(true);
@@ -64,10 +60,9 @@ describe('matchesStatusFilter (the tabs)', () => {
     expect(matchesStatusFilter(campaign({ status: 'draft' }), 'all')).toBe(true);
   });
 
-  it('the tab list is exactly Tous / À valider / Actives / À venir / En attente / Terminées', () => {
+  it('the tab list is exactly Tous / Actives / À venir / En attente / Terminées (no « À valider »)', () => {
     expect(STATUS_FILTERS.map((f) => f.label)).toEqual([
       'Tous',
-      'À valider',
       'Actives',
       'À venir',
       'En attente',
@@ -86,7 +81,6 @@ describe('countByFilter', () => {
     ]);
     expect(counts).toEqual({
       all: 4,
-      to_decide: 2,
       active: 2,
       upcoming: 1,
       pending: 0,
@@ -149,9 +143,5 @@ describe('copy pins', () => {
     expect(EMPTY_STATE_TITLE).toBe('Aucune campagne pour le moment');
     expect(EMPTY_STATE_DETAIL).toContain('vos établissements');
     expect(LOAD_ERROR_MESSAGE).toBe('Impossible de charger les campagnes');
-  });
-
-  it('the decision CTA routes to the accept/reject surface (never duplicated here)', () => {
-    expect(DECIDE_ROUTE).toBe('/owner-allocations');
   });
 });

@@ -23,7 +23,7 @@ describe('actionFor (bell CTA routing by type)', () => {
   });
 
   it('keeps dispatch_pending_acceptance on the allocations surface', () => {
-    expect(actionFor(notif('dispatch_pending_acceptance')).actionPath).toBe('/owner-allocations');
+    expect(actionFor(notif('dispatch_pending_acceptance')).actionPath).toBe('/owner-dashboard');
   });
 
   it('REV2 — both facture types land on « Mes factures » (they had NO action path before)', () => {
