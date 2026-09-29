@@ -33,6 +33,14 @@ export const TVA_RATE = 0.19;
 export const ttcFromHt = (amountHt: number): number =>
   Math.round(amountHt * (1 + TVA_RATE) * 100) / 100;
 
+/**
+ * HT from TTC — the reverse of ttcFromHt, same rounding. SH-TTC1 (operator ruling 2026-09-29): the
+ * screenhost's 50 % share IS a TTC amount (10 000 HT paid by the screencaster → 5 000 TTC to the
+ * venue), so the screenhost facture derives its HT from the share, never the other way round.
+ */
+export const htFromTtc = (amountTtc: number): number =>
+  Math.round((amountTtc / (1 + TVA_RATE)) * 100) / 100;
+
 /** The TVA line amount, additive-consistent: HT + TVA always equals the printed TTC. */
 export const tvaFromHt = (amountHt: number): number =>
   Math.round((ttcFromHt(amountHt) - amountHt) * 100) / 100;

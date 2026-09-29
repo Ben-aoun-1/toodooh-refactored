@@ -23,8 +23,8 @@ import { monthLabelFr } from './report/monthly-job.js';
 export interface ScreenhostFactureLine {
   /** 'campaign' | 'event' — the reversement_lines.source bucket. */
   source: string;
-  /** Σ sh_amount_tnd for that source in the month (HT). */
-  amountHtTnd: number;
+  /** Σ sh_amount_tnd for that source in the month — TTC (SH-TTC1). */
+  amountTtcTnd: number;
 }
 
 export interface ScreenhostFactureData {
@@ -116,7 +116,7 @@ export const renderScreenhostFacturePdf = async (data: ScreenhostFactureData): P
     // ── the per-source revenue lines ──────────────────────────────────────────
     let y = 232;
     doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Désignation', left, y);
-    doc.text('Montant HT', left, y, { width, align: 'right' });
+    doc.text('Montant TTC', left, y, { width, align: 'right' });
     y += 16;
     doc.strokeColor('#E5E7EB').lineWidth(1).moveTo(left, y).lineTo(right, y).stroke();
     y += 10;
@@ -129,7 +129,7 @@ export const renderScreenhostFacturePdf = async (data: ScreenhostFactureData): P
         .text(sourceLabelFr(line.source), left, y, {
           width: width - 120,
         });
-      doc.text(formatTnd(line.amountHtTnd), left, y, { width, align: 'right' });
+      doc.text(formatTnd(line.amountTtcTnd), left, y, { width, align: 'right' });
       y += 22;
     }
 

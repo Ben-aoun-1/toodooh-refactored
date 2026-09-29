@@ -496,11 +496,14 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     expect(text).not.toContain('RELEVÉ DE REVERSEMENT'); // the superseded title is dead
     expect(text).toContain('juillet 2026');
 
-    // The per-source line + the money trio. 42.50 HT → TVA 8.08 → TTC 50.58 (× 1.19 exactly).
+    // The per-source line + the money trio. SH-TTC1: the 42.50 share IS the TTC — HT 35.71 and
+    // TVA 6.79 are carved out of it, never added on top (the pre-ruling 50.58 must be gone).
     expect(text).toContain('Revenus de diffusion');
+    expect(text).toContain('Montant TTC');
     expect(text).toContain('42.50 TND');
-    expect(text).toContain('8.08 TND');
-    expect(text).toContain('50.58 TND');
+    expect(text).toContain('35.71 TND');
+    expect(text).toContain('6.79 TND');
+    expect(text).not.toContain('50.58');
     expect(text).toContain('Déposer votre facture signée');
 
     // THE LEAK KILL, pinned on the RENDERED TEXT. The relevé this replaces printed
@@ -677,17 +680,17 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     const detail = res.json() as {
       total_sh_tnd: number;
       designation: string;
-      lines: { source: string; amount_ht_tnd: number }[];
+      lines: { source: string; amount_ttc_tnd: number }[];
     };
 
     // Sorted by source — the ordering is part of the contract, so the PDF and the screen cannot
     // list the same amounts in different orders and read as different documents.
     expect(detail.lines).toEqual([
-      { source: 'campaign', amount_ht_tnd: 30 },
-      { source: 'event', amount_ht_tnd: 12.5 },
+      { source: 'campaign', amount_ttc_tnd: 30 },
+      { source: 'event', amount_ttc_tnd: 12.5 },
     ]);
     // THE INVARIANT: the breakdown accounts for the whole facture, to the millime.
-    const sum = detail.lines.reduce((acc, l) => acc + l.amount_ht_tnd, 0);
+    const sum = detail.lines.reduce((acc, l) => acc + l.amount_ttc_tnd, 0);
     expect(Math.round(sum * 1e4) / 1e4).toBe(detail.total_sh_tnd);
     expect(detail.total_sh_tnd).toBe(42.5);
     expect(detail.designation).toBe('Facture juillet 2026');
@@ -699,12 +702,12 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
 
     const detail = (
       await app.inject({ method: 'GET', url: `/api/screenhosts/statements/${id}` })
-    ).json() as { lines: { source: string; amount_ht_tnd: number }[] };
+    ).json() as { lines: { source: string; amount_ttc_tnd: number }[] };
 
     // (a) the wire's lines ARE what the shared computation home returns…
     const shared = await factureLinesFor(s.screenhostId, '2026-07');
     expect(detail.lines).toEqual(
-      shared.map((l) => ({ source: l.source, amount_ht_tnd: l.amountHtTnd })),
+      shared.map((l) => ({ source: l.source, amount_ttc_tnd: l.amountTtcTnd })),
     );
 
     // (b) …and the sweep rendered the stored PDF from that same function, so every wire line
@@ -719,7 +722,7 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     const flatten = (s: string): string => s.toLowerCase().replace(/[^a-z0-9à-ÿ]/gi, '');
     for (const line of detail.lines) {
       expect(flatten(text)).toContain(flatten(sourceLabelFr(line.source)));
-      expect(text).toContain(`${line.amount_ht_tnd.toFixed(2)} TND`);
+      expect(text).toContain(`${line.amount_ttc_tnd.toFixed(2)} TND`);
     }
     expect(flatten(text)).toContain(flatten('Revenus de diffusion — campagnes'));
     expect(flatten(text)).toContain(flatten('Revenus de diffusion — événements'));

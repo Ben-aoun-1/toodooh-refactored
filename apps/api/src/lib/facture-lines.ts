@@ -27,8 +27,8 @@ import { monthBounds } from './report/monthly-job.js';
 export interface FactureSourceLine {
   /** 'campaign' | 'event' — the reversement_lines.source bucket. */
   source: string;
-  /** Σ sh_amount_tnd for that source in the month (HT). */
-  amountHtTnd: number;
+  /** Σ sh_amount_tnd for that source in the month — TTC (SH-TTC1: the share is TTC). */
+  amountTtcTnd: number;
 }
 
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
@@ -61,10 +61,10 @@ export async function factureLinesByVenue(
 
   const byVenue = new Map<string, FactureSourceLine[]>();
   for (const row of rows) {
-    const amountHtTnd = round4(Number(row.totalSh));
-    if (amountHtTnd <= 0) continue;
+    const amountTtcTnd = round4(Number(row.totalSh));
+    if (amountTtcTnd <= 0) continue;
     const list = byVenue.get(row.screenhostId) ?? [];
-    list.push({ source: row.source, amountHtTnd });
+    list.push({ source: row.source, amountTtcTnd });
     byVenue.set(row.screenhostId, list);
   }
   for (const list of byVenue.values()) list.sort((a, b) => a.source.localeCompare(b.source));
@@ -79,6 +79,6 @@ export async function factureLinesFor(
   return (await factureLinesByVenue(month)).get(screenhostId) ?? [];
 }
 
-/** The lines' HT total. The sweep stores this as the facture's `total_sh_tnd`. */
-export const sumLinesHt = (lines: readonly FactureSourceLine[]): number =>
-  round4(lines.reduce((s, l) => s + l.amountHtTnd, 0));
+/** The lines' TTC total (SH-TTC1). The sweep stores this as the facture's `total_sh_tnd`. */
+export const sumLinesTtc = (lines: readonly FactureSourceLine[]): number =>
+  round4(lines.reduce((s, l) => s + l.amountTtcTnd, 0));

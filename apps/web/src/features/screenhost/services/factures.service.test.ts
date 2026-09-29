@@ -63,8 +63,8 @@ describe('facturesService (REV2 — the owner factures wire)', () => {
       deposited_at: null,
       designation: 'Facture juillet 2026',
       lines: [
-        { source: 'campaign', amount_ht_tnd: 30 },
-        { source: 'event', amount_ht_tnd: 12.5 },
+        { source: 'campaign', amount_ttc_tnd: 30 },
+        { source: 'event', amount_ttc_tnd: 12.5 },
       ],
     });
     const detail = await facturesService.detail('f1');

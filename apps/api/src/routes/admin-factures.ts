@@ -11,7 +11,6 @@ import {
   screenhosts,
   users,
 } from '../db/schema.js';
-import { ttcFromHt } from '../lib/facture.js';
 import { monthLabelFr } from '../lib/report/monthly-job.js';
 import { maskedPayoutLabel } from '../lib/versement-mode.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -110,9 +109,9 @@ export const adminFacturesRoutes: FastifyPluginAsync = async (app) => {
       factureId: facture.id,
       userId: ownerId,
       designation: factureDesignation(facture.month),
-      // Montant = the facture's TTC, not its HT: the versement is what Toodooh PAYS, and the
-      // facture claims TTC. Derived through the same ttcFromHt the document itself used.
-      montantTtc: ttcFromHt(Number(facture.totalShTnd)).toFixed(4),
+      // Montant = the facture's TTC: the versement is what Toodooh PAYS. SH-TTC1 (operator ruling
+      // 2026-09-29) — the stored Σ share IS that TTC; nothing is added on top.
+      montantTtc: Number(facture.totalShTnd).toFixed(4),
       modeLabelMasked: maskedPayoutLabel(owner?.rib, owner?.iban),
       createdBy: adminId,
     };
@@ -152,7 +151,7 @@ export const adminFacturesRoutes: FastifyPluginAsync = async (app) => {
         ...r,
         total_sh_tnd: Number(r.total_sh_tnd),
         // The admin table's « Montant » column is the TTC the owner will be paid.
-        montant_ttc: ttcFromHt(Number(r.total_sh_tnd)),
+        montant_ttc: Number(r.total_sh_tnd),
         designation: factureDesignation(r.month),
         deposited_at: r.deposited_at ? r.deposited_at.toISOString() : null,
       })),

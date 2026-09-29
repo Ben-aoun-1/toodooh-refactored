@@ -15,8 +15,8 @@ import {
 } from '../db/schema.js';
 import { storage } from '../storage/s3-storage.js';
 
-import { factureLinesByVenue, sumLinesHt } from './facture-lines.js';
-import { tvaFromHt, ttcFromHt } from './facture.js';
+import { factureLinesByVenue, sumLinesTtc } from './facture-lines.js';
+import { htFromTtc, tvaFromHt, ttcFromHt } from './facture.js';
 import { renderMonthlyInvoicePdf } from './monthly-invoice-pdf.js';
 import { monthLabelFr, previousClosedMonth } from './report/monthly-job.js';
 import { renderScreenhostFacturePdf } from './screenhost-facture-pdf.js';
@@ -195,7 +195,7 @@ export async function runMonthlyBillingSweep(
   const bySource = await factureLinesByVenue(month);
   const settled = [...bySource.entries()].map(([screenhostId, lines]) => ({
     screenhostId,
-    totalSh: String(sumLinesHt(lines)),
+    totalSh: String(sumLinesTtc(lines)),
   }));
 
   const venueIds = settled.map((s) => s.screenhostId);
@@ -237,9 +237,10 @@ export async function runMonthlyBillingSweep(
 
       const id = randomUUID();
       const reference = makeBillingReference('FS', id);
-      // The owner's earnings are HT; TVA rides on top, exactly as on the screencaster side.
-      const subtotalHt = totalSh;
-      const totalTtc = ttcFromHt(subtotalHt);
+      // SH-TTC1 (operator ruling 2026-09-29): the owner's share IS the TTC total — HT and TVA are
+      // carved OUT of it, never added on top (the pre-ruling « HT + 19 % » overpaid by 19 %).
+      const totalTtc = totalSh;
+      const subtotalHt = htFromTtc(totalTtc);
       const tva = round4(totalTtc - subtotalHt);
       const pdf = await renderScreenhostFacturePdf({
         reference,
@@ -280,7 +281,7 @@ export async function runMonthlyBillingSweep(
           userId: venue.ownerId,
           type: 'screenhost_facture_ready',
           title: 'Votre facture est disponible',
-          body: `La facture de ${monthLabelFr(month)} pour « ${venue.name} » (${ttcFromHt(totalSh).toFixed(2)} TND TTC) est disponible. Merci de l'imprimer, la signer et la déposer.`,
+          body: `La facture de ${monthLabelFr(month)} pour « ${venue.name} » (${totalSh.toFixed(2)} TND TTC) est disponible. Merci de l'imprimer, la signer et la déposer.`,
         });
       }
       result.statementsGenerated += 1;

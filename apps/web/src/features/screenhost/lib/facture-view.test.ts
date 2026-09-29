@@ -36,20 +36,23 @@ const row = (over: Partial<OwnerFactureRow> = {}): OwnerFactureRow => ({
 });
 
 describe('factureMoney (the trio the owner sees = the trio on the PDF)', () => {
-  it('reproduces the api sweep exactly: 42.50 HT → 8.08 TVA → 50.58 TTC', () => {
-    // The figure verified from the rendered document at commit 1.
-    expect(factureMoney(42.5)).toEqual({ htTnd: 42.5, tvaTnd: 8.08, ttcTnd: 50.58 });
+  it('SH-TTC1 — the 42.50 share IS the TTC: 35.71 HT + 6.79 TVA, the api sweep exactly', () => {
+    expect(factureMoney(42.5)).toEqual({ htTnd: 35.71, tvaTnd: 6.79, ttcTnd: 42.5 });
+  });
+
+  it('SH-TTC1 — the operator example: a 5 000 share is 5 000 TTC, never 5 950', () => {
+    expect(factureMoney(5000).ttcTnd).toBe(5000);
   });
 
   it('HT + TVA always equals TTC — TVA is the difference, never a second computation', () => {
-    for (const ht of [0, 1, 7.77, 100, 1234.56, 9999.99]) {
-      const { htTnd, tvaTnd, ttcTnd } = factureMoney(ht);
+    for (const share of [0, 1, 7.77, 100, 1234.56, 9999.99]) {
+      const { htTnd, tvaTnd, ttcTnd } = factureMoney(share);
       expect(Math.round((htTnd + tvaTnd) * 100) / 100).toBe(ttcTnd);
     }
   });
 
-  it('total_sh_tnd IS the sous-total HT (the sweep stores Σ sh_amount_tnd)', () => {
-    expect(factureMoney(120).htTnd).toBe(120);
+  it('total_sh_tnd IS the total TTC (the sweep stores Σ sh_amount_tnd)', () => {
+    expect(factureMoney(120).ttcTnd).toBe(120);
   });
 
   it('the TVA label reads the rate from lib/money — never a second 19 % in the codebase', () => {
@@ -63,13 +66,13 @@ describe('factureLines (the detail screen line table = the PDF line table)', () 
       factureLines({
         total_sh_tnd: 42.5,
         lines: [
-          { source: 'campaign', amount_ht_tnd: 30 },
-          { source: 'event', amount_ht_tnd: 12.5 },
+          { source: 'campaign', amount_ttc_tnd: 30 },
+          { source: 'event', amount_ttc_tnd: 12.5 },
         ],
       }),
     ).toEqual([
-      { label: 'Revenus de diffusion — campagnes', amountHtTnd: 30 },
-      { label: 'Revenus de diffusion — événements', amountHtTnd: 12.5 },
+      { label: 'Revenus de diffusion — campagnes', amountTtcTnd: 30 },
+      { label: 'Revenus de diffusion — événements', amountTtcTnd: 12.5 },
     ]);
   });
 
@@ -77,26 +80,26 @@ describe('factureLines (the detail screen line table = the PDF line table)', () 
     const detail = {
       total_sh_tnd: 42.5,
       lines: [
-        { source: 'campaign', amount_ht_tnd: 30 },
-        { source: 'event', amount_ht_tnd: 12.5 },
+        { source: 'campaign', amount_ttc_tnd: 30 },
+        { source: 'event', amount_ttc_tnd: 12.5 },
       ],
     };
-    const sum = factureLines(detail).reduce((s, l) => s + l.amountHtTnd, 0);
+    const sum = factureLines(detail).reduce((s, l) => s + l.amountTtcTnd, 0);
     expect(Math.round(sum * 1e4) / 1e4).toBe(detail.total_sh_tnd);
     // …and the trio the screen prints is derived from that same total.
-    expect(factureMoney(detail.total_sh_tnd).ttcTnd).toBe(50.58);
+    expect(factureMoney(detail.total_sh_tnd).ttcTnd).toBe(42.5);
   });
 
   it('an unknown source degrades to the neutral wording rather than printing a raw bucket name', () => {
     expect(
-      factureLines({ total_sh_tnd: 5, lines: [{ source: 'mystery', amount_ht_tnd: 5 }] }),
-    ).toEqual([{ label: SOURCE_LABEL_FALLBACK, amountHtTnd: 5 }]);
+      factureLines({ total_sh_tnd: 5, lines: [{ source: 'mystery', amount_ttc_tnd: 5 }] }),
+    ).toEqual([{ label: SOURCE_LABEL_FALLBACK, amountTtcTnd: 5 }]);
     expect(sourceLabelFr('mystery')).toBe('Revenus de diffusion');
   });
 
   it('ZERO lines is the ONLY fallback case — the stored HT under neutral wording, never an invented split', () => {
     expect(factureLines({ total_sh_tnd: 42.5, lines: [] })).toEqual([
-      { label: SOURCE_LABEL_FALLBACK, amountHtTnd: 42.5 },
+      { label: SOURCE_LABEL_FALLBACK, amountTtcTnd: 42.5 },
     ]);
   });
 });

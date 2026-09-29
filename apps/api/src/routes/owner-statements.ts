@@ -168,7 +168,7 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
       total_sh_tnd: Number(row.total_sh_tnd),
       designation: factureDesignation(row.month),
       deposited_at: row.deposited_at ? row.deposited_at.toISOString() : null,
-      lines: lines.map((l) => ({ source: l.source, amount_ht_tnd: l.amountHtTnd })),
+      lines: lines.map((l) => ({ source: l.source, amount_ttc_tnd: l.amountTtcTnd })),
     });
   });
 
