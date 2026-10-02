@@ -3,7 +3,7 @@ import nodemailer from 'nodemailer';
 import type { Env } from '../env.js';
 import { logger } from '../logger.js';
 
-import type { EmailSender, SendResult } from './sender.js';
+import type { EmailAttachment, EmailSender, SendResult } from './sender.js';
 
 // Per-send transport (no pool — slice-1 volume; Decision 2). send() NEVER throws
 // (Q2): it returns a result union so the better-auth verification hook can't fail
@@ -32,6 +32,8 @@ export class SmtpEmailSender implements EmailSender {
     subject: string;
     html: string;
     text?: string;
+    attachments?: EmailAttachment[];
+    replyTo?: string;
   }): Promise<SendResult> {
     try {
       const transporter = nodemailer.createTransport(this.config);

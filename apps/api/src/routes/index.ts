@@ -28,6 +28,7 @@ import { campaignImpressionsEstimateRoutes } from './campaign-impressions-estima
 import { campaignTargetingRoutes } from './campaign-targeting.js';
 import { campaignsPricingRoutes } from './campaigns-pricing.js';
 import { campaignsRoutes } from './campaigns.js';
+import { candidaturesRoutes } from './candidatures.js';
 import { cartRoutes } from './cart.js';
 import { creativesRoutes } from './creatives.js';
 import { deviceAuthRoutes } from './device-auth.js';
@@ -42,6 +43,7 @@ import { passwordRoutes } from './password.js';
 import { predefinedZonesRoutes } from './predefined-zones.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
 import { profileRoutes } from './profile.js';
+import { publicNetworkStatsRoutes } from './public-network-stats.js';
 import { rechargesRoutes } from './recharges.js';
 import { referenceRoutes } from './reference.js';
 import { screenhostDeclarationRoutes } from './screenhost-declaration.js';
@@ -126,6 +128,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminFacturesRoutes);
   // SUP-1 — le support enfin enregistré : POST /api/support (tout rôle) + la file admin.
   await app.register(supportRoutes);
+  // NEWLANDING-1 — the public landing's two calls: live network counters + Carrières applications.
+  await app.register(publicNetworkStatsRoutes);
+  await app.register(candidaturesRoutes);
   await app.register(adminSupportRoutes);
   await app.register(adminRechargesRoutes);
   // FCT2 — the admin wallet adjustment (signed, audited, reason-required) + its audit trail.
