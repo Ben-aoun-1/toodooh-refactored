@@ -290,17 +290,27 @@ describe('SETTLE1 — the settlement runner (real Postgres)', () => {
       reference: `ST1-${Math.random().toString(16).slice(2, 8)}`,
     });
 
-    // Before: LIMBO — ended-unreconciled shows NEITHER engagé NOR settlement (FIX2b ruling).
+    // Before: LIMBO — LEDG-1 3A: the « Engagé » row shows (never disappears), no refund yet; the
+    // funded gate still ignores it (FIX2b window clause unchanged).
     const before = await walletLedger(z.advertiser);
-    expect(before.transactions.filter((r) => r.type !== 'recharge')).toHaveLength(0);
+    expect(before.transactions.filter((r) => r.type !== 'recharge')).toMatchObject([
+      { type: 'engagement', amount_tnd: -400, campaign_id: z.campaignId },
+    ]);
     expect(before.solde).toMatchObject({ total_tnd: 5000, engaged_tnd: 0, spendable_tnd: 5000 });
 
     await runSettlementWalk(await collectSettlementInventory(), admin);
 
-    // After: the limbo resolves into the NET settlement row; « Solde total » turns truthful.
+    // After: the engagement stays, the unspent 370 comes back as « Remboursé » (400 − 30 spent).
     const after = await walletLedger(z.advertiser);
-    const settlement = after.transactions.find((r) => r.type === 'settlement');
-    expect(settlement).toMatchObject({ label: 'ky', amount_tnd: -30, campaign_id: z.campaignId });
+    expect(after.transactions.find((r) => r.type === 'engagement')).toMatchObject({
+      label: 'ky',
+      amount_tnd: -400,
+    });
+    expect(after.transactions.find((r) => r.type === 'refund')).toMatchObject({
+      label: 'ky',
+      amount_tnd: 370,
+      campaign_id: z.campaignId,
+    });
     expect(after.solde).toMatchObject({ total_tnd: 4970, engaged_tnd: 0, spendable_tnd: 4970 });
   });
 
