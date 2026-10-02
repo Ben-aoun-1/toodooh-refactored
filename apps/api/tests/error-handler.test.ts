@@ -22,6 +22,7 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       SMTP_USER: 'test@too-dooh.com',
       SMTP_PASSWORD: 'test-smtp-pw',
       SMTP_FROM: 'no-reply@too-dooh.com',
+      HR_MAILBOX: 'hr@too-dooh.com',
       STORAGE_ENDPOINT: 'http://localhost:9000',
       STORAGE_ACCESS_KEY: 'minioadmin',
       STORAGE_SECRET_KEY: 'minioadmin',
