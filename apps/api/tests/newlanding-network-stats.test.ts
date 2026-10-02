@@ -159,7 +159,7 @@ describe('NEWLANDING-1 — public network stats', () => {
       impressions: 420,
       audience: 65,
       gender: { f: 40, m: 60 },
-      ages: { '17–30 ans': 50, '31–45 ans': 30, '46 ans et +': 20 },
+      ages: { '17–30': 50, '31–45': 30, '46+': 20 },
     });
     const hourly = body['hourly'] as number[];
     expect(hourly).toHaveLength(16); // 8h → 23h
