@@ -128,9 +128,9 @@ export async function computePublicNetworkStats(): Promise<PublicNetworkStats> {
     gender: hasGender ? { f: pct(venueRow?.female), m: pct(venueRow?.male) } : null,
     ages: hasAges
       ? {
-          '17–30 ans': pct(venueRow?.a1),
-          '31–45 ans': pct(venueRow?.a2),
-          '46 ans et +': pct(venueRow?.a3),
+          '17–30': pct(venueRow?.a1),
+          '31–45': pct(venueRow?.a2),
+          '46+': pct(venueRow?.a3),
         }
       : null,
   };
