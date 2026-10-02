@@ -114,7 +114,7 @@ export function HistorySection({
                     <th className="px-3 py-3 font-semibold">Type</th>
                     <th className="px-3 py-3 font-semibold">Période de diffusion</th>
                     <th className="px-3 py-3 font-semibold">Clôture</th>
-                    <th className="px-3 py-3 text-right font-semibold">Budget HT (TTC)</th>
+                    <th className="px-3 py-3 text-right font-semibold">Budget</th>
                     <th className="px-5 py-3" />
                   </tr>
                 </thead>

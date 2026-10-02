@@ -35,7 +35,7 @@ import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { useCampaignTargeting } from '@/features/campaigns/targeting/hooks/useCampaignTargeting';
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
-import { htTtcLabel, ttcParenthetical } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 import CreativePreviewTile from './CreativePreviewTile';
 
@@ -255,7 +255,7 @@ export default function StepCart({
                 <p className="text-sm text-gray-600">Montant estimé</p>
                 {/* CF-U1 — every displayed montant carries its TTC (Mejri item 6). */}
                 <p className="mt-0.5 text-lg font-bold text-brand-deep">
-                  {value == null ? '—' : htTtcLabel(value)}
+                  {value == null ? '—' : tndLabel(value)}
                 </p>
               </div>
               <div className="rounded-2xl bg-brand-accent/10 p-4">
@@ -275,13 +275,8 @@ export default function StepCart({
                   {value == null ? '—' : tnd.format(value)}
                 </span>
                 <span className="ml-1 text-base font-medium text-gray-400">
-                  {value == null ? '' : 'TND HT'}
+                  {value == null ? '' : 'TND'}
                 </span>
-                {value != null && (
-                  <p className="mt-1 text-sm font-medium text-gray-500">
-                    {ttcParenthetical(value)}
-                  </p>
-                )}
                 {value == null && (
                   <p className="mt-1 text-sm text-gray-500">
                     Déplacez le curseur pour renseigner votre budget.

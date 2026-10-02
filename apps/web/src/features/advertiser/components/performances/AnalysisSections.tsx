@@ -4,7 +4,6 @@ import { formatTnd } from '@/lib/money';
 import {
   PERIOD_EMPTY,
   budgetLabel,
-  budgetTtcNote,
   cspCharacteristics,
   isLowCoverage,
   listOrDash,
@@ -125,8 +124,7 @@ export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
             <KpiCell
               label="Budget investi"
               value={formatTnd(analysis.overview.budget_ht)}
-              suffix="TND HT"
-              detail={budgetTtcNote(analysis.overview.budget_ht)}
+              suffix="TND"
             />
           </div>
         )}

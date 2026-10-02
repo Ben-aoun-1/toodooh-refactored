@@ -1,7 +1,7 @@
 import { ShoppingCart } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { htTtcLabel, htTtcOrDash } from '@/lib/money';
+import { tndLabel, tndOrDash } from '@/lib/money';
 
 import { useCartRead } from '../hooks/useCart';
 import { cartBarVisible } from '../lib/cart-bar';
@@ -41,15 +41,15 @@ export default function CartDockBar() {
               {item.name}
             </p>
             {/* CF-U4 — every montant rides the house formatter. */}
-            <p className="mt-0.5 text-xs text-gray-500">{htTtcOrDash(item.requested_budget)}</p>
+            <p className="mt-0.5 text-xs text-gray-500">{tndOrDash(item.requested_budget)}</p>
           </li>
         ))}
       </ul>
       <div className="border-t border-gray-100 px-3 py-3">
         <p className="mb-2 text-xs text-gray-600">
           Total{' '}
-          <span className="block truncate font-bold text-gray-900" title={htTtcLabel(totalHt)}>
-            {htTtcLabel(totalHt)}
+          <span className="block truncate font-bold text-gray-900" title={tndLabel(totalHt)}>
+            {tndLabel(totalHt)}
           </span>
         </p>
         {!onCartPage && (

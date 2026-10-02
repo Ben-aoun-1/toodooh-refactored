@@ -1,4 +1,4 @@
-import { htTtcLabel, ttcParenthetical } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 import type { ClosedCampaignWire, ShareWire } from '../services/performances.service';
 
@@ -58,8 +58,8 @@ export const OPPORTUNITY_CARDS: readonly { title: string; body: string }[] = [
 
 // ── money (RG-PERF-30 — HT with the TTC in parentheses, the money.ts home) ───────────────
 
-export const budgetLabel = (budgetHt: number): string => htTtcLabel(budgetHt);
-export const budgetTtcNote = (budgetHt: number): string => ttcParenthetical(budgetHt);
+/** HT-1 — the screencaster's budget, HT without the HT/TTC letters. */
+export const budgetLabel = (budgetHt: number): string => tndLabel(budgetHt);
 
 // ── epic 1 — live fold ──────────────────────────────────────────────────────────────────
 

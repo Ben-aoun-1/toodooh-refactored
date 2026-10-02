@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { CART_WIDGET_Z_CLASS } from '@/features/cart/lib/cart-confirm';
-import { htTtcLabel, htTtcOrDash } from '@/lib/money';
+import { tndLabel, tndOrDash } from '@/lib/money';
 
 import { useCartRead } from '../hooks/useCart';
 import { cartBarVisible } from '../lib/cart-bar';
@@ -67,14 +67,14 @@ export default function CartEdgeTab() {
             <li key={item.id} className="flex items-center justify-between gap-2 text-sm">
               <span className="truncate text-gray-700">{item.name}</span>
               <span className="flex-shrink-0 font-medium text-gray-900">
-                {htTtcOrDash(item.requested_budget)}
+                {tndOrDash(item.requested_budget)}
               </span>
             </li>
           ))}
         </ul>
         <div className="border-t border-gray-100 px-4 py-3">
           <p className="mb-3 text-sm text-gray-600">
-            Total : <span className="font-bold text-gray-900">{htTtcLabel(totalHt)}</span>
+            Total : <span className="font-bold text-gray-900">{tndLabel(totalHt)}</span>
           </p>
           {!onCartPage && (
             <button

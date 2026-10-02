@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import statIcon5 from '@/assets/stats/5.png';
 import type { LastCampaign } from '@/features/advertiser/hooks/useLastCampaigns';
 import CampaignPrevues from '@/features/campaigns/components/CampaignPrevues';
-import { htTtcOrDash } from '@/lib/money';
+import { tndOrDash } from '@/lib/money';
 
 const STATUS_MAP: Record<string, { label: string; bg: string; text: string; dot: string }> = {
   draft: { label: 'Non validé', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
@@ -102,7 +102,7 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                         </div>
                         {/* CF-U1 (Mejri item 6) — every advertiser montant carries its TTC. */}
                         <p className="text-base font-bold text-gray-900 tabular-nums">
-                          {htTtcOrDash(campaign.budget)}
+                          {tndOrDash(campaign.budget)}
                         </p>
                       </div>
                       {/* CF-HF3 (Mejri item 3) — the display rule: prévues (plan, else IMP-EST1's

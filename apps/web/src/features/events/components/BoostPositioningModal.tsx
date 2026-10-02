@@ -10,7 +10,7 @@ import { CAMPAIGN_BUDGET_FLOOR_TND } from '@/features/campaigns/lib/cmax-budget'
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { eventBoostApi } from '@/features/events/services/event-boost.api';
 import { getErrorMessage } from '@/lib/errors';
-import { htTtcLabel } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
 import { formatEventDate, formatEventHours } from '../lib/event-display';
@@ -201,7 +201,7 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
                 {eligibleCount > 1 ? 's' : ''} dans les zones ajoutées.
               </p>
               <p className="mt-3 text-center text-2xl font-bold text-gray-900">
-                {amount === null ? '—' : htTtcLabel(amount)}
+                {amount === null ? '—' : tndLabel(amount)}
               </p>
               <input
                 id="event-boost-budget"

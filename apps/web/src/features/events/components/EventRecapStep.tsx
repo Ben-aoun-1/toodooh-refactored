@@ -16,7 +16,7 @@ import {
 } from '@/features/campaigns/lib/cmax-budget';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
-import { htTtcLabel, ttcParenthetical } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 import { formatEventDate, formatEventHours } from '../lib/event-display';
 import type { EventItemView } from '../services/events.api';
@@ -40,7 +40,7 @@ interface EventRecapStepProps {
  * EV3 — the parcours' Récapitulatif: the diffusion-window line, the zone count, the
  * categories-are-automatic reminder, and the budget slider bounded [100, live C_max_evt]
  * (GET /:id/cmax forks to the EVENT engine server-side — same wire, event ceiling). Montants
- * HT (TTC) via lib/money; « Ajouter au panier » files the positioning under Événements.
+ * HT, no letters (HT-1), via lib/money; « Ajouter au panier » files the positioning under Événements.
  */
 export default function EventRecapStep({
   campaignId,
@@ -146,7 +146,7 @@ export default function EventRecapStep({
               <div className="rounded-2xl bg-brand-primary/10 p-4">
                 <p className="text-sm text-gray-600">Montant estimé</p>
                 <p className="mt-0.5 text-lg font-bold text-brand-deep">
-                  {value == null ? '—' : htTtcLabel(value)}
+                  {value == null ? '—' : tndLabel(value)}
                 </p>
               </div>
               <div className="rounded-2xl bg-brand-accent/10 p-4">
@@ -163,13 +163,8 @@ export default function EventRecapStep({
                   {value == null ? '—' : tnd.format(value)}
                 </span>
                 <span className="ml-1 text-base font-medium text-gray-400">
-                  {value == null ? '' : 'TND HT'}
+                  {value == null ? '' : 'TND'}
                 </span>
-                {value != null && (
-                  <p className="mt-1 text-sm font-medium text-gray-500">
-                    {ttcParenthetical(value)}
-                  </p>
-                )}
                 {value == null && (
                   <p className="mt-1 text-sm text-gray-500">
                     Déplacez le curseur pour renseigner votre budget.
