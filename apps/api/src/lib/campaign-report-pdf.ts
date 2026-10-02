@@ -8,7 +8,7 @@ import { BRAND, INK, MUTED, loadLogo } from './facture.js';
 // (no chromium in CI), rendered on the fly, and test-decodable so the confidentiality sweep can
 // assert what the file does NOT contain (RG-PERF-31: no CPM, no SPS, no indice d'attention, no
 // split key). Section 05 « Analyses et recommandations » is OUT (Mejri). Every montant is HT with
-// TTC in parentheses (RG-PERF-30); « personnes touchées » never appears (RG-PERF-04).
+// HT without letters (HT-1, supersedes RG-PERF-30's TTC parentheses); « personnes touchées » never appears (RG-PERF-04).
 
 const fmtInt = (n: number): string => Math.round(n).toLocaleString('fr-FR');
 const fmtMoney = (n: number): string =>
@@ -20,9 +20,11 @@ const fmtDate = (iso: string | null): string => {
 };
 const fmtPct = (pct: number): string => `${pct.toLocaleString('fr-FR')} %`;
 
-/** HT with the TTC in parentheses — the ONE advertiser-facing money convention. */
-export const htTtcLine = (ht: number, ttc: number): string =>
-  `${fmtMoney(ht)} TND HT (${fmtMoney(ttc)} TND TTC)`;
+/**
+ * HT-1 (operator, 2026-10-02, ruling 2A) — the screencaster sees every amount HT WITHOUT the
+ * HT/TTC letters, and this report is not a payment document: « 1 000,00 TND ».
+ */
+export const tndLine = (ht: number): string => `${fmtMoney(ht)} TND`;
 
 export const natureLabel = (nature: 'normal' | 'event'): string =>
   nature === 'event' ? 'Campagne événement' : 'Campagne normale';
@@ -184,8 +186,7 @@ export const renderCampaignReportPdf = (data: CampaignReportData): Promise<Buffe
       { label: 'Établissements diffuseurs', value: fmtInt(c.venues) },
       {
         label: 'Budget investi',
-        value: `${fmtMoney(c.budgetHt)} TND HT`,
-        detail: `(${fmtMoney(c.budgetTtc)} TND TTC)`,
+        value: tndLine(c.budgetHt),
       },
     ]);
 
@@ -253,7 +254,7 @@ export const renderCampaignReportPdf = (data: CampaignReportData): Promise<Buffe
       .font('Helvetica')
       .fontSize(8)
       .text(
-        'Toodooh · Mes performances · Screencaster — Les impressions sont présentées comme impressions générées ; les montants sont HT avec le TTC entre parenthèses.',
+        'Toodooh · Mes performances · Screencaster — Les impressions sont présentées comme impressions générées ; les montants sont hors taxes.',
         left,
         doc.y + 6,
         { width },

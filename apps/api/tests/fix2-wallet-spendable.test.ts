@@ -272,13 +272,13 @@ describe('FIX2 — reservation semantics + the served ledger (real Postgres)', (
     expect(wallet.engaged_tnd).toBe(300); // only the live window
     expect(wallet.spendable_tnd).toBe(5200); // never −14 462-shaped again
 
-    // The ledger mirrors the SAME predicate: the zombies show NEITHER an « Engagé » row NOR a
-    // settlement row (limbo pending settlement — the settlement lane's territory, not a display).
+    // LEDG-1 ruling 3A: « Engagé » never disappears — the ended-unsettled zombies KEEP their
+    // engagement rows on screen (the funded gate above still ignores them: display ≠ reservation).
     mockSession(advertiser);
     const res = await app.inject({ method: 'GET', url: '/api/wallet/transactions' });
     const body = res.json<Awaited<ReturnType<typeof walletLedger>>>();
-    expect(body.transactions.filter((r) => r.type === 'engagement')).toHaveLength(1);
-    expect(body.transactions.filter((r) => r.type === 'settlement')).toHaveLength(0);
+    expect(body.transactions.filter((r) => r.type === 'engagement')).toHaveLength(3);
+    expect(body.transactions.filter((r) => r.type === 'refund')).toHaveLength(0);
     expect(body.solde).toEqual({
       total_tnd: 5500,
       engaged_tnd: 300,
@@ -299,7 +299,7 @@ describe('FIX2 — reservation semantics + the served ledger (real Postgres)', (
   });
 
   // ── the served ledger + the Σ-reconciliation pins ──────────────────────────
-  it('serves the COMPLETE signed ledger; total ≡ Σ(non-engagement rows), spendable ≡ total + Σ(engagement rows)', async () => {
+  it('LEDG-1 — Engagé stays after settlement, Remboursé = budget − spend; Σ(rows) ≡ spendable', async () => {
     const advertiser = await seedUser();
     await fund(advertiser, '1000.00');
     const engagedCampaign = await seedCampaign(advertiser, {
@@ -337,31 +337,57 @@ describe('FIX2 — reservation semantics + the served ledger (real Postgres)', (
 
     const byType = (t: string) => body.transactions.filter((r) => r.type === t);
     expect(byType('recharge')).toHaveLength(1);
-    expect(byType('engagement')).toHaveLength(1);
-    expect(byType('settlement')).toHaveLength(1);
+    expect(byType('engagement')).toHaveLength(2);
+    expect(byType('refund')).toHaveLength(1);
     expect(byType('adjustment')).toHaveLength(1);
 
-    // Signs + linkage: the engagement carries FT1 (still engaged); ky appears ONLY as its NET
-    // settlement row (never both), same campaign_id an earlier engagement row would have carried.
-    expect(byType('engagement')[0]).toMatchObject({
+    // FT1 is still engaged; ky KEEPS its −250 engagement and gains a +70 refund (250 − 180 spent).
+    expect(byType('engagement').find((r) => r.campaign_id === engagedCampaign)).toMatchObject({
       label: 'FT1',
       amount_tnd: -400,
-      campaign_id: engagedCampaign,
     });
-    expect(byType('settlement')[0]).toMatchObject({
+    expect(byType('engagement').find((r) => r.campaign_id === settledCampaign)).toMatchObject({
       label: 'ky',
-      amount_tnd: -180,
+      amount_tnd: -250,
+    });
+    expect(byType('refund')[0]).toMatchObject({
+      label: 'ky',
+      amount_tnd: 70,
       campaign_id: settledCampaign,
     });
-    expect(
-      body.transactions.some((r) => r.type === 'engagement' && r.campaign_id === settledCampaign),
-    ).toBe(false);
 
-    // THE Σ-reconciliation (the acceptance bar — hand-reconcilable to the dinar):
+    // THE Σ-reconciliation (no limbo here): every row together lands on the spendable solde.
     const sum = (rows: { amount_tnd: number }[]) => rows.reduce((s, r) => s + r.amount_tnd, 0);
-    const nonEngagement = body.transactions.filter((r) => r.type !== 'engagement');
-    expect(sum(nonEngagement)).toBe(body.solde.total_tnd);
-    expect(body.solde.total_tnd + sum(byType('engagement'))).toBe(body.solde.spendable_tnd);
+    expect(sum(body.transactions)).toBe(body.solde.spendable_tnd);
+  });
+
+  it('LEDG-1 — a fully spent campaign shows NO Remboursé line; rejected or budget-less ones show nothing', async () => {
+    const advertiser = await seedUser();
+    await fund(advertiser, '1000.00');
+    const spent = await seedCampaign(advertiser, {
+      status: 'completed',
+      requestedBudget: '300.00',
+      name: 'Plein',
+    });
+    await settle(spent, '300.0000');
+    await seedCampaign(advertiser, {
+      status: 'rejected',
+      requestedBudget: '200.00',
+      name: 'Rejet',
+    });
+    await seedCampaign(advertiser, {
+      status: 'pending',
+      requestedBudget: null,
+      name: 'Sans budget',
+    });
+    mockSession(advertiser);
+
+    const res = await app.inject({ method: 'GET', url: '/api/wallet/transactions' });
+    const body = res.json<Awaited<ReturnType<typeof walletLedger>>>();
+    const campaignRows = body.transactions.filter((r) => r.campaign_id !== null);
+    expect(campaignRows).toEqual([
+      expect.objectContaining({ type: 'engagement', label: 'Plein', amount_tnd: -300 }),
+    ]);
   });
 
   it('GET /api/wallet/balance now carries engaged_tnd + spendable_tnd (additive)', async () => {

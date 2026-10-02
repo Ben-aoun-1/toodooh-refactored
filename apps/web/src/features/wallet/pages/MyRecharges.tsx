@@ -26,9 +26,13 @@ import {
   useMyRecharges,
 } from '@/features/wallet/hooks/useRechargeDemandes';
 import { useWalletTransactions } from '@/features/wallet/hooks/useWalletTransactions';
-import { isExpenseView } from '@/features/wallet/lib/wallet-ledger';
+import {
+  LEDGER_FILTERS,
+  type LedgerFilter,
+  matchesLedgerFilter,
+} from '@/features/wallet/lib/wallet-ledger';
 import type { RechargeRow } from '@/features/wallet/services/wallet.service';
-import { htTtcLabel } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 const QUICK_AMOUNTS = [
   { value: 1000, label: '1 000 TND', tag: 'Populaire' },
@@ -38,7 +42,6 @@ const QUICK_AMOUNTS = [
 ];
 
 // RECH-F1 (Mejri 07/09 point 3): ajustements exist in the list, so they get their filter.
-type TabFilter = 'all' | 'recharges' | 'expenses' | 'adjustments';
 
 export default function MyRecharges() {
   const user = useAuthStore((state) => state.user);
@@ -52,7 +55,7 @@ export default function MyRecharges() {
   const createBon = useCreateBon(user?.id);
   const depositSignedBon = useDepositSignedBon(user?.id);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<TabFilter>('all');
+  const [activeTab, setActiveTab] = useState<LedgerFilter>('all');
   const [showNewRechargeModal, setShowNewRechargeModal] = useState(false);
   const [newAmount, setNewAmount] = useState('');
   // FCT1 — the freshly generated bon for the « Votre bon de commande est prêt » popup.
@@ -67,9 +70,7 @@ export default function MyRecharges() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
-      if (activeTab === 'recharges' && t.type !== 'recharge') return false;
-      if (activeTab === 'expenses' && !isExpenseView(t)) return false;
-      if (activeTab === 'adjustments' && t.type !== 'adjustment') return false;
+      if (!matchesLedgerFilter(t, activeTab)) return false;
       if (searchQuery) {
         return t.designation.toLowerCase().includes(searchQuery.toLowerCase());
       }
@@ -158,14 +159,13 @@ export default function MyRecharges() {
             </div>
             <span className="text-sm text-white/70 font-medium">Solde disponible</span>
           </div>
-          {/* CF-U1 (Mejri item 6) — the solde carries its TTC like every advertiser montant.
-              FIX2 — the headline is SPENDABLE (what the funded gates enforce); the full balance
-              rides beneath as « Solde total ». */}
+          {/* HT-1 — the solde is HT, shown without the HT/TTC letters. FIX2 — the headline is
+              SPENDABLE (what the funded gates enforce); the full balance rides beneath. */}
           <p className="text-3xl md:text-4xl font-bold text-white tracking-tight tabular-nums">
-            {loading ? '...' : htTtcLabel(spendableTnd)}
+            {loading ? '...' : tndLabel(spendableTnd)}
           </p>
           <p className="mt-1 text-sm text-white/70 tabular-nums">
-            {loading ? '' : `Solde total : ${htTtcLabel(totalTnd)}`}
+            {loading ? '' : `Solde total : ${tndLabel(totalTnd)}`}
           </p>
         </div>
         <div className="flex items-center gap-4 relative z-10">
@@ -241,21 +241,17 @@ export default function MyRecharges() {
               />
             </div>
             <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-              {(['all', 'recharges', 'expenses', 'adjustments'] as TabFilter[]).map((tab) => (
+              {LEDGER_FILTERS.map((tab) => (
                 <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
                   className={`px-4 py-2 font-medium transition-colors ${
-                    activeTab === tab ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'
+                    activeTab === tab.key
+                      ? 'bg-gray-900 text-white'
+                      : 'text-gray-500 hover:bg-gray-50'
                   }`}
                 >
-                  {tab === 'all'
-                    ? 'Tous'
-                    : tab === 'recharges'
-                      ? 'Recharges'
-                      : tab === 'expenses'
-                        ? 'Dépenses'
-                        : 'Ajustements'}
+                  {tab.label}
                 </button>
               ))}
             </div>
@@ -303,28 +299,17 @@ export default function MyRecharges() {
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        {/* FIX2 — four SERVED row types, sign from the wire: recharge credit
-                            (green ↓), « Engagé » (amber ↑ — informational, balance unmoved),
-                            « Réglé » NET settlement (gray ↑), SIGNED adjustment (green ↓/red ↑). */}
+                        {/* LEDG-1 ruling 5A — money in (recharge, Remboursé, positive adjustment)
+                            is green ↓; money out (Engagé, negative adjustment) is red ↑. */}
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            tx.tone === 'credit'
-                              ? 'bg-green-50'
-                              : tx.tone === 'engaged'
-                                ? 'bg-amber-50'
-                                : tx.type === 'adjustment'
-                                  ? 'bg-red-50'
-                                  : 'bg-gray-100'
+                            tx.tone === 'credit' ? 'bg-green-50' : 'bg-red-50'
                           }`}
                         >
                           {tx.tone === 'credit' ? (
                             <ArrowDownLeft className="h-4 w-4 text-green-600" />
-                          ) : tx.tone === 'engaged' ? (
-                            <ArrowUpRight className="h-4 w-4 text-amber-600" />
-                          ) : tx.type === 'adjustment' ? (
-                            <ArrowUpRight className="h-4 w-4 text-red-600" />
                           ) : (
-                            <ArrowUpRight className="h-4 w-4 text-gray-500" />
+                            <ArrowUpRight className="h-4 w-4 text-red-600" />
                           )}
                         </div>
                         <span className="text-sm font-medium text-gray-900">{tx.designation}</span>
@@ -332,8 +317,8 @@ export default function MyRecharges() {
                           <span
                             className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               tx.badge === 'Engagé'
-                                ? 'bg-amber-50 text-amber-700'
-                                : 'bg-gray-100 text-gray-600'
+                                ? 'bg-red-50 text-red-700'
+                                : 'bg-green-50 text-green-700'
                             }`}
                           >
                             {tx.badge}
@@ -344,18 +329,11 @@ export default function MyRecharges() {
                     <td className="px-5 py-4">
                       <span
                         className={`text-sm font-semibold ${
-                          tx.tone === 'credit'
-                            ? 'text-green-600'
-                            : tx.tone === 'engaged'
-                              ? 'text-amber-700'
-                              : tx.type === 'adjustment'
-                                ? 'text-red-600'
-                                : 'text-gray-900'
+                          tx.tone === 'credit' ? 'text-green-600' : 'text-red-600'
                         }`}
                       >
-                        {/* MINOR-1/27 — a fully-refunded settlement is 0: no sign on 0. */}
                         {tx.amountTnd < 0 ? '-' : tx.amountTnd > 0 ? '+' : ''}
-                        {htTtcLabel(Math.abs(tx.amountTnd))}
+                        {tndLabel(Math.abs(tx.amountTnd))}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">{formatDate(tx.date)}</td>

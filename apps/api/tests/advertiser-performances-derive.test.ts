@@ -15,7 +15,7 @@ import {
   CAMPAIGN_REPORT_READY_TYPE,
   campaignReportReadyNotification,
 } from '../src/lib/campaign-report-notification.js';
-import { campaignReportFilename, htTtcLine } from '../src/lib/campaign-report-pdf.js';
+import { campaignReportFilename, tndLine } from '../src/lib/campaign-report-pdf.js';
 
 // SC-P — the pure derivations behind « Mes performances » (Screencaster), pinned without a DB.
 
@@ -225,8 +225,8 @@ describe('the clôture notification + the report file', () => {
     expect(CAMPAIGN_REPORT_READY_TYPE).toBe('campaign_report_ready');
   });
 
-  it('RG-PERF-30 — HT with the TTC in parentheses; a slugged, dated filename', () => {
-    expect(htTtcLine(1000, 1190)).toBe('1 000,00 TND HT (1 190,00 TND TTC)');
+  it('HT-1 — the budget reads HT without letters; a slugged, dated filename', () => {
+    expect(tndLine(1000)).toBe('1 000,00 TND'); // HT-1: HT, no HT/TTC letters
     expect(campaignReportFilename({ name: "Soldes d'Été 2026 !", closedOn: '2026-07-15' })).toBe(
       'rapport-soldes-d-ete-2026-2026-07-15.pdf',
     );

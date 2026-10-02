@@ -748,8 +748,10 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
       expect(text).toContain('Marque Test');
       expect(text).toContain('SECTION 01');
       expect(text).toContain('SECTION 04');
-      expect(text).toContain('TND HT');
-      expect(text).toContain('TND TTC');
+      // HT-1 (ruling 2A) — the budget is HT without the HT/TTC letters.
+      expect(text).toContain('TND');
+      expect(text).not.toContain('TND HT');
+      expect(text).not.toContain('TTC');
       expect(text).toContain('12');
       // RG-PERF-04 / RG-PERF-31 — the forbidden vocabulary never reaches the file.
       expect(text).not.toMatch(/CPM/);

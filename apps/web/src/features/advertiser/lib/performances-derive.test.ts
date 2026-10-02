@@ -12,7 +12,6 @@ import {
   awaitingFirstClosure,
   barWidthPct,
   budgetLabel,
-  budgetTtcNote,
   cspCharacteristics,
   filterHistory,
   isLowCoverage,
@@ -103,10 +102,9 @@ describe('epic 7 — the thresholds', () => {
   });
 });
 
-describe('epic 8 — RG-PERF-30 every montant HT with the TTC in parentheses (money.ts home)', () => {
-  it('formats through htTtcLabel / ttcParenthetical', () => {
-    expect(budgetLabel(2200)).toBe(`2${NBSP}200 TND HT (2${NBSP}618 TND TTC)`);
-    expect(budgetTtcNote(1500)).toBe(`(1${NBSP}785 TND TTC)`);
+describe('HT-1 — every screencaster montant is HT, without the HT/TTC letters (money.ts home)', () => {
+  it('formats through tndLabel', () => {
+    expect(budgetLabel(2200)).toBe(`2${NBSP}200 TND`);
   });
 });
 

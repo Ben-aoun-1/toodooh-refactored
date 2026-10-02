@@ -13,7 +13,7 @@
 
 // CF-U1 (Mejri item 6) — the balance card montant carries its TTC like every advertiser montant;
 // the formatter (and the 19% rate) live in the shared money lib (still pure).
-import { htTtcLabel } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 export interface DashboardStats {
   activeCampaigns: number;
@@ -37,8 +37,8 @@ export const INITIAL_STATS: DashboardStats = {
   campaignsDiffused: 0,
   totalViews: 0,
   conversionRate: 0,
-  balance: '0 TND HT (0 TND TTC)',
-  balanceTotal: '0 TND HT (0 TND TTC)',
+  balance: '0 TND',
+  balanceTotal: '0 TND',
   totalBudget: 0,
   totalDurationSeconds: 0,
   prevYearCampaigns: 0,
@@ -130,8 +130,8 @@ export function computeDashboardStats(
       campaignsDiffused,
       totalViews,
       conversionRate: Math.round(conversionRate * 10) / 10,
-      balance: htTtcLabel(spendableTnd),
-      balanceTotal: htTtcLabel(totalTnd),
+      balance: tndLabel(spendableTnd),
+      balanceTotal: tndLabel(totalTnd),
       totalBudget,
       totalDurationSeconds,
       prevYearCampaigns,

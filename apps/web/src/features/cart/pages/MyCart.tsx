@@ -18,7 +18,7 @@ import { formatEventHours } from '@/features/events/lib/event-display';
 import { splitCartSections } from '@/features/events/lib/event-positioning';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { htTtcOrDash, formatTnd, ttcFromHt } from '@/lib/money';
+import { tndOrDash, formatTnd, ttcFromHt } from '@/lib/money';
 
 const log = logger.child({ module: 'MyCart' });
 
@@ -47,7 +47,6 @@ export default function MyCart() {
   // splits them). The totals stay ONE basket — one solde, one « Confirmer et lancer ».
   const { campagnes, evenements } = splitCartSections(items);
   const totalHt = cart.data?.total_ht ?? 0;
-  const tva = Math.round((ttcFromHt(totalHt) - totalHt) * 100) / 100;
   const ttc = ttcFromHt(totalHt);
 
   // Compose: the /mine row carries the chips/zones the card idiom already renders.
@@ -184,7 +183,7 @@ export default function MyCart() {
                       </div>
                     </div>
                     <p className="text-base font-bold text-gray-900 tabular-nums">
-                      {htTtcOrDash(item.requested_budget)}
+                      {tndOrDash(item.requested_budget)}
                     </p>
                   </div>
                   {reason && (
@@ -256,7 +255,7 @@ export default function MyCart() {
                       </p>
                     </div>
                     <p className="text-base font-bold text-gray-900 tabular-nums">
-                      {htTtcOrDash(item.requested_budget)}
+                      {tndOrDash(item.requested_budget)}
                     </p>
                   </div>
                   {reason && (
@@ -305,13 +304,10 @@ export default function MyCart() {
           <div className="h-fit rounded-2xl border border-gray-200 bg-white p-6">
             <h3 className="mb-4 text-lg font-bold text-gray-900">Prêt à diffuser</h3>
             <dl className="space-y-2 text-sm">
+              {/* HT-1 (operator, 2026-10-02): the cart shows its total in HT and TTC. */}
               <div className="flex justify-between">
-                <dt className="text-gray-500">Coût réel (HT)</dt>
+                <dt className="text-gray-500">Total HT</dt>
                 <dd className="font-medium text-gray-900 tabular-nums">{formatTnd(totalHt)} TND</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-gray-500">TVA (19 %)</dt>
-                <dd className="font-medium text-gray-900 tabular-nums">{formatTnd(tva)} TND</dd>
               </div>
               <div className="flex justify-between border-t border-gray-100 pt-2">
                 <dt className="font-semibold text-gray-900">Total TTC</dt>
@@ -324,8 +320,8 @@ export default function MyCart() {
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                 <p className="font-semibold">Solde insuffisant</p>
                 <p className="mt-1">
-                  Solde : {formatTnd(solde.balance)} TND HT — requis : {formatTnd(solde.required)}{' '}
-                  TND HT (manque {formatTnd(Math.max(0, solde.required - solde.balance))} TND).
+                  Solde : {formatTnd(solde.balance)} TND — requis : {formatTnd(solde.required)} TND
+                  (manque {formatTnd(Math.max(0, solde.required - solde.balance))} TND).
                 </p>
                 <button
                   type="button"

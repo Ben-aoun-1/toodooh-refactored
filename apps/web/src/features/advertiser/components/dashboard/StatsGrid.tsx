@@ -2,7 +2,7 @@ import statIcon1 from '@/assets/stats/1.png';
 import statIcon2 from '@/assets/stats/2.png';
 import statIcon3 from '@/assets/stats/3.png';
 import statIcon4 from '@/assets/stats/4.png';
-import { htTtcOrDash } from '@/lib/money';
+import { tndOrDash } from '@/lib/money';
 
 interface StatsGridProps {
   campaignsDiffused: number;
@@ -71,7 +71,7 @@ export default function StatsGrid({
         {/* CF-U4 — the montant rides the house formatter (fr locale, HT (TTC)); the raw
             US-locale Intl retired. The other three tiles are counts/durations — no money there. */}
         <p className="text-2xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-          {loading ? '...' : htTtcOrDash(totalBudget)}
+          {loading ? '...' : tndOrDash(totalBudget)}
         </p>
       </div>
     </div>

@@ -58,7 +58,7 @@ import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.
 import BoostPositioningModal from '@/features/events/components/BoostPositioningModal';
 import EventPlacementSummary from '@/features/events/components/EventPlacementSummary';
 import { logger } from '@/lib/logger';
-import { htTtcOrDash } from '@/lib/money';
+import { tndOrDash } from '@/lib/money';
 
 const log = logger.child({ module: 'MyCampaigns' });
 
@@ -687,7 +687,7 @@ export default function MyCampaigns() {
                     {/* CF-U1 (Mejri item 6) — null renders « — » (no phantom 5 000); a set
                         budget carries its TTC. */}
                     <p className="text-base font-bold text-gray-900 tabular-nums">
-                      {htTtcOrDash(campaign.budget)}
+                      {tndOrDash(campaign.budget)}
                     </p>
                   </div>
                   {/* CF-HF3 (Mejri item 3) — the display rule: prévues (plan, else IMP-EST1's
@@ -833,8 +833,8 @@ export default function MyCampaigns() {
                           year: 'numeric',
                         })
                       : '—';
-                    // CF-U1 (Mejri item 6) — « — » for a null budget; HT (TTC) otherwise.
-                    const budgetStr = htTtcOrDash(campaign.budget);
+                    // HT-1 — « — » for a null budget; the HT amount without letters otherwise.
+                    const budgetStr = tndOrDash(campaign.budget);
                     const isMenuOpen = openActionRowId === campaign.id;
                     return (
                       <tr key={campaign.id} className="hover:bg-gray-50/50 transition-colors">

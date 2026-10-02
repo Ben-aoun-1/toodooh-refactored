@@ -33,14 +33,34 @@ describe('the money-format sweep', () => {
       join(WEB_SRC, 'features', 'advertiser', 'components', 'dashboard', 'StatsGrid.tsx'),
       'utf8',
     );
-    expect(statsGrid).toContain('htTtcOrDash(totalBudget)');
+    expect(statsGrid).toContain('tndOrDash(totalBudget)');
     expect(statsGrid).not.toContain('en-US');
 
     // CART-V1 — the cart montants moved into the two docked forms; both stay on the formatter.
     for (const file of ['CartDockBar.tsx', 'CartEdgeTab.tsx']) {
       const source = readFileSync(join(WEB_SRC, 'features', 'cart', 'components', file), 'utf8');
-      expect(source).toContain('htTtcOrDash(item.requested_budget)');
+      expect(source).toContain('tndOrDash(item.requested_budget)');
       expect(source).not.toMatch(/\$\{item\.requested_budget\} TND/);
     }
+  });
+
+  // HT-1 (operator, 2026-10-02): the screencaster sees every amount HT WITHOUT the HT/TTC letters.
+  // TTC is allowed only where they pay (the recharge modal + its minimum-amount copy) and in the
+  // documents issued after paying (« Mes factures »).
+  it('HT-1 — no screencaster screen uses the HT (TTC) formatters outside payment + documents', () => {
+    const allowed = new Set([
+      join('wallet', 'components', 'NewRechargeModal.tsx'),
+      join('wallet', 'lib', 'recharge-methods.ts'),
+      join('wallet', 'pages', 'MyInvoices.tsx'),
+    ]);
+    const offenders = ['campaigns', 'cart', 'events', 'advertiser', 'wallet']
+      .flatMap((feature) => walk(join(WEB_SRC, 'features', feature)))
+      .filter((file) => !allowed.has(file.slice(join(WEB_SRC, 'features').length + 1)))
+      .filter((file) =>
+        /\b(htTtcLabel|htTtcOrDash|ttcParenthetical)\(|'TND HT'|TND HT \(/.test(
+          readFileSync(file, 'utf8'),
+        ),
+      );
+    expect(offenders).toEqual([]);
   });
 });

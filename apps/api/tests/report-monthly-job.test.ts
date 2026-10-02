@@ -658,7 +658,11 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   it('a still-running sweep makes the next guarded tick a logged no-op', async () => {
     const owner = await seedUser();
     const venueLong = await seedVenueWithData(owner, 'Café Long');
-    await seedMonthStats(venueLong, '2026-06'); // MEJ-10
+    // runGuardedSweep runs on the REAL clock, so the month it renders is the real previous closed
+    // month — a hard-coded '2026-06' only rendered while June was inside the window (green in
+    // Sept, red from 2026-10-01: the render was never reached and the hung mock starved the next
+    // test). Seed the month the sweep will actually process.
+    await seedMonthStats(venueLong, previousClosedMonth(new Date()).month); // MEJ-10
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
     let release: (() => void) | undefined;
     renderSpy.mockImplementationOnce(

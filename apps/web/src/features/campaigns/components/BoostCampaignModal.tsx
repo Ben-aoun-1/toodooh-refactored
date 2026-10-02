@@ -23,7 +23,7 @@ import { type BoostAdditionsWire, boostApi } from '@/features/campaigns/services
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { ApiError } from '@/lib/api-client';
 import { getErrorMessage } from '@/lib/errors';
-import { htTtcLabel, htTtcOrDash } from '@/lib/money';
+import { tndLabel, tndOrDash } from '@/lib/money';
 
 interface BoostCampaignModalProps {
   campaign: CampaignView;
@@ -145,9 +145,7 @@ export default function BoostCampaignModal({ campaign, userId, onClose }: BoostC
             </div>
             <div className="flex justify-between sm:block">
               <dt className="text-gray-500">Budget</dt>
-              <dd className="font-medium text-gray-900">
-                {htTtcOrDash(campaign.requested_budget)}
-              </dd>
+              <dd className="font-medium text-gray-900">{tndOrDash(campaign.requested_budget)}</dd>
             </div>
             <div className="flex justify-between sm:block">
               <dt className="text-gray-500">Catégories</dt>
@@ -277,7 +275,7 @@ export default function BoostCampaignModal({ campaign, userId, onClose }: BoostC
                   <span>MAX : {sliderMax} TND</span>
                 </div>
                 <p className="mt-2 text-center text-lg font-bold text-gray-900 tabular-nums">
-                  {amount === null ? '—' : htTtcLabel(amount)}
+                  {amount === null ? '—' : tndLabel(amount)}
                 </p>
               </>
             )}

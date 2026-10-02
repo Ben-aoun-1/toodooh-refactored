@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import smart3Icon from '@/assets/smart3.png';
 
 interface BalanceCardProps {
-  /** FIX2 — the SPENDABLE headline (what the funded gates enforce), formatted HT (TTC). */
+  /** FIX2 — the SPENDABLE headline (what the funded gates enforce), formatted HT, no letters (HT-1). */
   balance: string;
-  /** FIX2 — « Solde total » shown beneath, formatted HT (TTC). */
+  /** FIX2 — « Solde total » shown beneath, formatted HT, no letters (HT-1). */
   balanceTotal: string;
   loading: boolean;
   isDisabled: boolean;

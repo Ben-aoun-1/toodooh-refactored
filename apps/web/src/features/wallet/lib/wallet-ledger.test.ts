@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { RechargeRow, WalletTransactionRow } from '@/features/wallet/services/wallet.service';
 
 import {
+  LEDGER_FILTERS,
   invoiceRows,
-  isExpenseView,
+  matchesLedgerFilter,
   monthlyInvoiceDesignation,
   recapitulatifDesignation,
   transactionView,
@@ -57,7 +58,7 @@ describe('transactionView (FIX2 — the verbatim view over the served ledger)', 
     expect(view.date.toISOString()).toBe('2026-07-10T10:00:00.000Z');
   });
 
-  it('an engagement renders with the « Engagé » badge and its OWN tone — informational, the balance has not moved', () => {
+  it('LEDG-1 — an engagement renders « Engagé » as a real debit (red, ruling 5A)', () => {
     const view = transactionView(
       wireRow({
         id: 'engagement-c1',
@@ -72,20 +73,16 @@ describe('transactionView (FIX2 — the verbatim view over the served ledger)', 
       designation: 'FT1',
       badge: 'Engagé',
       amountTnd: -300,
-      tone: 'engaged',
+      tone: 'debit',
       method: '',
     });
   });
 
-  it('a settlement renders « Réglé » as a debit; a FULLY REFUNDED one renders 0 honestly', () => {
-    const settled = transactionView(
-      wireRow({ id: 'settlement-s1', type: 'settlement', label: 'ky', amount_tnd: -180 }),
+  it('LEDG-1 — a refund renders « Remboursé » as a credit (green, ruling 5A)', () => {
+    const refund = transactionView(
+      wireRow({ id: 'refund-s1', type: 'refund', label: 'ky', amount_tnd: 70, campaign_id: 'c1' }),
     );
-    expect(settled).toMatchObject({ badge: 'Réglé', amountTnd: -180, tone: 'debit' });
-    const refunded = transactionView(
-      wireRow({ id: 'settlement-s2', type: 'settlement', label: 'khvutfyu', amount_tnd: 0 }),
-    );
-    expect(refunded).toMatchObject({ badge: 'Réglé', amountTnd: 0, tone: 'credit' });
+    expect(refund).toMatchObject({ badge: 'Remboursé', amountTnd: 70, tone: 'credit' });
   });
 
   it('adjustments keep their SIGN and surface the reason as the method column', () => {
@@ -109,17 +106,32 @@ describe('transactionView (FIX2 — the verbatim view over the served ledger)', 
     expect(positive).toMatchObject({ amountTnd: 40, tone: 'credit' });
   });
 
-  it('the « Dépenses » tab matches engagements AND settlements, nothing else', () => {
-    expect(isExpenseView(transactionView(wireRow({ type: 'engagement', amount_tnd: -1 })))).toBe(
-      true,
-    );
-    expect(isExpenseView(transactionView(wireRow({ type: 'settlement', amount_tnd: -1 })))).toBe(
-      true,
-    );
-    expect(isExpenseView(transactionView(wireRow()))).toBe(false);
-    expect(isExpenseView(transactionView(wireRow({ type: 'adjustment', amount_tnd: -1 })))).toBe(
-      false,
-    );
+  it('LEDG-1 ruling 4A — the filters are Tous / Recharges / Engagements / Remboursements / Ajustements', () => {
+    expect(LEDGER_FILTERS.map((f) => f.label)).toEqual([
+      'Tous',
+      'Recharges',
+      'Engagements',
+      'Remboursements',
+      'Ajustements',
+    ]);
+  });
+
+  it('each filter matches exactly its own row type; « Tous » matches everything', () => {
+    const rows = {
+      recharge: transactionView(wireRow()),
+      engagement: transactionView(wireRow({ type: 'engagement', amount_tnd: -1 })),
+      refund: transactionView(wireRow({ type: 'refund', amount_tnd: 1 })),
+      adjustment: transactionView(wireRow({ type: 'adjustment', amount_tnd: -1 })),
+    };
+    const matched = (f: Parameters<typeof matchesLedgerFilter>[1]) =>
+      Object.entries(rows)
+        .filter(([, v]) => matchesLedgerFilter(v, f))
+        .map(([k]) => k);
+    expect(matched('all')).toEqual(['recharge', 'engagement', 'refund', 'adjustment']);
+    expect(matched('recharges')).toEqual(['recharge']);
+    expect(matched('engagements')).toEqual(['engagement']);
+    expect(matched('refunds')).toEqual(['refund']);
+    expect(matched('adjustments')).toEqual(['adjustment']);
   });
 });
 

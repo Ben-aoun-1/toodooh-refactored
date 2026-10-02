@@ -9,14 +9,19 @@ import type { RechargeRow, WalletTransactionRow } from '@/features/wallet/servic
  * here is the pure VIEW mapping: wire row → badge/tone the table renders.
  */
 
-export type TransactionTone = 'credit' | 'debit' | 'engaged';
+/**
+ * LEDG-1 (operator, 2026-10-02): « Engagé » is the money a campaign took at confirmation and never
+ * disappears; « Remboursé » is what came back at settlement (served only when > 0). Ruling 5A: an
+ * engagement is a real debit (red), a refund a credit (green).
+ */
+export type TransactionTone = 'credit' | 'debit';
 
 export interface TransactionView {
   id: string;
   type: WalletTransactionRow['type'];
   designation: string;
-  /** French row badge: « Engagé » for unsettled engagements, « Réglé » for settlements. */
-  badge: 'Engagé' | 'Réglé' | null;
+  /** French row badge: « Engagé » for engagements, « Remboursé » for refunds. */
+  badge: 'Engagé' | 'Remboursé' | null;
   /** SIGNED TND HT, exactly as served. */
   amountTnd: number;
   date: Date;
@@ -25,25 +30,38 @@ export interface TransactionView {
   tone: TransactionTone;
 }
 
-/**
- * The verbatim view: sign and type come FROM THE WIRE, never re-derived. An engagement renders
- * with its own tone (informational — the balance has not moved yet); a fully-refunded settlement
- * renders 0 honestly (a real outcome, not absence).
- */
+/** The verbatim view: sign and type come FROM THE WIRE, never re-derived. */
 export const transactionView = (row: WalletTransactionRow): TransactionView => ({
   id: row.id,
   type: row.type,
   designation: row.label,
-  badge: row.type === 'engagement' ? 'Engagé' : row.type === 'settlement' ? 'Réglé' : null,
+  badge: row.type === 'engagement' ? 'Engagé' : row.type === 'refund' ? 'Remboursé' : null,
   amountTnd: row.amount_tnd,
   date: new Date(row.date),
   method: row.detail ?? '',
-  tone: row.type === 'engagement' ? 'engaged' : row.amount_tnd >= 0 ? 'credit' : 'debit',
+  tone: row.amount_tnd >= 0 ? 'credit' : 'debit',
 });
 
-/** The « Dépenses » tab: everything campaign-money (engagements + settlements). */
-export const isExpenseView = (view: TransactionView): boolean =>
-  view.type === 'engagement' || view.type === 'settlement';
+/** LEDG-1 ruling 4A — the « Dernières transactions » filters, one per row type. */
+export type LedgerFilter = 'all' | 'recharges' | 'engagements' | 'refunds' | 'adjustments';
+
+export const LEDGER_FILTERS: readonly { key: LedgerFilter; label: string }[] = [
+  { key: 'all', label: 'Tous' },
+  { key: 'recharges', label: 'Recharges' },
+  { key: 'engagements', label: 'Engagements' },
+  { key: 'refunds', label: 'Remboursements' },
+  { key: 'adjustments', label: 'Ajustements' },
+];
+
+const FILTER_TYPE: Record<Exclude<LedgerFilter, 'all'>, TransactionView['type']> = {
+  recharges: 'recharge',
+  engagements: 'engagement',
+  refunds: 'refund',
+  adjustments: 'adjustment',
+};
+
+export const matchesLedgerFilter = (view: TransactionView, filter: LedgerFilter): boolean =>
+  filter === 'all' || view.type === FILTER_TYPE[filter];
 
 /**
  * The MyInvoices « Récapitulatifs de commande » rows (FCT2 relabel — every recharge HAS a

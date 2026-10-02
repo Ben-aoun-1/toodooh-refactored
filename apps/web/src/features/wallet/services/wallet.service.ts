@@ -58,13 +58,13 @@ export interface WalletBalance {
 /** FIX2 — one served ledger row (GET /wallet/transactions), rendered VERBATIM. */
 export interface WalletTransactionRow {
   id: string;
-  type: 'recharge' | 'engagement' | 'settlement' | 'adjustment';
-  /** Campaign name for engagement/settlement rows; fixed labels otherwise. */
+  type: 'recharge' | 'engagement' | 'refund' | 'adjustment';
+  /** Campaign name for engagement/refund rows; fixed labels otherwise. */
   label: string;
-  /** SIGNED TND HT: recharges +, engagements −, settlements − (0 when fully refunded). */
+  /** SIGNED TND HT: recharges +, engagements −, refunds +, adjustments ±. */
   amount_tnd: number;
   date: string;
-  /** Links an engagement to its later settlement (same campaign). */
+  /** Links an engagement to its later refund (same campaign). */
   campaign_id: string | null;
   /** Recharge payment method / adjustment reason. */
   detail: string | null;

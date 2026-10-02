@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { htTtcLabel } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 import { computeDashboardStats } from './dashboard-stats.transform';
 
@@ -83,10 +83,10 @@ describe('computeDashboardStats', () => {
   it('FIX2 — spendable headlines « Solde disponible », total rides as « Solde total »', () => {
     const result = computeDashboardStats([], 370, 770, NOW);
 
-    // The SHARED money lib is the one formatter (TVA lives there, nowhere else).
-    expect(result.stats.balance).toBe(htTtcLabel(370));
-    expect(result.stats.balanceTotal).toBe(htTtcLabel(770));
-    expect(result.stats.balance).toMatch(/TND HT \(.+TND TTC\)$/);
+    // HT-1 — the SHARED money lib formats it HT, without the HT/TTC letters.
+    expect(result.stats.balance).toBe(tndLabel(370));
+    expect(result.stats.balanceTotal).toBe(tndLabel(770));
+    expect(result.stats.balance).not.toMatch(/HT|TTC/);
     expect(result.availableBalanceTnd).toBe(370); // the getting-started gate reads SPENDABLE
   });
 
