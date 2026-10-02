@@ -120,15 +120,18 @@ export const walletLedger = async (advertiserId: string): Promise<WalletLedger> 
       campaign_id: null,
       detail: r.method === 'bon_de_commande' ? 'Bon de commande' : 'Virement bancaire',
     })),
-    ...campaignRows.map((c) => ({
-      id: `engagement-${c.id}`,
-      type: 'engagement' as const,
-      label: c.name || 'Campagne',
-      amount_tnd: -engagedAmount(c),
-      date: iso(c.submittedAt, c.createdAt),
-      campaign_id: c.id,
-      detail: null,
-    })),
+    // A legacy campaign that never carried a budget (and never settled) took nothing: no 0 row.
+    ...campaignRows
+      .filter((c) => engagedAmount(c) > 0)
+      .map((c) => ({
+        id: `engagement-${c.id}`,
+        type: 'engagement' as const,
+        label: c.name || 'Campagne',
+        amount_tnd: -engagedAmount(c),
+        date: iso(c.submittedAt, c.createdAt),
+        campaign_id: c.id,
+        detail: null,
+      })),
     ...campaignRows.flatMap((c) => {
       if (c.reconciliationId === null || c.reconciledAt === null) return [];
       const refund = round4(engagedAmount(c) - Number(c.spendTnd ?? 0));

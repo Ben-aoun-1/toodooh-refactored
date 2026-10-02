@@ -361,7 +361,7 @@ describe('FIX2 — reservation semantics + the served ledger (real Postgres)', (
     expect(sum(body.transactions)).toBe(body.solde.spendable_tnd);
   });
 
-  it('LEDG-1 — a fully spent campaign shows NO Remboursé line; a rejected one shows nothing', async () => {
+  it('LEDG-1 — a fully spent campaign shows NO Remboursé line; rejected or budget-less ones show nothing', async () => {
     const advertiser = await seedUser();
     await fund(advertiser, '1000.00');
     const spent = await seedCampaign(advertiser, {
@@ -374,6 +374,11 @@ describe('FIX2 — reservation semantics + the served ledger (real Postgres)', (
       status: 'rejected',
       requestedBudget: '200.00',
       name: 'Rejet',
+    });
+    await seedCampaign(advertiser, {
+      status: 'pending',
+      requestedBudget: null,
+      name: 'Sans budget',
     });
     mockSession(advertiser);
 
