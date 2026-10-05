@@ -906,6 +906,7 @@ nav.tnav{position:sticky}
 .tcm-err{font-size:13.5px;color:#A33A2B;min-height:20px;margin:2px 0 10px}
 .tcm-send{width:100%;padding:16px;border:0;border-radius:12px;background:#0D2B1F;color:#fff;font:600 16px "Inter",sans-serif;cursor:pointer;transition:background .2s}
 .tcm-send:hover{background:#204B43}
+.tcm-send:disabled{opacity:.6;cursor:progress}
 .tcm-foot{font-size:13px;color:#4A635A;margin:14px 0 0;text-align:center}
 .tcm-foot a{color:#1D9E75;font-weight:600}
 .tcm-ok{text-align:center;padding:10px 0}
@@ -2365,22 +2366,22 @@ nav.tnav{position:sticky}
     </form>
     <div class="tcm-ok" id="tcm-ok" hidden>
       <span class="mk"><svg viewBox="0 0 616 616" aria-hidden="true"><path fill="currentColor" d="M252 0H360V140Q360 178 333 205L205 333Q178 360 140 360H0V255H195Q252 255 252 198Z"/><path fill="currentColor" d="M364 616H256V476Q256 438 283 411L411 283Q438 256 476 256H616V361H421Q364 361 364 418Z"/></svg></span>
-      <h2>Votre message est prêt</h2>
-      <p class="intro">Votre messagerie s'est ouverte avec le message adressé à contact@too-dooh.com. Il ne vous reste qu'à l'envoyer.</p>
+      <h2>Message envoyé</h2>
+      <p class="intro">Votre message est bien arrivé à l'équipe Toodooh. Nous vous répondrons par email très bientôt.</p>
       <button type="button" class="tcm-send" data-close>Fermer</button>
     </div>
   </div>
 </div>
 <script>
 (function(){
-  var MAIL='contact@too-dooh.com';
+  var ENDPOINT=window.TOODOOH_CONTACT_ENDPOINT||'/api/contact', kind='message';
   var btn=document.querySelector('.tnav-contact'), panel=document.getElementById('tnav-panel');
   function setPanel(o){panel.hidden=!o; btn.setAttribute('aria-expanded',o?'true':'false');}
   btn.addEventListener('click',function(e){e.stopPropagation(); setPanel(panel.hidden);});
   document.addEventListener('click',function(e){if(!panel.hidden&&!panel.contains(e.target)) setPanel(false);});
   var m=document.getElementById('tcm'), f=document.getElementById('tcm-form'), ok=document.getElementById('tcm-ok'), err=document.getElementById('tcm-err'), last=null;
-  function open(role){
-    last=document.activeElement; setPanel(false);
+  function open(role,k){
+    last=document.activeElement; setPanel(false); kind=k||'message';
     f.hidden=false; ok.hidden=true; err.textContent='';
     if(role){var r=f.querySelector('input[value="'+role+'"]'); if(r) r.checked=true;}
     m.hidden=false; document.body.style.overflow='hidden';
@@ -2394,7 +2395,7 @@ nav.tnav{position:sticky}
     var t=a.textContent.trim();
     if(/^(Prendre rendez-vous|Parler à un Agent Toodooh)$/.test(t)){
       a.addEventListener('click',function(e){e.preventDefault();
-        var v=a.closest('#view-sh')||a.closest('.shs')?'Screenhost':(a.closest('#view-sc')||a.closest('.scs')?'Screencaster':null); open(v);});
+        var v=a.closest('#view-sh')||a.closest('.shs')?'Screenhost':(a.closest('#view-sc')||a.closest('.scs')?'Screencaster':null); open(v,/^Prendre/.test(t)?'rendez-vous':'message');});
     }
   });
   m.addEventListener('click',function(e){if(e.target===m) close();});
@@ -2408,10 +2409,14 @@ nav.tnav{position:sticky}
     if(!role){err.textContent='Indiquez si vous êtes Screencaster ou Screenhost.';return;}
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){err.textContent='Indiquez une adresse email valide pour que nous puissions vous répondre.';f.email.focus();return;}
     if(!msg){err.textContent='Écrivez votre message.';f.message.focus();return;}
-    var subject='['+role+'] Message depuis le site Toodooh';
-    var body='Profil : '+role+'\nNom : '+(name||'Non renseigné')+'\nEmail : '+email+'\n\n'+msg;
-    window.location.href='mailto:'+MAIL+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-    f.hidden=true; ok.hidden=false; f.reset();
+    var send=f.querySelector('.tcm-send'); send.disabled=true; send.textContent='Envoi en cours…';
+    fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:role,kind:kind,name:name,email:email,message:msg})})
+      .then(function(r){
+        if(r.ok){f.hidden=true; ok.hidden=false; f.reset(); return;}
+        err.textContent=r.status===429?'Trop de messages envoyés. Réessayez dans une heure.':"L'envoi n'a pas abouti. Réessayez dans un instant.";
+      })
+      .catch(function(){err.textContent="L'envoi n'a pas abouti. Vérifiez votre connexion et réessayez.";})
+      .then(function(){send.disabled=false; send.textContent='Envoyer le message';});
   });
 })();
 </script><script>

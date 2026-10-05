@@ -30,6 +30,7 @@ import { campaignsPricingRoutes } from './campaigns-pricing.js';
 import { campaignsRoutes } from './campaigns.js';
 import { candidaturesRoutes } from './candidatures.js';
 import { cartRoutes } from './cart.js';
+import { contactRoutes } from './contact.js';
 import { creativesRoutes } from './creatives.js';
 import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
@@ -131,6 +132,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // NEWLANDING-1 — the public landing's two calls: live network counters + Carrières applications.
   await app.register(publicNetworkStatsRoutes);
   await app.register(candidaturesRoutes);
+  await app.register(contactRoutes);
   await app.register(adminSupportRoutes);
   await app.register(adminRechargesRoutes);
   // FCT2 — the admin wallet adjustment (signed, audited, reason-required) + its audit trail.
