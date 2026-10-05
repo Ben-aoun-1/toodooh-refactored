@@ -1,14 +1,15 @@
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { resolveHomeRoute } from '@/features/auth/utils/home-route';
+import { resolvePostLoginRoute } from '@/features/auth/utils/post-login-route';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function LoginForm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const login = useAuthStore((state) => state.login);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +26,9 @@ export default function LoginForm() {
     try {
       await login(formData.email, formData.password);
       const { profileType, role, validationStatus } = useAuthStore.getState();
-      navigate(resolveHomeRoute(profileType, role, validationStatus));
+      navigate(
+        resolvePostLoginRoute(searchParams.get('next'), profileType, role, validationStatus),
+      );
       toast.success('Connexion réussie');
     } catch (error) {
       toast.error(getErrorMessage(error) || "Une erreur inattendue s'est produite");

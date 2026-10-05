@@ -1,7 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import React, { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useSearchParams,
+} from 'react-router-dom';
 
 import NotFoundPage from '@/components/NotFoundPage';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
@@ -11,6 +17,7 @@ import AgentRoute from '@/features/agent/components/AgentRoute';
 import { isAgentRole } from '@/features/agent/utils/agent-roles';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { resolveHomeRoute } from '@/features/auth/utils/home-route';
+import { resolvePostLoginRoute } from '@/features/auth/utils/post-login-route';
 import { createQueryClient } from '@/lib/query-client';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
@@ -162,6 +169,7 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, initialized, profileType, role, validationStatus } = useAuthStore();
+  const [searchParams] = useSearchParams();
 
   if (!initialized) {
     return (
@@ -177,8 +185,14 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   // Si un utilisateur est connecté, le rediriger vers son espace (agent/owner/advertiser) via le
   // résolveur unique — même s'il est en attente de validation (les fonctionnalités seront grisées),
   // ou vers l'écran de statut si le compte a été rejeté (resolveHomeRoute décide).
+  // LAND-FB1 — un annonceur déjà connecté qui clique « Lancer une campagne » sur le site
+  // (/login?next=/new-campaign) va directement à l'assistant (liste blanche, cf. post-login-route).
   if (user) {
-    return <Navigate to={resolveHomeRoute(profileType, role, validationStatus)} />;
+    return (
+      <Navigate
+        to={resolvePostLoginRoute(searchParams.get('next'), profileType, role, validationStatus)}
+      />
+    );
   }
 
   return <>{children}</>;
