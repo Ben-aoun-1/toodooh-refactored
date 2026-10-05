@@ -23,9 +23,10 @@ describe('« Impressions estimées » reads the dispatch dry-run everywhere', ()
     }
   });
 
-  it('the cursor sizes the dry-run on both recaps (budgetTnd: value)', () => {
+  it('the cursor sizes the dry-run on both recaps (budget / EVT-MIN1 minutes)', () => {
     expect(read(SURFACES.wizardRecap)).toContain('budgetTnd: value');
-    expect(read(SURFACES.eventRecap)).toContain('budgetTnd: value');
+    // EVT-MIN1 — a positioning's cursor is in MINUTES; the dry-run is sized by them.
+    expect(read(SURFACES.eventRecap)).toContain('minutes: value');
   });
 
   it('the retired CPM formula is gone (helper deleted, no consumer left)', () => {

@@ -12,17 +12,20 @@ import {
   suggestEventsForCampaigns,
 } from './event-positioning';
 
-// EV3 — the parcours' pure rules: the 15 s bibliothèque filter, the panier's two sections and
-// the voie-3 suggestion rule (inside the window OR ≤ 7 days after the end, top 3 by proximity).
+// EV3 — the parcours' pure rules: the bibliothèque filter (EVT-MIN1: 10–30 s videos, 10/20/30 s
+// images), the panier's two sections and the voie-3 suggestion rule (inside the window OR ≤ 7
+// days after the end, top 3 by proximity).
 
-describe('eventSpotSelectable — the 15 s antenne grid', () => {
-  it('videos must fit the grid; 15 s exactly passes; photos always pass', () => {
-    expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: 16 })).toBe(false);
-    expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: 15 })).toBe(true);
-    expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: 5 })).toBe(true);
+describe('eventSpotSelectable — EVT-MIN1: what can air in a pod slot', () => {
+  it('videos 10–30 s pass (23 s included); shorter, longer or unknown do not; images 10/20/30 s', () => {
+    expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: 31 })).toBe(false);
+    expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: 23 })).toBe(true);
+    expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: 10 })).toBe(true);
+    expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: 5 })).toBe(false);
     expect(eventSpotSelectable({ creative_type: 'video', duration_seconds: null })).toBe(false);
     expect(eventSpotSelectable({ creative_type: 'photo', duration_seconds: 30 })).toBe(true);
-    expect(EVENT_SPOT_MAX_SECONDS).toBe(15);
+    expect(eventSpotSelectable({ creative_type: 'photo', duration_seconds: 15 })).toBe(false);
+    expect(EVENT_SPOT_MAX_SECONDS).toBe(30);
   });
 });
 

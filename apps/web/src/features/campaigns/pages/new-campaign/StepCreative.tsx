@@ -24,6 +24,11 @@ import {
 } from '@/features/campaigns/services/creative-media';
 import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
 import {
+  EVENT_VIDEO_MIN_SECONDS,
+  eventSlotLabel,
+  eventSlotSeconds,
+} from '@/features/events/lib/event-minutes';
+import {
   EVENT_SPOT_MAX_SECONDS,
   EVENT_SPOT_TOO_LONG_MESSAGE,
   filterEventSpots,
@@ -86,8 +91,8 @@ export default function StepCreative({
   eventMode = false,
 }: StepCreativeProps) {
   const { data: allCreatives = [], isLoading } = useMyCreatives(userId);
-  // EV3 — the bibliothèque only offers spots that FIT the antenne grid (videos ≤ 15 s; photos
-  // always — their duration is a display cadence). The classic wizard shows everything.
+  // EV3 — the bibliothèque only offers spots that can air in an event pod slot (EVT-MIN1: videos
+  // 10–30 s, images 10/20/30 s). The classic wizard shows everything.
   const creatives = eventMode ? filterEventSpots(allCreatives) : allCreatives;
   const upload = useCreativeUpload(userId);
 
@@ -109,7 +114,8 @@ export default function StepCreative({
         toast.error(await unreadableVideoMessage(file));
         return;
       }
-      if (probed > maxVideoSeconds) {
+      // EVT-MIN1 — an event video also has a floor (10 s): too short a spot cannot fill a slot.
+      if (probed > maxVideoSeconds || (eventMode && probed < EVENT_VIDEO_MIN_SECONDS)) {
         toast.error(
           eventMode ? EVENT_SPOT_TOO_LONG_MESSAGE : 'La vidéo ne doit pas dépasser 30 secondes.',
         );
@@ -126,7 +132,7 @@ export default function StepCreative({
         type: uploadType,
         duration_seconds: durationSeconds,
         title: file.name,
-        // EV3 — the server re-checks the 15 s cap on its own measured duration.
+        // EV3 — the server re-checks the event range on its own measured duration.
         ...(eventMode ? { for_event: true } : {}),
       });
       toast.success('Création téléversée avec succès.');
@@ -236,7 +242,9 @@ export default function StepCreative({
                 <p className="font-bold text-gray-900">Téléverser une nouvelle création</p>
                 <p className="text-sm text-gray-500">
                   {uploadType === 'video'
-                    ? `MP4 ou MOV (H.264) · ${eventMode ? EVENT_SPOT_MAX_SECONDS : MAX_VIDEO_DURATION_SECONDS} secondes maximum`
+                    ? eventMode
+                      ? `MP4 ou MOV (H.264) · ${EVENT_VIDEO_MIN_SECONDS} à ${EVENT_SPOT_MAX_SECONDS} secondes`
+                      : `MP4 ou MOV (H.264) · ${MAX_VIDEO_DURATION_SECONDS} secondes maximum`
                     : 'JPEG, PNG ou WebP'}
                 </p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
@@ -291,6 +299,19 @@ export default function StepCreative({
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <span>{creative.duration_seconds ?? '—'}s</span>
+                          {/* EVT-MIN1 — the pod slot this spot airs in (23 s → créneau de 30 s). */}
+                          {eventMode &&
+                            eventSlotSeconds(creative.creative_type, creative.duration_seconds) !==
+                              null && (
+                              <span className="text-gray-400">
+                                → créneau de{' '}
+                                {eventSlotSeconds(
+                                  creative.creative_type,
+                                  creative.duration_seconds,
+                                )}{' '}
+                                s
+                              </span>
+                            )}
                           <span
                             className={`px-2 py-0.5 rounded-full font-medium ${
                               STATUS_STYLE[creative.validation_status] ??
@@ -331,7 +352,7 @@ export default function StepCreative({
               <ul className="text-sm text-gray-600 space-y-1">
                 <li>
                   {eventMode
-                    ? `Vidéo : ${EVENT_SPOT_MAX_SECONDS} secondes maximum — la grille événementielle diffuse par blocs de 15 s`
+                    ? `Vidéo : ${EVENT_VIDEO_MIN_SECONDS} à ${EVENT_SPOT_MAX_SECONDS} secondes — chaque annonceur dispose d’une minute dans la page publicitaire du bloc ; votre vidéo occupe un créneau de 10, 12, 15, 20 ou 30 s (ex. ${eventSlotLabel('video', 23) ?? ''})`
                     : 'Vidéo : 30 secondes maximum (MP4 / MOV, H.264)'}
                 </li>
                 <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG / WebP)</li>

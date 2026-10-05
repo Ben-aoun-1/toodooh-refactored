@@ -14,6 +14,12 @@ export interface CampaignView {
   description: string | null;
   requested_budget: number | null;
   /**
+   * EVT-MIN1 — an event positioning's size in MINUTES (one minute = one seat of a bloc's pod at
+   * one venue); its requested_budget is derived from it by the api. Null on classic campaigns and
+   * on positionings booked before the minutes model. Optional: older api responses omit it.
+   */
+  event_minutes?: number | null;
+  /**
    * CPM-1 — the campaign's OWN CPMs (TND/1000). CPM-3: its screencaster's — realigned by an admin
    * change while a draft not yet frozen, kept otherwise. Its type picks one (api cpmForCampaign).
    */
@@ -72,6 +78,8 @@ export interface UpdateCampaignInput {
   /** CF-Z1 — replace-set of targeted zones; [] clears (whole network). */
   zone_ids?: string[];
   creative_id?: string | null;
+  /** EVT-MIN1 — a positioning's minutes; the api derives requested_budget from them. */
+  event_minutes?: number | null;
 }
 
 /** MAP-2 — GET /:id/coverage: one definition for the pins and the caption. */
@@ -99,6 +107,13 @@ export interface CampaignCmaxRead {
   eligible_count: number;
   /** CF-HF4 — targeting-matching venues BEFORE capacity exclusions (the saturated/empty split). */
   targeted_count?: number;
+  /**
+   * EVT-MIN1 — positionings only: the minutes still free (the slider's max) and each minute's
+   * price/impressions in the ORDERED list — the price of N minutes is the sum of the first N.
+   */
+  max_minutes?: number;
+  minute_prices_tnd?: number[];
+  minute_impressions?: number[];
 }
 
 /**
@@ -143,8 +158,18 @@ export const campaignsApi = {
   },
   /** IMP-EST1 — the dry-run estimate; `budgetTnd` sizes it with the unsaved cursor (else the
    * stored requested_budget). */
-  impressionsEstimate(id: string, budgetTnd?: number): Promise<ImpressionsEstimateRead> {
-    const query = budgetTnd === undefined ? '' : `?budget_tnd=${encodeURIComponent(budgetTnd)}`;
+  /** EVT-MIN1 — `minutes` sizes a positioning's dry-run with its minutes cursor. */
+  impressionsEstimate(
+    id: string,
+    budgetTnd?: number,
+    minutes?: number,
+  ): Promise<ImpressionsEstimateRead> {
+    const query =
+      minutes !== undefined
+        ? `?minutes=${encodeURIComponent(minutes)}`
+        : budgetTnd === undefined
+          ? ''
+          : `?budget_tnd=${encodeURIComponent(budgetTnd)}`;
     return apiClient.get<ImpressionsEstimateRead>(`/campaigns/${id}/impressions-estimate${query}`);
   },
   /** MAP-2 — the campaign's COVERED établissements (the dispatch-eligible set): the plottable

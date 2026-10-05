@@ -21,6 +21,8 @@ interface UseImpressionsEstimateOptions {
   /** The cursor: a number sizes the dry-run with it, null = no budget chosen yet, undefined = the
    *  campaign's stored requested_budget. */
   budgetTnd?: number | null;
+  /** EVT-MIN1 — a positioning's minutes cursor (same contract as budgetTnd; wins when given). */
+  minutes?: number | null;
   inputs?: EstimateInputs;
   enabled?: boolean;
   /** Past the dispatch, or refused (lib/impressions-estimate: isEstimableStatus): the request is
@@ -36,26 +38,32 @@ export function useImpressionsEstimate(
   campaignId: string | null,
   {
     budgetTnd,
+    minutes,
     inputs = {},
     enabled = true,
     notEstimable = false,
   }: UseImpressionsEstimateOptions = {},
 ): EstimateView {
-  const cursor = useDebouncedValue(budgetTnd, ESTIMATE_DEBOUNCE_MS);
+  const byMinutes = minutes !== undefined;
+  const value = byMinutes ? minutes : budgetTnd;
+  const cursor = useDebouncedValue(value, ESTIMATE_DEBOUNCE_MS);
   const query = useQuery({
     queryKey: campaignsKeys.impressionsEstimate(
       campaignId ?? '',
-      cursor ?? 'stored',
+      cursor == null ? 'stored' : byMinutes ? `${cursor}min` : cursor,
       estimateInputsKey(inputs),
     ),
-    queryFn: () => campaignsApi.impressionsEstimate(campaignId ?? '', cursor ?? undefined),
+    queryFn: () =>
+      byMinutes
+        ? campaignsApi.impressionsEstimate(campaignId ?? '', undefined, cursor ?? undefined)
+        : campaignsApi.impressionsEstimate(campaignId ?? '', cursor ?? undefined),
     enabled: enabled && !notEstimable && !!campaignId && cursor !== null,
     staleTime: ESTIMATE_STALE_TIME_MS,
   });
   return estimateView({
     notEstimable,
-    budgetUnset: budgetTnd === null,
-    pending: cursor !== budgetTnd || query.isPending,
+    budgetUnset: value === null,
+    pending: cursor !== value || query.isPending,
     isError: query.isError,
     data: query.data,
   });

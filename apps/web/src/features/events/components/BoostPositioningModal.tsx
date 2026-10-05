@@ -14,6 +14,12 @@ import { tndLabel } from '@/lib/money';
 
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
 import { formatEventDate, formatEventHours } from '../lib/event-display';
+import {
+  EVENT_MIN_MINUTES,
+  eventMinutesImpressions,
+  eventMinutesPrice,
+  minutesLabel,
+} from '../lib/event-minutes';
 
 // EV6 (flow §7) — the POSITIONING booster: ONE axis, ZONES ONLY. The spot, the categories and the
 // diffusion window belong to the match, so they are shown FROZEN (padlocked, read-only) instead of
@@ -44,6 +50,8 @@ export const eventBoostReasonFr = (error: unknown): string | null => {
       return 'Solde insuffisant pour ce boost.';
     case 'NO_ELIGIBLE':
       return 'Aucun établissement éligible dans les zones ajoutées sur cette fenêtre.';
+    case 'EVENT_MINUTES_UNAVAILABLE':
+      return 'Ces minutes ne sont plus toutes disponibles dans les zones ajoutées.';
     case 'EVENT_NMAX_EXCEEDED':
       return 'Le budget complémentaire dépasse la limite de concentration.';
     case 'NOT_BOOSTABLE':
@@ -72,6 +80,9 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
 
   const [zoneIds, setZoneIds] = useState<string[]>([]);
   const [amount, setAmount] = useState<number | null>(null);
+  // EVT-MIN1 — a positioning sized in minutes boosts in minutes (an older one keeps the TND amount).
+  const minutesMode = campaign.event_minutes != null;
+  const [minutes, setMinutes] = useState<number | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
 
   // The picker EXCLUDES what the positioning already covers — only additions exist here.
@@ -85,9 +96,17 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
   });
   const ceiling = previewQuery.data?.c_max_evt_tnd;
   const eligibleCount = previewQuery.data?.eligible_count ?? 0;
+  const maxMinutes = previewQuery.data?.max_minutes ?? 0;
+  const minutePrices = previewQuery.data?.minute_prices_tnd ?? [];
+  const minuteImpressions = previewQuery.data?.minute_impressions ?? [];
 
   const apply = useMutation({
-    mutationFn: () => eventBoostApi.apply(campaign.id, zoneIds, amount ?? 0),
+    mutationFn: () =>
+      eventBoostApi.apply(
+        campaign.id,
+        zoneIds,
+        minutesMode ? { minutes: minutes ?? 0 } : { amountTnd: amount ?? 0 },
+      ),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: campaignsKeys.all });
       toast.success(
@@ -103,11 +122,13 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
 
   const canApply =
     zoneIds.length > 0 &&
-    amount !== null &&
-    amount >= CAMPAIGN_BUDGET_FLOOR_TND &&
-    ceiling !== undefined &&
-    amount <= ceiling &&
-    !apply.isPending;
+    !apply.isPending &&
+    (minutesMode
+      ? minutes !== null && minutes >= EVENT_MIN_MINUTES && minutes <= maxMinutes
+      : amount !== null &&
+        amount >= CAMPAIGN_BUDGET_FLOOR_TND &&
+        ceiling !== undefined &&
+        amount <= ceiling);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -181,7 +202,9 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
 
         {/* The complementary budget, bounded by the LIVE ceiling. */}
         <section className="mt-4 rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-bold text-gray-900">Budget complémentaire</h3>
+          <h3 className="text-sm font-bold text-gray-900">
+            {minutesMode ? 'Minutes à ajouter' : 'Budget complémentaire'}
+          </h3>
           {zoneIds.length === 0 ? (
             <p className="mt-2 text-sm text-gray-500">
               Sélectionnez au moins une zone pour connaître le budget disponible.
@@ -194,6 +217,45 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
             <p className="mt-2 text-sm text-red-600">
               Impossible de calculer le budget disponible — réessayez.
             </p>
+          ) : minutesMode ? (
+            <>
+              <p className="mt-1 text-xs text-[#7A7A7A]">
+                {eligibleCount} établissement{eligibleCount > 1 ? 's' : ''} éligible
+                {eligibleCount > 1 ? 's' : ''} dans les zones ajoutées.
+              </p>
+              <p className="mt-3 text-center text-2xl font-bold text-gray-900">
+                {minutes === null ? '—' : minutesLabel(minutes)}
+              </p>
+              <p className="text-center text-sm text-gray-600">
+                {minutes === null
+                  ? 'Déplacez le curseur pour ajouter des minutes.'
+                  : `${tndLabel(eventMinutesPrice(minutePrices, minutes))} · ${new Intl.NumberFormat('fr-TN').format(eventMinutesImpressions(minuteImpressions, minutes))} impressions`}
+              </p>
+              <input
+                id="event-boost-minutes"
+                type="range"
+                min={EVENT_MIN_MINUTES}
+                max={Math.max(EVENT_MIN_MINUTES, maxMinutes)}
+                step={1}
+                value={minutes ?? EVENT_MIN_MINUTES}
+                onChange={(e) => {
+                  setRefusal(null);
+                  setMinutes(Number(e.target.value));
+                }}
+                disabled={maxMinutes < EVENT_MIN_MINUTES}
+                aria-label="Minutes à ajouter"
+                className="mt-2 w-full cursor-pointer accent-brand-primary disabled:opacity-40"
+              />
+              <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
+                <span>MIN : {minutesLabel(EVENT_MIN_MINUTES)}</span>
+                <span>MAX : {minutesLabel(maxMinutes)}</span>
+              </div>
+              {maxMinutes < EVENT_MIN_MINUTES && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Aucune minute n’est encore disponible dans les zones ajoutées sur cette fenêtre.
+                </p>
+              )}
+            </>
           ) : (
             <>
               <p className="mt-1 text-xs text-[#7A7A7A]">
