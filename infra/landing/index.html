@@ -1136,7 +1136,7 @@ nav.tnav{position:sticky}
 
 /* === Vitrine : temps forts sportifs (style grandes compétitions) === */
 .vev{position:relative;overflow:hidden;color:#fff;padding:clamp(90px,10vw,150px) 0;font-family:"Inter",sans-serif;
-  background:radial-gradient(ellipse at 50% 35%,#204B43 0%,#0D2B1F 34%,#08201A 64%,#04130D 100%)}
+  background:repeating-linear-gradient(90deg,rgba(118,230,171,.045) 0 90px,transparent 90px 180px),radial-gradient(ellipse at 50% 40%,#2B6656 0%,#1A4A3D 38%,#123A2F 70%,#0F3328 100%)}
 .vev:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.9;
   background-image:radial-gradient(1.5px 1.5px at 8% 18%,#fff,transparent),radial-gradient(1px 1px at 22% 62%,#cdeedd,transparent),radial-gradient(1.5px 1.5px at 35% 12%,#fff,transparent),radial-gradient(1px 1px at 48% 80%,#cdeedd,transparent),radial-gradient(2px 2px at 63% 22%,#fff,transparent),radial-gradient(1px 1px at 72% 70%,#fff,transparent),radial-gradient(1.5px 1.5px at 86% 35%,#d6f3e3,transparent),radial-gradient(1px 1px at 93% 85%,#fff,transparent),radial-gradient(1px 1px at 15% 88%,#fff,transparent),radial-gradient(1.5px 1.5px at 56% 50%,#e3f7ec,transparent);
   animation:vevtw 5s ease-in-out infinite alternate}
@@ -1152,7 +1152,7 @@ nav.tnav{position:sticky}
 .vev-tr span.o{color:transparent;-webkit-text-stroke:1.4px rgba(118,230,171,.30)}
 .vev-tr i{flex:none;width:clamp(14px,1.4vw,22px);height:clamp(14px,1.4vw,22px);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 616 616'%3E%3Cpath fill='%2376E6AB' fill-opacity='.55' d='M252 0H360V140Q360 178 333 205L205 333Q178 360 140 360H0V255H195Q252 255 252 198Z'/%3E%3Cpath fill='%2376E6AB' fill-opacity='.55' d='M364 616H256V476Q256 438 283 411L411 283Q438 256 476 256H616V361H421Q364 361 364 418Z'/%3E%3C/svg%3E") center/contain no-repeat}
 @keyframes vevm{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.vev-in{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:0 clamp(20px,5vw,64px);text-align:center}
+.vev-in{position:relative;z-index:2;max-width:1060px;margin:0 auto;padding:0 clamp(20px,5vw,64px);text-align:center}
 .vev-live{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0D2B1F;background:linear-gradient(180deg,#FFFFFF,#D9F5E6);border-radius:999px;padding:8px 16px;margin-bottom:26px;box-shadow:0 6px 24px rgba(118,230,171,.35)}
 .vev-live i{width:9px;height:9px;border-radius:50%;background:#E3262E;animation:vevl 1.4s ease-in-out infinite}
 @keyframes vevl{0%,100%{box-shadow:0 0 0 0 rgba(227,38,46,.6)}50%{box-shadow:0 0 0 7px rgba(227,38,46,0)}}
@@ -1171,7 +1171,16 @@ nav.tnav{position:sticky}
 .vev-comp li.more{background:#76E6AB;color:#0D2B1F;border-color:transparent}
 .vev-comp li.more:before{background:#0D2B1F}
 .vev a:focus-visible{outline:3px solid #76E6AB;outline-offset:3px}
-@media(prefers-reduced-motion:reduce){.vev-tr,.vev-live i,.vev:before{animation:none}}
+.vev-edge{position:absolute;left:0;right:0;height:clamp(44px,7vw,104px);z-index:1;pointer-events:none}
+.vev-edge svg{display:block;width:100%;height:100%;overflow:visible}
+.vev-edge.top{top:-1px}
+.vev-edge.bot{bottom:-1px}
+.vev-edge .ln{stroke:#76E6AB;stroke-width:3;fill:none;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 6px rgba(118,230,171,.75))}
+.vev-edge .ln2{stroke:rgba(118,230,171,.45);stroke-width:1.2;fill:none;stroke-dasharray:10 9;vector-effect:non-scaling-stroke;animation:vevdash 18s linear infinite}
+@keyframes vevdash{to{stroke-dashoffset:-380}}
+.vev-kick{position:absolute;left:50%;top:50%;width:clamp(44px,4.4vw,60px);height:clamp(44px,4.4vw,60px);transform:translate(-50%,-50%);border-radius:50%;background:#0D2B1F;border:2px solid #76E6AB;color:#76E6AB;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 7px rgba(13,43,31,.9),0 0 26px rgba(118,230,171,.55)}
+.vev-kick svg{width:46%;height:46%}
+@media(prefers-reduced-motion:reduce){.vev-tr,.vev-live i,.vev:before,.vev-edge .ln2{animation:none}}
 
 /* === MOBILE-1 (2026-10-02) — phone layout fixes, loaded last so it wins; desktop untouched === */
 @media (max-width:760px){
@@ -1251,6 +1260,8 @@ nav.tnav{position:sticky}
 <!-- Vitrine : temps forts sportifs -->
 <section class="vev" aria-labelledby="vev-title">
   <div class="vev-glow" aria-hidden="true"></div>
+  <div class="vev-edge top" aria-hidden="true"><svg viewBox="0 0 1440 120" preserveAspectRatio="none"><polygon points="0,0 1440,0 1440,22 0,98" fill="#0D2B1F"/><line class="ln" x1="0" y1="98" x2="1440" y2="22"/><line class="ln2" x1="0" y1="114" x2="1440" y2="38"/></svg><span class="vev-kick"><svg viewBox="0 0 616 616"><path fill="currentColor" d="M252 0H360V140Q360 178 333 205L205 333Q178 360 140 360H0V255H195Q252 255 252 198Z"/><path fill="currentColor" d="M364 616H256V476Q256 438 283 411L411 283Q438 256 476 256H616V361H421Q364 361 364 418Z"/></svg></span></div>
+  <div class="vev-edge bot" aria-hidden="true"><svg viewBox="0 0 1440 120" preserveAspectRatio="none"><polygon points="0,120 1440,120 1440,98 0,22" fill="#FFFFFF"/><line class="ln" x1="0" y1="22" x2="1440" y2="98"/><line class="ln2" x1="0" y1="6" x2="1440" y2="82"/></svg></div>
   <div class="vev-marq" aria-hidden="true"><div class="vev-row r1"><div class="vev-tr"><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i><span class="o">LaLiga</span><i></i><span class="f">Premier League</span><i></i><span class="o">Serie A</span><i></i><span class="f">Ligue Europa</span><i></i><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i><span class="o">LaLiga</span><i></i><span class="f">Premier League</span><i></i><span class="o">Serie A</span><i></i><span class="f">Ligue Europa</span><i></i></div></div><div class="vev-row r2"><div class="vev-tr"><span class="f">LaLiga</span><i></i><span class="o">Premier League</span><i></i><span class="f">Serie A</span><i></i><span class="o">Ligue Europa</span><i></i><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i><span class="f">LaLiga</span><i></i><span class="o">Premier League</span><i></i><span class="f">Serie A</span><i></i><span class="o">Ligue Europa</span><i></i><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i></div></div></div>
   <div class="vev-in">
     <span class="vev-live"><i></i>Soirs de match</span>
