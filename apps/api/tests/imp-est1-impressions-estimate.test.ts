@@ -478,7 +478,13 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
       expect(before).toMatchObject({ status: 'ok', source: 'simulation', days_count: null });
 
       const outcome = await runEventDispatch(
-        { id: campaignId, name: 'Positionnement', advertiserId, requestedBudget: 600 },
+        {
+          id: campaignId,
+          name: 'Positionnement',
+          advertiserId,
+          requestedBudget: 600,
+          eventMinutes: null,
+        },
         { id: event?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS },
         15,
       );

@@ -224,7 +224,13 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
   /** A complete positioning draft: bound row + approved/pending spot + budget. */
   const seedPositioning = async (
     advId: string,
-    opts: { eventId?: string; spot?: 'approved' | 'pending'; budget?: string } = {},
+    opts: {
+      eventId?: string;
+      spot?: 'approved' | 'pending';
+      budget?: string;
+      /** EVT-MIN1 — the positioning's size in minutes (2 by default; null = not chosen). */
+      minutes?: number | null;
+    } = {},
   ): Promise<{ campaignId: string; eventId: string }> => {
     const eventId = opts.eventId ?? (await seedEvent());
     mockSession(advId);
@@ -234,7 +240,11 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
     const creativeId = await seedCreative(advId, { status: opts.spot ?? 'approved' });
     await db
       .update(campaigns)
-      .set({ creativeId, requestedBudget: opts.budget ?? '150.00' })
+      .set({
+        creativeId,
+        requestedBudget: opts.budget ?? '12.00',
+        eventMinutes: opts.minutes === undefined ? 2 : opts.minutes,
+      })
       .where(eq(campaigns.id, campaignId));
     return { campaignId, eventId };
   };
@@ -286,19 +296,26 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       expect((resPast.json() as { error: string }).error).toBe('EVENT_TERMINE');
     });
 
-    it('the row rides the CLASSIC draft machinery: budget/description PATCH + Reprendre read', async () => {
+    it('the row rides the CLASSIC draft machinery: minutes/description PATCH + Reprendre read', async () => {
+      await seedVenue(); // A_max 100 → one minute = 15 × 100 × 4 / 1000 = 6 TND
       const advId = await seedUser();
       const { campaignId, eventId } = await seedPositioning(advId);
-      const res = await patchCampaign(campaignId, {
-        description: 'Mi-temps',
-        requested_budget: 120,
-      });
+      // EVT-MIN1 — a positioning is sized in minutes; the SERVER derives its budget.
+      const res = await patchCampaign(campaignId, { description: 'Mi-temps', event_minutes: 3 });
       expect(res.statusCode).toBe(200);
       const read = await app.inject({ method: 'GET', url: `/api/campaigns/${campaignId}` });
       expect(read.statusCode).toBe(200);
       const body = read.json() as Record<string, unknown>;
       expect(body['event_id']).toBe(eventId);
-      expect(body['requested_budget']).toBe(120);
+      expect(body['event_minutes']).toBe(3);
+      expect(body['requested_budget']).toBe(18);
+      // The budget is never PATCHed directly on a positioning; minutes beyond the free seats 400.
+      const direct = await patchCampaign(campaignId, { requested_budget: 120 });
+      expect(direct.statusCode).toBe(400);
+      expect((direct.json() as { error: string }).error).toBe('EVENT_BUDGET_FROM_MINUTES');
+      const over = await patchCampaign(campaignId, { event_minutes: 7 });
+      expect(over.statusCode).toBe(400);
+      expect(over.json()).toMatchObject({ error: 'BUDGET_EXCEEDS_CMAX', max_minutes: 6 });
     });
 
     it('the SNAPSHOT LOCK: dates and type are not PATCHable on a positioning', async () => {
@@ -311,15 +328,17 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
     });
   });
 
-  describe('the 15-second spot matrix (attach + upload)', () => {
-    it('ATTACH refuses a video over 15 s on a positioning; 15 s passes; photos pass', async () => {
+  describe('the event spot matrix (attach + upload) — EVT-MIN1: 10–30 s', () => {
+    it('ATTACH refuses a video outside 10–30 s on a positioning; 23 s passes; photos pass', async () => {
       const advId = await seedUser();
       const { campaignId } = await seedPositioning(advId);
-      const long = await seedCreative(advId, { duration: 16 });
+      const long = await seedCreative(advId, { duration: 31 });
       const res = await patchCampaign(campaignId, { creative_id: long });
       expect(res.statusCode).toBe(400);
       expect((res.json() as { error: string }).error).toBe('EVENT_SPOT_TOO_LONG');
-      const exact = await seedCreative(advId, { duration: 15 });
+      const short = await seedCreative(advId, { duration: 9 });
+      expect((await patchCampaign(campaignId, { creative_id: short })).statusCode).toBe(400);
+      const exact = await seedCreative(advId, { duration: 23 });
       expect((await patchCampaign(campaignId, { creative_id: exact })).statusCode).toBe(200);
       const photo = await seedCreative(advId, { type: 'photo', duration: 20 });
       expect((await patchCampaign(campaignId, { creative_id: photo })).statusCode).toBe(200);
@@ -338,7 +357,7 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       expect((await patchCampaign(campaignId, { creative_id: long })).statusCode).toBe(200);
     });
 
-    it('UPLOAD with for_event refuses a long video BEFORE storing; photos pass', async () => {
+    it('UPLOAD with for_event refuses a video outside 10–30 s BEFORE storing; photos pass', async () => {
       const advId = await seedUser();
       mockSession(advId);
       const video = multipartBody({
@@ -348,7 +367,7 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       });
       const refused = await app.inject({
         method: 'POST',
-        url: '/api/creatives?type=video&duration_seconds=20&for_event=1',
+        url: '/api/creatives?type=video&duration_seconds=8&for_event=1',
         payload: video.payload,
         headers: video.headers,
       });
@@ -369,33 +388,34 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
     });
   });
 
-  describe('the cart gates — min 100, EVENT ceiling, no J+2 floor', () => {
-    it('refuses below the 100 TND floor and above the EVENT C_max; accepts inside', async () => {
-      await seedVenue(); // A_max 100 × 6 blocs × 20 → I_max 12 000
+  describe('the cart gates — minutes (min 1), EVENT ceiling, no J+2 floor', () => {
+    it('refuses without minutes and beyond the free minutes; accepts 1 minute (no 100 TND floor)', async () => {
+      await seedVenue(); // A_max 100 × 6 blocs → 6 minutes at 6 TND
       const advId = await seedUser();
-      const { campaignId, eventId } = await seedPositioning(advId, { budget: '50.00' });
-      const below = await addToCart(campaignId);
-      expect(below.statusCode).toBe(400);
-      expect((below.json() as { error: string }).error).toBe('BUDGET_BELOW_MINIMUM');
+      const { campaignId, eventId } = await seedPositioning(advId, { minutes: null });
+      const unsized = await addToCart(campaignId);
+      expect(unsized.statusCode).toBe(400);
+      expect((unsized.json() as { error: string }).error).toBe('MISSING_BUDGET');
 
       const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
       const ceiling = await computeEventCmax(
         { id: eventId, kickoffAt: ev?.kickoffAt ?? KICKOFF, endsAt: ev?.endsAt ?? ENDS },
         (await getDispatchConfig()).eventCpmTnd,
       );
-      expect(ceiling.cMaxEvtTnd).toBeGreaterThanOrEqual(100);
+      expect(ceiling.maxMinutes).toBe(6);
 
       await db
         .update(campaigns)
-        .set({ requestedBudget: `${ceiling.cMaxEvtTnd + 1}.00` })
+        .set({ eventMinutes: ceiling.maxMinutes + 1, requestedBudget: '42.00' })
         .where(eq(campaigns.id, campaignId));
       const over = await addToCart(campaignId);
       expect(over.statusCode).toBe(400);
       expect((over.json() as { error: string }).error).toBe('BUDGET_EXCEEDS_CMAX');
 
+      // ONE minute (6 TND) is a valid purchase — the 100 TND floor no longer applies (ruling 4A).
       await db
         .update(campaigns)
-        .set({ requestedBudget: '150.00' })
+        .set({ eventMinutes: 1, requestedBudget: '6.00' })
         .where(eq(campaigns.id, campaignId));
       expect((await addToCart(campaignId)).statusCode).toBe(200);
     });

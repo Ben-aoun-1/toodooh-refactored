@@ -305,6 +305,15 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // EVT-MIN1 — the bought minutes are no longer all free: nothing persisted, nothing flips.
+    if (outcome.status === 'EVENT_MINUTES_UNAVAILABLE') {
+      return reply.status(409).send({
+        error: 'EVENT_MINUTES_UNAVAILABLE',
+        message: `Il ne reste que ${outcome.availableMinutes} minute${outcome.availableMinutes > 1 ? 's' : ''} disponible${outcome.availableMinutes > 1 ? 's' : ''} sur cet événement — le screencaster doit réduire son positionnement.`,
+        available_minutes: outcome.availableMinutes,
+        statusCode: 409,
+      });
+    }
     if (outcome.status === 'EVENT_ANNULE') {
       return reply.status(409).send({
         error: 'EVENT_ANNULE',

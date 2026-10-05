@@ -568,6 +568,13 @@
       "when": 1790335605880,
       "tag": "0080_campaign_typical_week",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1791209076018,
+      "tag": "0081_event_minutes",
+      "breakpoints": true
     }
   ]
 }

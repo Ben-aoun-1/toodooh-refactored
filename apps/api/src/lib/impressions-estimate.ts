@@ -15,6 +15,8 @@ import { assemblePool } from './dispatch/pool.js';
 import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
 import { buildWindowDays } from './dispatch/window.js';
 import { assembleEventPool, fillEventBlocs } from './event-dispatch/dispatch.js';
+import { eventMinutesPriceTnd } from './event-pricing/minutes.js';
+import { computeEventCmax } from './event-pricing/pricing.js';
 import { predictedImpressions } from './impressions-display.js';
 import { impressionsObjectif } from './impressions-objectif.js';
 import { eventPrevuesByCampaign, planPrevuesByCampaign } from './planned-impressions.js';
@@ -49,6 +51,8 @@ export interface EstimateCampaign {
   startDate: string | null;
   endDate: string | null;
   requestedBudget: string | null;
+  /** EVT-MIN1 — a positioning's size in minutes (null = classic, or not chosen yet). */
+  eventMinutes: number | null;
   standardCpmTnd: string;
   eventCpmTnd: string;
   t10s: string;
@@ -160,6 +164,7 @@ const eventEstimate = async (
   c: EstimateCampaign,
   eventId: string,
   budgetOverride: number | undefined,
+  minutesOverride: number | undefined,
 ): Promise<ImpressionsEstimate> => {
   // A dispatched positioning: its placed blocs (runEventDispatch would short-circuit on any row),
   // through the same post-dispatch home as the classic branch and /mine (IMP-UNIT1).
@@ -177,11 +182,31 @@ const eventEstimate = async (
 
   const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!ev || ev.annule) return { status: 'EVENT_CANCELLED' };
-  const budget = budgetOf(c, budgetOverride);
-  if (budget === null) return { status: 'NO_BUDGET' };
-
   // The activation path's CPM for a positioning (cpmForCampaign on its own rates → CPM_evt).
   const cpm = cpmForCampaign(c.campaignType, campaignCpmRates(c));
+
+  // EVT-MIN1 — a positioning sized in minutes (the cursor's, else the stored count): the first N
+  // minutes of the ordered list — the dispatch's own take — priced the same way.
+  const minutesWanted = minutesOverride ?? c.eventMinutes;
+  if (minutesWanted !== null) {
+    const { minutes } = await computeEventCmax(
+      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+      cpm,
+    );
+    if (minutes.length === 0) return { status: 'NO_ELIGIBLE' };
+    const taken = minutes.slice(0, minutesWanted);
+    return {
+      status: 'OK',
+      source: 'SIMULATION',
+      impressions: taken.reduce((sum, m) => sum + m.impressions, 0),
+      objectif: impressionsObjectif(c, eventMinutesPriceTnd(minutes, minutesWanted)),
+      venuesCount: new Set(taken.map((m) => m.screenhostId)).size,
+      daysCount: null,
+    };
+  }
+
+  const budget = budgetOf(c, budgetOverride);
+  if (budget === null) return { status: 'NO_BUDGET' };
   const pool = await assembleEventPool({ id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt });
   const fill = fillEventBlocs(pool, budget, cpm);
   if (fill.status === 'NO_POOL') return { status: 'NO_ELIGIBLE' };
@@ -203,8 +228,8 @@ const eventEstimate = async (
  */
 export const estimateCampaignImpressions = async (
   campaign: EstimateCampaign,
-  opts: { budgetTnd?: number } = {},
+  opts: { budgetTnd?: number; minutes?: number } = {},
 ): Promise<ImpressionsEstimate> =>
   campaign.eventId === null
     ? classicEstimate(campaign, opts.budgetTnd)
-    : eventEstimate(campaign, campaign.eventId, opts.budgetTnd);
+    : eventEstimate(campaign, campaign.eventId, opts.budgetTnd, opts.minutes);

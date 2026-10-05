@@ -16,9 +16,13 @@ import { requireAuth } from '../middleware/require-auth.js';
 
 const idParamSchema = z.object({ id: z.uuid() });
 const previewBodySchema = z.object({ added_zone_ids: z.array(z.uuid()).min(1).max(50) });
-const applyBodySchema = previewBodySchema.extend({
-  amount_tnd: z.number().positive().max(100_000_000),
-});
+// EVT-MIN1 — a positioning sized in minutes boosts in `minutes`; an older one keeps `amount_tnd`.
+const applyBodySchema = previewBodySchema
+  .extend({
+    amount_tnd: z.number().positive().max(100_000_000).optional(),
+    minutes: z.number().int().min(1).max(100_000).optional(),
+  })
+  .refine((b) => b.amount_tnd !== undefined || b.minutes !== undefined);
 
 const sendUnauthenticated = (reply: FastifyReply) =>
   reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
@@ -93,6 +97,18 @@ const sendRefusal = (reply: FastifyReply, refusal: EventBoostRefusal) => {
         error: 'NO_ELIGIBLE',
         message: 'Aucun établissement éligible dans les zones ajoutées sur cette fenêtre.',
       });
+    case 'MINUTES_REQUIRED':
+      return reply.status(400).send({
+        error: 'MINUTES_REQUIRED',
+        message: 'Indiquez le nombre de minutes à ajouter.',
+      });
+    case 'MINUTES_UNAVAILABLE':
+      return reply.status(409).send({
+        error: 'EVENT_MINUTES_UNAVAILABLE',
+        message: `Il ne reste que ${refusal.availableMinutes} minute${refusal.availableMinutes > 1 ? 's' : ''} disponible${refusal.availableMinutes > 1 ? 's' : ''} dans les zones ajoutées.`,
+        available_minutes: refusal.availableMinutes,
+        statusCode: 409,
+      });
     case 'NMAX_EXCEEDED':
       return reply.status(400).send({
         error: 'EVENT_NMAX_EXCEEDED',
@@ -121,6 +137,14 @@ export const eventBoostRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send({
       c_max_evt_tnd: result.cMaxEvtTnd,
       eligible_count: result.eligibleCount,
+      // EVT-MIN1 — the minutes slider of a positioning sized in minutes (absent otherwise).
+      ...(result.minutes
+        ? {
+            max_minutes: result.minutes.maxMinutes,
+            minute_prices_tnd: result.minutes.pricesTnd,
+            minute_impressions: result.minutes.impressions,
+          }
+        : {}),
     });
   });
 
@@ -129,13 +153,16 @@ export const eventBoostRoutes: FastifyPluginAsync = async (app) => {
     const params = idParamSchema.safeParse(request.params);
     if (!params.success) return invalidField(reply, 'id', 'must be a uuid');
     const body = applyBodySchema.safeParse(request.body ?? {});
-    if (!body.success) return invalidField(reply, 'amount_tnd', 'a positive amount is required');
+    if (!body.success) {
+      return invalidField(reply, 'minutes', 'a positive minutes count (or amount_tnd) is required');
+    }
     const userId = request.user?.id;
     if (!userId) return sendUnauthenticated(reply);
 
     const result = await applyEventBoost(params.data.id, userId, {
       addedZoneIds: body.data.added_zone_ids,
-      amountTnd: body.data.amount_tnd,
+      ...(body.data.amount_tnd !== undefined ? { amountTnd: body.data.amount_tnd } : {}),
+      ...(body.data.minutes !== undefined ? { minutes: body.data.minutes } : {}),
     });
     if (result.status !== 'APPLIED') return sendRefusal(reply, result);
     return reply.status(200).send({

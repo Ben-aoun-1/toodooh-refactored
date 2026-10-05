@@ -1,12 +1,14 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import { eventAllocations, hourReservations, notifications } from '../../db/schema.js';
+import { type EventMinutePlacement, takeEventMinutes } from '../event-pricing/minutes.js';
 import {
   REPS_PER_BLOC,
   type EventRef,
   blocCells,
   computeAmax,
+  computeEventCmax,
   eventEligibleVenues,
 } from '../event-pricing/pricing.js';
 
@@ -32,6 +34,12 @@ import {
 //   D5/D7 — N_max = ⌊C_cible × 50 % ÷ 20⌋ venues; needing MORE venues than N_max to reach
 //        I_cible BLOCKS the validation atomically (nothing persisted).
 //   D6 — pool exhaustion below I_cible: PARTIAL placement accepted + an alert.
+//
+// EVT-MIN1 (2026-10-05) — a positioning bought IN MINUTES (campaigns.event_minutes set) skips
+// D3–D7: it takes the FIRST N minutes of computeEventCmax's ordered list (one seat per bloc per
+// venue, lib/event-pricing/minutes.ts), under a per-event advisory lock so two validations can
+// never sell the same last seat. Fewer free minutes than bought refuses (MINUTES_UNAVAILABLE) —
+// never a silent partial. Positionings without event_minutes keep D1–D7 below (ruling A1).
 
 /** D4 — the anti-miette line: a remainder worth under this many TND is dropped. */
 export const EVENT_MIETTE_TND = 20;
@@ -222,8 +230,16 @@ export const eventPartialBody = (matchName: string): string =>
   `Votre positionnement « ${matchName} » n'a pas pu être placé en totalité — l'inventaire disponible sur la fenêtre est limité.`;
 
 export interface EventDispatchOutcome {
-  status: 'OK' | 'ALREADY_DISPATCHED' | 'NMAX_EXCEEDED' | 'NO_POOL' | 'CPM_CHANGED';
+  status:
+    | 'OK'
+    | 'ALREADY_DISPATCHED'
+    | 'NMAX_EXCEEDED'
+    | 'NO_POOL'
+    | 'CPM_CHANGED'
+    | 'MINUTES_UNAVAILABLE';
   nMax?: number;
+  /** MINUTES_UNAVAILABLE — the free minutes left when the validation ran. */
+  availableMinutes?: number;
   partial?: boolean;
   allocationIds?: string[];
 }
@@ -241,7 +257,14 @@ export interface EventDispatchOutcome {
  * written.
  */
 export const runEventDispatch = async (
-  positioning: { id: string; name: string; advertiserId: string; requestedBudget: number },
+  positioning: {
+    id: string;
+    name: string;
+    advertiserId: string;
+    requestedBudget: number;
+    /** EVT-MIN1 — set = the minutes model; null = EV4's whole-bloc fill (ruling A1). */
+    eventMinutes: number | null;
+  },
   event: EventRef,
   cpmEvtTnd: number,
   cpmCheck?: (tx: FreezeTx, freezeCpm: number) => Promise<boolean>,
@@ -252,6 +275,14 @@ export const runEventDispatch = async (
     .where(eq(eventAllocations.campaignId, positioning.id))
     .limit(1);
   if (existing.length > 0) return { status: 'ALREADY_DISPATCHED' };
+  if (positioning.eventMinutes !== null) {
+    return runEventMinutesDispatch(
+      { ...positioning, eventMinutes: positioning.eventMinutes },
+      event,
+      cpmEvtTnd,
+      cpmCheck,
+    );
+  }
 
   const pool = await assembleEventPool(event);
   const fill = fillEventBlocs(pool, positioning.requestedBudget, cpmEvtTnd);
@@ -311,6 +342,75 @@ export const runEventDispatch = async (
 type FreezeTx = Parameters<Parameters<(typeof db)['transaction']>[0]>[0];
 type DbExecutor = typeof db | FreezeTx;
 
+/**
+ * EVT-MIN1 — serialise seat sales per event: the lock is held to the end of the caller's
+ * transaction, and the minute list is read AFTER it, so it sees every committed sale.
+ */
+export const lockEventSeats = async (executor: DbExecutor, eventId: string): Promise<void> => {
+  await executor.execute(sql`select pg_advisory_xact_lock(hashtext(${`event-seats:${eventId}`}))`);
+};
+
+/** Write minute placements: allocations EN_ATTENTE + hour holds + one proposal per owner. */
+export const writeMinutePlacements = async (
+  executor: DbExecutor,
+  positioning: { id: string; name: string },
+  eventId: string,
+  placements: readonly EventMinutePlacement[],
+): Promise<string[]> => {
+  const ids: string[] = [];
+  const owners = new Set<string>();
+  for (const placement of placements) {
+    const [row] = await executor
+      .insert(eventAllocations)
+      .values({
+        campaignId: positioning.id,
+        screenhostId: placement.screenhostId,
+        blocs: placement.blocs,
+        impressionsTotal: placement.impressionsTotal,
+        montantTnd: placement.montantTnd.toFixed(3),
+        statut: 'EN_ATTENTE',
+      })
+      .returning({ id: eventAllocations.id });
+    if (row) ids.push(row.id);
+    await reserveBlocHours(executor, eventId, placement.screenhostId, placement.blocs);
+    owners.add(placement.ownerId);
+  }
+  if (owners.size > 0) {
+    await executor.insert(notifications).values(
+      [...owners].map((ownerId) => ({
+        userId: ownerId,
+        type: 'dispatch_pending_acceptance',
+        title: EVENT_PROPOSAL_TITLE,
+        body: eventProposalBody(positioning.name),
+        campaignId: positioning.id,
+      })),
+    );
+  }
+  return ids;
+};
+
+/** EVT-MIN1 — the minutes dispatch: the first N minutes of the ordered list, all or nothing. */
+const runEventMinutesDispatch = async (
+  positioning: { id: string; name: string; requestedBudget: number; eventMinutes: number },
+  event: EventRef,
+  cpmEvtTnd: number,
+  cpmCheck?: (tx: FreezeTx, freezeCpm: number) => Promise<boolean>,
+): Promise<EventDispatchOutcome> => {
+  const outcome = await db.transaction(async (tx): Promise<EventDispatchOutcome> => {
+    if (cpmCheck && !(await cpmCheck(tx, cpmEvtTnd))) return { status: 'CPM_CHANGED' };
+    await lockEventSeats(tx, event.id);
+    const { minutes } = await computeEventCmax(event, cpmEvtTnd);
+    if (minutes.length === 0) return { status: 'NO_POOL' };
+    const take = takeEventMinutes(minutes, positioning.eventMinutes, positioning.requestedBudget);
+    if (take.status === 'NOT_ENOUGH') {
+      return { status: 'MINUTES_UNAVAILABLE', availableMinutes: take.available };
+    }
+    const allocationIds = await writeMinutePlacements(tx, positioning, event.id, take.placements);
+    return { status: 'OK', partial: false, allocationIds };
+  });
+  return outcome;
+};
+
 /** Reserve every Tunis (day, hour) cell the placed blocs touch — idempotent per cell. */
 export const reserveBlocHours = async (
   executor: DbExecutor,
@@ -358,9 +458,9 @@ export interface EventCascadeOutcome {
  */
 export const runEventRefusalCascade = async (
   executor: DbExecutor,
-  positioning: { id: string; name: string },
+  positioning: { id: string; name: string; eventMinutes: number | null },
   event: EventRef,
-  refused: { screenhostId: string; impressionsTotal: number },
+  refused: { screenhostId: string; impressionsTotal: number; minutes: number; montantTnd: number },
   cpmEvtTnd: number,
 ): Promise<EventCascadeOutcome> => {
   const held = await executor
@@ -369,6 +469,21 @@ export const runEventRefusalCascade = async (
     .where(eq(eventAllocations.campaignId, positioning.id));
   const exclude = new Set<string>(held.map((h) => h.screenhostId));
   exclude.add(refused.screenhostId);
+
+  // EVT-MIN1 — a minutes positioning re-places the refused MINUTES on the next free seats of the
+  // ordered list (held + refused venues out), charged up to the refused value. A repair, not a
+  // purchase: fewer free minutes than refused places what exists (PARTIAL), the rest is refunded
+  // at settlement (REFUSE carries no money).
+  if (positioning.eventMinutes !== null) {
+    await lockEventSeats(executor, event.id);
+    const { minutes } = await computeEventCmax(event, cpmEvtTnd, exclude);
+    const count = Math.min(refused.minutes, minutes.length);
+    if (count === 0) return { status: 'NO_POOL', allocationIds: [] };
+    const take = takeEventMinutes(minutes, count, refused.montantTnd);
+    if (take.status === 'NOT_ENOUGH') return { status: 'NO_POOL', allocationIds: [] };
+    const ids = await writeMinutePlacements(executor, positioning, event.id, take.placements);
+    return { status: count < refused.minutes ? 'PARTIAL' : 'REPLACED', allocationIds: ids };
+  }
 
   const pool = await assembleEventPool(event, exclude);
   const refusedValueTnd = Math.round(refused.impressionsTotal * cpmEvtTnd) / 1000;

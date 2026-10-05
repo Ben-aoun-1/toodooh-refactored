@@ -16,6 +16,7 @@ import { MIN_CAMPAIGN_BUDGET_TND } from '../../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../../lib/campaign-cmax.js';
 import { plusCalendarDays } from '../../lib/campaign-dates.js';
 import { getDispatchConfig } from '../../lib/dispatch/config.js';
+import { eventMinutesPriceTnd } from '../../lib/event-pricing/minutes.js';
 import { computeEventCmax } from '../../lib/event-pricing/pricing.js';
 import { walletSpendable } from '../../lib/recharges.js';
 import { screencasterCpmRates } from '../../lib/screencaster-cpm.js';
@@ -311,19 +312,28 @@ export const launchEvent = async (
   const eventCpm = own?.eventCpmTnd ?? (await getDispatchConfig()).eventCpmTnd;
   const ceiling = await computeEventCmax({ id: event.id, kickoffAt, endsAt }, eventCpm);
   const wallet = await walletSpendable(advertiserId);
-  const wanted =
-    input.budgetTnd ?? Math.floor(ceiling.cMaxEvtTnd * (input.budgetShare ?? rng.float(0.3, 0.7)));
-  const budget = Math.max(
-    MIN_CAMPAIGN_BUDGET_TND,
-    Math.min(wanted, ceiling.cMaxEvtTnd, Math.floor(wallet.spendable_tnd)),
-  );
-  if (
-    ceiling.cMaxEvtTnd < MIN_CAMPAIGN_BUDGET_TND ||
-    wallet.spendable_tnd < MIN_CAMPAIGN_BUDGET_TND
-  ) {
+  // EVT-MIN1 — a positioning buys MINUTES (≥ 1): a share of the free minutes, or the minutes a
+  // requested budget affords, never more than the wallet covers; its budget is their price.
+  const affordable = (budgetTnd: number): number => {
+    let n = 0;
+    while (
+      n < ceiling.minutes.length &&
+      eventMinutesPriceTnd(ceiling.minutes, n + 1) <= budgetTnd
+    ) {
+      n += 1;
+    }
+    return n;
+  };
+  const wantedMinutes =
+    input.budgetTnd !== undefined
+      ? affordable(input.budgetTnd)
+      : Math.max(1, Math.floor(ceiling.maxMinutes * (input.budgetShare ?? rng.float(0.3, 0.7))));
+  const minutes = Math.min(wantedMinutes, affordable(wallet.spendable_tnd));
+  if (ceiling.maxMinutes === 0 || minutes < 1) {
     await db.delete(events).where(eq(events.id, event.id));
-    return { error: ceiling.cMaxEvtTnd < MIN_CAMPAIGN_BUDGET_TND ? 'CMAX_TOO_LOW' : 'NOT_FUNDED' };
+    return { error: ceiling.maxMinutes === 0 ? 'CMAX_TOO_LOW' : 'NOT_FUNDED' };
   }
+  const budget = eventMinutesPriceTnd(ceiling.minutes, minutes);
 
   const [creative] = await db
     .insert(creatives)
@@ -348,6 +358,7 @@ export const launchEvent = async (
       startDate: kickoffDate,
       endDate: kickoffDate,
       requestedBudget: budget.toFixed(2),
+      eventMinutes: minutes,
       eventId: event.id,
       creativeId: creative?.id ?? null,
     })

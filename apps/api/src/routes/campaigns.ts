@@ -25,6 +25,7 @@ import {
   startDateViolation,
 } from '../lib/campaign-dates.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
+import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { validateEventSpot } from '../lib/event-pricing/spot.js';
@@ -132,7 +133,12 @@ const createSchema = z.object({
 // explicit null unlinks (gate back to null).
 const updateSchema = createSchema
   .partial()
-  .extend({ creative_id: z.uuid().nullable().optional() })
+  .extend({
+    creative_id: z.uuid().nullable().optional(),
+    // EVT-MIN1 — an event positioning's size in minutes (positionings only); the server derives
+    // requested_budget from it. null clears both.
+    event_minutes: z.number().int().min(1).max(100_000).nullable().optional(),
+  })
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 type UpdateInput = z.infer<typeof updateSchema>;
 
@@ -148,6 +154,7 @@ export const campaignSelection = {
   endDate: campaigns.endDate,
   description: campaigns.description,
   requestedBudget: campaigns.requestedBudget,
+  eventMinutes: campaigns.eventMinutes,
   // CPM-1 — the campaign's own CPMs (CPM-3: its screencaster's, realigned while a draft not yet
   // frozen); the web prices its estimate at them.
   standardCpmTnd: campaigns.standardCpmTnd,
@@ -172,6 +179,7 @@ export type CampaignRow = Pick<
   | 'endDate'
   | 'description'
   | 'requestedBudget'
+  | 'eventMinutes'
   | 'standardCpmTnd'
   | 'eventCpmTnd'
   | 'submittedAt'
@@ -199,6 +207,8 @@ export const campaignView = (
   end_date: string | null;
   description: string | null;
   requested_budget: number | null;
+  /** EVT-MIN1 — a positioning's size in minutes (null on classic campaigns / older positionings). */
+  event_minutes: number | null;
   /** CPM-1 — the campaign's own CPMs (TND/1000), captured at creation; its type picks one. */
   standard_cpm_tnd: number;
   event_cpm_tnd: number;
@@ -220,6 +230,7 @@ export const campaignView = (
   end_date: row.endDate,
   description: row.description,
   requested_budget: row.requestedBudget === null ? null : Number(row.requestedBudget),
+  event_minutes: row.eventMinutes,
   standard_cpm_tnd: Number(row.standardCpmTnd),
   event_cpm_tnd: Number(row.eventCpmTnd),
   content_validation_status: contentValidationStatus,
@@ -450,7 +461,13 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     // Owner-scope in the WHERE: a foreign id is indistinguishable from a missing one.
     const [existing] = await db
-      .select({ id: campaigns.id, status: campaigns.status, eventId: campaigns.eventId })
+      .select({
+        id: campaigns.id,
+        status: campaigns.status,
+        eventId: campaigns.eventId,
+        standardCpmTnd: campaigns.standardCpmTnd,
+        eventCpmTnd: campaigns.eventCpmTnd,
+      })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
@@ -480,6 +497,49 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         message: 'Les dates d’un positionnement suivent la fenêtre de diffusion du match.',
       });
     }
+    // EVT-MIN1 — a positioning is sized in MINUTES; its budget is their price, derived HERE (never
+    // taken from the client). Classic campaigns have no minutes; a positioning's budget is never
+    // PATCHed directly.
+    let minutesPatch: { eventMinutes: number | null; requestedBudget: string | null } | null = null;
+    if (parsed.data.event_minutes !== undefined) {
+      if (existing.eventId === null) {
+        return reply.status(400).send({
+          error: 'EVENT_MINUTES_CLASSIC',
+          message: 'Seul un positionnement événementiel se mesure en minutes.',
+        });
+      }
+      if (parsed.data.event_minutes === null) {
+        minutesPatch = { eventMinutes: null, requestedBudget: null };
+      } else {
+        const verdict = await checkEventMinutes(
+          existing.eventId,
+          parsed.data.event_minutes,
+          campaignCpmRates(existing).eventCpmTnd,
+        );
+        if (!verdict.ok && verdict.reason === 'EVENT_ANNULE') {
+          return reply
+            .status(409)
+            .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
+        }
+        if (!verdict.ok) {
+          return reply.status(400).send({
+            error: 'BUDGET_EXCEEDS_CMAX',
+            message: `Il reste ${verdict.maxMinutes} minute${verdict.maxMinutes > 1 ? 's' : ''} disponible${verdict.maxMinutes > 1 ? 's' : ''} sur cet événement.`,
+            max_minutes: verdict.maxMinutes,
+            c_max_tnd: verdict.cMaxTnd,
+          });
+        }
+        minutesPatch = {
+          eventMinutes: parsed.data.event_minutes,
+          requestedBudget: verdict.priceTnd.toFixed(2),
+        };
+      }
+    } else if (existing.eventId !== null && parsed.data.requested_budget !== undefined) {
+      return reply.status(400).send({
+        error: 'EVENT_BUDGET_FROM_MINUTES',
+        message: 'Le budget d’un positionnement découle de ses minutes (event_minutes).',
+      });
+    }
     // Linking a creative: it must EXIST and belong to the SAME advertiser — owner-scoped 404 (a
     // foreign or nonexistent creative is indistinguishable from missing). null unlinks (no lookup).
     if (parsed.data.creative_id != null) {
@@ -495,8 +555,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       if (!creative) {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
       }
-      // EV3 — an event positioning's spot must fit the 15-second antenne grid (EV2's seam,
-      // wired here): a longer VIDEO can never air in a bloc, so the ATTACH refuses — whether
+      // EV3 — an event positioning's spot must fit the pod's slot grid (EVT-MIN1: 10–30 s
+      // videos, 10/20/30 s images — lib/event-pricing/spot.ts), so the ATTACH refuses — whether
       // the spot came fresh from upload or from the bibliothèque (CF-SK1 hash-inherit included:
       // inheritance moves the validation verdict, never the length).
       if (existing.eventId !== null) {
@@ -508,7 +568,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     // CF-Z1 — a zone-only PATCH has an empty columns patch: skip the UPDATE (drizzle rejects an
     // empty set()) and re-read the row; otherwise update as before. Zones replace-set after.
-    const columnsPatch = buildUpdatePatch(parsed.data);
+    const columnsPatch = { ...buildUpdatePatch(parsed.data), ...(minutesPatch ?? {}) };
     let updated: CampaignRow | undefined;
     if (Object.keys(columnsPatch).length > 0) {
       const [row] = await db
@@ -590,6 +650,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         i_max_facturable: evCmax.iMax,
         eligible_count: evCmax.eligibleCount,
         targeted_count: evCmax.eligibleCount,
+        // EVT-MIN1 — the minutes slider: its max, and each minute's price/impressions in the
+        // ORDERED list (the price of N minutes = Σ of the first N; lowering the slider drops the
+        // last venue's latest bloc first).
+        max_minutes: evCmax.maxMinutes,
+        minute_prices_tnd: evCmax.minutes.map((m) => m.priceTnd),
+        minute_impressions: evCmax.minutes.map((m) => m.impressions),
       });
     }
     const missing: string[] = [];
@@ -756,6 +822,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
         requestedBudget: campaigns.requestedBudget,
+        eventMinutes: campaigns.eventMinutes,
         campaignType: campaigns.campaignType,
         eventId: campaigns.eventId,
         standardCpmTnd: campaigns.standardCpmTnd,
@@ -809,9 +876,17 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         message: 'A campaign needs a positive requested budget before submission.',
       });
     }
+    // EVT-MIN1 — a positioning is sized in minutes (minimum 1, ruling 4A): no 100 TND floor, and
+    // its minutes must still be free (the event ceiling below is the minutes check).
+    if (isEventRow && existing.eventMinutes === null) {
+      return reply.status(400).send({
+        error: 'MISSING_BUDGET',
+        message: 'Choisissez le nombre de minutes de votre positionnement.',
+      });
+    }
     // CF-U3 (Mejri) — the budget floor: below 100 TND is refused BEFORE the ceiling gate (a
     // sub-floor ask is never deliverable business, whatever the inventory says).
-    if (Number(existing.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) {
+    if (!isEventRow && Number(existing.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) {
       return reply.status(400).send({
         error: 'BUDGET_BELOW_MINIMUM',
         message: `A campaign budget must be at least ${MIN_CAMPAIGN_BUDGET_TND} TND.`,
@@ -838,15 +913,18 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           .status(409)
           .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
       }
-      const evCmax = await computeEventCmax(
-        { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+      const verdict = await checkEventMinutes(
+        ev.id,
+        existing.eventMinutes ?? 0,
         campaignCpmRates(existing).eventCpmTnd,
       );
-      if (Number(existing.requestedBudget) > evCmax.cMaxEvtTnd) {
+      if (!verdict.ok) {
         return reply.status(400).send({
           error: 'BUDGET_EXCEEDS_CMAX',
-          message: 'The requested budget exceeds the available inventory for this targeting.',
-          c_max_tnd: evCmax.cMaxEvtTnd,
+          message: 'The requested minutes exceed the available inventory for this event.',
+          ...(verdict.reason === 'MINUTES_EXCEED_AVAILABLE'
+            ? { max_minutes: verdict.maxMinutes, c_max_tnd: verdict.cMaxTnd }
+            : {}),
         });
       }
     } else if (

@@ -13,7 +13,12 @@ import {
 } from '../../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../campaign-budget.js';
 import { campaignCpmRates } from '../dispatch/config.js';
-import { computeEventCmax } from '../event-pricing/pricing.js';
+import {
+  type EventMinute,
+  eventMinutesPriceTnd,
+  takeEventMinutes,
+} from '../event-pricing/minutes.js';
+import { REPS_PER_BLOC, computeEventCmax } from '../event-pricing/pricing.js';
 import { walletSpendable } from '../recharges.js';
 
 import {
@@ -22,7 +27,9 @@ import {
   assembleEventPool,
   eventProposalBody,
   fillEventBlocs,
+  lockEventSeats,
   reserveBlocHours,
+  writeMinutePlacements,
 } from './dispatch.js';
 
 // EV6 (flow §7) — THE EVENT BOOSTER: extend a live positioning on ONE axis, ZONES ONLY. The spot,
@@ -53,12 +60,20 @@ export type EventBoostRefusal =
   | { status: 'BUDGET_EXCEEDS_CMAX'; cMaxEvtTnd: number }
   | { status: 'INSUFFICIENT_BALANCE'; requiredTnd: number; availableTnd: number }
   | { status: 'NO_ELIGIBLE' }
-  | { status: 'NMAX_EXCEEDED'; nMax: number };
+  | { status: 'NMAX_EXCEEDED'; nMax: number }
+  // EVT-MIN1 — a minutes positioning boosts in minutes.
+  | { status: 'MINUTES_REQUIRED' }
+  | { status: 'MINUTES_UNAVAILABLE'; availableMinutes: number };
 
 export interface EventBoostPreview {
   status: 'PREVIEW';
   cMaxEvtTnd: number;
   eligibleCount: number;
+  /**
+   * EVT-MIN1 — set for a positioning sized in minutes: the ORDERED minutes the added zones offer
+   * (venues this positioning already holds excluded) — the booster's slider reads them.
+   */
+  minutes?: { maxMinutes: number; pricesTnd: number[]; impressions: number[] };
 }
 
 export interface EventBoostApplied {
@@ -157,18 +172,18 @@ const complementaryCeiling = async (
     },
     campaignCpmRates(loaded.campaign).eventCpmTnd,
   );
-  const own = await db
-    .select({ montantTnd: eventAllocations.montantTnd, statut: eventAllocations.statut })
-    .from(eventAllocations)
-    .where(eq(eventAllocations.campaignId, loaded.campaign.id));
-  // Only LIVE allocations (EN_ATTENTE / ACCEPTE) hold inventory; a REFUSE released its blocs.
-  const engagedTnd = own
-    .filter((a) => a.statut !== 'REFUSE')
-    .reduce((sum, a) => sum + Number(a.montantTnd), 0);
-  return {
-    cMaxEvtTnd: Math.max(0, Math.round((full.cMaxEvtTnd - engagedTnd) * 1000) / 1000),
-    eligibleCount: full.eligibleCount,
-  };
+  // EVT-MIN1 ruling A1 — this positioning predates the minutes model: its ceiling stays EV2's
+  // whole-bloc value (blocs × A_max × 20 at CPM_evt), never the minute-priced one. The pool is
+  // already NET of what it holds (eventSeatsHeld counts its live allocations as all five seats of
+  // each bloc), so nothing more is subtracted — the engaged value used to be, when the pool still
+  // counted held blocs.
+  const cpm = campaignCpmRates(loaded.campaign).eventCpmTnd;
+  const legacyCmax = Math.floor(
+    (cpm *
+      full.venues.reduce((sum, v) => sum + v.blocsDisponibles * v.amaxPph * REPS_PER_BLOC, 0)) /
+      1000,
+  );
+  return { cMaxEvtTnd: legacyCmax, eligibleCount: full.eligibleCount };
 };
 
 /** The ADDED perimeter: pool venues sitting in the added zones, minus the ones already held. */
@@ -201,6 +216,38 @@ const addedPerimeter = async (
   return pool.filter((p) => allowed.has(p.screenhostId));
 };
 
+/**
+ * EVT-MIN1 — the minutes the ADDED perimeter offers: the event's ordered minute list over venues
+ * this positioning does not hold yet, kept to the venues sitting in the added zones (list order
+ * preserved). Priced at the positioning's own event CPM.
+ */
+const addedPerimeterMinutes = async (
+  loaded: LoadedPositioning,
+  additions: readonly string[],
+): Promise<EventMinute[]> => {
+  const held = await db
+    .select({ screenhostId: eventAllocations.screenhostId })
+    .from(eventAllocations)
+    .where(eq(eventAllocations.campaignId, loaded.campaign.id));
+  const { minutes } = await computeEventCmax(
+    { id: loaded.event.id, kickoffAt: loaded.event.kickoffAt, endsAt: loaded.event.endsAt },
+    campaignCpmRates(loaded.campaign).eventCpmTnd,
+    new Set(held.map((h) => h.screenhostId)),
+  );
+  if (minutes.length === 0) return [];
+  const inAddedZones = await db
+    .select({ id: screenhosts.id })
+    .from(screenhosts)
+    .where(
+      and(
+        inArray(screenhosts.id, [...new Set(minutes.map((m) => m.screenhostId))]),
+        inArray(screenhosts.zoneId, [...additions]),
+      ),
+    );
+  const allowed = new Set(inAddedZones.map((s) => s.id));
+  return minutes.filter((m) => allowed.has(m.screenhostId));
+};
+
 /** The preview: the complementary ceiling over the hypothetical merged zone set. Persists NOTHING. */
 export const previewEventBoost = async (
   campaignId: string,
@@ -209,6 +256,19 @@ export const previewEventBoost = async (
 ): Promise<EventBoostPreview | EventBoostRefusal> => {
   const gated = await gate(campaignId, advertiserId, addedZoneIds);
   if (!gated.ok) return gated.refusal;
+  if (gated.loaded.campaign.eventMinutes !== null) {
+    const minutes = await addedPerimeterMinutes(gated.loaded, gated.additions);
+    return {
+      status: 'PREVIEW',
+      cMaxEvtTnd: eventMinutesPriceTnd(minutes, minutes.length),
+      eligibleCount: new Set(minutes.map((m) => m.screenhostId)).size,
+      minutes: {
+        maxMinutes: minutes.length,
+        pricesTnd: minutes.map((m) => m.priceTnd),
+        impressions: minutes.map((m) => m.impressions),
+      },
+    };
+  }
   const ceiling = await complementaryCeiling(gated.loaded);
   const perimeter = await addedPerimeter(gated.loaded, gated.additions);
   return {
@@ -227,23 +287,30 @@ export const previewEventBoost = async (
 export const applyEventBoost = async (
   campaignId: string,
   advertiserId: string,
-  input: { addedZoneIds: readonly string[]; amountTnd: number },
+  input: { addedZoneIds: readonly string[]; amountTnd?: number; minutes?: number },
 ): Promise<EventBoostApplied | EventBoostRefusal> => {
   const gated = await gate(campaignId, advertiserId, input.addedZoneIds);
   if (!gated.ok) return gated.refusal;
   const { loaded, additions } = gated;
+  if (loaded.campaign.eventMinutes !== null) {
+    if (input.minutes === undefined) return { status: 'MINUTES_REQUIRED' };
+    return applyEventMinutesBoost(loaded, additions, advertiserId, input.minutes);
+  }
+  if (input.amountTnd === undefined)
+    return { status: 'BUDGET_BELOW_MINIMUM', floorTnd: MIN_CAMPAIGN_BUDGET_TND };
 
-  if (input.amountTnd < MIN_CAMPAIGN_BUDGET_TND) {
+  const amountTnd = input.amountTnd;
+  if (amountTnd < MIN_CAMPAIGN_BUDGET_TND) {
     return { status: 'BUDGET_BELOW_MINIMUM', floorTnd: MIN_CAMPAIGN_BUDGET_TND };
   }
   const ceiling = await complementaryCeiling(loaded);
-  if (input.amountTnd > ceiling.cMaxEvtTnd) {
+  if (amountTnd > ceiling.cMaxEvtTnd) {
     return { status: 'BUDGET_EXCEEDS_CMAX', cMaxEvtTnd: ceiling.cMaxEvtTnd };
   }
   // FIX2 — SPENDABLE (no exclusion: the positioning's own budget stays engaged; the boost is on top).
   const balance = (await walletSpendable(advertiserId)).spendable_tnd;
-  if (balance < input.amountTnd) {
-    return { status: 'INSUFFICIENT_BALANCE', requiredTnd: input.amountTnd, availableTnd: balance };
+  if (balance < amountTnd) {
+    return { status: 'INSUFFICIENT_BALANCE', requiredTnd: amountTnd, availableTnd: balance };
   }
 
   const perimeter = await addedPerimeter(loaded, additions);
@@ -252,11 +319,7 @@ export const applyEventBoost = async (
   // The complementary fill: EV4's rules over the added perimeter, budgeted by the top-up alone.
   // N_max is derived from the COMPLEMENTARY budget (this is a new placement decision of its own).
   // CPM-1 — a boost extends an EXISTING positioning: it prices at the positioning's own event CPM.
-  const fill = fillEventBlocs(
-    perimeter,
-    input.amountTnd,
-    campaignCpmRates(loaded.campaign).eventCpmTnd,
-  );
+  const fill = fillEventBlocs(perimeter, amountTnd, campaignCpmRates(loaded.campaign).eventCpmTnd);
   if (fill.status === 'NMAX_EXCEEDED') return { status: 'NMAX_EXCEEDED', nMax: fill.nMax };
   if (fill.status === 'NO_POOL') return { status: 'NO_ELIGIBLE' };
 
@@ -272,8 +335,7 @@ export const applyEventBoost = async (
       .update(campaigns)
       .set({
         requestedBudget: String(
-          Math.round((Number(loaded.campaign.requestedBudget ?? 0) + input.amountTnd) * 1000) /
-            1000,
+          Math.round((Number(loaded.campaign.requestedBudget ?? 0) + amountTnd) * 1000) / 1000,
         ),
       })
       .where(eq(campaigns.id, campaignId));
@@ -312,7 +374,7 @@ export const applyEventBoost = async (
       .insert(campaignBoosts)
       .values({
         campaignId,
-        amountTnd: input.amountTnd.toFixed(2),
+        amountTnd: amountTnd.toFixed(2),
         previousEndDate: loaded.campaign.endDate ?? '1970-01-01',
         newEndDate: loaded.campaign.endDate ?? '1970-01-01',
         addedZoneIds: [...additions],
@@ -332,9 +394,85 @@ export const applyEventBoost = async (
   return {
     status: 'APPLIED',
     boostId: applied.boostId,
-    amountTnd: input.amountTnd,
+    amountTnd: amountTnd,
     placedVenues: applied.placedVenues,
     placedImpressions: applied.placedImpressions,
     partial: applied.partial,
   };
+};
+
+/**
+ * EVT-MIN1 — the minutes boost: the first `minutes` minutes the added zones offer, priced like
+ * the dispatch (Σ minute prices), under the event's seat lock. ONE transaction appends the zones,
+ * raises event_minutes and the budget by the price, writes the allocations + holds + proposals and
+ * the audit row. Fewer free minutes than asked refuses (never shortened).
+ */
+const applyEventMinutesBoost = async (
+  loaded: LoadedPositioning,
+  additions: readonly string[],
+  advertiserId: string,
+  minutes: number,
+): Promise<EventBoostApplied | EventBoostRefusal> => {
+  if (!Number.isInteger(minutes) || minutes < 1) return { status: 'MINUTES_REQUIRED' };
+  const preview = await addedPerimeterMinutes(loaded, additions);
+  if (preview.length === 0) return { status: 'NO_ELIGIBLE' };
+  if (preview.length < minutes) {
+    return { status: 'MINUTES_UNAVAILABLE', availableMinutes: preview.length };
+  }
+  const priceTnd = eventMinutesPriceTnd(preview, minutes);
+  const balance = (await walletSpendable(advertiserId)).spendable_tnd;
+  if (balance < priceTnd) {
+    return { status: 'INSUFFICIENT_BALANCE', requiredTnd: priceTnd, availableTnd: balance };
+  }
+  const campaignId = loaded.campaign.id;
+  const outcome = await db.transaction(
+    async (tx): Promise<EventBoostApplied | EventBoostRefusal> => {
+      await lockEventSeats(tx, loaded.event.id);
+      // Re-read under the lock: a seat sold since the preview must not be sold twice.
+      const list = await addedPerimeterMinutes(loaded, additions);
+      const take = takeEventMinutes(list, minutes, priceTnd);
+      if (take.status === 'NOT_ENOUGH') {
+        return { status: 'MINUTES_UNAVAILABLE', availableMinutes: take.available };
+      }
+      await tx
+        .insert(campaignZones)
+        .values(additions.map((zoneId) => ({ campaignId, zoneId })))
+        .onConflictDoNothing();
+      await tx
+        .update(campaigns)
+        .set({
+          requestedBudget: (Number(loaded.campaign.requestedBudget ?? 0) + priceTnd).toFixed(2),
+          eventMinutes: (loaded.campaign.eventMinutes ?? 0) + minutes,
+        })
+        .where(eq(campaigns.id, campaignId));
+      await writeMinutePlacements(
+        tx,
+        { id: campaignId, name: loaded.campaign.name },
+        loaded.event.id,
+        take.placements,
+      );
+      const [audit] = await tx
+        .insert(campaignBoosts)
+        .values({
+          campaignId,
+          amountTnd: priceTnd.toFixed(2),
+          previousEndDate: loaded.campaign.endDate ?? '1970-01-01',
+          newEndDate: loaded.campaign.endDate ?? '1970-01-01',
+          addedZoneIds: [...additions],
+          addedCategoryIds: [],
+          placedFact: take.impressions,
+          appliedBy: advertiserId,
+        })
+        .returning({ id: campaignBoosts.id });
+      return {
+        status: 'APPLIED',
+        boostId: audit?.id ?? '',
+        amountTnd: priceTnd,
+        placedVenues: take.placements.length,
+        placedImpressions: take.impressions,
+        partial: false,
+      };
+    },
+  );
+  return outcome;
 };

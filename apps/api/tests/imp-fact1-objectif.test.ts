@@ -348,7 +348,13 @@ describe('IMP-FACT1 — « Impressions prévues » is the objective fixed at pay
     expect(await objectifOf(campaignId)).toBe(40_000);
 
     const outcome = await runEventDispatch(
-      { id: campaignId, name: 'Positionnement', advertiserId, requestedBudget: 600 },
+      {
+        id: campaignId,
+        name: 'Positionnement',
+        advertiserId,
+        requestedBudget: 600,
+        eventMinutes: null,
+      },
       { id: ev?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS },
       15,
     );

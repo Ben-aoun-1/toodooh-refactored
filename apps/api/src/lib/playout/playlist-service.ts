@@ -63,9 +63,12 @@ export const computeScreenPlaylist = async (
       repsPerHour: spot.repsPerHour,
       creativeType: spot.creativeType === 'photo' ? 'photo' : 'video',
       validUntil: spot.validUntil,
+      ...(spot.slots ? { slots: spot.slots } : {}),
     });
   }
-  return buildPlaylist(sources);
+  // EVT-MIN1 — the server clock rides the message (only when a pod slot is in it, so every other
+  // playlist stays byte-identical) so a player can align its slots.
+  return buildPlaylist(sources, sources.some((source) => source.slots) ? now : undefined);
 };
 
 /**
@@ -88,6 +91,10 @@ export const resolveAirableVideo = async (
     const blackout = await soldEventBlackouts(now, new Date(now.getTime() + 1));
     return isInBlackout(blackout, now) ? null : allocation;
   }
-  const spot = (await activeEventSpots(screenhostId, now)).find((s) => s.campaignId === videoId);
+  // EVT-MIN1 — the WHOLE bloc credits a minutes spot's proof (a VIDEO_ENDED landing just after
+  // its pod closed is still its bloc's — settlement measures per bloc).
+  const spot = (await activeEventSpots(screenhostId, now, { wholeBloc: true })).find(
+    (s) => s.campaignId === videoId,
+  );
   return spot ?? null;
 };

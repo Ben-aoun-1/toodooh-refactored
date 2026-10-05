@@ -218,17 +218,27 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
     await setCpmConfig('15.000', '30.000');
     const at15 = await computeEventCmax(EVENT_REF(eventId), 15);
     const at30 = await computeEventCmax(EVENT_REF(eventId), 30);
-    expect(at15.cMaxEvtTnd).toBe(180); // 6 blocs × 2 000 × 15 / 1000
-    expect(at30.cMaxEvtTnd).toBe(360);
+    // EVT-MIN1 — six minutes of A_max 100: 15 × 100 × 4 / 1000 = 6 TND each.
+    expect(at15.cMaxEvtTnd).toBe(36);
+    expect(at30.cMaxEvtTnd).toBe(72);
 
     mockSession(advertiserId, 'advertiser');
     const cursor = await app.inject({ method: 'GET', url: `/api/campaigns/${campaignId}/cmax` });
-    expect((cursor.json() as { c_max_tnd: number }).c_max_tnd).toBe(180);
+    expect((cursor.json() as { c_max_tnd: number }).c_max_tnd).toBe(36);
 
-    // A budget the NEW CPM would allow but the positioning's own does not.
+    // Its minutes are PRICED at its own CPM (15), never the one saved since (30).
+    const sized = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${campaignId}`,
+      payload: { event_minutes: 2 },
+    });
+    expect(sized.statusCode).toBe(200);
+    expect((sized.json() as { requested_budget: number }).requested_budget).toBe(12);
+
+    // More minutes than are free refuses at the cart and at submit, the ceiling at its own CPM.
     await db
       .update(campaigns)
-      .set({ requestedBudget: '181.00' })
+      .set({ eventMinutes: 7, requestedBudget: '42.00' })
       .where(eq(campaigns.id, campaignId));
     const cart = await app.inject({
       method: 'POST',
@@ -239,7 +249,7 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
     expect((cart.json() as { error: string }).error).toBe('BUDGET_EXCEEDS_CMAX');
     const submit = await app.inject({ method: 'POST', url: `/api/campaigns/${campaignId}/submit` });
     expect(submit.statusCode).toBe(400);
-    expect((submit.json() as { c_max_tnd: number }).c_max_tnd).toBe(180);
+    expect((submit.json() as { c_max_tnd: number }).c_max_tnd).toBe(36);
 
     const adminId = await seedUser({ role: 'admin' });
     mockSession(adminId, 'admin');
@@ -249,7 +259,7 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
     });
     const report = hosts.json() as { cpm_tnd: number; totals: { c_max_tnd: number } };
     expect(report.cpm_tnd).toBe(15);
-    expect(report.totals.c_max_tnd).toBe(180);
+    expect(report.totals.c_max_tnd).toBe(36);
   });
 
   it('an owner refusal re-places the refused VALUE at the positioning’s CPM (== its montant)', async () => {
@@ -301,11 +311,17 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
     await db.update(campaigns).set({ status: 'upcoming' }).where(eq(campaigns.id, campaignId));
     await setCpmConfig('15.000', '30.000');
 
+    // A positioning from before the minutes model (ruling A1): its booster keeps EV2's whole-bloc
+    // ceiling — Σ free blocs × A_max × 20 at ITS CPM.
     const full15 = await computeEventCmax(EVENT_REF(eventId), 15);
+    const legacy15 = Math.floor(
+      (15 * full15.venues.reduce((s, v) => s + v.blocsDisponibles * v.amaxPph * 20, 0)) / 1000,
+    );
     const preview = await previewEventBoost(campaignId, advertiserId, [newZone]);
     expect(preview.status).toBe('PREVIEW');
     if (preview.status !== 'PREVIEW') return;
-    expect(preview.cMaxEvtTnd).toBe(full15.cMaxEvtTnd - 180); // 360 − 180, not 720 − 180
+    // The pool is already net of the 6 blocs it holds: only the target venue's value remains.
+    expect(preview.cMaxEvtTnd).toBe(legacy15); // 180 at its CPM 15, not 360 at 30
 
     const applied = await applyEventBoost(campaignId, advertiserId, {
       addedZoneIds: [newZone],

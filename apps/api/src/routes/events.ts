@@ -277,6 +277,10 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
       i_max: result.iMax,
       eligible_count: result.eligibleCount,
       min_budget_tnd: MIN_CAMPAIGN_BUDGET_TND,
+      // EVT-MIN1 — the minutes a positioning created now could buy (one per venue × bloc with a
+      // free pod seat); the minimum purchase is one minute.
+      max_minutes: result.maxMinutes,
+      min_minutes: 1,
       // SUGG-1 — the pool's distinct sectors (stored names), for the suggestion card's tags.
       sectors: result.sectors,
     });

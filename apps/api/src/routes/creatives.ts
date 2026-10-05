@@ -264,10 +264,10 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       storedDurationSeconds = measuredDuration;
     }
 
-    // EV3 — the event-spot cap (EV2's seam), enforced at upload when the positioning parcours
-    // declares it (?for_event=1): a video longer than 15 s can never air in a bloc, so refuse
+    // EV3 — the event-spot rule, enforced at upload when the positioning parcours declares it
+    // (?for_event=1): EVT-MIN1 — a video outside 10–30 s can never air in a pod slot, so refuse
     // BEFORE storing anything. Judged on the stored value (the server-measured duration when the
-    // probe is on). Photos pass — their duration is a display cadence, not a media length.
+    // probe is on). Photos: 10, 20 or 30 s (the upload's own photo rule already enforces it).
     if (parsedQuery.data.for_event !== undefined) {
       const verdict = validateEventSpot({
         creativeType: type,
