@@ -906,6 +906,7 @@ nav.tnav{position:sticky}
 .tcm-err{font-size:13.5px;color:#A33A2B;min-height:20px;margin:2px 0 10px}
 .tcm-send{width:100%;padding:16px;border:0;border-radius:12px;background:#0D2B1F;color:#fff;font:600 16px "Inter",sans-serif;cursor:pointer;transition:background .2s}
 .tcm-send:hover{background:#204B43}
+.tcm-send:disabled{opacity:.6;cursor:progress}
 .tcm-foot{font-size:13px;color:#4A635A;margin:14px 0 0;text-align:center}
 .tcm-foot a{color:#1D9E75;font-weight:600}
 .tcm-ok{text-align:center;padding:10px 0}
@@ -1135,42 +1136,51 @@ nav.tnav{position:sticky}
 
 /* === Vitrine : temps forts sportifs (style grandes compétitions) === */
 .vev{position:relative;overflow:hidden;color:#fff;padding:clamp(90px,10vw,150px) 0;font-family:"Inter",sans-serif;
-  background:radial-gradient(ellipse at 50% 35%,#16337E 0%,#0B1D57 30%,#060F35 60%,#02061A 100%)}
+  background:repeating-linear-gradient(90deg,rgba(118,230,171,.045) 0 90px,transparent 90px 180px),radial-gradient(ellipse at 50% 40%,#2B6656 0%,#1A4A3D 38%,#123A2F 70%,#0F3328 100%)}
 .vev:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.9;
-  background-image:radial-gradient(1.5px 1.5px at 8% 18%,#fff,transparent),radial-gradient(1px 1px at 22% 62%,#cfd9ff,transparent),radial-gradient(1.5px 1.5px at 35% 12%,#fff,transparent),radial-gradient(1px 1px at 48% 80%,#cfd9ff,transparent),radial-gradient(2px 2px at 63% 22%,#fff,transparent),radial-gradient(1px 1px at 72% 70%,#fff,transparent),radial-gradient(1.5px 1.5px at 86% 35%,#dfe6ff,transparent),radial-gradient(1px 1px at 93% 85%,#fff,transparent),radial-gradient(1px 1px at 15% 88%,#fff,transparent),radial-gradient(1.5px 1.5px at 56% 50%,#e8edff,transparent);
+  background-image:radial-gradient(1.5px 1.5px at 8% 18%,#fff,transparent),radial-gradient(1px 1px at 22% 62%,#cdeedd,transparent),radial-gradient(1.5px 1.5px at 35% 12%,#fff,transparent),radial-gradient(1px 1px at 48% 80%,#cdeedd,transparent),radial-gradient(2px 2px at 63% 22%,#fff,transparent),radial-gradient(1px 1px at 72% 70%,#fff,transparent),radial-gradient(1.5px 1.5px at 86% 35%,#d6f3e3,transparent),radial-gradient(1px 1px at 93% 85%,#fff,transparent),radial-gradient(1px 1px at 15% 88%,#fff,transparent),radial-gradient(1.5px 1.5px at 56% 50%,#e3f7ec,transparent);
   animation:vevtw 5s ease-in-out infinite alternate}
 @keyframes vevtw{from{opacity:.55}to{opacity:1}}
 .vev-glow{position:absolute;inset:0;pointer-events:none;
-  background:conic-gradient(from 200deg at 0% 0%,transparent 0deg,rgba(214,226,255,.16) 18deg,transparent 40deg),conic-gradient(from 120deg at 100% 0%,transparent 0deg,rgba(214,226,255,.16) 22deg,transparent 44deg),radial-gradient(ellipse at 50% 100%,rgba(212,175,55,.18),transparent 55%)}
+  background:conic-gradient(from 200deg at 0% 0%,transparent 0deg,rgba(118,230,171,.13) 18deg,transparent 40deg),conic-gradient(from 120deg at 100% 0%,transparent 0deg,rgba(118,230,171,.13) 22deg,transparent 44deg),radial-gradient(ellipse at 50% 100%,rgba(29,158,117,.28),transparent 55%)}
 .vev-marq{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:clamp(18px,3vw,40px) 0;pointer-events:none}
 .vev-row{overflow:hidden;transform:rotate(-3deg) scale(1.08)}
 .vev-tr{display:flex;align-items:center;gap:clamp(18px,2vw,34px);width:max-content;animation:vevm 60s linear infinite}
 .vev-row.r2 .vev-tr{animation-direction:reverse;animation-duration:70s}
 .vev-tr span{font-family:"Clash Grotesk","Inter",sans-serif;font-weight:600;font-size:clamp(46px,7vw,112px);letter-spacing:-.02em;line-height:1;white-space:nowrap;font-variant-ligatures:none;text-transform:uppercase}
-.vev-tr span.f{color:rgba(160,185,255,.13)}
-.vev-tr span.o{color:transparent;-webkit-text-stroke:1.4px rgba(214,226,255,.32)}
-.vev-tr i{flex:none;width:clamp(14px,1.4vw,22px);height:clamp(14px,1.4vw,22px);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 616 616'%3E%3Cpath fill='%23D4AF37' fill-opacity='.6' d='M252 0H360V140Q360 178 333 205L205 333Q178 360 140 360H0V255H195Q252 255 252 198Z'/%3E%3Cpath fill='%23D4AF37' fill-opacity='.6' d='M364 616H256V476Q256 438 283 411L411 283Q438 256 476 256H616V361H421Q364 361 364 418Z'/%3E%3C/svg%3E") center/contain no-repeat}
+.vev-tr span.f{color:rgba(118,230,171,.10)}
+.vev-tr span.o{color:transparent;-webkit-text-stroke:1.4px rgba(118,230,171,.30)}
+.vev-tr i{flex:none;width:clamp(14px,1.4vw,22px);height:clamp(14px,1.4vw,22px);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 616 616'%3E%3Cpath fill='%2376E6AB' fill-opacity='.55' d='M252 0H360V140Q360 178 333 205L205 333Q178 360 140 360H0V255H195Q252 255 252 198Z'/%3E%3Cpath fill='%2376E6AB' fill-opacity='.55' d='M364 616H256V476Q256 438 283 411L411 283Q438 256 476 256H616V361H421Q364 361 364 418Z'/%3E%3C/svg%3E") center/contain no-repeat}
 @keyframes vevm{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.vev-in{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:0 clamp(20px,5vw,64px);text-align:center}
-.vev-live{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0B1D57;background:linear-gradient(180deg,#FFFFFF,#C9D3EA);border-radius:999px;padding:8px 16px;margin-bottom:26px;box-shadow:0 6px 24px rgba(160,185,255,.35)}
+.vev-in{position:relative;z-index:2;max-width:1060px;margin:0 auto;padding:0 clamp(20px,5vw,64px);text-align:center}
+.vev-live{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#0D2B1F;background:linear-gradient(180deg,#FFFFFF,#D9F5E6);border-radius:999px;padding:8px 16px;margin-bottom:26px;box-shadow:0 6px 24px rgba(118,230,171,.35)}
 .vev-live i{width:9px;height:9px;border-radius:50%;background:#E3262E;animation:vevl 1.4s ease-in-out infinite}
 @keyframes vevl{0%,100%{box-shadow:0 0 0 0 rgba(227,38,46,.6)}50%{box-shadow:0 0 0 7px rgba(227,38,46,0)}}
 .vev h2{font-family:"Clash Grotesk","Inter",sans-serif;font-weight:600;letter-spacing:-.03em;font-size:clamp(42px,6.6vw,104px);line-height:.92;margin:0;font-variant-ligatures:none;
-  background:linear-gradient(180deg,#FFFFFF 0%,#E4EAF7 45%,#9FB0D6 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 10px 30px rgba(0,0,0,.55))}
-.vev h2 span{display:block;background:linear-gradient(180deg,#FFF3C4 0%,#F2D27A 35%,#D4AF37 60%,#A67C1B 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.vev p{font-size:clamp(17px,1.4vw,20px);line-height:1.6;color:#D6DEF5;max-width:56ch;margin:26px auto 34px;text-shadow:0 2px 20px rgba(0,0,0,.8)}
+  background:linear-gradient(180deg,#FFFFFF 0%,#E8F7EF 45%,#A9D9C2 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 10px 30px rgba(0,0,0,.55))}
+.vev h2 span{display:block;background:linear-gradient(180deg,#D9FBE9 0%,#9EF0C6 35%,#76E6AB 60%,#1D9E75 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.vev p{font-size:clamp(17px,1.4vw,20px);line-height:1.6;color:#D3E8DD;max-width:56ch;margin:26px auto 34px;text-shadow:0 2px 20px rgba(0,0,0,.8)}
 .vev-acts{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
 .vev-cta{display:inline-flex;align-items:center;padding:16px 26px;border-radius:12px;font-weight:700;font-size:16px;text-decoration:none;transition:filter .2s,border-color .2s,color .2s}
-.vev-cta.solid{background:linear-gradient(180deg,#F7E39A,#D4AF37 55%,#B48A24);color:#0B1D57;box-shadow:0 10px 30px -10px rgba(212,175,55,.6)}
+.vev-cta.solid{background:#76E6AB;color:#0D2B1F;box-shadow:0 10px 30px -10px rgba(118,230,171,.6)}
 .vev-cta.solid:hover{filter:brightness(1.08)}
-.vev-cta.line{border:1.5px solid rgba(214,226,255,.55);color:#fff;background:rgba(6,15,53,.55)}.vev-cta.line:hover{border-color:#fff}
+.vev-cta.line{border:1.5px solid rgba(118,230,171,.55);color:#fff;background:rgba(13,43,31,.55)}.vev-cta.line:hover{border-color:#fff}
 .vev-comp{list-style:none;padding:0;margin:44px 0 0;display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
-.vev-comp li{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:linear-gradient(180deg,rgba(30,58,140,.85),rgba(8,20,70,.85));border:1px solid rgba(214,226,255,.35);border-radius:999px;padding:9px 16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-.vev-comp li:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#D4AF37;margin-right:8px;vertical-align:.1em}
-.vev-comp li.more{background:linear-gradient(180deg,#F7E39A,#D4AF37 55%,#B48A24);color:#0B1D57;border-color:transparent}
-.vev-comp li.more:before{background:#0B1D57}
-.vev a:focus-visible{outline:3px solid #F2D27A;outline-offset:3px}
-@media(prefers-reduced-motion:reduce){.vev-tr,.vev-live i,.vev:before{animation:none}}
+.vev-comp li{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:linear-gradient(180deg,rgba(32,75,67,.85),rgba(13,43,31,.85));border:1px solid rgba(118,230,171,.32);border-radius:999px;padding:9px 16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.vev-comp li:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#76E6AB;margin-right:8px;vertical-align:.1em}
+.vev-comp li.more{background:#76E6AB;color:#0D2B1F;border-color:transparent}
+.vev-comp li.more:before{background:#0D2B1F}
+.vev a:focus-visible{outline:3px solid #76E6AB;outline-offset:3px}
+.vev-edge{position:absolute;left:0;right:0;height:clamp(44px,7vw,104px);z-index:1;pointer-events:none}
+.vev-edge svg{display:block;width:100%;height:100%;overflow:visible}
+.vev-edge.top{top:-1px}
+.vev-edge.bot{bottom:-1px}
+.vev-edge .ln{stroke:#76E6AB;stroke-width:3;fill:none;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 6px rgba(118,230,171,.75))}
+.vev-edge .ln2{stroke:rgba(118,230,171,.45);stroke-width:1.2;fill:none;stroke-dasharray:10 9;vector-effect:non-scaling-stroke;animation:vevdash 18s linear infinite}
+@keyframes vevdash{to{stroke-dashoffset:-380}}
+.vev-kick{position:absolute;left:50%;top:50%;width:clamp(44px,4.4vw,60px);height:clamp(44px,4.4vw,60px);transform:translate(-50%,-50%);border-radius:50%;background:#0D2B1F;border:2px solid #76E6AB;color:#76E6AB;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 7px rgba(13,43,31,.9),0 0 26px rgba(118,230,171,.55)}
+.vev-kick svg{width:46%;height:46%}
+@media(prefers-reduced-motion:reduce){.vev-tr,.vev-live i,.vev:before,.vev-edge .ln2{animation:none}}
 
 /* === MOBILE-1 (2026-10-02) — phone layout fixes, loaded last so it wins; desktop untouched === */
 @media (max-width:760px){
@@ -1243,19 +1253,21 @@ nav.tnav{position:sticky}
     <h2 id="scs-title">Votre audience est déjà là.</h2>
     <p class="sub">Toodooh vous permet de l'atteindre.</p>
     <p>Cafés, lounges, salles de sport, pharmacies, commerces… : Toodooh fait de ces lieux de vie un média indoor que vous ciblez, pilotez et mesurez, pour vos marques comme pour vos clients d'agence.</p>
-    <div class="acts"><a class="scs-cta solid" href="#page-screencasters">Découvrir</a><a class="scs-cta line" href="/signup">Lancer une campagne</a></div>
+    <div class="acts"><a class="scs-cta solid" href="#page-screencasters">Découvrir</a><a class="scs-cta line" href="/login?next=/new-campaign">Lancer une campagne</a></div>
   </div>
   <figure><img src="/images/site-4e7ae7cabb.jpg" alt="Salle de sport, un sportif regarde un écran mural qui diffuse un message Toodooh" loading="lazy"></figure>
 </section>
 <!-- Vitrine : temps forts sportifs -->
 <section class="vev" aria-labelledby="vev-title">
   <div class="vev-glow" aria-hidden="true"></div>
+  <div class="vev-edge top" aria-hidden="true"><svg viewBox="0 0 1440 120" preserveAspectRatio="none"><polygon points="0,0 1440,0 1440,22 0,98" fill="#0D2B1F"/><line class="ln" x1="0" y1="98" x2="1440" y2="22"/><line class="ln2" x1="0" y1="114" x2="1440" y2="38"/></svg><span class="vev-kick"><svg viewBox="0 0 616 616"><path fill="currentColor" d="M252 0H360V140Q360 178 333 205L205 333Q178 360 140 360H0V255H195Q252 255 252 198Z"/><path fill="currentColor" d="M364 616H256V476Q256 438 283 411L411 283Q438 256 476 256H616V361H421Q364 361 364 418Z"/></svg></span></div>
+  <div class="vev-edge bot" aria-hidden="true"><svg viewBox="0 0 1440 120" preserveAspectRatio="none"><polygon points="0,120 1440,120 1440,98 0,22" fill="#FFFFFF"/><line class="ln" x1="0" y1="22" x2="1440" y2="98"/><line class="ln2" x1="0" y1="6" x2="1440" y2="82"/></svg></div>
   <div class="vev-marq" aria-hidden="true"><div class="vev-row r1"><div class="vev-tr"><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i><span class="o">LaLiga</span><i></i><span class="f">Premier League</span><i></i><span class="o">Serie A</span><i></i><span class="f">Ligue Europa</span><i></i><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i><span class="o">LaLiga</span><i></i><span class="f">Premier League</span><i></i><span class="o">Serie A</span><i></i><span class="f">Ligue Europa</span><i></i></div></div><div class="vev-row r2"><div class="vev-tr"><span class="f">LaLiga</span><i></i><span class="o">Premier League</span><i></i><span class="f">Serie A</span><i></i><span class="o">Ligue Europa</span><i></i><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i><span class="f">LaLiga</span><i></i><span class="o">Premier League</span><i></i><span class="f">Serie A</span><i></i><span class="o">Ligue Europa</span><i></i><span class="f">Ligue des champions</span><i></i><span class="o">Coupe d'Afrique des nations</span><i></i><span class="f">Coupe du monde</span><i></i></div></div></div>
   <div class="vev-in">
     <span class="vev-live"><i></i>Soirs de match</span>
     <h2 id="vev-title">Chaque grand match, <span>une salle comble.</span></h2>
     <p>Ligue des champions, CAN, Coupe du monde, LaLiga, Premier League… Les soirs de match, cafés et lounges font le plein. Placez votre marque sur ces temps forts, en quelques clics depuis la plateforme.</p>
-    <div class="vev-acts"><a class="vev-cta solid" href="#sc-events">Découvrir les campagnes événementielles</a><a class="vev-cta line" href="/signup">Lancer une campagne</a></div>
+    <div class="vev-acts"><a class="vev-cta solid" href="#sc-events">Découvrir les campagnes événementielles</a></div>
     <ul class="vev-comp" aria-label="Compétitions"><li>Ligue des champions</li><li>Coupe d'Afrique des nations</li><li>Coupe du monde</li><li>LaLiga</li><li>Premier League</li><li>Serie A</li><li>Ligue Europa</li><li class="more">Et tous les grands rendez-vous du sport</li></ul>
   </div>
 </section>
@@ -1417,7 +1429,7 @@ nav.tnav{position:sticky}
     <span class="scp-kicker"><img class="scp-logo" src="/images/site-9e39ef275e.png" alt="">Screencasters</span>
     <h1 id="scp-title">Votre marque, <span>au cœur de leur quotidien.</span></h1>
     <p>Toodooh permet aux marques et aux agences de diffuser leurs campagnes sur les écrans des lieux de vie, avec un ciblage précis, une audience mesurée et une preuve de chaque diffusion.</p>
-    <div class="acts"><a class="scs-cta solid" href="/signup">Lancer une campagne</a><a class="scs-cta dark" href="#">Prendre rendez-vous</a></div>
+    <div class="acts"><a class="scs-cta solid" href="/login?next=/new-campaign">Lancer une campagne</a><a class="scs-cta dark" href="#">Prendre rendez-vous</a></div>
   </div>
   <figure class="scp-photo">
     <img src="/images/site-31625643bc.jpg" alt="Trois amis souriants dans une galerie commerçante">
@@ -1434,7 +1446,7 @@ nav.tnav{position:sticky}
       <p class="sc-sub">Toodooh vous permet de l'atteindre.</p>
       <p class="sc-lead">Au café, au restaurant, à la salle de sport ou chez les commerçants de proximité, vos clients prennent le temps. Toodooh fait de ces lieux de vie un média indoor que vous ciblez, pilotez et mesurez.</p>
       <div class="sc-actions">
-        <a class="sc-cta solid" href="/signup">Lancer une campagne</a>
+        <a class="sc-cta solid" href="/login?next=/new-campaign">Lancer une campagne</a>
         <a class="sc-cta line" href="#sc-build">Voir le ciblage</a>
       </div>
     </div>
@@ -1562,7 +1574,7 @@ nav.tnav{position:sticky}
           <div class="sc-legend2"><span><i class="on"></i>Réseau actif</span><span><i></i>Ouverture progressive</span></div>
           <div class="sc-sum">
             <p class="sc-sum-p">Vous gardez la main sur chaque critère. La plateforme répartit ensuite la diffusion dans les établissements qui correspondent à votre ciblage, et vous suivez chaque passage en temps réel.</p>
-            <a class="sc-cta solid" href="/signup">Lancer une campagne</a>
+            <a class="sc-cta solid" href="/login?next=/new-campaign">Lancer une campagne</a>
           </div>
         </div>
       </div>
@@ -1590,7 +1602,7 @@ nav.tnav{position:sticky}
         <span class="sc-ev-tag"><i></i>Campagnes événementielles</span>
         <h2 id="sc-ev-title">Les grands soirs, <span>à portée de main.</span></h2>
         <p class="lead">Positionnez-vous sur les matchs et événements sportifs, quand les lieux se remplissent, en quelques clics depuis la plateforme.</p>
-        <a class="sc-cta solid" href="/signup">Lancer une campagne</a>
+        <a class="sc-cta solid" href="/login?next=/new-campaign">Lancer une campagne</a>
       </div>
       <div class="sc-ev-vis" aria-hidden="true">
         <div class="tv"><div class="pitch">
@@ -2365,22 +2377,22 @@ nav.tnav{position:sticky}
     </form>
     <div class="tcm-ok" id="tcm-ok" hidden>
       <span class="mk"><svg viewBox="0 0 616 616" aria-hidden="true"><path fill="currentColor" d="M252 0H360V140Q360 178 333 205L205 333Q178 360 140 360H0V255H195Q252 255 252 198Z"/><path fill="currentColor" d="M364 616H256V476Q256 438 283 411L411 283Q438 256 476 256H616V361H421Q364 361 364 418Z"/></svg></span>
-      <h2>Votre message est prêt</h2>
-      <p class="intro">Votre messagerie s'est ouverte avec le message adressé à contact@too-dooh.com. Il ne vous reste qu'à l'envoyer.</p>
+      <h2>Message envoyé</h2>
+      <p class="intro">Votre message est bien arrivé à l'équipe Toodooh. Nous vous répondrons par email très bientôt.</p>
       <button type="button" class="tcm-send" data-close>Fermer</button>
     </div>
   </div>
 </div>
 <script>
 (function(){
-  var MAIL='contact@too-dooh.com';
+  var ENDPOINT=window.TOODOOH_CONTACT_ENDPOINT||'/api/contact', kind='message';
   var btn=document.querySelector('.tnav-contact'), panel=document.getElementById('tnav-panel');
   function setPanel(o){panel.hidden=!o; btn.setAttribute('aria-expanded',o?'true':'false');}
   btn.addEventListener('click',function(e){e.stopPropagation(); setPanel(panel.hidden);});
   document.addEventListener('click',function(e){if(!panel.hidden&&!panel.contains(e.target)) setPanel(false);});
   var m=document.getElementById('tcm'), f=document.getElementById('tcm-form'), ok=document.getElementById('tcm-ok'), err=document.getElementById('tcm-err'), last=null;
-  function open(role){
-    last=document.activeElement; setPanel(false);
+  function open(role,k){
+    last=document.activeElement; setPanel(false); kind=k||'message';
     f.hidden=false; ok.hidden=true; err.textContent='';
     if(role){var r=f.querySelector('input[value="'+role+'"]'); if(r) r.checked=true;}
     m.hidden=false; document.body.style.overflow='hidden';
@@ -2394,7 +2406,7 @@ nav.tnav{position:sticky}
     var t=a.textContent.trim();
     if(/^(Prendre rendez-vous|Parler à un Agent Toodooh)$/.test(t)){
       a.addEventListener('click',function(e){e.preventDefault();
-        var v=a.closest('#view-sh')||a.closest('.shs')?'Screenhost':(a.closest('#view-sc')||a.closest('.scs')?'Screencaster':null); open(v);});
+        var v=a.closest('#view-sh')||a.closest('.shs')?'Screenhost':(a.closest('#view-sc')||a.closest('.scs')?'Screencaster':null); open(v,/^Prendre/.test(t)?'rendez-vous':'message');});
     }
   });
   m.addEventListener('click',function(e){if(e.target===m) close();});
@@ -2408,10 +2420,14 @@ nav.tnav{position:sticky}
     if(!role){err.textContent='Indiquez si vous êtes Screencaster ou Screenhost.';return;}
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){err.textContent='Indiquez une adresse email valide pour que nous puissions vous répondre.';f.email.focus();return;}
     if(!msg){err.textContent='Écrivez votre message.';f.message.focus();return;}
-    var subject='['+role+'] Message depuis le site Toodooh';
-    var body='Profil : '+role+'\nNom : '+(name||'Non renseigné')+'\nEmail : '+email+'\n\n'+msg;
-    window.location.href='mailto:'+MAIL+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-    f.hidden=true; ok.hidden=false; f.reset();
+    var send=f.querySelector('.tcm-send'); send.disabled=true; send.textContent='Envoi en cours…';
+    fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:role,kind:kind,name:name,email:email,message:msg})})
+      .then(function(r){
+        if(r.ok){f.hidden=true; ok.hidden=false; f.reset(); return;}
+        err.textContent=r.status===429?'Trop de messages envoyés. Réessayez dans une heure.':"L'envoi n'a pas abouti. Réessayez dans un instant.";
+      })
+      .catch(function(){err.textContent="L'envoi n'a pas abouti. Vérifiez votre connexion et réessayez.";})
+      .then(function(){send.disabled=false; send.textContent='Envoyer le message';});
   });
 })();
 </script><script>
@@ -2419,16 +2435,14 @@ nav.tnav{position:sticky}
   var views={vit:document.getElementById('view-vitrine'),sc:document.getElementById('view-sc'),sh:document.getElementById('view-sh'),legal:document.getElementById('view-legal'),tarifs:document.getElementById('view-tarifs'),remb:document.getElementById('view-remb'),car:document.getElementById('view-car'),agsc:document.getElementById('view-agsc'),agsh:document.getElementById('view-agsh')};
   var titles={vit:'Toodooh | Jump into Smarter Advertising',sc:'Toodooh | Screencasters',sh:'Toodooh | Screenhosts',legal:'Toodooh | Mentions légales',tarifs:'Toodooh | Modalités tarifaires',remb:'Toodooh | Politique de remboursement',car:'Toodooh | Carrières',agsc:'Toodooh | Screencast Agent',agsh:'Toodooh | Screenhost Agent'};
   var tops={sc:'page-screencasters',sh:'page-screenhosts',legal:'page-mentions',tarifs:'page-tarifs',remb:'page-remboursement',car:'page-carrieres',agsc:'page-agent-sc',agsh:'page-agent-sh'};
-  var summaries={sc:'screencasters',sh:'screenhosts'};
   var nav=document.querySelector('nav.tnav'), links=[].slice.call(nav.querySelectorAll('.tnav-links a'));
   function cur(){for(var k in views){if(!views[k].hidden) return k;} return 'vit';}
   function spy(){
     nav.classList.toggle('scrolled',window.scrollY>40);
     var v=cur(), on=null;
+    // The links open other pages: one lights up only while you are ON that page, never from
+    // scrolling past its summary on the home page.
     if(v!=='vit'){var gv=({agsc:'car',agsh:'car'})[v]||v; on=nav.querySelector('a[data-view="'+gv+'"]');}
-    else links.forEach(function(a){
-      var dv=a.getAttribute('data-view'), id=dv?summaries[dv]:a.getAttribute('href').slice(1);
-      var s=document.getElementById(id); if(s&&s.getBoundingClientRect().top<=120) on=a;});
     links.forEach(function(a){a.classList.toggle('on',a===on); if(a===on&&v!=='vit') a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current');});
   }
   function route(){
