@@ -148,7 +148,13 @@ describe('MAP-TV1 — new placements land only on installed venues (real Postgre
     // Each installed venue is worth 6 blocs × 100 pers/h × 20 at CPM 15 = 180 TND: 700 TND needs
     // a fourth venue. The gated pool has none → a PARTIAL fill over the three installed ones.
     const dispatched = await runEventDispatch(
-      { id: positioningId, name: 'MAP-TV1', advertiserId, requestedBudget: 700 },
+      {
+        id: positioningId,
+        name: 'MAP-TV1',
+        advertiserId,
+        requestedBudget: 700,
+        eventMinutes: null,
+      },
       event,
       EVENT_CPM,
     );
@@ -168,9 +174,14 @@ describe('MAP-TV1 — new placements land only on installed venues (real Postgre
       .where(eq(eventAllocations.id, refused.id));
     const cascade = await runEventRefusalCascade(
       db,
-      { id: positioningId, name: 'MAP-TV1' },
+      { id: positioningId, name: 'MAP-TV1', eventMinutes: null },
       event,
-      { screenhostId: refused.screenhostId, impressionsTotal: refused.impressionsTotal },
+      {
+        screenhostId: refused.screenhostId,
+        impressionsTotal: refused.impressionsTotal,
+        minutes: 6,
+        montantTnd: Number(refused.montantTnd),
+      },
       EVENT_CPM,
     );
     expect(cascade).toEqual({ status: 'NO_POOL', allocationIds: [] });

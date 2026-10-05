@@ -273,7 +273,9 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
   });
 
   describe('computeEventCmax — the worked example (NO attention coefficient)', () => {
-    it('2 venues: A_max 120 × 6 blocs + fallback 50 × 6 blocs at CPM 15 → C_max 306', async () => {
+    // EVT-MIN1 (2026-10-05) — the selling unit is the MINUTE: one seat of a bloc's pod, worth
+    // A_max × 4 impressions at CPM_evt (no attention coefficient still).
+    it('2 venues: A_max 120 × 6 minutes + fallback 50 × 6 minutes at CPM 15 → C_max 61.20', async () => {
       const sectors = await ownerSectors();
       const venueA = await seedVenue({ sector: sectors[0] ?? '', affluence: [80, 120, 95] });
       const venueB = await seedVenue({ sector: sectors[1] ?? sectors[0] ?? '' }); // no grid → 50
@@ -283,13 +285,19 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       expect(result.eligibleCount).toBe(2);
       const a = result.venues.find((v) => v.screenhostId === venueA);
       const b = result.venues.find((v) => v.screenhostId === venueB);
-      // facturable = brut: A_max × 20 reps × blocs — no T anywhere.
-      expect(REPS_PER_BLOC).toBe(20);
-      expect(a?.impressions).toBe(120 * 20 * 6); // 14 400
+      // facturable = brut: A_max × 4 reps per minute × minutes — no T anywhere.
+      expect(REPS_PER_BLOC).toBe(20); // the pre-EVT-MIN1 whole-bloc constant survives for A1
+      expect(a?.impressions).toBe(120 * 4 * 6); // 2 880
       expect(b?.amaxPph).toBe(AMAX_FALLBACK_PPH);
-      expect(b?.impressions).toBe(50 * 20 * 6); // 6 000
-      expect(result.iMax).toBe(20_400);
-      expect(result.cMaxEvtTnd).toBe(306); // ⌊15 × 20 400 / 1000⌋
+      expect(b?.impressions).toBe(50 * 4 * 6); // 1 200
+      expect(result.iMax).toBe(4_080);
+      expect(result.maxMinutes).toBe(12);
+      // Ordered SPS desc then ancienneté: A's six minutes at 7.20, then B's six at 3.00.
+      expect(result.minutes.map((m) => m.priceTnd)).toEqual([
+        ...Array<number>(6).fill(7.2),
+        ...Array<number>(6).fill(3),
+      ]);
+      expect(result.cMaxEvtTnd).toBe(61.2); // 6 × 7.20 + 6 × 3.00
     });
 
     it('an event-INELIGIBLE sector excludes its venues (restored after)', async () => {
@@ -368,7 +376,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       if (savedCpm !== undefined) await sql`update dispatch_config set event_cpm_tnd = ${savedCpm}`;
     });
 
-    it('GET /api/events/:id/cmax — the campaign-cmax idiom + the shared 100 TND floor', async () => {
+    it('GET /api/events/:id/cmax — the ceiling + the minutes the caller can buy', async () => {
       const sectors = await ownerSectors();
       await seedVenue({ sector: sectors[0] ?? '', affluence: [120] });
       const eventId = await seedEvent();
@@ -378,10 +386,11 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.c_max_evt_tnd).toBe(Math.floor((15 * 120 * 20 * 6) / 1000)); // 216
-      expect(body.i_max).toBe(14_400);
+      expect(body.c_max_evt_tnd).toBe(43.2); // 6 minutes × 15 × 120 × 4 / 1000
+      expect(body.i_max).toBe(2_880);
       expect(body.eligible_count).toBe(1);
-      expect(body.min_budget_tnd).toBe(100);
+      expect(body.max_minutes).toBe(6);
+      expect(body.min_minutes).toBe(1);
 
       const missing = await app.inject({
         method: 'GET',
@@ -429,7 +438,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
 
       const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
       expect(res.statusCode).toBe(200);
-      expect(res.json().c_max_evt_tnd).toBe(Math.floor((30 * 120 * 20 * 6) / 1000)); // 432, not 216
+      expect(res.json().c_max_evt_tnd).toBe(86.4); // 6 × 30 × 120 × 4 / 1000, not 43.2
     });
 
     it('GET /api/admin/events/:id/tarification — per-venue detail, admin-gated', async () => {
@@ -463,7 +472,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
           name: expect.stringContaining('EV2 Venue'),
           amax_pph: 120,
           blocs_disponibles: 6,
-          impressions: 14_400,
+          impressions: 2_880,
         },
       ]);
       await app.close();
@@ -507,20 +516,32 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
     });
   });
 
-  describe('the 15 s event-spot seam (exported, unwired — EV3 wires it)', () => {
-    it('a video over 15 s is refused in French; 15 s passes; photos always pass', () => {
-      expect(EVENT_SPOT_MAX_SECONDS).toBe(15);
+  describe('the event-spot seam — EVT-MIN1 ruling 7A: 10–30 s videos, slot classes', () => {
+    it('a video airs in the smallest class dividing the minute; outside 10–30 s is refused', () => {
+      expect(EVENT_SPOT_MAX_SECONDS).toBe(30);
       expect(validateEventSpot({ creativeType: 'video', durationSeconds: 15 })).toEqual({
         ok: true,
+        slotSeconds: 15,
       });
-      const long = validateEventSpot({ creativeType: 'video', durationSeconds: 16 });
+      expect(validateEventSpot({ creativeType: 'video', durationSeconds: 23 })).toEqual({
+        ok: true,
+        slotSeconds: 30,
+      });
+      expect(validateEventSpot({ creativeType: 'video', durationSeconds: 11 })).toEqual({
+        ok: true,
+        slotSeconds: 12,
+      });
+      const long = validateEventSpot({ creativeType: 'video', durationSeconds: 31 });
       expect(long.ok).toBe(false);
-      if (!long.ok) expect(long.reason).toContain('15 secondes');
+      if (!long.ok) expect(long.reason).toContain('entre 10 et 30 secondes');
+      expect(validateEventSpot({ creativeType: 'video', durationSeconds: 9 }).ok).toBe(false);
       const unknown = validateEventSpot({ creativeType: 'video', durationSeconds: null });
       expect(unknown.ok).toBe(false);
-      expect(validateEventSpot({ creativeType: 'photo', durationSeconds: 30 })).toEqual({
+      expect(validateEventSpot({ creativeType: 'photo', durationSeconds: 20 })).toEqual({
         ok: true,
+        slotSeconds: 20,
       });
+      expect(validateEventSpot({ creativeType: 'photo', durationSeconds: 15 }).ok).toBe(false);
     });
   });
 });

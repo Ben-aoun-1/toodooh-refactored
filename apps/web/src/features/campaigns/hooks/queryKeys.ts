@@ -38,7 +38,8 @@ export const campaignsKeys = {
    * everything that moves the estimate — the budget sized with (the cursor, or 'stored') and a
    * signature of the campaign's dates / targeting / zones / spot — so a change recomputes it live.
    */
-  impressionsEstimate: (id: string, budget: number | 'stored', inputs: string) =>
+  // EVT-MIN1 — `${n}min` keys a positioning's minutes cursor apart from a TND budget.
+  impressionsEstimate: (id: string, budget: number | 'stored' | `${number}min`, inputs: string) =>
     [...campaignsKeys.all, 'impressionsEstimate', id, budget, inputs] as const,
 
   /** Persisted `campaign_categories` rows for a campaign (edit-mode hydration). */

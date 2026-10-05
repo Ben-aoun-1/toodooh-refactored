@@ -61,14 +61,16 @@ describe('the ZONES-ONLY surface', () => {
     expect(modal).toContain('amount <= ceiling');
   });
 
-  it('the api wire carries the two inputs only', () => {
+  it('the api wire carries the zones and the ask only (EVT-MIN1: minutes, or a legacy amount)', () => {
     const api = read('../services/event-boost.api.ts');
     expect(api).toContain('added_zone_ids');
     expect(api).toContain('amount_tnd');
+    expect(api).toContain('minutes: ask.minutes');
     // The frozen axes never become WIRE FIELDS (the file's prose names them to explain the
     // absence, so the pin reads the payload keys, not the comments).
     const payloadKeys = [...api.matchAll(/^\s{6}(\w+):/gm)].map((m) => m[1]);
-    expect(payloadKeys.sort()).toEqual(['added_zone_ids', 'added_zone_ids', 'amount_tnd']);
+    expect(payloadKeys.sort()).toEqual(['added_zone_ids', 'added_zone_ids']);
+    expect(api).not.toMatch(/(spot|category|categor(y|ie)_ids|end_date)\s*:/);
   });
 });
 

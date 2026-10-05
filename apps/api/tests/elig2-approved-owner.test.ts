@@ -282,9 +282,9 @@ describe('ELIG-2 — only approved owners count (real Postgres)', () => {
       const cmax = await computeEventCmax(ref, 15);
       expect(cmax.venues.map((x) => x.screenhostId)).toEqual([v.approved]);
       expect(cmax.eligibleCount).toBe(1);
-      // one venue, six blocs × 100 pers/h × 20 = 12 000 impressions → ⌊15 × 12 000 ÷ 1000⌋
-      expect(cmax.iMax).toBe(12_000);
-      expect(cmax.cMaxEvtTnd).toBe(180);
+      // EVT-MIN1 — one venue, six minutes × 100 pers/h × 4 = 2 400 impressions → 6 × 6 TND
+      expect(cmax.iMax).toBe(2_400);
+      expect(cmax.cMaxEvtTnd).toBe(36);
 
       const pool = await assembleEventPool(ref);
       expect(pool.map((x) => x.screenhostId)).toEqual([v.approved]);

@@ -270,9 +270,10 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
       expect((await eventEligibleVenues(ref)).map((x) => x.id)).toEqual([v.on]);
       const cmax = await computeEventCmax(ref, EVENT_CPM);
       expect(cmax.venues.map((x) => x.screenhostId)).toEqual([v.on]);
-      // one venue × six blocs × 100 pers/h × 20 = 12 000 impressions → ⌊15 × 12 000 ÷ 1000⌋
-      expect(cmax.iMax).toBe(12_000);
-      expect(cmax.cMaxEvtTnd).toBe(180);
+      // EVT-MIN1 — one venue × six minutes × 100 pers/h × 4 = 2 400 impressions → 6 × 6 TND
+      expect(cmax.iMax).toBe(2_400);
+      expect(cmax.maxMinutes).toBe(6);
+      expect(cmax.cMaxEvtTnd).toBe(36);
       expect((await assembleEventPool(ref)).map((x) => x.screenhostId)).toEqual([v.on]);
     });
 
@@ -294,7 +295,14 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
       // The switched-on venue is worth 6 blocs × 100 × 20 at CPM 15 = 180 TND: 400 TND needs a
       // second venue, and the event pool has none → a PARTIAL fill over the one venue.
       const dispatched = await runEventDispatch(
-        { id: positioningId, name: 'CAP-EVT1', advertiserId, requestedBudget: 400 },
+        // A positioning from before the minutes model (event_minutes NULL — ruling A1).
+        {
+          id: positioningId,
+          name: 'CAP-EVT1',
+          advertiserId,
+          requestedBudget: 400,
+          eventMinutes: null,
+        },
         event,
         EVENT_CPM,
       );
@@ -313,9 +321,14 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
         .where(eq(eventAllocations.id, refused.id));
       const cascade = await runEventRefusalCascade(
         db,
-        { id: positioningId, name: 'CAP-EVT1' },
+        { id: positioningId, name: 'CAP-EVT1', eventMinutes: null },
         event,
-        { screenhostId: refused.screenhostId, impressionsTotal: refused.impressionsTotal },
+        {
+          screenhostId: refused.screenhostId,
+          impressionsTotal: refused.impressionsTotal,
+          minutes: 6,
+          montantTnd: Number(refused.montantTnd),
+        },
         EVENT_CPM,
       );
       expect(cascade).toEqual({ status: 'NO_POOL', allocationIds: [] });

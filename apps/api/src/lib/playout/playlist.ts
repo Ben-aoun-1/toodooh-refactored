@@ -27,11 +27,20 @@ export interface PlaylistVideo {
    * ABSENT = no known blackout (older senders; older players ignore it).
    */
   blackouts?: { start: string; end: string }[];
+  /**
+   * EVT-MIN1 — ADDITIVE, minutes-model event entries only: the exact instants (ISO) this spot
+   * starts inside its bloc's pod, each slot lasting `seconds` (the spot, then the Toodooh screen
+   * until the slot ends). A player that knows `slots` plays them on time; older players ignore it
+   * and fall back to reps_per_hour within valid_until.
+   */
+  slots?: { at: string; seconds: number }[];
 }
 
 export interface PlaylistMessage {
   videos: PlaylistVideo[];
   loop: boolean;
+  /** EVT-MIN1 — ADDITIVE: the server's clock when the playlist was built (ISO), for slot alignment. */
+  server_time?: string;
 }
 
 export interface PlaylistSource {
@@ -47,6 +56,8 @@ export interface PlaylistSource {
   validUntil?: Date;
   /** EVT-STOP — the blackout windows this (classic) entry must not air in. */
   blackouts?: readonly { start: Date; end: Date }[];
+  /** EVT-MIN1 — a minutes-model event spot's exact pod slots. */
+  slots?: readonly { at: Date; seconds: number }[];
 }
 
 // A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule), with "today"
@@ -71,7 +82,10 @@ export const campaignWindowValidUntil = (endDate: string): Date =>
 
 // Map resolved sources → the playlist. id = campaign id (the proof-of-play resolution key); priority
 // defaults to 0 (TAKEOVER deferred). loop is always true (the player cycles the list).
-export const buildPlaylist = (sources: readonly PlaylistSource[]): PlaylistMessage => ({
+export const buildPlaylist = (
+  sources: readonly PlaylistSource[],
+  serverTime?: Date,
+): PlaylistMessage => ({
   videos: sources.map((source) => ({
     id: source.campaignId,
     url: source.url,
@@ -92,6 +106,12 @@ export const buildPlaylist = (sources: readonly PlaylistSource[]): PlaylistMessa
           })),
         }
       : {}),
+    ...(source.slots !== undefined && source.slots.length > 0
+      ? {
+          slots: source.slots.map((slot) => ({ at: slot.at.toISOString(), seconds: slot.seconds })),
+        }
+      : {}),
   })),
   loop: true,
+  ...(serverTime !== undefined ? { server_time: serverTime.toISOString() } : {}),
 });

@@ -2,6 +2,12 @@ import { and, eq } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import { campaigns, creatives, eventAllocations, events, screenhosts } from '../../db/schema.js';
+import {
+  type EventPod,
+  eventPodTimeline,
+  eventPodWindow,
+  eventSlotSeconds,
+} from '../event-pricing/minutes.js';
 import { ANTENNE_SECONDS_PER_BLOC } from '../event-pricing/pricing.js';
 import { BLOC_MINUTES } from '../fenetre-diffusion.js';
 
@@ -63,20 +69,60 @@ export interface ActiveEventSpot {
   durationSeconds: number | null;
   creativeType: string;
   repsPerHour: number;
-  /** FRESH-1 — the end of the bloc airing now: the spot stops being airable there. */
+  /** FRESH-1 — the end of the bloc (EVT-MIN1: of the POD) airing now: airable until there. */
   validUntil: Date;
+  /**
+   * EVT-MIN1 — the exact instants this spot starts inside the pod, each owning `slotSeconds`
+   * (the spot, then the Toodooh screen until the slot ends). Absent on positionings dispatched
+   * before the minutes model (they keep EV5's spread cadence).
+   */
+  slots?: { at: Date; seconds: number }[];
 }
 
+interface AiringRow {
+  campaignId: string;
+  campaignName: string;
+  creativeId: string;
+  storageKey: string;
+  durationSeconds: number | null;
+  creativeType: string;
+  blocs: unknown;
+  eventMinutes: number | null;
+  kickoffAt: Date;
+  allocationCreatedAt: Date;
+}
+
+/** The phase of a bloc: avant blocs end at (or before) kickoff, après blocs start after the match. */
+const blocPhase = (bloc: StoredBloc, kickoffAt: Date): 'avant' | 'apres' =>
+  new Date(bloc.end).getTime() <= kickoffAt.getTime() ? 'avant' : 'apres';
+
 /**
- * The venue's event spots airable RIGHT NOW (usually zero or one — a venue can hold allocations
- * for several events, but EV2's placement-time foreign-reservation exclusion guarantees no two
- * events own the same venue-hour, so overlapping blocs cannot occur).
+ * EVT-MIN1 — the pod of one bloc at one venue, from its ACCEPTE minutes seats: first-booked seat
+ * first (allocation created_at, then campaign id), each at its spot's slot class.
  */
-export const activeEventSpots = async (
-  screenhostId: string,
-  now: Date,
-): Promise<ActiveEventSpot[]> => {
-  const rows = await db
+const podOf = (
+  bloc: StoredBloc,
+  kickoffAt: Date,
+  seatRows: readonly AiringRow[],
+): EventPod | null => {
+  const ordered = [...seatRows].sort((a, b) => {
+    const t = a.allocationCreatedAt.getTime() - b.allocationCreatedAt.getTime();
+    return t !== 0 ? t : a.campaignId < b.campaignId ? -1 : a.campaignId > b.campaignId ? 1 : 0;
+  });
+  return eventPodTimeline(
+    blocPhase(bloc, kickoffAt),
+    new Date(bloc.start),
+    new Date(bloc.end),
+    ordered.map((r) => ({
+      campaignId: r.campaignId,
+      // A spot validated before EVT-MIN1 may sit outside the classes: it airs in a 30 s slot.
+      slotSeconds: eventSlotSeconds(r.creativeType, r.durationSeconds) ?? 30,
+    })),
+  );
+};
+
+const airingRows = async (screenhostId: string): Promise<AiringRow[]> =>
+  db
     .select({
       campaignId: campaigns.id,
       campaignName: campaigns.name,
@@ -85,7 +131,9 @@ export const activeEventSpots = async (
       durationSeconds: creatives.durationSeconds,
       creativeType: creatives.creativeType,
       blocs: eventAllocations.blocs,
-      annule: events.annule,
+      eventMinutes: campaigns.eventMinutes,
+      kickoffAt: events.kickoffAt,
+      allocationCreatedAt: eventAllocations.createdAt,
     })
     .from(eventAllocations)
     .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
@@ -101,32 +149,82 @@ export const activeEventSpots = async (
       ),
     );
 
+/**
+ * The venue's event spots airable RIGHT NOW. A positioning dispatched before EVT-MIN1 airs for its
+ * whole bloc at EV5's spread cadence (900 ÷ S). A minutes positioning airs only inside its bloc's
+ * POD (ruling 6B: the rest of the bloc stays dark), at its exact slots.
+ *
+ * `opts.wholeBloc` widens the minutes gate to the whole bloc — proof INGEST uses it, so a
+ * VIDEO_ENDED received just after the pod closes (network latency) is still credited to its bloc,
+ * exactly what settlement measures.
+ */
+export const activeEventSpots = async (
+  screenhostId: string,
+  now: Date,
+  opts: { wholeBloc?: boolean } = {},
+): Promise<ActiveEventSpot[]> => {
+  const rows = await airingRows(screenhostId);
+
   const spots: ActiveEventSpot[] = [];
   for (const row of rows) {
     const airing = parseBlocs(row.blocs).find((bloc) => blocCoversInstant(bloc, now));
     if (!airing) continue;
-    spots.push({
+    const base = {
       campaignId: row.campaignId,
       campaignName: row.campaignName,
       creativeId: row.creativeId,
       storageKey: row.storageKey,
       durationSeconds: row.durationSeconds,
       creativeType: row.creativeType,
-      repsPerHour: eventRepsPerHour(row.durationSeconds ?? 0),
-      validUntil: new Date(airing.end),
+    };
+    if (row.eventMinutes === null) {
+      spots.push({
+        ...base,
+        repsPerHour: eventRepsPerHour(row.durationSeconds ?? 0),
+        validUntil: new Date(airing.end),
+      });
+      continue;
+    }
+    // The seats of THIS bloc at this venue: every minutes positioning with an ACCEPTE allocation
+    // covering the same bloc start.
+    const seatRows = rows.filter(
+      (r) =>
+        r.eventMinutes !== null &&
+        parseBlocs(r.blocs).some(
+          (b) => new Date(b.start).getTime() === new Date(airing.start).getTime(),
+        ),
+    );
+    const pod = podOf(airing, row.kickoffAt, seatRows);
+    if (!pod) continue;
+    const t = now.getTime();
+    if (!opts.wholeBloc && (t < pod.start.getTime() || t >= pod.end.getTime())) continue;
+    const own = pod.slots.filter((slot) => slot.campaignId === row.campaignId);
+    const podSeconds = (pod.end.getTime() - pod.start.getTime()) / 1000;
+    spots.push({
+      ...base,
+      // Older players space by reps/hour: own plays spread over the pod's length.
+      repsPerHour: podSeconds > 0 ? Math.max(1, Math.round((own.length * 3600) / podSeconds)) : 0,
+      validUntil: pod.end,
+      slots: own.map((slot) => ({ at: slot.at, seconds: slot.slotSeconds })),
     });
   }
   return spots;
 };
 
 /**
- * Every venue holding an ACCEPTE allocation whose bloc EDGE (start or end) falls in
+ * Every venue holding an ACCEPTE allocation whose bloc EDGE — or, EVT-MIN1, POD edge — falls in
  * (since, until] — the bloc pusher's scan. A start edge makes the spot appear, an end edge makes
- * it disappear; both need the same UPDATE_PLAYLIST re-push.
+ * it disappear; both need the same UPDATE_PLAYLIST re-push. An après pod opens mid-bloc and an
+ * avant pod closes mid-bloc, so those instants are edges too.
  */
 export const venuesAtBlocEdge = async (since: Date, until: Date): Promise<string[]> => {
   const rows = await db
-    .select({ screenhostId: eventAllocations.screenhostId, blocs: eventAllocations.blocs })
+    .select({
+      screenhostId: eventAllocations.screenhostId,
+      blocs: eventAllocations.blocs,
+      eventMinutes: campaigns.eventMinutes,
+      kickoffAt: events.kickoffAt,
+    })
     .from(eventAllocations)
     .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
     .innerJoin(events, eq(campaigns.eventId, events.id))
@@ -141,11 +239,36 @@ export const venuesAtBlocEdge = async (since: Date, until: Date): Promise<string
   const sinceMs = since.getTime();
   const untilMs = until.getTime();
   const edged = new Set<string>();
+  // EVT-MIN1 — seats per (venue, bloc) of minutes positionings, to size each pod.
+  const seats = new Map<string, { venue: string; bloc: StoredBloc; kickoffAt: Date; n: number }>();
   for (const row of rows) {
     for (const bloc of parseBlocs(row.blocs)) {
       for (const edge of [new Date(bloc.start).getTime(), new Date(bloc.end).getTime()]) {
         if (edge > sinceMs && edge <= untilMs) edged.add(row.screenhostId);
       }
+      if (row.eventMinutes !== null) {
+        const key = `${row.screenhostId}|${new Date(bloc.start).toISOString()}`;
+        const cell = seats.get(key) ?? {
+          venue: row.screenhostId,
+          bloc,
+          kickoffAt: row.kickoffAt,
+          n: 0,
+        };
+        cell.n += 1;
+        seats.set(key, cell);
+      }
+    }
+  }
+  for (const cell of seats.values()) {
+    const pod = eventPodWindow(
+      blocPhase(cell.bloc, cell.kickoffAt),
+      new Date(cell.bloc.start),
+      new Date(cell.bloc.end),
+      cell.n,
+    );
+    if (!pod) continue;
+    for (const edge of [pod.start.getTime(), pod.end.getTime()]) {
+      if (edge > sinceMs && edge <= untilMs) edged.add(cell.venue);
     }
   }
   return [...edged];

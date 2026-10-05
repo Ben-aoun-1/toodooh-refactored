@@ -2,27 +2,29 @@ import type { CreativeView } from '@/features/campaigns/services/creatives.api';
 
 import type { EventItemView } from '../services/events.api';
 
+import {
+  EVENT_SPOT_RANGE_MESSAGE,
+  EVENT_VIDEO_MAX_SECONDS,
+  eventSlotSeconds,
+} from './event-minutes';
+
 // EV3 — the positioning parcours' pure rules, ONE home (the page, the panier sections, the
 // suggestions block and the tests all read these — no duplicated literals in components).
 
-/** The antenne grid: an event VIDEO over 15 s can never air in a bloc (EV2's seam, mirrored). */
-export const EVENT_SPOT_MAX_SECONDS = 15;
+/** EVT-MIN1 — the longest event video (the pod slots run 10–30 s; ./event-minutes.ts). */
+export const EVENT_SPOT_MAX_SECONDS = EVENT_VIDEO_MAX_SECONDS;
 
-/** The French refusal the api sends for a too-long video — mirrored for client-side pre-checks. */
-export const EVENT_SPOT_TOO_LONG_MESSAGE = `Un spot vidéo événementiel ne peut pas dépasser ${EVENT_SPOT_MAX_SECONDS} secondes.`;
+/** The French refusal for a video outside 10–30 s — mirrors the api's message. */
+export const EVENT_SPOT_TOO_LONG_MESSAGE = EVENT_SPOT_RANGE_MESSAGE;
 
 /**
- * The bibliothèque filter of the Vidéo step: videos must fit the 15 s grid; photos always pass
- * (their duration is a display cadence, not a media length — the api rule, mirrored).
+ * The bibliothèque filter of the Vidéo step: EVT-MIN1 — a spot is offered iff it can air in a pod
+ * slot (videos 10–30 s, images 10/20/30 s — the api rule, mirrored).
  */
 export const eventSpotSelectable = (creative: {
   creative_type: string;
   duration_seconds: number | null;
-}): boolean =>
-  creative.creative_type !== 'video' ||
-  (creative.duration_seconds !== null &&
-    creative.duration_seconds > 0 &&
-    creative.duration_seconds <= EVENT_SPOT_MAX_SECONDS);
+}): boolean => eventSlotSeconds(creative.creative_type, creative.duration_seconds) !== null;
 
 export const filterEventSpots = (creatives: CreativeView[]): CreativeView[] =>
   creatives.filter(eventSpotSelectable);

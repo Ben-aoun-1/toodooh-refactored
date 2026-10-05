@@ -79,7 +79,8 @@ export default function EventPositioning() {
   const [currentStep, setCurrentStep] = useState(1);
   const [zoneIds, setZoneIds] = useState<string[]>([]);
   const [creativeId, setCreativeId] = useState<string | null>(null);
-  const [requestedBudget, setRequestedBudget] = useState<number | null>(null);
+  // EVT-MIN1 — a positioning is sized in MINUTES; the api derives its budget from them.
+  const [eventMinutes, setEventMinutes] = useState<number | null>(null);
 
   // Hydrate ONCE from the loaded row (zones/creative/budget survive a resume).
   const hydratedRef = useRef(false);
@@ -88,7 +89,7 @@ export default function EventPositioning() {
     hydratedRef.current = true;
     setZoneIds((campaign.data.zones ?? []).map((z) => z.zone_id));
     setCreativeId(campaign.data.creative_id);
-    setRequestedBudget(campaign.data.requested_budget ?? null);
+    setEventMinutes(campaign.data.event_minutes ?? null);
   }, [campaign.data]);
 
   const zonesQuery = useZones();
@@ -100,8 +101,8 @@ export default function EventPositioning() {
   // Dirty = the editable state moved since the last persisted snapshot. The row itself is
   // ALWAYS a server-side Brouillon (auto-Brouillon by construction — created at entry).
   const snapshot = useCallback(
-    () => JSON.stringify([zoneIds, creativeId, requestedBudget]),
-    [zoneIds, creativeId, requestedBudget],
+    () => JSON.stringify([zoneIds, creativeId, eventMinutes]),
+    [zoneIds, creativeId, eventMinutes],
   );
   const savedSnapRef = useRef<string | null>(null);
   useEffect(() => {
@@ -153,13 +154,16 @@ export default function EventPositioning() {
     [navigate],
   );
 
-  // Persist the dirty editable state (zones + budget; the creative link PATCHes at click).
+  // Persist the dirty editable state (zones + minutes; the creative link PATCHes at click).
   const persistDraft = useCallback(async (): Promise<boolean> => {
     if (!campaignId) return false;
     try {
       await updateCampaign.mutateAsync({
         id: campaignId,
-        input: { zone_ids: zoneIds, requested_budget: requestedBudget },
+        input: {
+          zone_ids: zoneIds,
+          ...(eventMinutes !== null ? { event_minutes: eventMinutes } : {}),
+        },
       });
       savedSnapRef.current = snapshot();
       return true;
@@ -168,7 +172,7 @@ export default function EventPositioning() {
       log.error({ err: error }, 'positioning draft save failed');
       return false;
     }
-  }, [campaignId, updateCampaign, zoneIds, requestedBudget, snapshot]);
+  }, [campaignId, updateCampaign, zoneIds, eventMinutes, snapshot]);
 
   // Enregistrer → the row stays a Brouillon (Mes campagnes · Reprendre resumes the parcours).
   const handleSave = useCallback(async () => {
@@ -270,7 +274,7 @@ export default function EventPositioning() {
         toast.error(BUDGET_FLOOR_ERROR, { duration: 6000 });
       } else if (isBudgetExceedsCmax(error)) {
         toast.error(
-          'Le budget dépasse l’inventaire disponible — le plafond a été recalculé, ajustez votre budget.',
+          'Ces minutes ne sont plus toutes disponibles — le maximum a été recalculé, ajustez votre positionnement.',
           { duration: 8000 },
         );
         void queryClient.invalidateQueries({ queryKey: campaignsKeys.cmax(campaignId) });
@@ -385,8 +389,8 @@ export default function EventPositioning() {
           campaignId={campaignId}
           event={event}
           zoneNames={zoneNames}
-          requestedBudget={requestedBudget}
-          setRequestedBudget={setRequestedBudget}
+          eventMinutes={eventMinutes}
+          setEventMinutes={setEventMinutes}
           spotValidationStatus={campaign.data?.content_validation_status ?? null}
           onAddToCart={handleAddToCart}
           adding={adding}

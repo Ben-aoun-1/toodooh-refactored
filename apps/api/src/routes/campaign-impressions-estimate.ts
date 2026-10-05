@@ -19,7 +19,11 @@ import { requireAuth } from '../middleware/require-auth.js';
 // estimate can reach is a 200 carrying a status — « no estimate » is an answer, not an error.
 
 const idParamSchema = z.object({ id: z.uuid() });
-const querySchema = z.object({ budget_tnd: z.coerce.number().positive().finite().optional() });
+// EVT-MIN1 — `minutes` sizes a positioning's dry-run with the minutes cursor the same way.
+const querySchema = z.object({
+  budget_tnd: z.coerce.number().positive().finite().optional(),
+  minutes: z.coerce.number().int().min(1).max(100_000).optional(),
+});
 
 /** The wire shape (snake_case, the campaigns API idiom). impressions is null unless status = ok. */
 export interface ImpressionsEstimateWire {
@@ -89,7 +93,7 @@ export const campaignImpressionsEstimateRoutes: FastifyPluginAsync = async (app)
       return reply.status(400).send({
         error: 'INVALID_INPUT',
         message: 'Validation échouée',
-        fields: [{ field: 'budget_tnd', reason: 'must be a positive number' }],
+        fields: [{ field: 'budget_tnd', reason: 'budget_tnd / minutes must be positive' }],
       });
     }
     const userId = request.user?.id;
@@ -106,6 +110,7 @@ export const campaignImpressionsEstimateRoutes: FastifyPluginAsync = async (app)
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
         requestedBudget: campaigns.requestedBudget,
+        eventMinutes: campaigns.eventMinutes,
         standardCpmTnd: campaigns.standardCpmTnd,
         eventCpmTnd: campaigns.eventCpmTnd,
         t10s: campaigns.t10s,
@@ -124,7 +129,12 @@ export const campaignImpressionsEstimateRoutes: FastifyPluginAsync = async (app)
     const { creativeId, creativeDurationSeconds, ...campaign } = row;
     const estimate = await estimateCampaignImpressions(
       { ...campaign, spotSeconds: creativeId === null ? null : creativeDurationSeconds },
-      { budgetTnd: parsedQuery.data.budget_tnd },
+      {
+        ...(parsedQuery.data.budget_tnd !== undefined
+          ? { budgetTnd: parsedQuery.data.budget_tnd }
+          : {}),
+        ...(parsedQuery.data.minutes !== undefined ? { minutes: parsedQuery.data.minutes } : {}),
+      },
     );
     return reply.status(200).send(toEstimateWire(estimate));
   });

@@ -59,6 +59,8 @@ export type ActivationOutcome =
   // atomically (nothing persisted); an event annulled between panier and validation refuses.
   | { status: 'EVENT_NMAX_EXCEEDED'; nMax: number }
   | { status: 'EVENT_ANNULE' }
+  // EVT-MIN1 — the bought minutes are no longer all free (seats sold since): nothing persisted.
+  | { status: 'EVENT_MINUTES_UNAVAILABLE'; availableMinutes: number }
   // CPM-3 — an admin CPM change landed between the campaign read and the freeze: nothing was
   // frozen; retryable (the next attempt reads the new CPM). lib/cpm-freeze-guard.ts.
   | { status: 'CPM_CHANGED' }
@@ -194,6 +196,7 @@ export const prepareActivation = async (
         name: campaign.name,
         advertiserId: campaign.advertiserId,
         requestedBudget,
+        eventMinutes: campaign.eventMinutes,
       },
       { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
       cpm,
@@ -205,6 +208,13 @@ export const prepareActivation = async (
     }
     if (dispatched.status === 'NO_POOL') {
       return { status: 'NOT_DELIVERABLE', reason: 'no_eligible' };
+    }
+    // EVT-MIN1 — seats sold since the screencaster chose their minutes: refuse, never shorten.
+    if (dispatched.status === 'MINUTES_UNAVAILABLE') {
+      return {
+        status: 'EVENT_MINUTES_UNAVAILABLE',
+        availableMinutes: dispatched.availableMinutes ?? 0,
+      };
     }
     // OK (fresh placement, possibly D6-partial — alerted inside) or ALREADY_DISPATCHED (resume).
     return { status: 'READY', plan: null, allocations: [] };

@@ -361,7 +361,13 @@ describe('IMP-UNIT1 — « Impressions prévues » is the real audience on both 
       expect(await prevuesOf(campaignId)).toBeNull();
 
       const outcome = await runEventDispatch(
-        { id: campaignId, name: 'Positionnement', advertiserId, requestedBudget: 600 },
+        {
+          id: campaignId,
+          name: 'Positionnement',
+          advertiserId,
+          requestedBudget: 600,
+          eventMinutes: null,
+        },
         { id: ev?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS },
         15,
       );

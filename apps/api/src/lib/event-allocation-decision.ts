@@ -40,6 +40,7 @@ export const decideEventAllocation = async (input: {
         // CPM-1 — the positioning's own rates, read in THIS transaction with the allocation.
         standardCpmTnd: campaigns.standardCpmTnd,
         eventCpmTnd: campaigns.eventCpmTnd,
+        eventMinutes: campaigns.eventMinutes,
         eventId: events.id,
         kickoffAt: events.kickoffAt,
         endsAt: events.endsAt,
@@ -84,11 +85,14 @@ export const decideEventAllocation = async (input: {
       await releaseBlocHours(tx, row.eventId, row.allocation.screenhostId);
       await runEventRefusalCascade(
         tx,
-        { id: row.campaignId, name: row.matchName },
+        { id: row.campaignId, name: row.matchName, eventMinutes: row.eventMinutes },
         { id: row.eventId, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
         {
           screenhostId: row.allocation.screenhostId,
           impressionsTotal: row.allocation.impressionsTotal,
+          // EVT-MIN1 — one placed bloc = one minute; the refused value caps the re-placement.
+          minutes: Array.isArray(row.allocation.blocs) ? row.allocation.blocs.length : 0,
+          montantTnd: Number(row.allocation.montantTnd),
         },
         // CPM-1 — the refused share's value and its re-placement price at the positioning's
         // OWN event CPM (the one its blocs were placed at), never a CPM saved since.

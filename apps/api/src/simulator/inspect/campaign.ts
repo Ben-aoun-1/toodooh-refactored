@@ -46,6 +46,7 @@ export const inspectCampaign = async (campaignId: string) => {
       startDate: campaigns.startDate,
       endDate: campaigns.endDate,
       requestedBudget: campaigns.requestedBudget,
+      eventMinutes: campaigns.eventMinutes,
       standardCpmTnd: campaigns.standardCpmTnd,
       eventCpmTnd: campaigns.eventCpmTnd,
       t10s: campaigns.t10s,

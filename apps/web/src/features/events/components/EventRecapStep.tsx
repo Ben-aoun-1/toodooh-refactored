@@ -3,32 +3,30 @@ import { useEffect, useState } from 'react';
 
 import PillButton from '@/components/PillButton';
 import ImpressionsEstimateText from '@/features/campaigns/components/ImpressionsEstimateText';
-import {
-  CART_BUDGET_MIN_TND,
-  CART_BUDGET_STEP_TND,
-} from '@/features/campaigns/hooks/new-campaign/cart-budget';
 import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
 import { useImpressionsEstimate } from '@/features/campaigns/hooks/useImpressionsEstimate';
-import {
-  CMAX_PULLBACK_NOTICE,
-  clampBudgetToCmax,
-  isInventoryInsufficient,
-} from '@/features/campaigns/lib/cmax-budget';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
 import { tndLabel } from '@/lib/money';
 
 import { formatEventDate, formatEventHours } from '../lib/event-display';
+import {
+  EVENT_MIN_MINUTES,
+  clampEventMinutes,
+  eventMinutesPrice,
+  minutesLabel,
+} from '../lib/event-minutes';
 import type { EventItemView } from '../services/events.api';
 
-const tnd = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
+const integer = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
 
 interface EventRecapStepProps {
   campaignId: string;
   event: EventItemView | null;
   zoneNames: string[];
-  requestedBudget: number | null;
-  setRequestedBudget: (value: number | null) => void;
+  /** EVT-MIN1 — the positioning's minutes (null = not chosen yet). */
+  eventMinutes: number | null;
+  setEventMinutes: (value: number | null) => void;
   /** The linked spot's validation status — 'approved' earns the SK1 immediate-launch line. */
   spotValidationStatus: string | null;
   onAddToCart: () => void | Promise<void>;
@@ -38,16 +36,18 @@ interface EventRecapStepProps {
 
 /**
  * EV3 — the parcours' Récapitulatif: the diffusion-window line, the zone count, the
- * categories-are-automatic reminder, and the budget slider bounded [100, live C_max_evt]
- * (GET /:id/cmax forks to the EVENT engine server-side — same wire, event ceiling). Montants
- * HT, no letters (HT-1), via lib/money; « Ajouter au panier » files the positioning under Événements.
+ * categories-are-automatic reminder, and — EVT-MIN1 — the MINUTES slider bounded [1, the minutes
+ * still free] (GET /:id/cmax forks to the event engine and sends the ordered minute prices: N
+ * minutes cost the sum of the first N, so lowering the slider drops the last venue's latest bloc
+ * first). Montants HT, no letters (HT-1), via lib/money; « Ajouter au panier » files the
+ * positioning under Événements.
  */
 export default function EventRecapStep({
   campaignId,
   event,
   zoneNames,
-  requestedBudget,
-  setRequestedBudget,
+  eventMinutes,
+  setEventMinutes,
   spotValidationStatus,
   onAddToCart,
   adding,
@@ -56,27 +56,29 @@ export default function EventRecapStep({
   const cmax = useCampaignCmax(campaignId);
   const [pullbackNotice, setPullbackNotice] = useState(false);
 
-  const value = requestedBudget;
-  const cMaxTnd = cmax.data?.c_max_tnd;
-  const zeroInventory = cMaxTnd !== undefined && isInventoryInsufficient(cMaxTnd);
-  const canAct = !adding && value != null && value >= CART_BUDGET_MIN_TND && !zeroInventory;
-
-  // Pull-back (the E5 idiom): a budget above a freshly-fetched ceiling clamps down VISIBLY.
-  useEffect(() => {
-    if (cMaxTnd === undefined) return;
-    const { next, clamped } = clampBudgetToCmax(value, cMaxTnd);
-    if (clamped) {
-      setRequestedBudget(next);
-      setPullbackNotice(true);
-    }
-  }, [cMaxTnd, value, setRequestedBudget]);
-
-  // IMP-EST1 (Q3 A) — the dry-run of the EVENT dispatch for this cursor (debounced): the blocs
-  // the bloc engine would place now (A_max × 20 per 20-min bloc), priced at the positioning's CPM.
+  const maxMinutes = cmax.data?.max_minutes;
+  const prices = cmax.data?.minute_prices_tnd ?? [];
+  const value = eventMinutes;
+  const zeroInventory = maxMinutes !== undefined && maxMinutes < EVENT_MIN_MINUTES;
+  const canAct = !adding && value != null && value >= EVENT_MIN_MINUTES && !zeroInventory;
+  const priceTnd = value == null ? null : eventMinutesPrice(prices, value);
+  // IMP-EST1 — « Impressions prévues » stays the SERVER's dry-run of the event dispatch, sized by
+  // the minutes cursor (debounced): the first N minutes the dispatch would take now.
   const estimate = useImpressionsEstimate(campaignId, {
-    budgetTnd: value,
+    minutes: value,
     inputs: { zones: zoneNames, extra: event?.id ?? null },
   });
+  const venuesCount = cmax.data?.eligible_count;
+
+  // Pull-back (the E5 idiom): minutes above a freshly-fetched max clamp down VISIBLY.
+  useEffect(() => {
+    if (maxMinutes === undefined || value === null) return;
+    const next = clampEventMinutes(value, maxMinutes);
+    if (next !== value) {
+      setEventMinutes(next);
+      setPullbackNotice(true);
+    }
+  }, [maxMinutes, value, setEventMinutes]);
 
   const approvedNotice = approvedSpotNotice(spotValidationStatus ?? undefined);
 
@@ -86,7 +88,7 @@ export default function EventRecapStep({
         <StepSectionHeading
           icon={Banknote}
           title="Récapitulatif"
-          subtitle="Vérifiez votre positionnement et fixez votre budget"
+          subtitle="Vérifiez votre positionnement et choisissez vos minutes"
         />
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -139,14 +141,14 @@ export default function EventRecapStep({
           <section className="min-w-0 rounded-2xl border border-gray-200 p-5 sm:p-6">
             <h3 className="text-lg font-bold text-gray-900">Ajuster votre impact</h3>
             <p className="mt-1 text-sm text-gray-600">
-              Déplacez le curseur pour ajuster votre budget et vos impressions prévues
+              Déplacez le curseur pour ajuster vos minutes, votre montant et vos impressions prévues
             </p>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-brand-primary/10 p-4">
                 <p className="text-sm text-gray-600">Montant estimé</p>
                 <p className="mt-0.5 text-lg font-bold text-brand-deep">
-                  {value == null ? '—' : tndLabel(value)}
+                  {priceTnd == null ? '—' : tndLabel(priceTnd)}
                 </p>
               </div>
               <div className="rounded-2xl bg-brand-accent/10 p-4">
@@ -160,54 +162,67 @@ export default function EventRecapStep({
             <div className="mt-4 rounded-2xl border border-gray-200 p-5">
               <div className="mb-4 text-center">
                 <span className="text-3xl font-bold text-gray-900">
-                  {value == null ? '—' : tnd.format(value)}
+                  {value == null ? '—' : integer.format(value)}
                 </span>
                 <span className="ml-1 text-base font-medium text-gray-400">
-                  {value == null ? '' : 'TND'}
+                  {value == null ? '' : value > 1 ? 'minutes' : 'minute'}
                 </span>
                 {value == null && (
                   <p className="mt-1 text-sm text-gray-500">
-                    Déplacez le curseur pour renseigner votre budget.
+                    Déplacez le curseur pour choisir vos minutes de diffusion.
                   </p>
                 )}
               </div>
 
               <input
-                id="event-budget"
+                id="event-minutes"
                 type="range"
-                min={CART_BUDGET_MIN_TND}
-                max={cMaxTnd ?? CART_BUDGET_MIN_TND}
-                step={CART_BUDGET_STEP_TND}
-                value={value ?? CART_BUDGET_MIN_TND}
+                min={EVENT_MIN_MINUTES}
+                max={maxMinutes ?? EVENT_MIN_MINUTES}
+                step={1}
+                value={value ?? EVENT_MIN_MINUTES}
                 onChange={(e) => {
                   setPullbackNotice(false);
-                  setRequestedBudget(Number(e.target.value));
+                  setEventMinutes(Number(e.target.value));
                 }}
-                disabled={cMaxTnd === undefined || zeroInventory}
-                aria-label="Budget du positionnement (TND)"
-                aria-valuetext={
-                  value == null ? 'Aucun budget renseigné' : `${tnd.format(value)} TND`
-                }
+                disabled={maxMinutes === undefined || zeroInventory}
+                aria-label="Minutes de diffusion du positionnement"
+                aria-valuetext={value == null ? 'Aucune minute choisie' : minutesLabel(value)}
                 className="w-full cursor-pointer accent-brand-primary disabled:cursor-not-allowed disabled:opacity-40"
               />
               <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
-                <span>MIN: {tnd.format(CART_BUDGET_MIN_TND)} TND</span>
-                <span>MAX: {cMaxTnd === undefined ? '…' : `${tnd.format(cMaxTnd)} TND`}</span>
+                <span>MIN : {minutesLabel(EVENT_MIN_MINUTES)}</span>
+                <span>
+                  MAX : {maxMinutes === undefined ? '…' : minutesLabel(maxMinutes)}
+                  {venuesCount !== undefined && venuesCount > 0
+                    ? ` · ${venuesCount} établissement${venuesCount > 1 ? 's' : ''}`
+                    : ''}
+                </span>
               </div>
+              <p className="mt-3 text-xs text-gray-500">
+                Une minute = votre spot dans la page publicitaire de 5 minutes d’un bloc, chez un
+                établissement. Les 3 blocs avant le match ouvrent par la publicité, les 3 blocs
+                après la terminent. En réduisant le curseur, vous retirez d’abord les minutes du
+                dernier établissement de la liste.
+              </p>
 
               {cmax.isLoading && (
                 <p className="mt-2 inline-flex items-center gap-2 text-xs text-gray-500">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Calcul du budget maximum disponible…
+                  Calcul des minutes disponibles…
                 </p>
               )}
               {cmax.isError && (
                 <p className="mt-2 text-xs text-red-600">
-                  Impossible de calculer le budget maximum — revenez sur cette étape pour réessayer.
+                  Impossible de calculer les minutes disponibles — revenez sur cette étape pour
+                  réessayer.
                 </p>
               )}
               {pullbackNotice && (
-                <p className="mt-2 text-xs font-medium text-amber-700">{CMAX_PULLBACK_NOTICE}</p>
+                <p className="mt-2 text-xs font-medium text-amber-700">
+                  Des minutes ont été vendues entre-temps : votre choix a été ramené au maximum
+                  disponible.
+                </p>
               )}
               {zeroInventory && (
                 <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">

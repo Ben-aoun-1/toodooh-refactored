@@ -216,18 +216,19 @@ describe('measured video rules at the upload route (probe mocked — every envir
     expect(await db.$count(creatives)).toBe(0);
   });
 
-  it('the event cap still applies to the MEASURED duration: a 20 s portrait spot → 400 EVENT_SPOT_TOO_LONG; 15 s → 201', async () => {
+  // EVT-MIN1 (ruling 7A) — an event video lasts 10–30 s, judged on the MEASURED duration.
+  it('the event range applies to the MEASURED duration: an 8 s spot declared 10 → 400 EVENT_SPOT_TOO_LONG; 23 s → 201', async () => {
     mockSession(await seedUser());
-    probeSpy.mockResolvedValue(measured({ durationSeconds: 20 }));
+    probeSpy.mockResolvedValue(measured({ durationSeconds: 8 }));
     const refused = await uploadVideo(app, 'duration_seconds=10&for_event=1');
     expect(refused.statusCode).toBe(400);
     expect((refused.json() as { error: string }).error).toBe('EVENT_SPOT_TOO_LONG');
     expect(await db.$count(creatives)).toBe(0);
 
-    probeSpy.mockResolvedValue(measured({ durationSeconds: 15 }));
+    probeSpy.mockResolvedValue(measured({ durationSeconds: 23 }));
     const ok = await uploadVideo(app, 'duration_seconds=10&for_event=1');
     expect(ok.statusCode).toBe(201);
-    expect((ok.json() as { duration_seconds: number }).duration_seconds).toBe(15);
+    expect((ok.json() as { duration_seconds: number }).duration_seconds).toBe(23);
   });
 
   // ── the probe only ever sees accepted video bytes ────────────────────────────

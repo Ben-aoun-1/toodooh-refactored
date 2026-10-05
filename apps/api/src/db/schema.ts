@@ -945,6 +945,11 @@ export const campaigns = pgTable(
     // admin sees it in the review queue and derives i_cible/cpm/s/t at activation (the activation
     // endpoint is unchanged). Nullable; L-price replaces the manual cart with the real cursor.
     requestedBudget: numeric('requested_budget', { precision: 12, scale: 2 }),
+    // EVT-MIN1 — an event positioning's size in MINUTES (one minute = one seat of one bloc's pod at
+    // one venue; lib/event-pricing/minutes.ts). requested_budget is DERIVED from it (the price of
+    // the first N minutes of the ordered list). NULL on classic campaigns AND on positionings
+    // dispatched before the minutes model — those keep EV4's whole-bloc rules (ruling A1).
+    eventMinutes: integer('event_minutes'),
     // CPM-3 — no database default any more: the BEFORE INSERT trigger of migration 0076 copies the
     // screencaster's CPMs (users.cpm_standard_tnd / cpm_event_tnd). `.default(sql\`NULL\`)` only
     // keeps the column insert-optional for Drizzle; an explicit value still wins in the trigger.
@@ -990,6 +995,10 @@ export const campaigns = pgTable(
     index('campaigns_advertiser_id_idx').on(table.advertiserId),
     // EV3 — the per-event positioning lookups (Mes Événements, the R4/EV5 era reads).
     index('campaigns_event_id_idx').on(table.eventId),
+    check(
+      'campaigns_event_minutes_positive',
+      sql`${table.eventMinutes} IS NULL OR ${table.eventMinutes} >= 1`,
+    ),
   ],
 );
 

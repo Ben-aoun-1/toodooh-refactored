@@ -398,13 +398,24 @@ export const runEventPlayout = async (input: {
         continue;
       }
       const span = to - from;
-      const spot = (await activeEventSpots(row.screenhostId, new Date(from + span / 2))).find(
-        (s) => s.campaignId === row.campaignId,
-      );
+      // EVT-MIN1 — a minutes spot airs only inside its bloc's pod: read the gate over the whole
+      // bloc to get its exact slots, then prove each slot falling in this hour's overlap.
+      const spot = (
+        await activeEventSpots(row.screenhostId, new Date(from + span / 2), { wholeBloc: true })
+      ).find((s) => s.campaignId === row.campaignId);
       if (!spot) continue;
-      const reps = Math.max(1, Math.floor((spot.repsPerHour * span) / (60 * 60 * 1000)));
-      const proofs = Array.from({ length: reps }, (_, i) => {
-        const at = new Date(from + Math.floor(((i + 0.5) * span) / reps));
+      const legacyReps = Math.max(1, Math.floor((spot.repsPerHour * span) / (60 * 60 * 1000)));
+      const instants: Date[] = spot.slots
+        ? spot.slots
+            .map((slot) => slot.at.getTime())
+            .filter((t) => t >= from && t < to)
+            .map((t) => new Date(t + (spot.durationSeconds ?? 10) * 1000))
+        : Array.from(
+            { length: legacyReps },
+            (_, i) => new Date(from + Math.floor(((i + 0.5) * span) / legacyReps)),
+          );
+      if (instants.length === 0) continue;
+      const proofs = instants.map((at) => {
         return {
           screenId: lit[0]!,
           screenhostId: row.screenhostId,

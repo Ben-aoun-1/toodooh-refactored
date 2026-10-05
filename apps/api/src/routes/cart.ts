@@ -10,7 +10,7 @@ import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
-import { computeEventCmax } from '../lib/event-pricing/pricing.js';
+import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { pushPlaylistToAllConnected } from '../lib/playout/push.js';
 import { walletSpendable } from '../lib/recharges.js';
 import { dropTypicalWeekFreeze, freezeTypicalWeek } from '../lib/typical-week-freeze.js';
@@ -68,19 +68,24 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
     return 'MISSING_CREATIVE';
   }
   if (c.requestedBudget === null || Number(c.requestedBudget) <= 0) return 'MISSING_BUDGET';
-  if (Number(c.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) return 'BUDGET_BELOW_MINIMUM';
+  // EVT-MIN1 — a positioning is sized in minutes (minimum 1, ruling 4A): no 100 TND floor.
+  if (isEvent && c.eventMinutes === null) return 'MISSING_BUDGET';
+  if (!isEvent && Number(c.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) {
+    return 'BUDGET_BELOW_MINIMUM';
+  }
   if (isEvent && c.eventId !== null) {
     // EV3 — the event ceiling (EV2 pricing, CPM_evt): the classic C_max never prices a
     // positioning (the engine boundary — computeCampaignCmax REFUSES bound rows outright).
     // CPM-1 — priced at the positioning's OWN event CPM (CPM-3: its screencaster's, realigned
     // while it is a draft not yet frozen).
-    const [ev] = await db.select().from(events).where(eq(events.id, c.eventId)).limit(1);
-    if (!ev || ev.annule) return 'EVENT_ANNULE';
-    const evCmax = await computeEventCmax(
-      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+    // EVT-MIN1 — its minutes must still be free (lib/event-minutes-gate — the PATCH's own check).
+    const verdict = await checkEventMinutes(
+      c.eventId,
+      c.eventMinutes ?? 0,
       campaignCpmRates(c).eventCpmTnd,
     );
-    if (Number(c.requestedBudget) > evCmax.cMaxEvtTnd) return 'BUDGET_EXCEEDS_CMAX';
+    if (!verdict.ok)
+      return verdict.reason === 'EVENT_ANNULE' ? 'EVENT_ANNULE' : 'BUDGET_EXCEEDS_CMAX';
     return null;
   }
   const cmax = await computeCampaignCmax(
