@@ -575,6 +575,13 @@
       "when": 1791209076018,
       "tag": "0081_event_minutes",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1791284438475,
+      "tag": "0082_event_catalogue_teams",
+      "breakpoints": true
     }
   ]
 }

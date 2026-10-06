@@ -2087,9 +2087,31 @@ export const events = pgTable(
     source: text('source').notNull().default('official'),
     suggestedBy: uuid('suggested_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // EVT-CAT2 (operator rulings 2026-10-06) — the catalogue card's football facts. All optional:
+    // a card without them falls back to the event name.
+    competition: text('competition'),
+    round: text('round'),
+    stadium: text('stadium'),
+    /** « À la une »: 'hero' (the big card) or 'pinned' (the cards under it); NULL = by month. */
+    featured: text('featured'),
+    /**
+     * B1 — a match whose date or kickoff time is not confirmed is LISTED with its badge but not
+     * positionable: kickoff_at then holds the provisional instant (pricing and the blocs need
+     * one), and nothing can be bought on it until the admin confirms.
+     */
+    dateTbc: boolean('date_tbc').notNull().default(false),
+    timeTbc: boolean('time_tbc').notNull().default(false),
+    /** « Sous réserve de qualification » (a club still to qualify, an opponent still to draw). */
+    qualificationPending: boolean('qualification_pending').notNull().default(false),
+    /** The card's date line when the date is not a single day (« Week-end du 30 octobre … »). */
+    dateLabel: text('date_label'),
   },
   (table) => [
     index('events_kickoff_at_idx').on(table.kickoffAt),
+    check(
+      'events_featured_valid',
+      sql`${table.featured} IS NULL OR ${table.featured} in ('hero', 'pinned')`,
+    ),
     check('events_type_sport', sql`${table.type} = 'sport'`),
     check('events_ends_after_kickoff', sql`${table.endsAt} > ${table.kickoffAt}`),
     check('events_source_valid', sql`${table.source} in ('official', 'suggested')`),
@@ -2098,6 +2120,58 @@ export const events = pgTable(
 
 export type EventRow = typeof events.$inferSelect;
 export type NewEventRow = typeof events.$inferInsert;
+
+// ── teams + event_matches (EVT-CAT2, 2026-10-06) ─────────────────────────────
+// The teams a catalogue card shows: a national team (its flag) or a club. The logo/flag image is
+// OPTIONAL (logo_key, the storage-key idiom, presigned on read) — a card without it shows the name
+// on the team's colours. Colours are #RRGGBB: the main one paints the poster's side and stripe,
+// `crowd` (optional) tints the stadium crowd when the main one is too dark/light to read.
+export const teams = pgTable(
+  'teams',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    isNational: boolean('is_national').notNull().default(false),
+    colorMain: text('color_main').notNull().default('#5A6B64'),
+    colorSecond: text('color_second').notNull().default('#FFFFFF'),
+    colorCrowd: text('color_crowd'),
+    logoKey: text('logo_key'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('teams_name_uq').on(sql`lower(${table.name})`),
+    check('teams_color_main_hex', sql`${table.colorMain} ~ '^#[0-9A-Fa-f]{6}$'`),
+    check('teams_color_second_hex', sql`${table.colorSecond} ~ '^#[0-9A-Fa-f]{6}$'`),
+    check(
+      'teams_color_crowd_hex',
+      sql`${table.colorCrowd} IS NULL OR ${table.colorCrowd} ~ '^#[0-9A-Fa-f]{6}$'`,
+    ),
+  ],
+);
+
+export type TeamRow = typeof teams.$inferSelect;
+
+// One row per match of an event, in display order: a classic fixture has one, a « Soirée Ligue
+// des champions » three (same kickoff, one positioning). The away team may be unknown yet
+// (« Adversaire après tirage »). A team in use is never deleted (RESTRICT).
+export const eventMatches = pgTable(
+  'event_matches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    homeTeamId: uuid('home_team_id')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'restrict' }),
+    awayTeamId: uuid('away_team_id').references(() => teams.id, { onDelete: 'restrict' }),
+  },
+  (table) => [
+    unique('event_matches_event_position_uq').on(table.eventId, table.position),
+    check('event_matches_position_nonneg', sql`${table.position} >= 0`),
+  ],
+);
 
 // ── hour_reservations (EV1 — the slots_evt seam, D51) ────────────────────────
 // A reserved venue-hour: (screenhost, calendar day, hour) held for an event. WRITTEN BY NOTHING

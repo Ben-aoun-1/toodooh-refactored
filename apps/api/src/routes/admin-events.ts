@@ -1,18 +1,22 @@
 import multipart from '@fastify/multipart';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import {
+  type EventRow,
   campaigns,
   eventAllocations,
   eventAttestations,
+  eventMatches,
   events,
   screenhosts,
+  teams,
 } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { matchesByEvent } from '../lib/event-catalogue.js';
 import { upsertEventAttestation } from '../lib/event-playout/attestation.js';
 import { remapEventPositionings, voidEventPositionings } from '../lib/event-playout/reschedule.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
@@ -71,7 +75,78 @@ const upsertBodySchema = z.object({
   type: z.string().optional(),
   kickoff_at: z.string().optional(),
   ends_at: z.string().optional(),
+  // EVT-CAT2 — the catalogue card's facts (optional; null clears) and its matches.
+  competition: z.string().max(120).nullable().optional(),
+  round: z.string().max(120).nullable().optional(),
+  stadium: z.string().max(160).nullable().optional(),
+  featured: z.enum(['hero', 'pinned']).nullable().optional(),
+  date_tbc: z.boolean().optional(),
+  time_tbc: z.boolean().optional(),
+  qualification_pending: z.boolean().optional(),
+  date_label: z.string().max(160).nullable().optional(),
+  /** Replace-set, display order; away null = « Adversaire après tirage ». [] clears. */
+  matches: z
+    .array(z.object({ home_team_id: z.uuid(), away_team_id: z.uuid().nullable() }))
+    .max(6)
+    .optional(),
 });
+
+type UpsertBody = z.infer<typeof upsertBodySchema>;
+
+const optionalText = (v: string | null | undefined): string | null => v?.trim() || null;
+
+/** EVT-CAT2 — the card scalars of a create/PATCH body (only the keys present). */
+const catalogueFields = (body: UpsertBody): Partial<typeof events.$inferInsert> => ({
+  ...(body.competition !== undefined ? { competition: optionalText(body.competition) } : {}),
+  ...(body.round !== undefined ? { round: optionalText(body.round) } : {}),
+  ...(body.stadium !== undefined ? { stadium: optionalText(body.stadium) } : {}),
+  ...(body.featured !== undefined ? { featured: body.featured } : {}),
+  ...(body.date_tbc !== undefined ? { dateTbc: body.date_tbc } : {}),
+  ...(body.time_tbc !== undefined ? { timeTbc: body.time_tbc } : {}),
+  ...(body.qualification_pending !== undefined
+    ? { qualificationPending: body.qualification_pending }
+    : {}),
+  ...(body.date_label !== undefined ? { dateLabel: optionalText(body.date_label) } : {}),
+});
+
+/** The match teams that do not exist (a 400 names the first). */
+const unknownTeams = async (matches: NonNullable<UpsertBody['matches']>): Promise<string[]> => {
+  const ids = [
+    ...new Set(
+      matches.flatMap((m) =>
+        m.away_team_id ? [m.home_team_id, m.away_team_id] : [m.home_team_id],
+      ),
+    ),
+  ];
+  if (ids.length === 0) return [];
+  const known = await db.select({ id: teams.id }).from(teams).where(inArray(teams.id, ids));
+  const knownIds = new Set(known.map((t) => t.id));
+  return ids.filter((id) => !knownIds.has(id));
+};
+
+type Executor = Pick<typeof db, 'delete' | 'insert'>;
+
+/** Replace an event's matches (display order = array order). */
+const replaceMatches = async (
+  executor: Executor,
+  eventId: string,
+  matches: NonNullable<UpsertBody['matches']>,
+): Promise<void> => {
+  await executor.delete(eventMatches).where(eq(eventMatches.eventId, eventId));
+  if (matches.length === 0) return;
+  await executor.insert(eventMatches).values(
+    matches.map((m, position) => ({
+      eventId,
+      position,
+      homeTeamId: m.home_team_id,
+      awayTeamId: m.away_team_id,
+    })),
+  );
+};
+
+/** The admin wire: the shared view + its matches. */
+const adminEventWire = async (row: EventRow, now: Date) =>
+  eventView(row, now, (await matchesByEvent([row.id])).get(row.id) ?? []);
 
 const parseInstant = (value: string): Date | null => {
   const d = new Date(value);
@@ -114,9 +189,10 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/admin/events', eventReadGuard, async (_request, reply) => {
     const now = new Date();
     const rows = await db.select().from(events).orderBy(desc(events.kickoffAt));
+    const matches = await matchesByEvent(rows.map((r) => r.id));
     return reply.status(200).send({
       events: rows.map((r) => ({
-        ...eventView(r, now),
+        ...eventView(r, now, matches.get(r.id) ?? []),
         annule: r.annule,
         suggested_by: r.suggestedBy,
         created_at: r.createdAt.toISOString(),
@@ -145,23 +221,33 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
     if (!endsAt) return invalidField(reply, 'ends_at', 'La date et heure de fin est invalide.');
     if (endsAt.getTime() <= kickoffAt.getTime())
       return invalidField(reply, 'ends_at', 'La fin doit être postérieure au début.');
-    const [created] = await db
-      .insert(events)
-      .values({
-        name,
-        description: body.description?.trim() || null,
-        category: body.category?.trim() || null,
-        type: 'sport',
-        kickoffAt,
-        endsAt,
-        source: 'official',
-      })
-      .returning();
+    if (body.matches) {
+      const unknown = await unknownTeams(body.matches);
+      if (unknown.length > 0)
+        return invalidField(reply, 'matches', `Équipe inconnue : ${unknown[0]}`);
+    }
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(events)
+        .values({
+          name,
+          description: body.description?.trim() || null,
+          category: body.category?.trim() || null,
+          type: 'sport',
+          kickoffAt,
+          endsAt,
+          source: 'official',
+          ...catalogueFields(body),
+        })
+        .returning();
+      if (row && body.matches) await replaceMatches(tx, row.id, body.matches);
+      return row;
+    });
     if (!created)
       return reply
         .status(500)
         .send({ error: 'INTERNAL', message: "L'événement n'a pas pu être créé." });
-    return reply.status(201).send(eventView(created, new Date()));
+    return reply.status(201).send(await adminEventWire(created, new Date()));
   });
 
   // PATCH /api/admin/events/:id — edit the §10 scalars of an OFFICIAL event. Editing dates
@@ -209,14 +295,25 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
     }
     if (endsAt.getTime() <= kickoffAt.getTime())
       return invalidField(reply, 'ends_at', 'La fin doit être postérieure au début.');
-    if (Object.keys(patch).length === 0) return reply.status(200).send(eventView(row, new Date()));
-    const [updated] = await db
-      .update(events)
-      .set(patch)
-      .where(eq(events.id, params.data.id))
-      .returning();
+    Object.assign(patch, catalogueFields(body));
+    if (body.matches) {
+      const unknown = await unknownTeams(body.matches);
+      if (unknown.length > 0)
+        return invalidField(reply, 'matches', `Équipe inconnue : ${unknown[0]}`);
+    }
+    if (Object.keys(patch).length === 0 && body.matches === undefined) {
+      return reply.status(200).send(await adminEventWire(row, new Date()));
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [next] =
+        Object.keys(patch).length > 0
+          ? await tx.update(events).set(patch).where(eq(events.id, params.data.id)).returning()
+          : [row];
+      if (next && body.matches) await replaceMatches(tx, next.id, body.matches);
+      return next;
+    });
     if (!updated) return sendNotFound(reply);
-    return reply.status(200).send(eventView(updated, new Date()));
+    return reply.status(200).send(await adminEventWire(updated, new Date()));
   });
 
   // POST /api/admin/events/:id/annuler — soft cancel (official OR suggested: the operator's kill

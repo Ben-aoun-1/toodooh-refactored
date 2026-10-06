@@ -112,15 +112,13 @@ export const writeWorld = async (
     for (const rows of chunked(userRows)) await tx.insert(users).values(rows);
 
     if (spec.agents.length > 0) {
-      await tx
-        .insert(agents)
-        .values(
-          spec.agents.map((a) => ({
-            userId: a.id,
-            code: a.code,
-            exportStatus: 'exported' as const,
-          })),
-        );
+      await tx.insert(agents).values(
+        spec.agents.map((a) => ({
+          userId: a.id,
+          code: a.code,
+          exportStatus: 'exported' as const,
+        })),
+      );
     }
     if (spec.referrals.length > 0) {
       await tx.insert(agentReferrals).values(

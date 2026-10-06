@@ -98,13 +98,11 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
         request.log.warn({ error: result.error }, 'support mailbox copy failed');
     }
 
-    return reply
-      .status(201)
-      .send({
-        id: row.id,
-        kind: row.kind,
-        status: row.status,
-        created_at: row.createdAt.toISOString(),
-      });
+    return reply.status(201).send({
+      id: row.id,
+      kind: row.kind,
+      status: row.status,
+      created_at: row.createdAt.toISOString(),
+    });
   });
 };
