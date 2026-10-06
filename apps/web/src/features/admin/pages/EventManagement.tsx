@@ -1,4 +1,4 @@
-import { Ban, CalendarClock, Coins, Pencil, Plus, ShieldCheck } from 'lucide-react';
+import { Ban, CalendarClock, Coins, Pencil, Plus, ShieldCheck, Users } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
@@ -7,6 +7,7 @@ import EventAttestationsPanel from '@/features/admin/components/EventAttestation
 import EventFormModal from '@/features/admin/components/EventFormModal';
 import EventReporterModal from '@/features/admin/components/EventReporterModal';
 import EventTarificationModal from '@/features/admin/components/EventTarificationModal';
+import TeamsManagerModal from '@/features/admin/components/TeamsManagerModal';
 import { useAdminEvents, useAnnulerEvent } from '@/features/admin/hooks/useAdminEvents';
 import type { AdminEventView } from '@/features/admin/services/admin-events.service';
 import {
@@ -36,6 +37,7 @@ export default function EventManagement() {
   // EV5 (R4) — the report modal + the per-event respect panel (the agent/admin attestation).
   const [reporting, setReporting] = useState<AdminEventView | null>(null);
   const [inspecting, setInspecting] = useState<AdminEventView | null>(null);
+  const [managingTeams, setManagingTeams] = useState(false);
 
   const confirmAnnuler = (event: AdminEventView) => {
     annuler.mutate(event.id, {
@@ -61,7 +63,16 @@ export default function EventManagement() {
       subtitle="Le catalogue sportif officiel et les matchs suggérés par les annonceurs"
     >
       <div className="space-y-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {/* EVT-CAT2 — the teams the catalogue cards show (logos optional). */}
+          <button
+            type="button"
+            onClick={() => setManagingTeams(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Users className="h-4 w-4" />
+            Équipes
+          </button>
           <button
             type="button"
             onClick={() => setModal({ open: true, event: null })}
@@ -223,6 +234,8 @@ export default function EventManagement() {
           </div>
         </div>
       )}
+
+      {managingTeams && <TeamsManagerModal onClose={() => setManagingTeams(false)} />}
 
       {confirming !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

@@ -17,6 +17,16 @@ export interface UpsertEventInput {
   category?: string | null;
   kickoff_at?: string;
   ends_at?: string;
+  // EVT-CAT2 — the catalogue card's facts and its matches (replace-set; [] clears).
+  competition?: string | null;
+  round?: string | null;
+  stadium?: string | null;
+  featured?: 'hero' | 'pinned' | null;
+  date_tbc?: boolean;
+  time_tbc?: boolean;
+  qualification_pending?: boolean;
+  date_label?: string | null;
+  matches?: { home_team_id: string; away_team_id: string | null }[];
 }
 
 // EV2 — the read-only tarification detail (GET /api/admin/events/:id/tarification).

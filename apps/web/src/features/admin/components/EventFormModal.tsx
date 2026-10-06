@@ -2,6 +2,11 @@ import { X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import EventCatalogueFields, {
+  catalogueDraftOf,
+  catalogueInput,
+} from '@/features/admin/components/EventCatalogueFields';
+import TeamsManagerModal from '@/features/admin/components/TeamsManagerModal';
 import {
   useCreateEvent,
   useUpdateEvent,
@@ -47,6 +52,9 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
   const [kickoff, setKickoff] = useState(event ? isoToLocalInput(event.kickoff_at) : '');
   const [ends, setEnds] = useState(event ? isoToLocalInput(event.ends_at) : '');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  // EVT-CAT2 — the catalogue card's facts + matches, and the teams manager on top of the form.
+  const [catalogue, setCatalogue] = useState(() => catalogueDraftOf(event));
+  const [managingTeams, setManagingTeams] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const create = useCreateEvent();
   const update = useUpdateEvent();
@@ -67,6 +75,7 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
       category: category.trim() === '' ? null : category.trim(),
       kickoff_at: localInputToIso(kickoff),
       ends_at: localInputToIso(ends),
+      ...catalogueInput(catalogue),
     };
     try {
       const saved = event
@@ -82,7 +91,7 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-[#171717]">
             {event ? "Modifier l'événement" : 'Créer un nouvel événement'}
@@ -199,6 +208,11 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
               {imageFile ? imageFile.name : 'Aucun fichier sélectionné'}
             </p>
           </div>
+          <EventCatalogueFields
+            value={catalogue}
+            onChange={setCatalogue}
+            onManageTeams={() => setManagingTeams(true)}
+          />
           {error !== null && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <button
@@ -218,6 +232,7 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
           </div>
         </form>
       </div>
+      {managingTeams && <TeamsManagerModal onClose={() => setManagingTeams(false)} />}
     </div>
   );
 }
