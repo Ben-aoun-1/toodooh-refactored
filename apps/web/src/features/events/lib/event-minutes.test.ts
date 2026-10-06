@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   EVENT_SLOT_CLASSES,
   clampEventMinutes,
+  distributeEventMinutes,
+  groupMinutesBounds,
   eventMinutesImpressions,
   eventMinutesPrice,
   eventSlotLabel,
@@ -62,5 +64,38 @@ describe('the slider sums', () => {
   it('labels minutes in French', () => {
     expect(minutesLabel(1)).toBe('1 minute');
     expect(minutesLabel(12)).toBe('12 minutes');
+  });
+});
+
+describe('distributeEventMinutes — ruling A1 (proportional to each match’s free minutes)', () => {
+  const sum = (a: number[]) => a.reduce((s, n) => s + n, 0);
+
+  it('spreads in proportion, sums exactly, every open match keeps ≥ 1', () => {
+    expect(distributeEventMinutes(20, [30, 10])).toEqual([15, 5]);
+    expect(distributeEventMinutes(4, [30, 10])).toEqual([3, 1]);
+    const parts = distributeEventMinutes(17, [12, 7, 5]);
+    expect(sum(parts)).toBe(17);
+    parts.forEach((p, i) => {
+      expect(p).toBeGreaterThanOrEqual(1);
+      expect(p).toBeLessThanOrEqual([12, 7, 5][i] ?? 0);
+    });
+  });
+
+  it('clamps into [one per open match, all minutes]; a full match gets 0', () => {
+    expect(groupMinutesBounds([6, 0, 3])).toEqual({ min: 2, max: 9 });
+    expect(distributeEventMinutes(1, [6, 0, 3])).toEqual([1, 0, 1]);
+    expect(distributeEventMinutes(99, [6, 0, 3])).toEqual([6, 0, 3]);
+    expect(distributeEventMinutes(5, [0, 0])).toEqual([0, 0]);
+  });
+
+  it('is monotonic: one more on the big slider never takes a minute from a match', () => {
+    const maxes = [9, 4, 13, 1];
+    let prev = distributeEventMinutes(4, maxes);
+    for (let t = 5; t <= 27; t += 1) {
+      const next = distributeEventMinutes(t, maxes);
+      expect(sum(next)).toBe(t);
+      next.forEach((p, i) => expect(p).toBeGreaterThanOrEqual(prev[i] ?? 0));
+      prev = next;
+    }
   });
 });

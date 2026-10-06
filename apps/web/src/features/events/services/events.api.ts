@@ -10,6 +10,24 @@ export interface EventBlocView {
   end: string;
 }
 
+/** EVT-CAT2 — a team on a catalogue card (logo optional — the colours always exist). */
+export interface TeamView {
+  id: string;
+  name: string;
+  is_national: boolean;
+  color_main: string;
+  color_second: string;
+  color_crowd: string | null;
+  logo_url: string | null;
+}
+
+/** EVT-CAT2 — one match of an event; away null = « Adversaire après tirage ». */
+export interface MatchView {
+  position: number;
+  home: TeamView;
+  away: TeamView | null;
+}
+
 export interface EventItemView {
   id: string;
   name: string;
@@ -21,6 +39,18 @@ export interface EventItemView {
   statut: 'a_venir' | 'en_cours' | 'termine';
   source: 'official' | 'suggested';
   has_image: boolean;
+  /** EVT-CAT2 — the card's football facts (optional; older rows carry nulls) and matches. */
+  competition?: string | null;
+  round?: string | null;
+  stadium?: string | null;
+  featured?: 'hero' | 'pinned' | null;
+  date_tbc?: boolean;
+  time_tbc?: boolean;
+  qualification_pending?: boolean;
+  date_label?: string | null;
+  matches?: MatchView[];
+  /** B1 — false while the date/time is « à confirmer » (or the match is over/annulé). */
+  positionable?: boolean;
   fenetre: {
     window_start: string;
     window_end: string;
@@ -60,6 +90,12 @@ export const eventsApi = {
   /** EV3 — « Je me positionne »: create the positioning draft (409 annulé/terminé). */
   positionner(eventId: string): Promise<PositioningCreatedView> {
     return apiClient.post(`/events/${eventId}/positionner`, {});
+  },
+  /** EVT-CAT2 — « Je me positionne sur ces N événements »: N drafts in one transaction. */
+  positionnerMultiple(
+    eventIds: string[],
+  ): Promise<{ positionings: { id: string; event_id: string; name: string }[] }> {
+    return apiClient.post('/events/positionner-multiple', { event_ids: eventIds });
   },
   catalogue(): Promise<{ events: EventItemView[] }> {
     return apiClient.get('/events');

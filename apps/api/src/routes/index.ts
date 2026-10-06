@@ -16,6 +16,7 @@ import { adminScreencasterCpmRoutes } from './admin-screencaster-cpm.js';
 import { adminScreenhostsRoutes } from './admin-screenhosts.js';
 import { adminSimulationsRoutes } from './admin-simulations.js';
 import { adminSupportRoutes } from './admin-support.js';
+import { adminTeamsRoutes } from './admin-teams.js';
 import { adminTestingRoutes } from './admin-testing.js';
 import { adminWalletRoutes } from './admin-wallet.js';
 import { adminRoutes } from './admin.js';
@@ -162,6 +163,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminEngineJournalRoutes);
   // EV1 — admin event management (§10 field set, type locked Sport, annuler, affiche upload).
   await app.register(adminEventsRoutes);
+  await app.register(adminTeamsRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,

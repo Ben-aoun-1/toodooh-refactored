@@ -67,3 +67,14 @@ export function useEventCmax(eventId: string) {
     queryFn: () => eventsApi.cmax(eventId),
   });
 }
+
+/** EVT-CAT2 — the multi-match selection: N positioning drafts, then the group parcours. */
+export function usePositionnerMultiple() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (eventIds: string[]) => eventsApi.positionnerMultiple(eventIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: campaignsKeys.all });
+    },
+  });
+}

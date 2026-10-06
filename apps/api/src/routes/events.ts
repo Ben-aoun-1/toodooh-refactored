@@ -1,12 +1,17 @@
-import { and, asc, eq, gte, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lt } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type EventRow, campaigns, events } from '../db/schema.js';
+import { type EventRow, events } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
-import { tunisDateOf } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
+import {
+  type MatchWire,
+  createPositioningDraft,
+  matchesByEvent,
+  positioningRefusal,
+} from '../lib/event-catalogue.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import {
   SUGGESTED_MATCH_DURATION_HOURS,
@@ -25,6 +30,8 @@ import { storage } from '../storage/s3-storage.js';
 // creates the campaign_type='event' draft row); hour_reservations is still written by nothing.
 
 const idParamSchema = z.object({ id: z.uuid() });
+// EVT-CAT2 — the multi-match selection (« Ma sélection »).
+const multiBodySchema = z.object({ event_ids: z.array(z.uuid()).min(1).max(20) });
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -40,7 +47,7 @@ const invalidField = (reply: FastifyReply, field: string, reason: string) =>
 // The shared wire shape. `statut` is derived at read time (Tunis wall-clock = the instant — the
 // comparison is instant-vs-instant, timezone-free); the window rides along so no client ever
 // recomputes it.
-export const eventView = (row: EventRow, now: Date) => {
+export const eventView = (row: EventRow, now: Date, matches: MatchWire[] = []) => {
   const fenetre = fenetreDiffusion(row.kickoffAt, row.endsAt);
   return {
     id: row.id,
@@ -48,6 +55,18 @@ export const eventView = (row: EventRow, now: Date) => {
     description: row.description,
     type: row.type,
     category: row.category,
+    // EVT-CAT2 — the catalogue card's football facts (all optional) and its matches.
+    competition: row.competition,
+    round: row.round,
+    stadium: row.stadium,
+    featured: row.featured,
+    date_tbc: row.dateTbc,
+    time_tbc: row.timeTbc,
+    qualification_pending: row.qualificationPending,
+    date_label: row.dateLabel,
+    matches,
+    /** B1 — false while the date/time is « à confirmer » (or the match is over/annulé). */
+    positionable: positioningRefusal(row, now) === null,
     kickoff_at: row.kickoffAt.toISOString(),
     ends_at: row.endsAt.toISOString(),
     statut: statutEvenement(now, row.kickoffAt, row.endsAt),
@@ -87,7 +106,10 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
       .from(events)
       .where(and(eq(events.source, 'official'), eq(events.annule, false), gte(events.endsAt, now)))
       .orderBy(asc(events.kickoffAt));
-    return reply.status(200).send({ events: rows.map((r) => eventView(r, now)) });
+    const matches = await matchesByEvent(rows.map((r) => r.id));
+    return reply
+      .status(200)
+      .send({ events: rows.map((r) => eventView(r, now, matches.get(r.id) ?? [])) });
   });
 
   // GET /api/events/suggested — « Ce que les screencasters suggèrent »: the SHARED suggestion
@@ -201,35 +223,13 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     const [row] = await db.select().from(events).where(eq(events.id, parsed.data.id)).limit(1);
     if (!row)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Événement introuvable.' });
-    if (row.annule) {
-      return reply.status(409).send({
-        error: 'EVENT_ANNULE',
-        message: 'Cet événement est annulé.',
-        statusCode: 409,
-        requestId: request.id,
-      });
+    // EVT-CAT2 B1 — annulé, terminé, or a date/time still « à confirmer » refuses (ONE rule,
+    // lib/event-catalogue).
+    const refusal = positioningRefusal(row, new Date());
+    if (refusal) {
+      return reply.status(409).send({ ...refusal, statusCode: 409, requestId: request.id });
     }
-    if (statutEvenement(new Date(), row.kickoffAt, row.endsAt) === 'termine') {
-      return reply.status(409).send({
-        error: 'EVENT_TERMINE',
-        message: 'Cet événement est terminé — le positionnement n’est plus possible.',
-        statusCode: 409,
-        requestId: request.id,
-      });
-    }
-    const fenetre = fenetreDiffusion(row.kickoffAt, row.endsAt);
-    const [created] = await db
-      .insert(campaigns)
-      .values({
-        advertiserId: userId,
-        name: row.name,
-        campaignType: 'event',
-        status: 'draft',
-        startDate: tunisDateOf(fenetre.windowStart),
-        endDate: tunisDateOf(fenetre.windowEnd),
-        eventId: row.id,
-      })
-      .returning();
+    const created = await createPositioningDraft(db, userId, row);
     if (!created) {
       return reply
         .status(500)
@@ -244,6 +244,50 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
       start_date: created.startDate,
       end_date: created.endDate,
     });
+  });
+
+  // POST /api/events/positionner-multiple {event_ids} — EVT-CAT2: « Je me positionne sur ces N
+  // événements ». ONE transaction creates one positioning draft per match (each its own campaign
+  // row — they share the spot, the zones and the cart later, each keeps its own minutes); any
+  // match that cannot be positioned refuses the whole selection, naming it.
+  app.post('/api/events/positionner-multiple', advertiserGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+    const parsed = multiBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) return invalidField(reply, 'event_ids', 'entre 1 et 20 événements');
+    const ids = [...new Set(parsed.data.event_ids)];
+    const rows = await db.select().from(events).where(inArray(events.id, ids));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const now = new Date();
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) {
+        return reply
+          .status(404)
+          .send({ error: 'NOT_FOUND', message: 'Événement introuvable.', event_id: id });
+      }
+      const refusal = positioningRefusal(row, now);
+      if (refusal) {
+        return reply.status(409).send({
+          ...refusal,
+          message: `« ${row.name} » : ${refusal.message}`,
+          event_id: id,
+          statusCode: 409,
+          requestId: request.id,
+        });
+      }
+    }
+    const created = await db.transaction(async (tx) => {
+      const out: { id: string; event_id: string; name: string }[] = [];
+      for (const id of ids) {
+        const row = byId.get(id);
+        if (!row) continue;
+        const c = await createPositioningDraft(tx, userId, row);
+        if (c) out.push({ id: c.id, event_id: row.id, name: c.name });
+      }
+      return out;
+    });
+    return reply.status(201).send({ positionings: created });
   });
 
   // GET /api/events/:id/cmax — EV2: the event budget ceiling (the campaign-cmax response idiom).

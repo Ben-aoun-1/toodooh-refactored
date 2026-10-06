@@ -106,6 +106,8 @@ export const adminKeys = {
 
   /** EV1 — the full event list for EventManagement (`adminEventsService.list`). */
   events: () => [...adminKeys.all, 'events'] as const,
+  /** EVT-CAT2 — the teams the catalogue cards show. */
+  teams: () => [...adminKeys.all, 'teams'] as const,
   /** EV1 — one event's presigned affiche URL (admin surface). */
   eventImageUrl: (id: string) => [...adminKeys.all, 'events', 'imageUrl', id] as const,
   /** EV2 — one event's tarification detail (`adminEventsService.tarification`). */

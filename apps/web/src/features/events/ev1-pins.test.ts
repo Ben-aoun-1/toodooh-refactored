@@ -37,8 +37,14 @@ describe('the Événements page', () => {
     expect(source).toContain('SuggestMatchForm');
   });
 
-  it('searches équipe/phase through the ONE lib home', () => {
-    expect(source).toContain('searchEvents');
+  // EVT-CAT2 (operator ruling 2026-10-06) — Youssef's validated page replaces the search bar:
+  // « À la une » + months through the ONE lib home, « Ma sélection », and « Mes Événements » +
+  // the suggestions kept under it.
+  it('lays the catalogue out through the ONE lib home, with « Ma sélection » and « Mes Événements »', () => {
+    expect(source).toContain('layoutCatalogue(');
+    expect(source).toContain('<SelectionPanel');
+    expect(source).toContain('<MesEvenementsStrip />');
+    expect(source).not.toContain('searchEvents');
   });
 });
 
