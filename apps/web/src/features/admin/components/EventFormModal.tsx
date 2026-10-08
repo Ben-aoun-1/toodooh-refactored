@@ -6,8 +6,10 @@ import EventCatalogueFields, {
   catalogueDraftOf,
   catalogueInput,
 } from '@/features/admin/components/EventCatalogueFields';
+import ImagePickerPreview from '@/features/admin/components/ImagePickerPreview';
 import TeamsManagerModal from '@/features/admin/components/TeamsManagerModal';
 import {
+  useAdminEventImageUrl,
   useCreateEvent,
   useUpdateEvent,
   useUploadEventImage,
@@ -59,6 +61,7 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
   const create = useCreateEvent();
   const update = useUpdateEvent();
   const uploadImage = useUploadEventImage();
+  const { data: storedImage } = useAdminEventImageUrl(event?.id ?? '', event?.has_image ?? false);
   const busy = create.isPending || update.isPending || uploadImage.isPending;
 
   const submit = async (e: React.FormEvent) => {
@@ -187,26 +190,15 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
             </div>
           </div>
           <div>
-            <label htmlFor="event-image" className="block text-sm font-medium text-[#171717] mb-1">
-              Image (affiche)
-            </label>
-            {/* GREEN2 item 7c — French file control (the native « Choose File » hides). */}
-            <input
-              id="event-image"
-              type="file"
+            <span className="block text-sm font-medium text-[#171717] mb-1">Image (affiche)</span>
+            <ImagePickerPreview
+              inputId="event-image"
               accept="image/jpeg,image/png"
-              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-              className="hidden"
+              file={imageFile}
+              onFile={setImageFile}
+              currentUrl={storedImage?.url ?? null}
+              hint="JPEG ou PNG"
             />
-            <label
-              htmlFor="event-image"
-              className="inline-block cursor-pointer rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200"
-            >
-              Parcourir les fichiers
-            </label>
-            <p className="mt-1 text-xs text-gray-500">
-              {imageFile ? imageFile.name : 'Aucun fichier sélectionné'}
-            </p>
           </div>
           <EventCatalogueFields
             value={catalogue}
