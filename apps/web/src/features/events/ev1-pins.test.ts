@@ -9,22 +9,20 @@ import { describe, expect, it } from 'vitest';
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-describe('the match card (EventCard)', () => {
-  const source = read('./components/EventCard.tsx');
+// EVT-PLAY1 (operator ruling 2026-10-08, 2 A) — the old EventCard is gone: the suggestions render
+// through the EVT-CAT2 card too, so ONE card carries the live CTA and the suggested badge.
+describe('the match card (CatalogueEventCard)', () => {
+  const source = read('./components/catalogue/CatalogueEventCard.tsx');
 
-  // EV3 — the disabled-CTA pin FLIPS: the parcours is live. « Je me positionne » creates the
-  // positioning draft and opens the 3 steps; only a Terminé match keeps a disabled CTA.
   it('the positioning CTA is LIVE (EV3): creates the draft and opens the parcours', () => {
-    expect(source).toContain('POSITIONNE_CTA');
+    expect(source).toContain('Je me positionne');
     expect(source).toContain('usePositionner');
     expect(source).toContain('/evenements/positionnement/');
-    expect(source).not.toContain('POSITIONNE_SOON'); // « Bientôt disponible » retired with the pin
-    expect(source).toContain("event.statut !== 'termine'"); // a finished match is not positionable
   });
 
-  it('badges suggested cards and shows the window line on every card', () => {
-    expect(source).toContain('SUGGESTED_BADGE');
-    expect(source).toContain('WINDOW_LINE');
+  it('the badge and the diffusion window come from the ONE lib home', () => {
+    expect(source).toContain('cardBadge(event)');
+    expect(source).toContain('kickoffLine(event)');
   });
 });
 
@@ -35,6 +33,7 @@ describe('the Événements page', () => {
     expect(source).toContain('Voir plus');
     expect(source).toContain('Ce que les screencasters suggèrent');
     expect(source).toContain('SuggestMatchForm');
+    expect(source).not.toContain('components/EventCard'); // the suggestions use the catalogue card
   });
 
   // EVT-CAT2 (operator ruling 2026-10-06) — Youssef's validated page replaces the search bar:
@@ -86,7 +85,7 @@ describe('the Supabase-era events tree is DEAD', () => {
   it('no events-feature or admin-events file touches supabase anymore', () => {
     for (const rel of [
       './pages/Events.tsx',
-      './components/EventCard.tsx',
+      './components/catalogue/CatalogueEventCard.tsx',
       './components/SuggestMatchForm.tsx',
       './services/events.api.ts',
       './hooks/useEvents.ts',

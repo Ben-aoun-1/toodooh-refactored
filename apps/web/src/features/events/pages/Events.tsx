@@ -9,7 +9,6 @@ import { logger } from '@/lib/logger';
 
 import CatalogueEventCard from '../components/catalogue/CatalogueEventCard';
 import SelectionPanel from '../components/catalogue/SelectionPanel';
-import EventCard from '../components/EventCard';
 import MesEvenementsStrip from '../components/MesEvenementsStrip';
 import SuggestMatchForm from '../components/SuggestMatchForm';
 import {
@@ -169,9 +168,9 @@ export default function Events() {
           {(suggested ?? []).length === 0 ? (
             <p className="text-sm text-[#5C5C5C]">Aucun match suggéré pour le moment.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
               {(suggested ?? []).map((e) => (
-                <EventCard key={e.id} event={e} />
+                <CatalogueEventCard key={e.id} event={e} />
               ))}
             </div>
           )}

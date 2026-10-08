@@ -1,5 +1,7 @@
 import type { EventItemView, MatchView, TeamView } from '../services/events.api';
 
+import { SUGGESTED_BADGE } from './event-display';
+
 // EVT-CAT2 (operator rulings 2026-10-06) — the new « Événements » page's pure rules, ONE home (the
 // cards, the hero, « Ma sélection » and the tests read these). Youssef's validated design: « À la
 // une » (one hero + pinned cards), then the matches month by month; a card names its teams, its
@@ -63,6 +65,7 @@ export function cardBadge(e: EventItemView): string | null {
   if (e.qualification_pending) return 'Sous réserve de qualification';
   if (e.date_tbc) return 'Jour à confirmer';
   if (e.time_tbc) return 'Horaire à confirmer';
+  if (e.source === 'suggested') return SUGGESTED_BADGE;
   return null;
 }
 

@@ -70,6 +70,11 @@ describe('card lines', () => {
     );
   });
 
+  it('a screencaster suggestion is badged as such (it is never an official match)', () => {
+    expect(cardBadge(ev({ source: 'suggested' }))).toBe('Suggéré par un annonceur');
+    expect(cardBadge(ev({ source: 'suggested', time_tbc: true }))).toBe('Horaire à confirmer');
+  });
+
   it('titles: one match, an undrawn opponent, an evening of three, a bare event', () => {
     const ca = team('Club Africain', '#D2001F');
     const est = team('Espérance de Tunis', '#C8001E');
