@@ -5,7 +5,7 @@ import {
   businessSectors,
   campaigns,
   eventAllocations,
-  hourReservations,
+  events,
   screenhostAffluence,
   screenhostAffluenceHourly,
   screenhostAmax,
@@ -21,9 +21,10 @@ import { isOpenAt, isOpenSlot } from '../opening-hours.js';
 
 import { eventSwitchOnSql } from './event-switch.js';
 import {
-  EVENT_MINUTE_REPS,
   EVENT_SEATS_PER_BLOC,
   type EventMinute,
+  eventMinuteImpressions,
+  eventPodWindow,
   orderedEventMinutes,
 } from './minutes.js';
 
@@ -39,14 +40,17 @@ import {
 //   C_max_evt        = ⌊CPM_evt × I_max ÷ 1000⌋  (CPM_evt admin-editable, 15 by default).
 //
 // EVT-MIN1 (2026-10-05) — the SELLING unit is now the MINUTE (./minutes.ts): a bloc's 5-minute pod
-// holds five one-minute seats, priced CPM_evt × A_max × 4 ÷ 1000 each; computeEventCmax returns the
+// holds five one-minute seats, priced CPM_evt × (A_max ÷ 3 × R) ÷ 1000 each since EVT-PRICE2
+// (R = the spot's plays in its minute; ./minutes.ts); computeEventCmax returns the
 // ordered minute list and prices the ceiling from it. The A_max ratchet, the eligibility and the
 // availability rules below are unchanged. ANTENNE_SECONDS_PER_BLOC / REPS_PER_BLOC survive for the
 // positionings dispatched before the minutes model (ruling A1 — they keep their EV4 rules).
 //
 // Eligibility (D1), PER BLOC on the bloc's OWN Tunis date (late kickoffs cross midnight):
 // the venue is open for the FULL 20 minutes, the date is not owner-declared unavailable (E2),
-// and no OTHER event holds a reservation on any hour the bloc touches. A venue with ≥ 1
+// and its ad break does not overlap an OTHER event's ad break at the venue (EVT-PRICE2, operator
+// ruling 2026-10-08 — it used to be any hour the bloc touches; a break uses 5 minutes of its 20,
+// so two matches' blocs may overlap as long as their breaks don't). A venue with ≥ 1
 // available bloc, an event-eligible sector, is_active and an APPROVED owner participates (ELIG-2,
 // operator ruling 2026-09-16 — the shared predicate lives in lib/approved-owner.ts, outside
 // dispatch/ so this boundary stays clean) — and only with an INSTALLED screen (MAP-TV1, operator
@@ -200,14 +204,18 @@ interface VenueHours {
 interface AvailabilityContext {
   /** E2 — the venue's owner-declared unavailable dates (YYYY-MM-DD). */
   unavailableDates: ReadonlySet<string>;
-  /** EV1 — (date:hour) cells held by OTHER events. */
-  foreignReservedCells: ReadonlySet<string>;
+  /**
+   * EVT-PRICE2 — the ad-break windows OTHER events hold at the venue, epoch ms [start, end): a
+   * minutes positioning's 5-minute break, a legacy one's whole bloc (foreignEventPods).
+   */
+  foreignPods: readonly { start: number; end: number }[];
 }
 
 /**
  * D1, per bloc: available iff EVERY Tunis (date, hour) cell the bloc touches is inside the
  * venue's opening hours ([opening, closing) — a bloc half-outside is OUT), on a date the owner
- * has not declared unavailable, and on an hour no OTHER event has reserved.
+ * has not declared unavailable, and its ad break (full length, 5 minutes — seats can still be
+ * sold) overlaps no OTHER event's ad break at the venue.
  * EV4 — the IDENTITY variant: the dispatch engine needs WHICH blocs, not how many. The counter
  * below derives from this list, so EV2's availability pins hold both byte-for-byte.
  */
@@ -220,14 +228,16 @@ export const availableBlocs = (
   const { openingHour, closingHour } = venue;
   const { blocs } = fenetreDiffusion(event.kickoffAt, event.endsAt);
   // HOURS-X1 — the window may wrap past midnight; isOpenAt handles both shapes.
-  return blocs.filter((bloc) =>
-    blocCells(bloc.start, bloc.end).every(
-      (c) =>
-        isOpenAt(c.hour, openingHour, closingHour) &&
-        !ctx.unavailableDates.has(c.date) &&
-        !ctx.foreignReservedCells.has(`${c.date}:${c.hour}`),
-    ),
-  );
+  return blocs.filter((bloc) => {
+    const open = blocCells(bloc.start, bloc.end).every(
+      (c) => isOpenAt(c.hour, openingHour, closingHour) && !ctx.unavailableDates.has(c.date),
+    );
+    if (!open) return false;
+    const pod = eventPodWindow(bloc.phase, bloc.start, bloc.end, EVENT_SEATS_PER_BLOC);
+    if (!pod) return true;
+    const [start, end] = [pod.start.getTime(), pod.end.getTime()];
+    return !ctx.foreignPods.some((w) => w.start < end && start < w.end);
+  });
 };
 
 export const blocAvailability = (
@@ -242,7 +252,7 @@ export interface EventVenuePricing {
   amaxPph: number;
   /** EVT-MIN1 — the venue's blocs with a free pod seat = the minutes it can still sell. */
   blocsDisponibles: number;
-  /** blocsDisponibles × A_max × 4 (one minute = four S_ref reps). */
+  /** blocsDisponibles × one minute's impressions (A_max ÷ 3 × R — ./minutes.ts). */
   impressions: number;
 }
 
@@ -318,12 +328,65 @@ export const eventSeatsHeld = async (
 };
 
 /**
+ * EVT-PRICE2 (operator ruling 2026-10-08) — the ad breaks OTHER events hold at these venues, epoch
+ * ms [start, end). A live allocation (the eventSeatsHeld set: EN_ATTENTE or ACCEPTE, of an
+ * upcoming or active positioning) holds, per placed bloc, the bloc's full-length break — the
+ * opening 5 minutes before kickoff, the closing 5 after — and a legacy positioning (event_minutes
+ * NULL, EV4's whole antenne) the whole bloc.
+ */
+export const foreignEventPods = async (
+  eventId: string,
+  screenhostIds: readonly string[],
+): Promise<Map<string, { start: number; end: number }[]>> => {
+  const pods = new Map<string, { start: number; end: number }[]>();
+  if (screenhostIds.length === 0) return pods;
+  const rows = await db
+    .select({
+      screenhostId: eventAllocations.screenhostId,
+      blocs: eventAllocations.blocs,
+      eventMinutes: campaigns.eventMinutes,
+      kickoffAt: events.kickoffAt,
+      otherEventId: campaigns.eventId,
+    })
+    .from(eventAllocations)
+    .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
+    .innerJoin(events, eq(campaigns.eventId, events.id))
+    .where(
+      and(
+        inArray(campaigns.status, ['upcoming', 'active']),
+        inArray(eventAllocations.statut, ['EN_ATTENTE', 'ACCEPTE']),
+        inArray(eventAllocations.screenhostId, [...screenhostIds]),
+      ),
+    );
+  for (const row of rows) {
+    if (row.otherEventId === eventId) continue; // our own seats are eventSeatsHeld's business
+    const list = pods.get(row.screenhostId) ?? [];
+    for (const bloc of Array.isArray(row.blocs) ? (row.blocs as unknown[]) : []) {
+      if (typeof bloc !== 'object' || bloc === null) continue;
+      const rec = bloc as Record<string, unknown>;
+      if (typeof rec['start'] !== 'string' || typeof rec['end'] !== 'string') continue;
+      const start = new Date(rec['start']);
+      const end = new Date(rec['end']);
+      if (row.eventMinutes === null) {
+        list.push({ start: start.getTime(), end: end.getTime() });
+        continue;
+      }
+      const phase = end.getTime() <= row.kickoffAt.getTime() ? 'avant' : 'apres';
+      const pod = eventPodWindow(phase, start, end, EVENT_SEATS_PER_BLOC);
+      if (pod) list.push({ start: pod.start.getTime(), end: pod.end.getTime() });
+    }
+    pods.set(row.screenhostId, list);
+  }
+  return pods;
+};
+
+/**
  * THE EVENT POOL — ONE home for which venues can take this match (CAP-EVT1 made it one function;
  * the ceiling and the bloc pool used to hold a copy each). A venue is in iff it is active, its
  * owner is APPROVED (ELIG-2), it has an INSTALLED screen (MAP-TV1), its EVENT SWITCH is on
  * (CAP-EVT1 — a « Capacité de diffusion » is set) and its sector is event-eligible, and it has
  * ≥ 1 available bloc of the match (D1: opening hours ∩ E2 declarations ∩ OTHER events'
- * reservations, full-bloc-only) — EVT-MIN1: a bloc whose five pod seats are all held by this
+ * ad breaks — EVT-PRICE2, was their hour reservations; full-bloc-only) — EVT-MIN1: a bloc whose five pod seats are all held by this
  * event's booked positionings is no longer available (eventSeatsHeld). NOT read: audience (A_max falls back to 50/h), zones (the event
  * booster's axis only), category × class, coordinates.
  *
@@ -386,17 +449,6 @@ export const eventEligibleVenues = async (
         inArray(screenhostUnavailability.day, dateList),
       ),
     );
-  const reservationRows = await db
-    .select({
-      screenhostId: hourReservations.screenhostId,
-      day: hourReservations.day,
-      hour: hourReservations.hour,
-      eventId: hourReservations.eventId,
-    })
-    .from(hourReservations)
-    .where(
-      and(inArray(hourReservations.screenhostId, ids), inArray(hourReservations.day, dateList)),
-    );
 
   const unavailableBySh = new Map<string, Set<string>>();
   for (const u of unavailabilityRows) {
@@ -404,13 +456,7 @@ export const eventEligibleVenues = async (
     set.add(u.day);
     unavailableBySh.set(u.screenhostId, set);
   }
-  const foreignReservedBySh = new Map<string, Set<string>>();
-  for (const r of reservationRows) {
-    if (r.eventId === event.id) continue; // our own hold never blocks our own pricing/placement
-    const set = foreignReservedBySh.get(r.screenhostId) ?? new Set<string>();
-    set.add(`${r.day}:${r.hour}`);
-    foreignReservedBySh.set(r.screenhostId, set);
-  }
+  const foreignPodsBySh = await foreignEventPods(event.id, ids);
 
   const seatsHeld = await eventSeatsHeld(event.id, ids);
 
@@ -421,7 +467,7 @@ export const eventEligibleVenues = async (
     const held = seatsHeld.get(venue.id) ?? NO_SEATS;
     const available = availableBlocs(event, venue, {
       unavailableDates: unavailableBySh.get(venue.id) ?? EMPTY,
-      foreignReservedCells: foreignReservedBySh.get(venue.id) ?? EMPTY,
+      foreignPods: foreignPodsBySh.get(venue.id) ?? [],
     }).filter((bloc) => (held.get(bloc.start.toISOString()) ?? 0) < EVENT_SEATS_PER_BLOC);
     if (available.length === 0) continue;
     venues.push({
@@ -449,15 +495,17 @@ export const compareEventVenues = (
 
 /**
  * The event ceiling, EVT-MIN1: the ORDERED minute list over the event pool (eventEligibleVenues,
- * D2 order) — one minute per (venue, bloc) with a free seat, priced CPM_evt × A_max × 4 ÷ 1000.
- * Its length is the slider's max, its total the ceiling. CPM_evt arrives resolved from the caller
- * (the config read stays out of this module — D51). `excludeScreenhostIds` narrows the pool (the
- * booster's « already held » venues).
+ * D2 order) — one minute per (venue, bloc) with a free seat, priced CPM_evt × (A_max ÷ 3 × R) ÷
+ * 1000. Its length is the slider's max, its total the ceiling. CPM_evt arrives resolved from the
+ * caller (the config read stays out of this module — D51). `excludeScreenhostIds` narrows the
+ * pool (the booster's « already held » venues). `playsPerMinute` = R, the positioning's spot
+ * (eventSpotPlaysPerMinute); 1 = no spot — the AUDIENCE alone (the catalogue card, EVT-PRICE2).
  */
 export const computeEventCmax = async (
   event: EventRef,
   cpmEvtTnd: number,
-  excludeScreenhostIds: ReadonlySet<string> = new Set(),
+  excludeScreenhostIds: ReadonlySet<string>,
+  playsPerMinute: number,
 ): Promise<EventCmaxResult> => {
   const pool = await eventEligibleVenues(event, excludeScreenhostIds);
   const priced: (EventEligibleVenue & { amaxPph: number })[] = [];
@@ -471,13 +519,14 @@ export const computeEventCmax = async (
       blocs: v.blocs.map((b) => ({ start: b.start, end: b.end })),
     })),
     cpmEvtTnd,
+    playsPerMinute,
   );
   const venues: EventVenuePricing[] = priced.map((v) => ({
     screenhostId: v.id,
     name: v.name,
     amaxPph: v.amaxPph,
     blocsDisponibles: v.blocs.length,
-    impressions: v.blocs.length * v.amaxPph * EVENT_MINUTE_REPS,
+    impressions: v.blocs.length * eventMinuteImpressions(v.amaxPph, playsPerMinute),
   }));
   return {
     cMaxEvtTnd: Math.round(minutes.reduce((sum, m) => sum + m.priceTnd, 0) * 100) / 100,

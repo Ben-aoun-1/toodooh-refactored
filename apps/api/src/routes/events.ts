@@ -312,9 +312,13 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     // is GET /api/campaigns/:id/cmax, priced at its own copy.
     const own = request.user ? await screencasterCpmRates(request.user.id) : null;
     const eventCpm = own?.eventCpmTnd ?? (await getDispatchConfig()).eventCpmTnd;
+    // EVT-PRICE2 (ruling 2026-10-08) — the catalogue card leaves R out: no spot is chosen yet, so
+    // i_max is the AUDIENCE (A_max ÷ 3 per minute); the price follows the spot in the parcours.
     const result = await computeEventCmax(
       { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
       eventCpm,
+      new Set(),
+      1,
     );
     return reply.status(200).send({
       c_max_evt_tnd: result.cMaxEvtTnd,

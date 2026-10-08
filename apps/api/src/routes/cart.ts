@@ -11,6 +11,7 @@ import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { checkEventMinutes } from '../lib/event-minutes-gate.js';
+import { positioningPlaysPerMinute } from '../lib/event-pricing/spot.js';
 import { pushPlaylistToAllConnected } from '../lib/playout/push.js';
 import { walletSpendable } from '../lib/recharges.js';
 import { dropTypicalWeekFreeze, freezeTypicalWeek } from '../lib/typical-week-freeze.js';
@@ -83,7 +84,9 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
       c.eventId,
       c.eventMinutes ?? 0,
       campaignCpmRates(c).eventCpmTnd,
+      await positioningPlaysPerMinute(c.creativeId),
     );
+    if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') return 'MISSING_CREATIVE';
     if (!verdict.ok)
       return verdict.reason === 'EVENT_ANNULE' ? 'EVENT_ANNULE' : 'BUDGET_EXCEEDS_CMAX';
     return null;

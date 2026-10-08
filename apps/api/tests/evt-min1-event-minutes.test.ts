@@ -14,6 +14,7 @@ import {
   eventPodTimeline,
   eventPodWindow,
   eventSlotSeconds,
+  eventSpotPlaysPerMinute,
   orderedEventMinutes,
   takeEventMinutes,
 } from '../src/lib/event-pricing/minutes.js';
@@ -69,10 +70,29 @@ describe('EVT-MIN1 — the pure rules', () => {
     for (const c of EVENT_SLOT_CLASSES) expect(eventPlaysPerMinute(c) * c).toBe(60);
   });
 
-  it('a minute = CPM × A_max × 4 ÷ 1000, to the centime', () => {
-    expect(eventMinutePriceTnd(100, 15)).toBe(6);
-    expect(eventMinutePriceTnd(37, 15)).toBe(2.22);
-    expect(eventMinutePriceTnd(37, 12.5)).toBe(1.85);
+  // EVT-PRICE2 (operator ruling 2026-10-08) — supersedes ruling 1A's A_max × 4.
+  it("R = 60 ÷ the spot's REAL length, rounded down; an image: 60 ÷ its chosen length", () => {
+    expect(eventSpotPlaysPerMinute('video', 10)).toBe(6);
+    expect(eventSpotPlaysPerMinute('video', 11)).toBe(5); // 5.45 → 5
+    expect(eventSpotPlaysPerMinute('video', 13)).toBe(4); // 4.62 → 4
+    expect(eventSpotPlaysPerMinute('video', 18)).toBe(3);
+    expect(eventSpotPlaysPerMinute('video', 23)).toBe(2);
+    expect(eventSpotPlaysPerMinute('video', 9)).toBeNull(); // cannot air in a pod
+    expect(eventSpotPlaysPerMinute('photo', 20)).toBe(3);
+    expect(eventSpotPlaysPerMinute('photo', 15)).toBeNull();
+    // Every whole length lands on the pod's own 60 ÷ slot.
+    for (let len = 10; len <= 30; len += 1) {
+      const slot = eventSlotSeconds('video', len) ?? 0;
+      expect(eventSpotPlaysPerMinute('video', len)).toBe(eventPlaysPerMinute(slot));
+    }
+  });
+
+  it('a minute = CPM × (A_max ÷ 3 × R) ÷ 1000, whole impressions, to the centime', () => {
+    // The operator's example: A_max 120, an 11 s spot (R 5) → 40 × 5 = 200 impressions, 3 TND.
+    expect(eventMinutePriceTnd(120, 15, 5)).toBe(3);
+    expect(eventMinutePriceTnd(120, 15, 3)).toBe(1.8); // 18 s
+    expect(eventMinutePriceTnd(120, 15, 1)).toBe(0.6); // no spot: the audience alone
+    expect(eventMinutePriceTnd(37, 15, 4)).toBe(0.74); // 37 × 4 ÷ 3 = 49.3 → 49 impressions
   });
 
   it('the ordered list: venues in pool order, blocs chronological; the slider drops the tail first', () => {
@@ -82,13 +102,14 @@ describe('EVT-MIN1 — the pure rules', () => {
         fakeVenue('last', 50, ['2027-06-10T18:00:00Z', '2027-06-10T21:20:00Z']),
       ],
       CPM,
+      6,
     );
     expect(list.map((m) => `${m.screenhostId}@${m.blocStart.toISOString().slice(11, 16)}`)).toEqual(
       ['best@18:00', 'best@21:00', 'last@18:00', 'last@21:20'],
     );
-    // 3 minutes = everything but the LAST venue's LATEST bloc.
-    expect(eventMinutesPriceTnd(list, 3)).toBe(6 + 6 + 3);
-    expect(eventMinutesPriceTnd(list, 4)).toBe(18);
+    // 3 minutes = everything but the LAST venue's LATEST bloc (a 10 s spot: R 6).
+    expect(eventMinutesPriceTnd(list, 3)).toBe(3 + 3 + 1.5);
+    expect(eventMinutesPriceTnd(list, 4)).toBe(9);
   });
 
   it('take: grouped per venue, all or nothing, charge capped at the budget', () => {
@@ -98,18 +119,19 @@ describe('EVT-MIN1 — the pure rules', () => {
         fakeVenue('b', 50, ['2027-06-10T18:00:00Z']),
       ],
       CPM,
+      6,
     );
-    const take = takeEventMinutes(list, 3, 15);
+    const take = takeEventMinutes(list, 3, 7.5);
     expect(take.status).toBe('OK');
     if (take.status !== 'OK') return;
     expect(take.placements.map((p) => [p.screenhostId, p.blocs.length, p.montantTnd])).toEqual([
-      ['a', 2, 12],
-      ['b', 1, 3],
+      ['a', 2, 6],
+      ['b', 1, 1.5],
     ]);
-    expect(take.impressions).toBe(2 * 400 + 200);
+    expect(take.impressions).toBe(2 * 200 + 100);
     // A_max rose since the budget was set: the overshoot is free delivery, never a charge.
-    const capped = takeEventMinutes(list, 3, 14);
-    expect(capped.status === 'OK' && capped.chargedTnd).toBe(14);
+    const capped = takeEventMinutes(list, 3, 7);
+    expect(capped.status === 'OK' && capped.chargedTnd).toBe(7);
     expect(takeEventMinutes(list, 4, 100)).toEqual({ status: 'NOT_ENOUGH', available: 3 });
     expect(takeEventMinutes(list, 0, 100).status).toBe('NOT_ENOUGH');
   });
@@ -278,21 +300,21 @@ describe('EVT-MIN1 — seats, dispatch and airing (real Postgres)', () => {
   it('the ceiling: one minute per bloc with a free seat; 5 seats fill a bloc; a legacy allocation fills all 5', async () => {
     await oneVenue();
     const event = await seedMatchEvent();
-    const fresh = await computeEventCmax(event, CPM);
+    const fresh = await computeEventCmax(event, CPM, new Set(), 3);
     expect(fresh.maxMinutes).toBe(6);
-    expect(fresh.cMaxEvtTnd).toBe(36); // 6 × 15 × 100 × 4 / 1000
+    expect(fresh.cMaxEvtTnd).toBe(9); // 6 × 15 × (100 ÷ 3 × 3) / 1000 — an 18–20 s spot, R 3
 
     // Five screencasters take one minute each: every one lands on the FIRST bloc (19:00 Tunis).
     for (let i = 0; i < 5; i += 1) {
       expect((await dispatch(await seedMinutesPositioning(event.id, 1), event)).status).toBe('OK');
     }
-    const after5 = await computeEventCmax(event, CPM);
+    const after5 = await computeEventCmax(event, CPM, new Set(), 3);
     expect(after5.maxMinutes).toBe(5);
     expect(after5.minutes[0]?.blocStart.toISOString()).toBe('2027-06-10T18:20:00.000Z');
 
     // A positioning from before the model (event_minutes NULL) holds its blocs WHOLE.
     expect((await dispatch(await seedMinutesPositioning(event.id, null), event)).status).toBe('OK');
-    expect((await computeEventCmax(event, CPM)).maxMinutes).toBe(0);
+    expect((await computeEventCmax(event, CPM, new Set(), 3)).maxMinutes).toBe(0);
   });
 
   it('dispatch takes the first N minutes; more than are free refuses and writes NOTHING', async () => {
@@ -311,8 +333,10 @@ describe('EVT-MIN1 — seats, dispatch and airing (real Postgres)', () => {
       '2027-06-10T18:40:00.000Z',
       '2027-06-10T21:00:00.000Z',
     ]);
-    expect(placed?.impressionsTotal).toBe(4 * 400);
-    expect(Number(placed?.montantTnd)).toBe(24);
+    // EVT-PRICE2 — the seeded 23 s spot plays twice a minute (R 2): 100 ÷ 3 × 2 = 66.7 → 67
+    // impressions, 15 × 67 ÷ 1000 = 1.005 → 1.01 TND a minute.
+    expect(placed?.impressionsTotal).toBe(4 * 67);
+    expect(Number(placed?.montantTnd)).toBe(4.04);
 
     const greedy = await seedMinutesPositioning(event.id, 7);
     expect(await dispatch(greedy, event)).toEqual({

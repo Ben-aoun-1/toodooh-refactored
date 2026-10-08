@@ -851,24 +851,38 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
     });
 
     it('THE OVERLAP PIN: a venue can never serve two events at overlapping instants', async () => {
-      // EV2's placement-time exclusion (foreignReservedCells) is what guarantees it: a venue-hour
-      // already reserved by ANOTHER event is not available to the next one, so two allocations on
-      // the same venue can never carry blocs that overlap in time.
+      // EVT-PRICE2 (operator ruling 2026-10-08) — the exclusion is now on the AD BREAKS: another
+      // event's live hold takes, per placed bloc, its break (a legacy one its whole bloc), and a
+      // bloc whose 5-minute break overlaps one is not available. Two allocations on one venue can
+      // therefore never AIR at overlapping instants — while their blocs may overlap.
+      const { assembleEventPool } = await import('../src/lib/event-dispatch/dispatch.js');
       const venue = await seedVenue();
       const firstEvent = await seedEvent();
-      await seedPositioning(firstEvent, venue.id);
-      await sql`insert into hour_reservations (screenhost_id, day, hour, event_id) values (${venue.id}, '2027-06-10', 19, ${firstEvent})`;
-      const { assembleEventPool } = await import('../src/lib/event-dispatch/dispatch.js');
-      // A second event over the SAME window sees the venue as unavailable on the reserved hour.
-      const secondKickoff = KICKOFF;
-      const pool = await assembleEventPool({
+      const held = await seedPositioning(firstEvent, venue.id); // legacy: the whole antenne
+      // A second event over the SAME window: every bloc collides with a held one → venue out.
+      const same = await assembleEventPool({
         id: '00000000-0000-4000-8000-0000000000e5',
-        kickoffAt: secondKickoff,
+        kickoffAt: KICKOFF,
         endsAt: ENDS,
       });
-      const entry = pool.find((p) => p.screenhostId === venue.id);
-      // Hour 19 carries the three pre-match blocs — all excluded, so only post-match ones remain.
-      expect(entry?.blocs.every((b) => b.start.getTime() >= ENDS.getTime())).toBe(true);
+      expect(same.find((p) => p.screenhostId === venue.id)).toBeUndefined();
+      // The first positioning under the minutes model holds only its breaks (19:00–19:05 …,
+      // 22:15–22:20 …). A second match 10 minutes EARLIER breaks at 18:50–18:55 …, 22:05–22:10 …:
+      // nothing overlaps, so all six of its blocs stay available at the venue (closing at 23:00).
+      await sql`update campaigns set event_minutes = 6 where id = ${held.campaignId}`;
+      const shifted = await assembleEventPool({
+        id: '00000000-0000-4000-8000-0000000000e6',
+        kickoffAt: new Date(KICKOFF.getTime() - 10 * 60_000),
+        endsAt: new Date(ENDS.getTime() - 10 * 60_000),
+      });
+      expect(shifted.find((p) => p.screenhostId === venue.id)?.blocs).toHaveLength(6);
+      // Same window again under the minutes model: the breaks coincide → venue out.
+      const coincide = await assembleEventPool({
+        id: '00000000-0000-4000-8000-0000000000e7',
+        kickoffAt: KICKOFF,
+        endsAt: ENDS,
+      });
+      expect(coincide.find((p) => p.screenhostId === venue.id)).toBeUndefined();
     });
   });
 });

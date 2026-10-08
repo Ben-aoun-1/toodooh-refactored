@@ -17,6 +17,7 @@ import { buildWindowDays } from './dispatch/window.js';
 import { assembleEventPool, fillEventBlocs } from './event-dispatch/dispatch.js';
 import { eventMinutesPriceTnd } from './event-pricing/minutes.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
+import { campaignPlaysPerMinute } from './event-pricing/spot.js';
 import { predictedImpressions } from './impressions-display.js';
 import { impressionsObjectif } from './impressions-objectif.js';
 import { eventPrevuesByCampaign, planPrevuesByCampaign } from './planned-impressions.js';
@@ -192,6 +193,8 @@ const eventEstimate = async (
     const { minutes } = await computeEventCmax(
       { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
       cpm,
+      new Set(),
+      await campaignPlaysPerMinute(c.id),
     );
     if (minutes.length === 0) return { status: 'NO_ELIGIBLE' };
     const taken = minutes.slice(0, minutesWanted);

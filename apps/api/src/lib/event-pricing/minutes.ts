@@ -6,9 +6,14 @@
 // venues best-SPS first (EV4's D2 order), each venue's blocs in chronological order — so lowering
 // the slider gives up the LAST venue's LATEST bloc first (ruling 3A).
 //
-//   price(minute)       = CPM_evt × A_max × 4 ÷ 1000, to the centime (ruling 1A: one minute =
-//                         four S_ref 15 s reps; the spot's real length never changes the price)
-//   impressions(minute) = A_max × 4
+//   R                   = how many times the spot airs in its minute: 60 ÷ its REAL length,
+//                         rounded DOWN (11 s → 5, 18 s → 3); an image: 60 ÷ its chosen length
+//   impressions(minute) = A_max ÷ 3 × R, whole impressions (A_max is an HOUR's audience; a bloc
+//                         is 20 minutes, so its audience is A_max ÷ 3)
+//   price(minute)       = CPM_evt × impressions(minute) ÷ 1000, to the centime
+//   (EVT-PRICE2, operator ruling 2026-10-08 — supersedes ruling 1A's flat A_max × 4: the spot's
+//   length now changes the price. With no spot yet — the catalogue card — R is left out: the card
+//   shows the AUDIENCE, A_max ÷ 3 per minute.)
 //   min purchase        = 1 minute (ruling 4A — the 100 TND floor, N_max, the 20 TND miette and
 //                         partial placement are retired for this model)
 //
@@ -26,8 +31,8 @@
 
 export const EVENT_SEATS_PER_BLOC = 5;
 export const EVENT_SEAT_SECONDS = 60;
-/** One minute = four reference 15 s reps (S_REF_SECONDS in ./pricing.ts). */
-export const EVENT_MINUTE_REPS = 4;
+/** A_max is an hour's audience; a 20-minute bloc sees a third of it. */
+export const EVENT_BLOC_AUDIENCE_DIVISOR = 3;
 
 export const EVENT_VIDEO_MIN_SECONDS = 10;
 export const EVENT_VIDEO_MAX_SECONDS = 30;
@@ -36,11 +41,19 @@ export const EVENT_SLOT_CLASSES = [10, 12, 15, 20, 30] as const;
 /** The display lengths a screencaster may choose for an event IMAGE. */
 export const EVENT_IMAGE_SECONDS = [10, 20, 30] as const;
 
-export const eventMinuteImpressions = (amaxPph: number): number => amaxPph * EVENT_MINUTE_REPS;
+/**
+ * One minute's impressions: A_max ÷ 3 × R, whole. `playsPerMinute` = R (eventSpotPlaysPerMinute);
+ * 1 = the audience alone (no spot chosen yet — the catalogue card).
+ */
+export const eventMinuteImpressions = (amaxPph: number, playsPerMinute: number): number =>
+  Math.round((amaxPph * playsPerMinute) / EVENT_BLOC_AUDIENCE_DIVISOR);
 
-/** CPM_evt × A_max × 4 ÷ 1000, rounded to the centime (requested_budget is numeric(12,2)). */
-export const eventMinutePriceTnd = (amaxPph: number, cpmEvtTnd: number): number =>
-  Math.round((cpmEvtTnd * eventMinuteImpressions(amaxPph)) / 10) / 100;
+/** CPM_evt × impressions(minute) ÷ 1000, rounded to the centime (requested_budget is numeric(12,2)). */
+export const eventMinutePriceTnd = (
+  amaxPph: number,
+  cpmEvtTnd: number,
+  playsPerMinute: number,
+): number => Math.round((cpmEvtTnd * eventMinuteImpressions(amaxPph, playsPerMinute)) / 10) / 100;
 
 export type EventSpotKind = 'video' | 'photo';
 
@@ -68,6 +81,19 @@ export const eventSlotSeconds = (
 export const eventPlaysPerMinute = (slotSeconds: number): number =>
   Math.floor(EVENT_SEAT_SECONDS / slotSeconds);
 
+/**
+ * EVT-PRICE2 — R, the price's play count: 60 ÷ the spot's REAL length, rounded down (operator
+ * ruling 2026-10-08: « if r = 4.99 we only take 4 »); an image: 60 ÷ its chosen length. For every
+ * whole length this equals the pod's 60 ÷ slot. null = the spot cannot air in an event pod.
+ */
+export const eventSpotPlaysPerMinute = (
+  creativeType: string,
+  durationSeconds: number | null,
+): number | null =>
+  eventSlotSeconds(creativeType, durationSeconds) === null || durationSeconds === null
+    ? null
+    : Math.floor(EVENT_SEAT_SECONDS / durationSeconds);
+
 export interface EventMinuteVenue {
   screenhostId: string;
   ownerId: string;
@@ -94,6 +120,7 @@ export interface EventMinute {
 export const orderedEventMinutes = (
   pool: readonly EventMinuteVenue[],
   cpmEvtTnd: number,
+  playsPerMinute: number,
 ): EventMinute[] =>
   pool.flatMap((venue) =>
     [...venue.blocs]
@@ -103,8 +130,8 @@ export const orderedEventMinutes = (
         ownerId: venue.ownerId,
         blocStart: bloc.start,
         blocEnd: bloc.end,
-        impressions: eventMinuteImpressions(venue.amaxPph),
-        priceTnd: eventMinutePriceTnd(venue.amaxPph, cpmEvtTnd),
+        impressions: eventMinuteImpressions(venue.amaxPph, playsPerMinute),
+        priceTnd: eventMinutePriceTnd(venue.amaxPph, cpmEvtTnd, playsPerMinute),
       })),
   );
 
