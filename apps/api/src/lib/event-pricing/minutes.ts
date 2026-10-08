@@ -13,8 +13,9 @@
 //                         partial placement are retired for this model)
 //
 // The pod (ruling 5B + 5C): spots ROTATE (A, B, C, A, B, C …) and the pod lasts exactly
-// (seats sold × 1 min) — avant blocs open with it, après blocs close with it. The rest of the
-// bloc stays blacked out (ruling 6B) and shows the TV's Toodooh screen.
+// (seats sold × 1 min) — avant blocs open with it, après blocs close with it. EVT-PLAY1
+// (2026-10-08) supersedes ruling 6B: outside the pod the venue's own TV shows, and no classic
+// campaign airs anywhere in the confirmed match's reserved window (lib/event-blackout).
 //
 // Lengths (ruling 7A): an event video lasts 10–30 s and airs in the smallest slot class that
 // divides the minute — 10, 12, 15, 20 or 30 s (23 s → 30 s: 23 s of spot + 7 s of Toodooh screen,
