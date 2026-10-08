@@ -23,8 +23,9 @@ const impressionsFmt = new Intl.NumberFormat('fr-FR');
 
 interface CatalogueEventCardProps {
   event: EventItemView;
-  selected: boolean;
-  onToggle: (eventId: string) => void;
+  /** « Ma sélection » — omit onToggle where there is no selection (the panier's suggestions). */
+  selected?: boolean;
+  onToggle?: (eventId: string) => void;
   variant?: 'card' | 'hero';
 }
 
@@ -37,7 +38,7 @@ interface CatalogueEventCardProps {
  */
 export default function CatalogueEventCard({
   event,
-  selected,
+  selected = false,
   onToggle,
   variant = 'card',
 }: CatalogueEventCardProps) {
@@ -106,24 +107,28 @@ export default function CatalogueEventCard({
           </span>
         </div>
         <div className="mt-auto flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => onToggle(event.id)}
-            disabled={!positionable}
-            aria-pressed={selected}
-            aria-label={`${selected ? 'Retirer' : 'Ajouter'} ${title} ${selected ? 'de' : 'à'} ma sélection`}
-            title={
-              positionable ? undefined : 'Disponible dès la confirmation de la date et de l’horaire'
-            }
-            className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-[1.5px] text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-              selected
-                ? 'border-[#1D9E75] bg-[#E6F7EE] text-[#0E6B4E]'
-                : 'border-[#0D2B1F] bg-white text-[#0D2B1F] hover:bg-[#F2F9F5]'
-            }`}
-          >
-            {selected ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {selected ? 'Dans ma sélection' : 'Ajouter à ma sélection'}
-          </button>
+          {onToggle && (
+            <button
+              type="button"
+              onClick={() => onToggle(event.id)}
+              disabled={!positionable}
+              aria-pressed={selected}
+              aria-label={`${selected ? 'Retirer' : 'Ajouter'} ${title} ${selected ? 'de' : 'à'} ma sélection`}
+              title={
+                positionable
+                  ? undefined
+                  : 'Disponible dès la confirmation de la date et de l’horaire'
+              }
+              className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-[1.5px] text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                selected
+                  ? 'border-[#1D9E75] bg-[#E6F7EE] text-[#0E6B4E]'
+                  : 'border-[#0D2B1F] bg-white text-[#0D2B1F] hover:bg-[#F2F9F5]'
+              }`}
+            >
+              {selected ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {selected ? 'Dans ma sélection' : 'Ajouter à ma sélection'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void handlePositionner()}
