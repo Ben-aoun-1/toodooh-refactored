@@ -28,7 +28,7 @@ import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
-import { validateEventSpot } from '../lib/event-pricing/spot.js';
+import { positioningPlaysPerMinute, validateEventSpot } from '../lib/event-pricing/spot.js';
 import { eventChargeableImpressions, impressionsObjectif } from '../lib/impressions-objectif.js';
 import { eventPrevuesOf, plannedPrevuesByCampaign } from '../lib/planned-impressions.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
@@ -467,6 +467,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         eventId: campaigns.eventId,
         standardCpmTnd: campaigns.standardCpmTnd,
         eventCpmTnd: campaigns.eventCpmTnd,
+        eventMinutes: campaigns.eventMinutes,
+        creativeId: campaigns.creativeId,
       })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
@@ -499,42 +501,66 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     // EVT-MIN1 — a positioning is sized in MINUTES; its budget is their price, derived HERE (never
     // taken from the client). Classic campaigns have no minutes; a positioning's budget is never
-    // PATCHed directly.
+    // PATCHed directly. EVT-PRICE2 (ruling 2026-10-08) — the price also follows the SPOT (R, its
+    // plays per minute), so changing the video re-derives it too, until the positioning is paid
+    // (only drafts and rejected rows reach here). No spot linked: no price (budget cleared).
     let minutesPatch: { eventMinutes: number | null; requestedBudget: string | null } | null = null;
-    if (parsed.data.event_minutes !== undefined) {
-      if (existing.eventId === null) {
-        return reply.status(400).send({
-          error: 'EVENT_MINUTES_CLASSIC',
-          message: 'Seul un positionnement événementiel se mesure en minutes.',
-        });
-      }
-      if (parsed.data.event_minutes === null) {
+    if (parsed.data.event_minutes !== undefined && existing.eventId === null) {
+      return reply.status(400).send({
+        error: 'EVENT_MINUTES_CLASSIC',
+        message: 'Seul un positionnement événementiel se mesure en minutes.',
+      });
+    }
+    if (
+      existing.eventId !== null &&
+      (parsed.data.event_minutes !== undefined || parsed.data.creative_id !== undefined)
+    ) {
+      const minutes =
+        parsed.data.event_minutes !== undefined ? parsed.data.event_minutes : existing.eventMinutes;
+      const creativeId =
+        parsed.data.creative_id !== undefined ? parsed.data.creative_id : existing.creativeId;
+      if (minutes === null) {
         minutesPatch = { eventMinutes: null, requestedBudget: null };
       } else {
         const verdict = await checkEventMinutes(
           existing.eventId,
-          parsed.data.event_minutes,
+          minutes,
           campaignCpmRates(existing).eventCpmTnd,
+          await positioningPlaysPerMinute(creativeId ?? null),
         );
         if (!verdict.ok && verdict.reason === 'EVENT_ANNULE') {
           return reply
             .status(409)
             .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
         }
-        if (!verdict.ok) {
+        if (!verdict.ok && parsed.data.event_minutes === undefined) {
+          // A SPOT change alone never fails on the minutes: the positioning keeps them and loses
+          // its price until it can be priced again (no spot, or no longer that many free) — the
+          // cart and submit gates name what's wrong.
+          minutesPatch = { eventMinutes: minutes, requestedBudget: null };
+        } else if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') {
+          // Minutes asked before any spot: refused (the price needs R).
+          return reply.status(400).send({
+            error: 'EVENT_SPOT_REQUIRED',
+            message: 'Choisissez d’abord votre vidéo : le prix d’une minute en dépend.',
+          });
+        } else if (!verdict.ok) {
           return reply.status(400).send({
             error: 'BUDGET_EXCEEDS_CMAX',
             message: `Il reste ${verdict.maxMinutes} minute${verdict.maxMinutes > 1 ? 's' : ''} disponible${verdict.maxMinutes > 1 ? 's' : ''} sur cet événement.`,
             max_minutes: verdict.maxMinutes,
             c_max_tnd: verdict.cMaxTnd,
           });
+        } else {
+          minutesPatch = { eventMinutes: minutes, requestedBudget: verdict.priceTnd.toFixed(2) };
         }
-        minutesPatch = {
-          eventMinutes: parsed.data.event_minutes,
-          requestedBudget: verdict.priceTnd.toFixed(2),
-        };
       }
-    } else if (existing.eventId !== null && parsed.data.requested_budget !== undefined) {
+    }
+    if (
+      existing.eventId !== null &&
+      parsed.data.event_minutes === undefined &&
+      parsed.data.requested_budget !== undefined
+    ) {
       return reply.status(400).send({
         error: 'EVENT_BUDGET_FROM_MINUTES',
         message: 'Le budget d’un positionnement découle de ses minutes (event_minutes).',
@@ -641,9 +667,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
       }
       // CPM-1 — the positioning's own event CPM (CPM-3: its screencaster's; see campaignCpmRates).
+      // EVT-PRICE2 — priced at its spot's R; no spot yet = the audience alone (R = 1).
       const evCmax = await computeEventCmax(
         { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
         campaignCpmRates(row).eventCpmTnd,
+        new Set(),
+        (await positioningPlaysPerMinute(row.creativeId)) ?? 1,
       );
       return reply.status(200).send({
         c_max_tnd: evCmax.cMaxEvtTnd,
@@ -917,7 +946,14 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         ev.id,
         existing.eventMinutes ?? 0,
         campaignCpmRates(existing).eventCpmTnd,
+        await positioningPlaysPerMinute(existing.creativeId),
       );
+      if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') {
+        return reply.status(400).send({
+          error: 'EVENT_SPOT_REQUIRED',
+          message: 'Choisissez d’abord votre vidéo : le prix d’une minute en dépend.',
+        });
+      }
       if (!verdict.ok) {
         return reply.status(400).send({
           error: 'BUDGET_EXCEEDS_CMAX',

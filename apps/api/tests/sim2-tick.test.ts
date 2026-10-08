@@ -340,7 +340,8 @@ describe('SIM-2 the tick (real engines on virtual time)', () => {
       kickoffAt: new Date(booked.kickoff_at),
       endsAt: new Date(booked.ends_at),
     };
-    const atOwn = await inSandbox(() => computeEventCmax(window, 31));
+    // EVT-PRICE2 — the launch's 10 s spot plays 6 times a minute.
+    const atOwn = await inSandbox(() => computeEventCmax(window, 31, new Set(), 6));
     expect(booked.c_max_tnd).toBe(atOwn.cMaxEvtTnd);
     const [row] = await inSandbox(() =>
       db

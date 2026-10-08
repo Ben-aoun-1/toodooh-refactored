@@ -16,7 +16,7 @@ import { MIN_CAMPAIGN_BUDGET_TND } from '../../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../../lib/campaign-cmax.js';
 import { plusCalendarDays } from '../../lib/campaign-dates.js';
 import { getDispatchConfig } from '../../lib/dispatch/config.js';
-import { eventMinutesPriceTnd } from '../../lib/event-pricing/minutes.js';
+import { eventMinutesPriceTnd, eventSpotPlaysPerMinute } from '../../lib/event-pricing/minutes.js';
 import { computeEventCmax } from '../../lib/event-pricing/pricing.js';
 import { walletSpendable } from '../../lib/recharges.js';
 import { screencasterCpmRates } from '../../lib/screencaster-cpm.js';
@@ -310,7 +310,13 @@ export const launchEvent = async (
   // /api/events/:id/cmax prices it), the global default only for a non-advertiser account.
   const own = await screencasterCpmRates(advertiserId);
   const eventCpm = own?.eventCpmTnd ?? (await getDispatchConfig()).eventCpmTnd;
-  const ceiling = await computeEventCmax({ id: event.id, kickoffAt, endsAt }, eventCpm);
+  // EVT-PRICE2 — priced at the spot this launch inserts below (R = its plays per minute).
+  const ceiling = await computeEventCmax(
+    { id: event.id, kickoffAt, endsAt },
+    eventCpm,
+    new Set(),
+    eventSpotPlaysPerMinute('video', spotSeconds) ?? 1,
+  );
   const wallet = await walletSpendable(advertiserId);
   // EVT-MIN1 — a positioning buys MINUTES (≥ 1): a share of the free minutes, or the minutes a
   // requested budget affords, never more than the wallet covers; its budget is their price.

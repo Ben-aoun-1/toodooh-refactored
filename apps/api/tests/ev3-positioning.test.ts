@@ -297,7 +297,9 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
     });
 
     it('the row rides the CLASSIC draft machinery: minutes/description PATCH + Reprendre read', async () => {
-      await seedVenue(); // A_max 100 → one minute = 15 × 100 × 4 / 1000 = 6 TND
+      // A_max 100, the seeded 12 s spot plays 5 times a minute (EVT-PRICE2): 100 ÷ 3 × 5 = 166.7
+      // → 167 impressions, one minute = 15 × 167 / 1000 = 2.505 → 2.51 TND.
+      await seedVenue();
       const advId = await seedUser();
       const { campaignId, eventId } = await seedPositioning(advId);
       // EVT-MIN1 — a positioning is sized in minutes; the SERVER derives its budget.
@@ -308,7 +310,7 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       const body = read.json() as Record<string, unknown>;
       expect(body['event_id']).toBe(eventId);
       expect(body['event_minutes']).toBe(3);
-      expect(body['requested_budget']).toBe(18);
+      expect(body['requested_budget']).toBe(7.53);
       // The budget is never PATCHed directly on a positioning; minutes beyond the free seats 400.
       const direct = await patchCampaign(campaignId, { requested_budget: 120 });
       expect(direct.statusCode).toBe(400);
@@ -316,6 +318,27 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       const over = await patchCampaign(campaignId, { event_minutes: 7 });
       expect(over.statusCode).toBe(400);
       expect(over.json()).toMatchObject({ error: 'BUDGET_EXCEEDS_CMAX', max_minutes: 6 });
+    });
+
+    // EVT-PRICE2 (operator ruling 2026-10-08) — the price follows the SPOT until it is paid.
+    it('changing the spot re-prices the minutes; minutes without a spot are refused', async () => {
+      await seedVenue(); // A_max 100
+      const advId = await seedUser();
+      const { campaignId } = await seedPositioning(advId); // 12 s spot (R 5), 2 minutes
+      expect((await patchCampaign(campaignId, { event_minutes: 3 })).json()).toMatchObject({
+        requested_budget: 7.53, // 3 × 2.51
+      });
+      // An 18 s spot plays 3 times a minute: 100 ÷ 3 × 3 = 100 impressions → 1.50 a minute.
+      const slower = await seedCreative(advId, { duration: 18 });
+      const res = await patchCampaign(campaignId, { creative_id: slower });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ event_minutes: 3, requested_budget: 4.5 });
+      // Unlinking the spot keeps the minutes and clears the price; sizing without a spot is refused.
+      const unlinked = await patchCampaign(campaignId, { creative_id: null });
+      expect(unlinked.json()).toMatchObject({ event_minutes: 3, requested_budget: null });
+      const blind = await patchCampaign(campaignId, { event_minutes: 2 });
+      expect(blind.statusCode).toBe(400);
+      expect((blind.json() as { error: string }).error).toBe('EVENT_SPOT_REQUIRED');
     });
 
     it('the SNAPSHOT LOCK: dates and type are not PATCHable on a positioning', async () => {
@@ -401,6 +424,8 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       const ceiling = await computeEventCmax(
         { id: eventId, kickoffAt: ev?.kickoffAt ?? KICKOFF, endsAt: ev?.endsAt ?? ENDS },
         (await getDispatchConfig()).eventCpmTnd,
+        new Set(),
+        1,
       );
       expect(ceiling.maxMinutes).toBe(6);
 
@@ -582,6 +607,8 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       const expected = await computeEventCmax(
         { id: eventId, kickoffAt: ev?.kickoffAt ?? KICKOFF, endsAt: ev?.endsAt ?? ENDS },
         (await getDispatchConfig()).eventCpmTnd,
+        new Set(),
+        1, // EVT-PRICE2 — no spot linked yet: the audience alone (R = 1)
       );
       expect(body['c_max_tnd']).toBe(expected.cMaxEvtTnd);
       expect(body['i_max_facturable']).toBe(expected.iMax);

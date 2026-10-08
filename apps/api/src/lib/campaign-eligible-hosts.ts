@@ -26,6 +26,7 @@ import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
 import type { EngineTrace } from './engine-journal/trace.js';
 import { isEventSwitchOn } from './event-pricing/event-switch.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
+import { campaignPlaysPerMinute } from './event-pricing/spot.js';
 import { venueHasInstalledScreenSql } from './installed-screen.js';
 
 // ELIG-1 (Meriam 15/09, « bloquant pour le testing ») — which venues a campaign can reach, AT ANY
@@ -255,7 +256,12 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       .where(eq(events.id, row.eventId))
       .limit(1);
     if (!event) return { status: 'NOT_FOUND' };
-    const cmax = await computeEventCmax(event, rates.eventCpmTnd);
+    const cmax = await computeEventCmax(
+      event,
+      rates.eventCpmTnd,
+      new Set(),
+      await campaignPlaysPerMinute(row.id),
+    );
     const allocations = await db
       .select({
         screenhostId: eventAllocations.screenhostId,

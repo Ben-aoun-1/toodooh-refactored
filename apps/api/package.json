@@ -20,7 +20,8 @@
     "learn1:recompute-amax": "tsx --env-file-if-exists=.env scripts/learn1-recompute-amax.ts",
     "db:generate": "drizzle-kit generate",
     "audience:backfill": "tsx --env-file-if-exists=.env scripts/backfill-monthly-audience.ts",
-    "facture:regenerate-ttc": "tsx --env-file-if-exists=.env scripts/sh-ttc1-regenerate-factures.ts"
+    "facture:regenerate-ttc": "tsx --env-file-if-exists=.env scripts/sh-ttc1-regenerate-factures.ts",
+    "evt-price2:reprice": "tsx --env-file-if-exists=.env scripts/evt-price2-reprice.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.110.0",

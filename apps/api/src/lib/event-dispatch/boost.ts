@@ -19,6 +19,7 @@ import {
   takeEventMinutes,
 } from '../event-pricing/minutes.js';
 import { REPS_PER_BLOC, computeEventCmax } from '../event-pricing/pricing.js';
+import { campaignPlaysPerMinute } from '../event-pricing/spot.js';
 import { walletSpendable } from '../recharges.js';
 
 import {
@@ -171,6 +172,8 @@ const complementaryCeiling = async (
       endsAt: loaded.event.endsAt,
     },
     campaignCpmRates(loaded.campaign).eventCpmTnd,
+    new Set(),
+    await campaignPlaysPerMinute(loaded.campaign.id),
   );
   // EVT-MIN1 ruling A1 — this positioning predates the minutes model: its ceiling stays EV2's
   // whole-bloc value (blocs × A_max × 20 at CPM_evt), never the minute-priced one. The pool is
@@ -233,6 +236,7 @@ const addedPerimeterMinutes = async (
     { id: loaded.event.id, kickoffAt: loaded.event.kickoffAt, endsAt: loaded.event.endsAt },
     campaignCpmRates(loaded.campaign).eventCpmTnd,
     new Set(held.map((h) => h.screenhostId)),
+    await campaignPlaysPerMinute(loaded.campaign.id),
   );
   if (minutes.length === 0) return [];
   const inAddedZones = await db

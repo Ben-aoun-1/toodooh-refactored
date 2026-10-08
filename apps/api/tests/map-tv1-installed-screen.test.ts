@@ -144,12 +144,12 @@ describe('MAP-TV1 — only a venue with an installed screen is sold (real Postgr
       const v = await seedMatrix(await eventSector());
       const ref = await eventRef();
 
-      const cmax = await computeEventCmax(ref, 15);
+      const cmax = await computeEventCmax(ref, 15, new Set(), 3);
       expect(cmax.venues.map((x) => x.screenhostId).sort()).toEqual(v.in);
       expect(cmax.eligibleCount).toBe(3);
-      // EVT-MIN1 — three venues × six minutes × 100 pers/h × 4 = 7 200 impressions → 18 × 6 TND
-      expect(cmax.iMax).toBe(7_200);
-      expect(cmax.cMaxEvtTnd).toBe(108);
+      // EVT-PRICE2 — three venues × six minutes × 100 pers/h ÷ 3 × R 3 = 1 800 → 18 × 1.50 TND
+      expect(cmax.iMax).toBe(1_800);
+      expect(cmax.cMaxEvtTnd).toBe(27);
 
       const pool = await assembleEventPool(ref);
       expect(pool.map((x) => x.screenhostId).sort()).toEqual(v.in);

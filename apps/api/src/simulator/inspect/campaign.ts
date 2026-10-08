@@ -20,6 +20,7 @@ import { readEngineJournal } from '../../lib/engine-journal/read.js';
 import { measureEventDelivery } from '../../lib/event-playout/settlement.js';
 import { parseBlocs } from '../../lib/event-playout/spots.js';
 import { computeEventCmax } from '../../lib/event-pricing/pricing.js';
+import { campaignPlaysPerMinute } from '../../lib/event-pricing/spot.js';
 import { estimateCampaignImpressions } from '../../lib/impressions-estimate.js';
 import { impressionsObjectif } from '../../lib/impressions-objectif.js';
 import { loadDeliveredSlots } from '../../lib/reconcile/delivered-slots.js';
@@ -78,6 +79,8 @@ export const inspectCampaign = async (campaignId: string) => {
         await computeEventCmax(
           { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
           Number(c.eventCpmTnd),
+          new Set(),
+          await campaignPlaysPerMinute(c.id),
         )
       ).cMaxEvtTnd;
     }

@@ -279,12 +279,12 @@ describe('ELIG-2 — only approved owners count (real Postgres)', () => {
         .returning();
       const ref = { id: event?.id ?? '', kickoffAt: MATCH_KICKOFF, endsAt: MATCH_ENDS };
 
-      const cmax = await computeEventCmax(ref, 15);
+      const cmax = await computeEventCmax(ref, 15, new Set(), 3);
       expect(cmax.venues.map((x) => x.screenhostId)).toEqual([v.approved]);
       expect(cmax.eligibleCount).toBe(1);
-      // EVT-MIN1 — one venue, six minutes × 100 pers/h × 4 = 2 400 impressions → 6 × 6 TND
-      expect(cmax.iMax).toBe(2_400);
-      expect(cmax.cMaxEvtTnd).toBe(36);
+      // EVT-PRICE2 — one venue, six minutes × 100 pers/h ÷ 3 × R 3 = 600 impressions → 6 × 1.50
+      expect(cmax.iMax).toBe(600);
+      expect(cmax.cMaxEvtTnd).toBe(9);
 
       const pool = await assembleEventPool(ref);
       expect(pool.map((x) => x.screenhostId)).toEqual([v.approved]);

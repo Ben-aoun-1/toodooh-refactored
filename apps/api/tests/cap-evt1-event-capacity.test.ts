@@ -268,12 +268,12 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
       const ref = await eventRef();
 
       expect((await eventEligibleVenues(ref)).map((x) => x.id)).toEqual([v.on]);
-      const cmax = await computeEventCmax(ref, EVENT_CPM);
+      const cmax = await computeEventCmax(ref, EVENT_CPM, new Set(), 3);
       expect(cmax.venues.map((x) => x.screenhostId)).toEqual([v.on]);
-      // EVT-MIN1 — one venue × six minutes × 100 pers/h × 4 = 2 400 impressions → 6 × 6 TND
-      expect(cmax.iMax).toBe(2_400);
+      // EVT-PRICE2 — one venue × six minutes × 100 pers/h ÷ 3 × R 3 = 600 impressions → 6 × 1.50
+      expect(cmax.iMax).toBe(600);
       expect(cmax.maxMinutes).toBe(6);
-      expect(cmax.cMaxEvtTnd).toBe(36);
+      expect(cmax.cMaxEvtTnd).toBe(9);
       expect((await assembleEventPool(ref)).map((x) => x.screenhostId)).toEqual([v.on]);
     });
 
@@ -283,7 +283,7 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
       await db.update(screenhosts).set({ broadcastCapacity: 1 }).where(eq(screenhosts.id, v.off));
 
       expect((await eventEligibleVenues(ref)).map((x) => x.id).sort()).toEqual(v.both);
-      expect((await computeEventCmax(ref, EVENT_CPM)).eligibleCount).toBe(2);
+      expect((await computeEventCmax(ref, EVENT_CPM, new Set(), 1)).eligibleCount).toBe(2);
       expect((await assembleEventPool(ref)).map((x) => x.screenhostId).sort()).toEqual(v.both);
     });
 
@@ -417,7 +417,9 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
         const ref = { id: event.id, kickoffAt: event.kickoffAt, endsAt: event.endsAt };
         expect((await eventEligibleVenues(ref)).map((x) => x.id).sort()).toEqual(expectedPool);
         expect(
-          (await computeEventCmax(ref, EVENT_CPM)).venues.map((x) => x.screenhostId).sort(),
+          (await computeEventCmax(ref, EVENT_CPM, new Set(), 1)).venues
+            .map((x) => x.screenhostId)
+            .sort(),
         ).toEqual(expectedPool);
         expect((await assembleEventPool(ref)).map((x) => x.screenhostId).sort()).toEqual(
           expectedPool,

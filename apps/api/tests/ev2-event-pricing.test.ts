@@ -194,7 +194,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
   });
 
   describe('blocAvailability — D1, per bloc on its own Tunis date', () => {
-    const noCtx = { unavailableDates: new Set<string>(), foreignReservedCells: new Set<string>() };
+    const noCtx = { unavailableDates: new Set<string>(), foreignPods: [] };
     const eventRef = { id: 'e', kickoffAt: KICKOFF, endsAt: ENDS };
 
     it('a fully-open venue offers all six blocs', () => {
@@ -236,7 +236,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       expect(
         blocAvailability(ref, venue, {
           unavailableDates: new Set(['2027-06-11']),
-          foreignReservedCells: new Set(),
+          foreignPods: [],
         }),
       ).toBe(0);
     });
@@ -246,23 +246,40 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         blocAvailability(
           eventRef,
           { id: 'v', openingHour: 8, closingHour: 23 },
-          { unavailableDates: new Set([MATCH_DATE]), foreignReservedCells: new Set() },
+          { unavailableDates: new Set([MATCH_DATE]), foreignPods: [] },
         ),
       ).toBe(0);
     });
 
-    it('a foreign reservation blocks exactly the blocs touching that hour', () => {
-      // Hour 22 reserved → the three post blocs die, the three pre blocs (h19) survive.
+    // EVT-PRICE2 (operator ruling 2026-10-08) — another match blocks a bloc only when the two AD
+    // BREAKS overlap. Here the après breaks close their blocs: 22:15–22:20, 22:35–22:40, 22:55–23:00.
+    const at = (hhmm: string): number => new Date(`${MATCH_DATE}T${hhmm}:00+01:00`).getTime();
+    const venue = { id: 'v', openingHour: 8, closingHour: 23 };
+    const withPods = (foreignPods: { start: number; end: number }[]) => ({
+      unavailableDates: new Set<string>(),
+      foreignPods,
+    });
+
+    it('a foreign break overlapping ours blocks exactly that bloc', () => {
       expect(
-        blocAvailability(
-          eventRef,
-          { id: 'v', openingHour: 8, closingHour: 23 },
-          {
-            unavailableDates: new Set(),
-            foreignReservedCells: new Set([`${MATCH_DATE}:22`]),
-          },
-        ),
-      ).toBe(3);
+        blocAvailability(eventRef, venue, withPods([{ start: at('22:16'), end: at('22:21') }])),
+      ).toBe(5);
+    });
+
+    it('a foreign break inside our bloc but clear of our break blocks nothing (the old hour rule did)', () => {
+      expect(
+        blocAvailability(eventRef, venue, withPods([{ start: at('22:05'), end: at('22:10') }])),
+      ).toBe(6);
+      // Breaks that merely touch do not overlap: [22:10, 22:15) then ours [22:15, 22:20).
+      expect(
+        blocAvailability(eventRef, venue, withPods([{ start: at('22:10'), end: at('22:15') }])),
+      ).toBe(6);
+    });
+
+    it('a legacy whole-bloc hold blocks every break it covers', () => {
+      expect(
+        blocAvailability(eventRef, venue, withPods([{ start: at('22:00'), end: at('22:40') }])),
+      ).toBe(4);
     });
 
     it('unset opening hours mean zero blocs', () => {
@@ -273,31 +290,37 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
   });
 
   describe('computeEventCmax — the worked example (NO attention coefficient)', () => {
-    // EVT-MIN1 (2026-10-05) — the selling unit is the MINUTE: one seat of a bloc's pod, worth
-    // A_max × 4 impressions at CPM_evt (no attention coefficient still).
-    it('2 venues: A_max 120 × 6 minutes + fallback 50 × 6 minutes at CPM 15 → C_max 61.20', async () => {
+    // EVT-MIN1 (2026-10-05) — the selling unit is the MINUTE: one seat of a bloc's pod. EVT-PRICE2
+    // (2026-10-08) — worth A_max ÷ 3 × R impressions at CPM_evt (R = the spot's plays per minute;
+    // no attention coefficient still). Here an 11 s spot: R 5.
+    it('2 venues: A_max 120 × 6 minutes + fallback 50 × 6 minutes at CPM 15, R 5 → C_max 25.50', async () => {
       const sectors = await ownerSectors();
       const venueA = await seedVenue({ sector: sectors[0] ?? '', affluence: [80, 120, 95] });
       const venueB = await seedVenue({ sector: sectors[1] ?? sectors[0] ?? '' }); // no grid → 50
       const eventId = await seedEvent();
 
-      const result = await computeEventCmax({ id: eventId, kickoffAt: KICKOFF, endsAt: ENDS }, 15);
+      const result = await computeEventCmax(
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        15,
+        new Set(),
+        5,
+      );
       expect(result.eligibleCount).toBe(2);
       const a = result.venues.find((v) => v.screenhostId === venueA);
       const b = result.venues.find((v) => v.screenhostId === venueB);
-      // facturable = brut: A_max × 4 reps per minute × minutes — no T anywhere.
+      // facturable = brut: A_max ÷ 3 × R per minute × minutes — no T anywhere.
       expect(REPS_PER_BLOC).toBe(20); // the pre-EVT-MIN1 whole-bloc constant survives for A1
-      expect(a?.impressions).toBe(120 * 4 * 6); // 2 880
+      expect(a?.impressions).toBe(200 * 6); // 120 ÷ 3 × 5 = 200 a minute
       expect(b?.amaxPph).toBe(AMAX_FALLBACK_PPH);
-      expect(b?.impressions).toBe(50 * 4 * 6); // 1 200
-      expect(result.iMax).toBe(4_080);
+      expect(b?.impressions).toBe(83 * 6); // 50 ÷ 3 × 5 = 83.3 → 83
+      expect(result.iMax).toBe(1_698);
       expect(result.maxMinutes).toBe(12);
-      // Ordered SPS desc then ancienneté: A's six minutes at 7.20, then B's six at 3.00.
+      // Ordered SPS desc then ancienneté: A's six minutes at 3.00, then B's six at 1.25.
       expect(result.minutes.map((m) => m.priceTnd)).toEqual([
-        ...Array<number>(6).fill(7.2),
         ...Array<number>(6).fill(3),
+        ...Array<number>(6).fill(1.25),
       ]);
-      expect(result.cMaxEvtTnd).toBe(61.2); // 6 × 7.20 + 6 × 3.00
+      expect(result.cMaxEvtTnd).toBe(25.5); // 6 × 3.00 + 6 × 1.25
     });
 
     it('an event-INELIGIBLE sector excludes its venues (restored after)', async () => {
@@ -315,6 +338,8 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         const result = await computeEventCmax(
           { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
           15,
+          new Set(),
+          1,
         );
         expect(result.eligibleCount).toBe(1);
       } finally {
@@ -325,7 +350,9 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       }
     });
 
-    it("the event's OWN reservation never blocks it; another event's does", async () => {
+    // EVT-PRICE2 (operator ruling 2026-10-08) — hour reservations no longer block another match:
+    // only an overlapping AD BREAK does (the EV5 overlap pin and the blocAvailability cases).
+    it("an hour reservation — ours or another match's — blocks no bloc of the match", async () => {
       const sectors = await ownerSectors();
       const shId = await seedVenue({ sector: sectors[0] ?? '', affluence: [100] });
       const eventId = await seedEvent();
@@ -334,14 +361,24 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       await db
         .insert(hourReservations)
         .values({ screenhostId: shId, day: MATCH_DATE, hour: 22, eventId });
-      let result = await computeEventCmax({ id: eventId, kickoffAt: KICKOFF, endsAt: ENDS }, 15);
+      let result = await computeEventCmax(
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        15,
+        new Set(),
+        1,
+      );
       expect(result.venues[0]?.blocsDisponibles).toBe(6); // our own hold is not a rival
 
       await db
         .insert(hourReservations)
         .values({ screenhostId: shId, day: MATCH_DATE, hour: 19, eventId: otherId });
-      result = await computeEventCmax({ id: eventId, kickoffAt: KICKOFF, endsAt: ENDS }, 15);
-      expect(result.venues[0]?.blocsDisponibles).toBe(3); // the rival's hour kills its blocs
+      result = await computeEventCmax(
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        15,
+        new Set(),
+        1,
+      );
+      expect(result.venues[0]?.blocsDisponibles).toBe(6); // nor is the rival's HOUR (no break)
     });
 
     it('an E2 declaration on the match date drops the venue entirely', async () => {
@@ -349,7 +386,12 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       const shId = await seedVenue({ sector: sectors[0] ?? '', affluence: [100] });
       await db.insert(screenhostUnavailability).values({ screenhostId: shId, day: MATCH_DATE });
       const eventId = await seedEvent();
-      const result = await computeEventCmax({ id: eventId, kickoffAt: KICKOFF, endsAt: ENDS }, 15);
+      const result = await computeEventCmax(
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        15,
+        new Set(),
+        1,
+      );
       expect(result.eligibleCount).toBe(0);
       expect(result.cMaxEvtTnd).toBe(0);
     });
@@ -386,8 +428,9 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.c_max_evt_tnd).toBe(43.2); // 6 minutes × 15 × 120 × 4 / 1000
-      expect(body.i_max).toBe(2_880);
+      // EVT-PRICE2 — the catalogue leaves R out: the AUDIENCE, 120 ÷ 3 = 40 a minute.
+      expect(body.c_max_evt_tnd).toBe(3.6); // 6 minutes × 15 × 40 / 1000
+      expect(body.i_max).toBe(240);
       expect(body.eligible_count).toBe(1);
       expect(body.max_minutes).toBe(6);
       expect(body.min_minutes).toBe(1);
@@ -438,7 +481,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
 
       const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
       expect(res.statusCode).toBe(200);
-      expect(res.json().c_max_evt_tnd).toBe(86.4); // 6 × 30 × 120 × 4 / 1000, not 43.2
+      expect(res.json().c_max_evt_tnd).toBe(7.2); // 6 × 30 × 40 / 1000, not 3.6
     });
 
     it('GET /api/admin/events/:id/tarification — per-venue detail, admin-gated', async () => {
@@ -472,7 +515,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
           name: expect.stringContaining('EV2 Venue'),
           amax_pph: 120,
           blocs_disponibles: 6,
-          impressions: 2_880,
+          impressions: 240, // the audience: 6 minutes × 120 ÷ 3
         },
       ]);
       await app.close();

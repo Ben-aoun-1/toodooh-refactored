@@ -580,9 +580,12 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
     // screencaster's positioning would pay); each screencaster pays their own event CPM, and a
     // positioning carries it (realigned while a draft not yet frozen, kept otherwise).
     const cfg = await getDispatchConfig();
+    // EVT-PRICE2 — no spot yet: the AUDIENCE per minute (A_max ÷ 3, R = 1), as the catalogue.
     const result = await computeEventCmax(
       { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
       cfg.eventCpmTnd,
+      new Set(),
+      1,
     );
     return reply.status(200).send({
       c_max_evt_tnd: result.cMaxEvtTnd,

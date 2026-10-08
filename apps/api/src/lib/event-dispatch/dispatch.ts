@@ -11,6 +11,7 @@ import {
   computeEventCmax,
   eventEligibleVenues,
 } from '../event-pricing/pricing.js';
+import { campaignPlaysPerMinute } from '../event-pricing/spot.js';
 
 // EV4 — THE EVENT DISPATCH ENGINE (its own module, the D51 boundary: nothing here imports
 // lib/dispatch or any campaign lib — the campaign engine and this one only ever meet at the
@@ -399,7 +400,12 @@ const runEventMinutesDispatch = async (
   const outcome = await db.transaction(async (tx): Promise<EventDispatchOutcome> => {
     if (cpmCheck && !(await cpmCheck(tx, cpmEvtTnd))) return { status: 'CPM_CHANGED' };
     await lockEventSeats(tx, event.id);
-    const { minutes } = await computeEventCmax(event, cpmEvtTnd);
+    const { minutes } = await computeEventCmax(
+      event,
+      cpmEvtTnd,
+      new Set(),
+      await campaignPlaysPerMinute(positioning.id, tx),
+    );
     if (minutes.length === 0) return { status: 'NO_POOL' };
     const take = takeEventMinutes(minutes, positioning.eventMinutes, positioning.requestedBudget);
     if (take.status === 'NOT_ENOUGH') {
@@ -476,7 +482,12 @@ export const runEventRefusalCascade = async (
   // at settlement (REFUSE carries no money).
   if (positioning.eventMinutes !== null) {
     await lockEventSeats(executor, event.id);
-    const { minutes } = await computeEventCmax(event, cpmEvtTnd, exclude);
+    const { minutes } = await computeEventCmax(
+      event,
+      cpmEvtTnd,
+      exclude,
+      await campaignPlaysPerMinute(positioning.id, executor),
+    );
     const count = Math.min(refused.minutes, minutes.length);
     if (count === 0) return { status: 'NO_POOL', allocationIds: [] };
     const take = takeEventMinutes(minutes, count, refused.montantTnd);
