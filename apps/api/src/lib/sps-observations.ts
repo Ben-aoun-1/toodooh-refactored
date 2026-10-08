@@ -12,7 +12,7 @@ import {
 
 import { plusCalendarDays } from './campaign-dates.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
-import { blackoutMinutesByCell } from './event-blackout.js';
+import { blackoutMinutesByCell, blackoutMinutesByVenueCell } from './event-blackout.js';
 import { PLAYOUT_TZ } from './reconcile/delivered-slots.js';
 
 export const ACCEPTATION_WINDOW_DAYS = 90;
@@ -164,6 +164,7 @@ export const spsObservationsInRange = async (
   ]);
   const nowSlot = tunisNowSlot(now);
   const blackoutNow = await blackoutMinutesByCell(
+    screenhostId,
     allocations.flatMap((a) => a.creneaux).filter((c) => c.date >= from && c.date <= to),
   );
   let scheduledElapsed = 0;
@@ -271,12 +272,16 @@ export const spsObservationsFor = async (
     .toISOString()
     .slice(0, 10);
   const firstDate = activiteSinceDate < weekStart ? activiteSinceDate : weekStart;
-  const blackoutNow = await blackoutMinutesByCell(
-    allocations.flatMap((a) => a.creneaux).filter((c) => c.date >= firstDate && c.date < weekEnd),
+  const blackoutByVenue = await blackoutMinutesByVenueCell(
+    allocations.map((a) => ({
+      screenhostId: a.screenhostId,
+      creneaux: a.creneaux.filter((c) => c.date >= firstDate && c.date < weekEnd),
+    })),
   );
   for (const a of allocations) {
     const o = result.get(a.screenhostId);
     if (!o) continue;
+    const blackoutNow = blackoutByVenue.get(a.screenhostId) ?? new Map<string, number>();
     for (const c of a.creneaux) {
       const blackout = spsBlackoutMin(c, blackoutNow);
       if (blackout >= 60) continue; // EVT-STOP — the same rule as computeSps

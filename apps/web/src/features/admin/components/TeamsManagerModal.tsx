@@ -2,6 +2,7 @@ import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import ImagePickerPreview from '@/features/admin/components/ImagePickerPreview';
 import {
   useAdminTeams,
   useDeleteTeam,
@@ -23,6 +24,8 @@ interface Draft {
   colorCrowd: string;
   useCrowd: boolean;
   logo: File | null;
+  /** The stored logo (presigned), for the preview. */
+  logoUrl: string | null;
   removeLogo: boolean;
 }
 
@@ -35,6 +38,7 @@ const fromTeam = (t: TeamView | null): Draft => ({
   colorCrowd: t?.color_crowd ?? '#7E8F88',
   useCrowd: t?.color_crowd != null,
   logo: null,
+  logoUrl: t?.logo_url ?? null,
   removeLogo: false,
 });
 
@@ -161,23 +165,16 @@ export default function TeamsManagerModal({ onClose }: { onClose: () => void }) 
               <span className="mb-1 block text-sm font-medium text-[#171717]">
                 Logo ou drapeau (facultatif)
               </span>
-              <input
-                id="team-logo"
-                type="file"
+              <ImagePickerPreview
+                inputId="team-logo"
                 accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => setDraft({ ...draft, logo: e.target.files?.[0] ?? null })}
+                file={draft.logo}
+                onFile={(logo) => setDraft({ ...draft, logo })}
+                currentUrl={draft.removeLogo ? null : draft.logoUrl}
+                hint="JPEG, PNG ou WebP, 2 Mo maximum"
+                fit="contain"
               />
-              <label
-                htmlFor="team-logo"
-                className="inline-block cursor-pointer rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200"
-              >
-                Parcourir les fichiers
-              </label>
-              <span className="ml-2 text-xs text-gray-500">
-                {draft.logo ? draft.logo.name : 'JPEG, PNG ou WebP, 2 Mo maximum'}
-              </span>
-              {draft.id && !draft.logo && (
+              {draft.id && !draft.logo && draft.logoUrl && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-gray-600">
                   <input
                     type="checkbox"

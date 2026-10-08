@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 
-import { soldEventBlackouts } from '../event-blackout.js';
+import { eventBlackouts } from '../event-blackout.js';
 import { pushPlaylistToAllConnected, pushPlaylistToVenue } from '../playout/push.js';
 
 import { venuesAtBlocEdge } from './spots.js';
@@ -12,8 +12,8 @@ import { venuesAtBlocEdge } from './spots.js';
 // entry, at an end edge it no longer does.
 //
 // Design notes:
-//   • ONE minute of granularity is enough — blocs are 20 minutes and the player receives a whole
-//     playlist with a cadence hint, so a sub-minute skew costs at most one rep.
+//   • ONE minute of granularity is enough — every edge (match window, bloc, pod announce/close)
+//     sits on a whole minute and the tick fires on the minute (EVT-PLAY1 R2).
 //   • IDEMPOTENT by construction: the push recomputes the playlist whole, so a double firing
 //     sends the same message twice (the player replaces its list).
 //   • Never throws: a dead socket or an unreachable venue warns; the tick keeps going.
@@ -25,7 +25,7 @@ export const BLOC_PUSH_TICK_MS = 60 * 1000;
 export interface BlocPushResult {
   venues: number;
   pushed: number;
-  /** EVT-STOP — a network-wide blackout edge fell in the window: every connected venue re-pushed. */
+  /** EVT-PLAY1 — a match window edge fell in the tick: every connected venue re-pushed. */
   network: boolean;
 }
 
@@ -39,10 +39,10 @@ export const runBlocPushTick = async (
   windowMs: number = BLOC_PUSH_TICK_MS,
 ): Promise<BlocPushResult> => {
   const since = new Date(now.getTime() - windowMs);
-  // EVT-STOP — a sold event's bloc edge is a NETWORK edge: classic stops (start) or resumes
-  // (end) on every screen, so every connected venue re-pushes — the per-venue scan below is then
-  // redundant. Edges are those of the MERGED windows (back-to-back blocs push once).
-  const windows = await soldEventBlackouts(
+  // EVT-PLAY1 — a confirmed match's window edge is a NETWORK edge: classic stops (start) or
+  // resumes (end) on every venue that shows events, so every connected venue re-pushes — the
+  // per-venue scan below is then redundant. Edges are those of the MERGED windows.
+  const { windows } = await eventBlackouts(
     new Date(since.getTime() - 1),
     new Date(now.getTime() + 1),
   );
@@ -77,15 +77,35 @@ export const runBlocPushTick = async (
   return { venues: venues.length, pushed, network: false };
 };
 
-/** Boot tick + per-minute unref'd interval — the campaign-lifecycle job posture. */
+/** EVT-PLAY1 (R2) — ms from `nowMs` to the next whole minute (every edge sits on one). */
+export const msToNextMinute = (nowMs: number): number =>
+  BLOC_PUSH_TICK_MS - (nowMs % BLOC_PUSH_TICK_MS);
+
+/**
+ * Boot tick, then one tick per minute ON the minute — not phased on the boot instant: a tick
+ * phased at :25 pushed every edge up to 59 s late and the pod's first slots were lost (R2). Each
+ * tick aims at an explicit minute EDGE and runs its window up to that edge. Node's timers run on
+ * libuv's cached loop clock, so a timer may fire a few ms BEFORE the wall-clock minute: it then
+ * waits out the remainder instead of flooring to the previous minute (which skipped the edge).
+ * Unref'd, like every job.
+ */
 export function startBlocPushJob(log: FastifyBaseLogger): void {
   void runBlocPushTick(log).catch((err: unknown) =>
     log.warn({ err }, 'event bloc push boot tick failed'),
   );
-  const timer = setInterval(() => {
-    void runBlocPushTick(log).catch((err: unknown) =>
-      log.warn({ err }, 'event bloc push tick failed'),
-    );
-  }, BLOC_PUSH_TICK_MS);
-  timer.unref();
+  const schedule = (): void => {
+    const edge = Date.now() + msToNextMinute(Date.now());
+    const fire = (): void => {
+      const early = edge - Date.now();
+      if (early > 0) {
+        setTimeout(fire, early).unref();
+        return;
+      }
+      void runBlocPushTick(log, new Date(edge))
+        .catch((err: unknown) => log.warn({ err }, 'event bloc push tick failed'))
+        .finally(schedule);
+    };
+    setTimeout(fire, edge - Date.now()).unref();
+  };
+  schedule();
 }

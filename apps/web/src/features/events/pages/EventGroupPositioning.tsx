@@ -19,6 +19,7 @@ import EventGroupRecapStep, { type GroupMatchLine } from '../components/EventGro
 import { useEventsCatalogue } from '../hooks/useEvents';
 import { cardTitle, dateLine, hourLabel } from '../lib/event-catalogue';
 import { parseGroupIds } from '../lib/event-group';
+import { groupMinutesTotal } from '../lib/event-minutes';
 
 const log = logger.child({ module: 'EventGroupPositioning' });
 
@@ -235,6 +236,7 @@ export default function EventGroupPositioning() {
           onDeselectCreative={handleDeselectCreative}
           linking={busy}
           eventMode
+          eventMinutes={groupMinutesTotal(ids, minutes)}
           onNext={() => setStep(3)}
           onBack={() => setStep(1)}
         />

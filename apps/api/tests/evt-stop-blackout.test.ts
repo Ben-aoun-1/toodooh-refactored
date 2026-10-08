@@ -1,29 +1,26 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
+import { type NewUser, businessSectors, events, screenhosts, users } from '../src/db/schema.js';
 import {
-  type NewUser,
-  campaigns,
-  creatives,
-  eventAllocations,
-  events,
-  screenhosts,
-  users,
-} from '../src/db/schema.js';
-import {
+  blackoutMinutesByVenueCell,
   blackoutMinutesInHour,
+  eventBlackouts,
   isInBlackout,
   mergeBlackouts,
-  soldEventBlackouts,
   upcomingBlackouts,
+  windowsForVenue,
 } from '../src/lib/event-blackout.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { eventSector } from './helpers/installed-screen-matrix.js';
 
-// EVT-STOP (operator rulings 2026-09-28, docs/daily/2026-09-28.md §2) — during a SOLD event's
-// blocs, every screen of the network stops classic campaigns. This file pins the ONE home of the
-// blackout windows: which events black out (sold = ≥ 1 upcoming/active positioning, not annulé;
-// only the blocs its live allocations placed), and the pure minute arithmetic planning reads.
+// EVT-STOP (2026-09-28) + EVT-PLAY1 (operator rulings 2026-10-08) — from kickoff − 1 h to the
+// end + 1 h of every CONFIRMED match (official, not annulé, date and time confirmed — sold or
+// not), the venues that show events (event switch on, event-eligible sector) stop classic
+// campaigns. This file pins the ONE home of those windows and the pure minute arithmetic
+// planning reads.
 
 const at = (iso: string): Date => new Date(iso);
 const w = (start: string, end: string) => ({ start: at(start), end: at(end) });
@@ -81,14 +78,14 @@ describe('EVT-STOP — the pure blackout rules', () => {
 });
 
 let seq = 0;
-const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
+const seedOwner = async (values: Partial<NewUser> = {}): Promise<string> => {
   seq += 1;
   const [u] = await db
     .insert(users)
     .values({
       email: `evtstop-${seq}@example.com`,
       contactName: `EVTSTOP ${seq}`,
-      role: 'advertiser',
+      role: 'individual_owner',
       status: 'approved',
       ...values,
     })
@@ -96,19 +93,12 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
+// The match: Friday 2027-03-12 20:00–22:00 Tunis (19:00–21:00Z) → the window 18:00Z–22:00Z.
 const KICKOFF = at('2027-03-12T20:00:00+01:00');
 const ENDS = at('2027-03-12T22:00:00+01:00');
-const bloc = (start: string, end: string) => ({ start, end, impressions: 1000 });
-const PRE_LAST = bloc('2027-03-12T18:40:00.000Z', '2027-03-12T19:00:00.000Z');
-const POST_FIRST = bloc('2027-03-12T21:00:00.000Z', '2027-03-12T21:20:00.000Z');
+const WINDOW = { start: '2027-03-12T18:00:00.000Z', end: '2027-03-12T22:00:00.000Z' };
 
-interface SeedOpts {
-  annule?: boolean;
-  status?: 'draft' | 'pending' | 'upcoming' | 'active' | 'completed';
-  allocations?: { statut: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE'; blocs: unknown[] }[];
-}
-
-const seedSoldEvent = async (opts: SeedOpts = {}): Promise<string> => {
+const seedMatch = async (values: Partial<typeof events.$inferInsert> = {}): Promise<string> => {
   seq += 1;
   const [event] = await db
     .insert(events)
@@ -118,57 +108,49 @@ const seedSoldEvent = async (opts: SeedOpts = {}): Promise<string> => {
       kickoffAt: KICKOFF,
       endsAt: ENDS,
       source: 'official',
-      annule: opts.annule ?? false,
+      ...values,
     })
     .returning();
-  const advertiserId = await seedUser();
-  const [creative] = await db
-    .insert(creatives)
-    .values({
-      advertiserId,
-      creativeType: 'video',
-      storageKey: `creatives/evtstop/${seq}`,
-      durationSeconds: 15,
-      validationStatus: 'approved',
-    })
-    .returning();
-  const [positioning] = await db
-    .insert(campaigns)
-    .values({
-      advertiserId,
-      name: `EVTSTOP Positionnement ${seq}`,
-      campaignType: 'event',
-      status: opts.status ?? 'active',
-      startDate: '2027-03-12',
-      endDate: '2027-03-12',
-      requestedBudget: '200.00',
-      eventId: event?.id,
-      creativeId: creative?.id,
-    })
-    .returning();
-  for (const a of opts.allocations ?? [{ statut: 'ACCEPTE', blocs: [PRE_LAST, POST_FIRST] }]) {
-    const ownerId = await seedUser({ role: 'individual_owner' });
-    const [venue] = await db
-      .insert(screenhosts)
-      .values({ name: `EVTSTOP Venue ${seq}-${Math.random()}`, ownerId })
-      .returning();
-    await db.insert(eventAllocations).values({
-      campaignId: positioning?.id ?? '',
-      screenhostId: venue?.id ?? '',
-      blocs: a.blocs,
-      impressionsTotal: 1000,
-      montantTnd: '100.000',
-      statut: a.statut,
-    });
-  }
   return event?.id ?? '';
 };
 
-const DAY = { from: at('2027-03-12T00:00:00Z'), to: at('2027-03-13T00:00:00Z') };
-const starts = async (): Promise<string[]> =>
-  (await soldEventBlackouts(DAY.from, DAY.to)).map((x) => x.start.toISOString());
+/** An owner sector that never shows events — none is seeded, so the test adds (and drops) one. */
+const withOtherSector = async (run: (sectorId: string) => Promise<void>): Promise<void> => {
+  const [s] = await db
+    .insert(businessSectors)
+    .values({ name: `EVTSTOP Pharmacie ${seq}`, audience: 'owner', eventEligible: false })
+    .returning({ id: businessSectors.id });
+  if (!s) throw new Error('withOtherSector: no row');
+  try {
+    await run(s.id);
+  } finally {
+    // The reference table is not reset between tests (db.test pins its seed count).
+    await db.delete(screenhosts).where(eq(screenhosts.businessSectorId, s.id));
+    await db.delete(businessSectors).where(eq(businessSectors.id, s.id));
+  }
+};
 
-describe('EVT-STOP — soldEventBlackouts (real Postgres)', () => {
+const seedVenue = async (sectorId: string, broadcastCapacity: number | null): Promise<string> => {
+  const [venue] = await db
+    .insert(screenhosts)
+    .values({
+      name: `EVTSTOP Venue ${seq}-${Math.random()}`,
+      ownerId: await seedOwner(),
+      businessSectorId: sectorId,
+      broadcastCapacity,
+    })
+    .returning();
+  return venue?.id ?? '';
+};
+
+const DAY = { from: at('2027-03-12T00:00:00Z'), to: at('2027-03-13T00:00:00Z') };
+const windowsOfDay = async (): Promise<{ start: string; end: string }[]> =>
+  (await eventBlackouts(DAY.from, DAY.to)).windows.map((x) => ({
+    start: x.start.toISOString(),
+    end: x.end.toISOString(),
+  }));
+
+describe('EVT-PLAY1 — eventBlackouts (real Postgres)', () => {
   beforeEach(async () => {
     await resetAuthTables();
   });
@@ -176,43 +158,50 @@ describe('EVT-STOP — soldEventBlackouts (real Postgres)', () => {
     await sql.end();
   });
 
-  it('a sold event blacks out exactly the blocs its live allocations placed', async () => {
-    await seedSoldEvent();
-    expect(await starts()).toEqual([PRE_LAST.start, POST_FIRST.start]);
+  it('a confirmed match reserves kickoff − 1 h → end + 1 h, sold or not (Q2 A)', async () => {
+    await seedMatch();
+    expect(await windowsOfDay()).toEqual([WINDOW]);
   });
 
-  it('EN_ATTENTE allocations count (the blocs are held), REFUSE ones do not', async () => {
-    await seedSoldEvent({
-      allocations: [
-        { statut: 'EN_ATTENTE', blocs: [PRE_LAST] },
-        { statut: 'REFUSE', blocs: [POST_FIRST] },
-      ],
+  it('a provisional date or time, a suggestion and an annulé match reserve nothing', async () => {
+    await seedMatch({ dateTbc: true });
+    await seedMatch({ timeTbc: true });
+    await seedMatch({ source: 'suggested' });
+    await seedMatch({ annule: true });
+    expect(await windowsOfDay()).toEqual([]);
+  });
+
+  it('only the venues that show events honour the window', async () => {
+    await seedMatch();
+    const shows = await seedVenue(await eventSector(), 1);
+    const switchOff = await seedVenue(await eventSector(), null);
+    await withOtherSector(async (sectorId) => {
+      const otherTrade = await seedVenue(sectorId, 1);
+      const b = await eventBlackouts(DAY.from, DAY.to);
+      expect(windowsForVenue(b, shows)).toHaveLength(1);
+      expect(windowsForVenue(b, switchOff)).toEqual([]);
+      expect(windowsForVenue(b, otherTrade)).toEqual([]);
+
+      // Per venue cell (R5 late-reservation input): 20:00 Tunis is a whole reserved hour.
+      const cells = [{ date: '2027-03-12', hour: 20 }];
+      const byVenue = await blackoutMinutesByVenueCell([
+        { screenhostId: shows, creneaux: cells },
+        { screenhostId: otherTrade, creneaux: cells },
+      ]);
+      expect(byVenue.get(shows)?.get('2027-03-12:20')).toBe(60);
+      expect(byVenue.get(otherTrade)).toBeUndefined();
     });
-    expect(await starts()).toEqual([PRE_LAST.start]);
   });
 
-  it('unsold events black out nothing: pending (P1 A), draft, annulé', async () => {
-    await seedSoldEvent({ status: 'pending' });
-    await seedSoldEvent({ status: 'draft' });
-    await seedSoldEvent({ annule: true });
-    expect(await starts()).toEqual([]);
-  });
-
-  it('upcoming counts as sold; completed no longer blacks out', async () => {
-    await seedSoldEvent({
-      status: 'upcoming',
-      allocations: [{ statut: 'ACCEPTE', blocs: [PRE_LAST] }],
+  it('overlapping matches merge; only windows overlapping [from, to) are returned', async () => {
+    await seedMatch();
+    await seedMatch({
+      kickoffAt: at('2027-03-12T22:30:00+01:00'),
+      endsAt: at('2027-03-13T00:30:00+01:00'),
     });
-    await seedSoldEvent({
-      status: 'completed',
-      allocations: [{ statut: 'ACCEPTE', blocs: [POST_FIRST] }],
-    });
-    expect(await starts()).toEqual([PRE_LAST.start]);
-  });
-
-  it('only windows overlapping [from, to) are returned', async () => {
-    await seedSoldEvent();
-    const late = await soldEventBlackouts(at('2027-03-12T20:00:00Z'), DAY.to);
-    expect(late.map((x) => x.start.toISOString())).toEqual([POST_FIRST.start]);
+    expect(await windowsOfDay()).toEqual([
+      { start: WINDOW.start, end: '2027-03-13T00:30:00.000Z' },
+    ]);
+    expect((await eventBlackouts(DAY.from, at('2027-03-12T18:00:00Z'))).windows).toEqual([]);
   });
 });

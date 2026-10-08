@@ -12,7 +12,6 @@ import {
   campaignDispatchPlan,
   campaigns,
   creatives,
-  eventAllocations,
   events,
   proofOfPlay,
   screenhostUnavailability,
@@ -231,39 +230,13 @@ const cren = (date: string, hour: number, reps = 30): DispatchCreneau => ({
 });
 
 /** EVT-STOP — a SOLD event (active positioning) whose allocation elsewhere holds these blocs. */
-const seedSoldBlackout = async (blocs: { start: string; end: string }[]): Promise<void> => {
-  const { advertiserId, creativeId } = await seedCampaignWithPlan(10);
-  const [event] = await db
-    .insert(events)
-    .values({
-      name: `E4 blackout ${seq}`,
-      kickoffAt: new Date(blocs[0]?.start ?? ''),
-      endsAt: new Date(new Date(blocs[blocs.length - 1]?.end ?? '').getTime() + 60 * 60 * 1000),
-      source: 'official',
-    })
-    .returning();
-  const [positioning] = await db
-    .insert(campaigns)
-    .values({
-      advertiserId,
-      name: 'Positionnement',
-      campaignType: 'event',
-      status: 'active',
-      startDate: MONDAY,
-      endDate: MONDAY,
-      requestedBudget: '200',
-      eventId: event?.id,
-      creativeId,
-    })
-    .returning();
-  const { shId: elsewhere } = await seedVenue();
-  await db.insert(eventAllocations).values({
-    campaignId: positioning?.id ?? '',
-    screenhostId: elsewhere,
-    blocs: blocs.map((b) => ({ ...b, impressions: 1000 })),
-    impressionsTotal: 1000,
-    montantTnd: '100.000',
-    statut: 'ACCEPTE',
+/** EVT-PLAY1 — a confirmed match: it reserves kickoff − 1 h → end + 1 h on venues showing events. */
+const seedMatch = async (kickoff: string, ends: string): Promise<void> => {
+  await db.insert(events).values({
+    name: `E4 match ${seq}`,
+    kickoffAt: new Date(kickoff),
+    endsAt: new Date(ends),
+    source: 'official',
   });
 };
 
@@ -352,19 +325,15 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
         statut: 'ACCEPTE',
         creneaux: [cren(MONDAY, 9), cren(MONDAY, 10)],
       });
-      // h10 proven (Tunis 10:15 = 09:15 Z); h9 never — but h9 is now FULLY blacked out.
+      // h10 proven (Tunis 10:15 = 09:15 Z); h9 never — but h9 is now FULLY reserved: a match
+      // 08:00–08:20 Z reserves 07:00–09:20 Z = Tunis h8, h9 and the first 20 min of h10.
       await seedProof(campaignId, shId, creativeId, new Date(`${MONDAY}T09:15:00Z`));
-      await seedSoldBlackout([
-        { start: `${MONDAY}T08:00:00.000Z`, end: `${MONDAY}T08:20:00.000Z` },
-        { start: `${MONDAY}T08:20:00.000Z`, end: `${MONDAY}T08:40:00.000Z` },
-        { start: `${MONDAY}T08:40:00.000Z`, end: `${MONDAY}T09:00:00.000Z` },
-        { start: `${MONDAY}T09:00:00.000Z`, end: `${MONDAY}T09:20:00.000Z` },
-      ]);
+      await seedMatch(`${MONDAY}T08:00:00Z`, `${MONDAY}T08:20:00Z`);
       const { variables } = await computeSps(shId, NOW);
       // activité: h9 out (0 minutes airable), h10 proven → 1/1 (it read 1/2 = 50 before).
       expect(variables.activite).toBe(100);
       // remplissage: engaged = h10's 30 reps × 10 s × 40/60 = 200 s; available = 252 000 − the
-      // 80 blacked-out open minutes (4 800 s) = 247 200 → 0,08 % (it read 600/252 000 = 0,24).
+      // 140 reserved open minutes (8 400 s) = 243 600 → 0,08 % (it read 600/252 000 = 0,24).
       expect(variables.remplissage).toBe(0.08);
     });
   });

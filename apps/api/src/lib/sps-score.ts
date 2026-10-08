@@ -11,7 +11,8 @@ import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
 import {
   blackoutMinutesByCell,
   blackoutMinutesInHour,
-  soldEventBlackouts,
+  eventBlackouts,
+  windowsForVenue,
 } from './event-blackout.js';
 import { openingHours } from './opening-hours.js';
 import { proofInstantSql } from './playout/proof-instant.js';
@@ -173,6 +174,7 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
   const firstBlackoutDate =
     activiteSinceDate < weekStartForBlackout ? activiteSinceDate : weekStartForBlackout;
   const blackoutNow = await blackoutMinutesByCell(
+    screenhostId,
     allocations.flatMap((a) => a.creneaux).filter((c) => c.date >= firstBlackoutDate),
   );
   let scheduled = 0;
@@ -221,9 +223,12 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
   // EVT-STOP (P2 A) — the blacked-out open minutes of the week's available days were never the
   // screen's to fill: they leave the denominator (and their share leaves engaged seconds).
   const declaredDays = new Set(declaredRows.map((r) => r.day));
-  const weekWindows = await soldEventBlackouts(
-    new Date(`${weekStart}T00:00:00+01:00`),
-    new Date(`${plusCalendarDays(weekEnd, 1)}T00:00:00+01:00`),
+  const weekWindows = windowsForVenue(
+    await eventBlackouts(
+      new Date(`${weekStart}T00:00:00+01:00`),
+      new Date(`${plusCalendarDays(weekEnd, 1)}T00:00:00+01:00`),
+    ),
+    screenhostId,
   );
   let blackoutSeconds = 0;
   if (weekWindows.length > 0) {

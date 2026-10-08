@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +9,6 @@ import { logger } from '@/lib/logger';
 
 import CatalogueEventCard from '../components/catalogue/CatalogueEventCard';
 import SelectionPanel from '../components/catalogue/SelectionPanel';
-import EventCard from '../components/EventCard';
 import MesEvenementsStrip from '../components/MesEvenementsStrip';
 import SuggestMatchForm from '../components/SuggestMatchForm';
 import {
@@ -18,7 +17,13 @@ import {
   usePositionnerMultiple,
   useSuggestedEvents,
 } from '../hooks/useEvents';
-import { eventsCountLabel, layoutCatalogue } from '../lib/event-catalogue';
+import {
+  SEARCH_EMPTY,
+  SEARCH_PLACEHOLDER,
+  eventsCountLabel,
+  layoutCatalogue,
+  searchEvents,
+} from '../lib/event-catalogue';
 import { groupPositioningPath } from '../lib/event-group';
 
 const log = logger.child({ module: 'Events' });
@@ -29,17 +34,24 @@ const log = logger.child({ module: 'Events' });
  * card « Ajouter à ma sélection » + « Je me positionne »; « Ma sélection » sums the selection's
  * maximum impressions and opens the multi-match parcours (one big minutes slider, one small one
  * per match). Under it, unchanged: « Mes Événements » and the screencasters' suggestions.
+ * The search (ruling 2026-10-08, 1 A) filters the catalogue and the suggestions; « Ma sélection »
+ * keeps what was picked even when a search hides it.
  */
 export default function Events() {
   const navigate = useNavigate();
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
   const { data: catalogue, isLoading } = useEventsCatalogue();
   const { data: suggested } = useSuggestedEvents(showSuggestions);
   const positionner = usePositionner();
   const positionnerMultiple = usePositionnerMultiple();
 
-  const layout = useMemo(() => layoutCatalogue(catalogue ?? []), [catalogue]);
+  const layout = useMemo(
+    () => layoutCatalogue(searchEvents(catalogue ?? [], query)),
+    [catalogue, query],
+  );
+  const visibleSuggested = searchEvents(suggested ?? [], query);
   const byId = useMemo(() => new Map((catalogue ?? []).map((e) => [e.id, e])), [catalogue]);
   const selected = selection.flatMap((id) => {
     const e = byId.get(id);
@@ -83,12 +95,29 @@ export default function Events() {
         subtitle="Profitez des pics d’audience des grands matchs pour amplifier votre impact"
       />
 
+      <div className="relative max-w-xl">
+        <Search
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4F6B60]"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={SEARCH_PLACEHOLDER}
+          aria-label="Rechercher un événement"
+          className="min-h-[46px] w-full rounded-xl border border-[#E1EAE5] bg-white pl-10 pr-3.5 text-sm text-[#0D2B1F] placeholder:text-[#8AA197] focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/40"
+        />
+      </div>
+
       <div className="grid grid-cols-1 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-10">
           {isLoading ? (
             <p className="text-sm text-[#5C5C5C]">Chargement des événements…</p>
           ) : (catalogue ?? []).length === 0 ? (
             <p className="text-sm text-[#5C5C5C]">Aucun événement au catalogue pour le moment.</p>
+          ) : !layout.hero && layout.pinned.length === 0 && layout.months.length === 0 ? (
+            <p className="text-sm text-[#5C5C5C]">{SEARCH_EMPTY}</p>
           ) : (
             <>
               {(layout.hero || layout.pinned.length > 0) && (
@@ -168,10 +197,12 @@ export default function Events() {
           </p>
           {(suggested ?? []).length === 0 ? (
             <p className="text-sm text-[#5C5C5C]">Aucun match suggéré pour le moment.</p>
+          ) : visibleSuggested.length === 0 ? (
+            <p className="text-sm text-[#5C5C5C]">{SEARCH_EMPTY}</p>
           ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {(suggested ?? []).map((e) => (
-                <EventCard key={e.id} event={e} />
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6">
+              {visibleSuggested.map((e) => (
+                <CatalogueEventCard key={e.id} event={e} />
               ))}
             </div>
           )}

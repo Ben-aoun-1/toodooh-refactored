@@ -12,6 +12,7 @@ import {
   layoutCatalogue,
   longDate,
   roundLine,
+  searchEvents,
   selectionCta,
   swatch,
 } from './event-catalogue';
@@ -70,25 +71,37 @@ describe('card lines', () => {
     );
   });
 
-  it('titles: one match, an undrawn opponent, an evening of three, a bare event', () => {
+  it('a screencaster suggestion is badged as such (it is never an official match)', () => {
+    expect(cardBadge(ev({ source: 'suggested' }))).toBe('Suggéré par un annonceur');
+    expect(cardBadge(ev({ source: 'suggested', time_tbc: true }))).toBe('Horaire à confirmer');
+  });
+
+  it('titles: the event name as typed, never a generated « Soirée » (ruling 2026-10-08)', () => {
     const ca = team('Club Africain', '#D2001F');
     const est = team('Espérance de Tunis', '#C8001E');
-    expect(cardTitle(ev({ matches: [{ position: 0, home: ca, away: est }] }))).toBe(
-      'Club Africain - Espérance de Tunis',
-    );
-    expect(cardTitle(ev({ matches: [{ position: 0, home: est, away: null }] }))).toBe(
-      'Espérance de Tunis - Adversaire après tirage',
-    );
+    expect(
+      cardTitle(ev({ name: 'Derby de Tunis', matches: [{ position: 0, home: ca, away: est }] })),
+    ).toBe('Derby de Tunis');
     const evening = ev({
+      name: 'Mardi des champions',
       competition: 'Ligue des champions',
       matches: [0, 1, 2].map((position) => ({ position, home: ca, away: est })),
     });
-    expect(cardTitle(evening)).toBe('Soirée Ligue des champions, 3 affiches au choix');
+    expect(cardTitle(evening)).toBe('Mardi des champions');
     expect(cardTitle(ev({ name: 'Finale' }))).toBe('Finale');
+  });
+
+  it('the round line: competition and round, without saying the competition twice', () => {
+    const est = team('Espérance de Tunis', '#C8001E');
+    expect(roundLine(ev({ competition: 'Ligue 1 tunisienne', round: '8ème journée' }))).toBe(
+      'Ligue 1 tunisienne, 8ème journée',
+    );
     expect(roundLine(ev({ competition: 'Serie A', round: 'Serie A, 10ème journée' }))).toBe(
       'Serie A, 10ème journée',
     );
     expect(roundLine(ev({ competition: 'Serie A' }))).toBe('Serie A');
+    expect(roundLine(ev({ round: 'Finale' }))).toBe('Finale');
+    expect(roundLine(ev({ category: 'Amical' }))).toBeNull(); // the catégorie has its own chip
     expect(
       swatch(ev({ matches: [{ position: 0, home: team('A', '#000000', '#E8E8E8'), away: est }] })),
     ).toEqual(['#E8E8E8', '#C8001E']);
@@ -122,5 +135,61 @@ describe('layoutCatalogue', () => {
     expect(selectionCta(0)).toBe('Je me positionne');
     expect(selectionCta(1)).toBe('Je me positionne sur cet événement');
     expect(selectionCta(3)).toBe('Je me positionne sur ces 3 événements');
+  });
+});
+
+describe('searchEvents — the page search (operator ruling 2026-10-08, 1 A)', () => {
+  const derby = ev({
+    id: 'derby',
+    name: 'Derby de Tunis',
+    competition: 'Ligue 1 tunisienne',
+    round: '8ème journée',
+    stadium: 'Stade Hammadi-Agrebi',
+    matches: [
+      {
+        position: 0,
+        home: team('Espérance de Tunis', '#C8102E'),
+        away: team('Club Africain', '#E30613'),
+      },
+    ],
+  });
+  const ldc = ev({
+    id: 'ldc',
+    name: 'Soirée LDC',
+    competition: 'Ligue des champions',
+    matches: [{ position: 0, home: team('Real Madrid', '#FFFFFF'), away: null }],
+  });
+  const suggestion = ev({
+    id: 'sugg',
+    name: 'Tunisie – Brésil',
+    category: 'Amical',
+    source: 'suggested',
+  });
+  const list = [derby, ldc, suggestion];
+  const ids = (q: string) => searchEvents(list, q).map((e) => e.id);
+
+  it('finds a team of any match, ignoring case AND accents', () => {
+    expect(ids('esperance')).toEqual(['derby']);
+    expect(ids('ESPÉRANCE')).toEqual(['derby']);
+    expect(ids('africain')).toEqual(['derby']);
+    expect(ids('real')).toEqual(['ldc']);
+  });
+
+  it('finds the competition, the round, the stadium, the name and the catégorie', () => {
+    expect(ids('ligue')).toEqual(['derby', 'ldc']);
+    expect(ids('8eme journee')).toEqual(['derby']);
+    expect(ids('hammadi')).toEqual(['derby']);
+    expect(ids('bresil')).toEqual(['sugg']);
+    expect(ids('amical')).toEqual(['sugg']);
+  });
+
+  it('finds an undrawn opponent by the card wording', () => {
+    expect(ids('apres tirage')).toEqual(['ldc']);
+  });
+
+  it('a blank query keeps everything; no match keeps nothing', () => {
+    expect(ids('')).toEqual(['derby', 'ldc', 'sugg']);
+    expect(ids('   ')).toEqual(['derby', 'ldc', 'sugg']);
+    expect(ids('zzz')).toEqual([]);
   });
 });

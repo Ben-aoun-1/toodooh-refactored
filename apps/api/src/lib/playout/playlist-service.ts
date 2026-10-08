@@ -1,9 +1,10 @@
 import { storage } from '../../storage/s3-storage.js';
 import {
   BLACKOUT_HORIZON_MS,
+  eventBlackouts,
   isInBlackout,
-  soldEventBlackouts,
   upcomingBlackouts,
+  windowsForVenue,
 } from '../event-blackout.js';
 import { activeEventSpots } from '../event-playout/spots.js';
 
@@ -25,10 +26,14 @@ export const computeScreenPlaylist = async (
   screenhostId: string,
   now: Date,
 ): Promise<PlaylistMessage> => {
-  // EVT-STOP — inside a sold event's bloc NO classic entry airs on any screen; outside, every
-  // classic entry carries the next 48 h of windows so an offline player honours them too.
+  // EVT-PLAY1 — inside a confirmed match's window (kickoff − 1 h → end + 1 h) NO classic entry
+  // airs on a venue that shows events; outside, every classic entry carries the next 48 h of
+  // windows so an offline player honours them too.
   const windows = upcomingBlackouts(
-    await soldEventBlackouts(now, new Date(now.getTime() + BLACKOUT_HORIZON_MS)),
+    windowsForVenue(
+      await eventBlackouts(now, new Date(now.getTime() + BLACKOUT_HORIZON_MS)),
+      screenhostId,
+    ),
     now,
   );
   const blackedOut = isInBlackout(windows, now);
@@ -85,11 +90,11 @@ export const resolveAirableVideo = async (
   now: Date,
 ): Promise<{ campaignId: string; creativeId: string; durationSeconds: number | null } | null> => {
   const [allocation] = await activeAllocationsForScreenhost(screenhostId, now, videoId);
-  // EVT-STOP — a classic play inside a sold event's bloc is not airable: never recorded, so
+  // EVT-PLAY1 — a classic play inside a confirmed match's window is not airable: never recorded, so
   // never delivered, billed or paid (the SAME gate the playlist applies).
   if (allocation) {
-    const blackout = await soldEventBlackouts(now, new Date(now.getTime() + 1));
-    return isInBlackout(blackout, now) ? null : allocation;
+    const blackout = await eventBlackouts(now, new Date(now.getTime() + 1));
+    return isInBlackout(windowsForVenue(blackout, screenhostId), now) ? null : allocation;
   }
   // EVT-MIN1 — the WHOLE bloc credits a minutes spot's proof (a VIDEO_ENDED landing just after
   // its pod closed is still its bloc's — settlement measures per bloc).

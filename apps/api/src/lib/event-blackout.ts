@@ -1,21 +1,23 @@
 import { fromZonedTime } from 'date-fns-tz';
-import { and, eq, gt, inArray, lt } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
-import { campaigns, eventAllocations, events } from '../db/schema.js';
+import { businessSectors, events, screenhosts } from '../db/schema.js';
 
-import { parseBlocs } from './event-playout/spots.js';
+import { eventSwitchOnSql } from './event-pricing/event-switch.js';
+import { FENETRE_MARGE_MS } from './fenetre-diffusion.js';
 
-// EVT-STOP (operator rulings 2026-09-28, docs/daily/2026-09-28.md §2) — THE ONE HOME of the event
-// blackout: during a SOLD event's blocs, every screen of the network stops classic campaigns
-// (only event spots air, where accepted). Every consumer — the playlist, proof ingest, the bloc
-// pusher, classic planning, the missed-slot detector, SPS, the simulator — reads its windows here.
+// EVT-PLAY1 (operator rulings 2026-10-08, supersedes EVT-STOP's « sold blocs, network-wide ») —
+// THE ONE HOME of the event reservation: from kickoff − 1 h to the end + 1 h of every CONFIRMED
+// match, the venues that can show events air NO classic campaign — the hour before, the match
+// itself and the hour after belong to the event (its pods; the rest of the time the venue's own
+// TV). Every consumer — the playlist, proof ingest, the bloc pusher, classic planning, the
+// missed-slot detector, settlement, SPS, the simulator — reads its windows here.
 //
-//   • SOLD (S1 A + P1 A) = not annulé AND ≥ 1 positioning (campaign_type 'event') in upcoming or
-//     active — a pending (unreviewed) positioning does NOT black the network out;
-//   • the windows are the blocs that positioning's LIVE allocations placed (EN_ATTENTE holds
-//     its blocs, ACCEPTE airs them; a REFUSE released them) — a bloc no venue could take blacks
-//     out nothing;
+//   • CONFIRMED = official, not annulé, date AND time confirmed (date_tbc / time_tbc false) —
+//     a provisional date never blacks out real classic sales; SOLD OR NOT (Q2 A);
+//   • the venues = the event switch on (broadcast_capacity set, CAP-EVT1) in an event-eligible
+//     sector — the venues that show matches; every other venue keeps its classic campaigns;
 //   • windows from several events are MERGED, so an overlap never counts a minute twice.
 
 export interface BlackoutWindow {
@@ -80,68 +82,95 @@ export const upcomingBlackouts = (
   );
 };
 
+/** The event windows over a span, and the venues they apply to. */
+export interface EventBlackouts {
+  windows: BlackoutWindow[];
+  venueIds: ReadonlySet<string>;
+}
+
+/** The windows a given venue honours: all of them if it shows events, none otherwise. */
+export const windowsForVenue = (b: EventBlackouts, screenhostId: string): BlackoutWindow[] =>
+  b.venueIds.has(screenhostId) ? b.windows : [];
+
 /**
- * EVT-STOP (R5) — the blackout minutes NOW of each given (date, hour) cell, keyed like
- * slotKey ('date:hour'); only non-zero cells are listed. The missed-slot detector and the NET
- * settlement read this to find the minutes a LATE blackout took from a frozen plan.
+ * EVT-STOP (R5) — the blackout minutes NOW of each venue's (date, hour) cells, keyed like slotKey
+ * ('date:hour') per venue; only non-zero cells are listed. The missed-slot detector, the NET
+ * settlement and SPS read this to find the minutes a LATE reservation took from a frozen plan.
  */
-export const blackoutMinutesByCell = async (
-  cells: readonly { date: string; hour: number }[],
+export const blackoutMinutesByVenueCell = async (
+  allocations: readonly {
+    screenhostId: string;
+    creneaux: readonly { date: string; hour: number }[];
+  }[],
   executor: Pick<typeof db, 'select'> = db,
-): Promise<Map<string, number>> => {
-  const byCell = new Map<string, number>();
-  if (cells.length === 0) return byCell;
-  const dates = cells.map((c) => c.date).sort();
+): Promise<Map<string, Map<string, number>>> => {
+  const byVenue = new Map<string, Map<string, number>>();
+  const dates = allocations.flatMap((a) => a.creneaux.map((c) => c.date)).sort();
+  if (dates.length === 0) return byVenue;
   const first = dates[0] ?? '';
   const last = dates[dates.length - 1] ?? first;
-  const windows = await soldEventBlackouts(
+  const blackouts = await eventBlackouts(
     fromZonedTime(`${first}T00:00:00`, TUNIS),
     new Date(fromZonedTime(`${last}T00:00:00`, TUNIS).getTime() + 24 * HOUR_MS),
     executor,
   );
-  if (windows.length === 0) return byCell;
-  for (const c of cells) {
-    const minutes = blackoutMinutesInHour(windows, c.date, c.hour);
-    if (minutes > 0) byCell.set(`${c.date}:${c.hour}`, minutes);
+  if (blackouts.windows.length === 0) return byVenue;
+  for (const a of allocations) {
+    const windows = windowsForVenue(blackouts, a.screenhostId);
+    if (windows.length === 0) continue;
+    const cells = byVenue.get(a.screenhostId) ?? new Map<string, number>();
+    for (const c of a.creneaux) {
+      const minutes = blackoutMinutesInHour(windows, c.date, c.hour);
+      if (minutes > 0) cells.set(`${c.date}:${c.hour}`, minutes);
+    }
+    byVenue.set(a.screenhostId, cells);
   }
-  return byCell;
+  return byVenue;
 };
 
+/** One venue's cells — {@link blackoutMinutesByVenueCell} for a single screenhost. */
+export const blackoutMinutesByCell = async (
+  screenhostId: string,
+  cells: readonly { date: string; hour: number }[],
+  executor: Pick<typeof db, 'select'> = db,
+): Promise<Map<string, number>> =>
+  (await blackoutMinutesByVenueCell([{ screenhostId, creneaux: cells }], executor)).get(
+    screenhostId,
+  ) ?? new Map<string, number>();
+
 /**
- * The merged blackout windows overlapping [from, to): the placed blocs of every live allocation
- * of every sold positioning of every non-annulé event.
+ * The merged reservation windows overlapping [from, to) — [kickoff − 1 h, end + 1 h) of every
+ * confirmed match — and the venues that honour them.
  */
-export const soldEventBlackouts = async (
+export const eventBlackouts = async (
   from: Date,
   to: Date,
   executor: Pick<typeof db, 'select'> = db,
-): Promise<BlackoutWindow[]> => {
-  // Every bloc lies in [kickoff − 1 h, end + 1 h] (lib/fenetre-diffusion), so the event row
-  // bounds the scan before the jsonb is read.
+): Promise<EventBlackouts> => {
   const rows = await executor
-    .select({ blocs: eventAllocations.blocs })
-    .from(eventAllocations)
-    .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
-    .innerJoin(events, eq(campaigns.eventId, events.id))
+    .select({ kickoffAt: events.kickoffAt, endsAt: events.endsAt })
+    .from(events)
     .where(
       and(
-        eq(campaigns.campaignType, 'event'),
-        inArray(campaigns.status, ['upcoming', 'active']),
-        inArray(eventAllocations.statut, ['EN_ATTENTE', 'ACCEPTE']),
+        eq(events.source, 'official'),
         eq(events.annule, false),
-        lt(events.kickoffAt, new Date(to.getTime() + HOUR_MS)),
-        gt(events.endsAt, new Date(from.getTime() - HOUR_MS)),
+        eq(events.dateTbc, false),
+        eq(events.timeTbc, false),
+        lt(events.kickoffAt, new Date(to.getTime() + FENETRE_MARGE_MS)),
+        gt(events.endsAt, new Date(from.getTime() - FENETRE_MARGE_MS)),
       ),
     );
-  const windows: BlackoutWindow[] = [];
-  for (const row of rows) {
-    for (const bloc of parseBlocs(row.blocs)) {
-      const start = new Date(bloc.start);
-      const end = new Date(bloc.end);
-      if (end.getTime() > from.getTime() && start.getTime() < to.getTime()) {
-        windows.push({ start, end });
-      }
-    }
-  }
-  return mergeBlackouts(windows);
+  const windows = mergeBlackouts(
+    rows.map((r) => ({
+      start: new Date(r.kickoffAt.getTime() - FENETRE_MARGE_MS),
+      end: new Date(r.endsAt.getTime() + FENETRE_MARGE_MS),
+    })),
+  );
+  if (windows.length === 0) return { windows, venueIds: new Set() };
+  const venues = await executor
+    .select({ id: screenhosts.id })
+    .from(screenhosts)
+    .innerJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
+    .where(and(eventSwitchOnSql(), eq(businessSectors.eventEligible, true)));
+  return { windows, venueIds: new Set(venues.map((v) => v.id)) };
 };

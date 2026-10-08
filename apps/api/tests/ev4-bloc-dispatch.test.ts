@@ -449,10 +449,11 @@ describe('EV4 — the bloc dispatch engine (real Postgres)', () => {
       const entryAfter = after.pool.find((p) => p.id === venue.id);
       expect(entryAfter).toBeDefined();
       if (!entryBefore || !entryAfter) return;
-      // Uniform hourly affluence → capacity is linear in surviving hours: 2 of 15 hours
-      // reserved shrinks the residual by EXACTLY 2/15 (the EV1 inert pin's live twin).
+      // Uniform hourly affluence → capacity is linear in surviving hours. EVT-PLAY1: the
+      // confirmed match (20:00–22:00 Tunis) reserves its whole window 19:00–23:00 — h19..h22,
+      // which hold the two reserved bloc hours — so 4 of 15 hours go: EXACTLY 4/15.
       expect(entryAfter.residualCapacity).toBe(
-        Math.round(entryBefore.residualCapacity * (13 / 15)),
+        Math.round(entryBefore.residualCapacity * (11 / 15)),
       );
       expect(entryAfter.residualCapacity).toBeLessThan(entryBefore.residualCapacity);
     });

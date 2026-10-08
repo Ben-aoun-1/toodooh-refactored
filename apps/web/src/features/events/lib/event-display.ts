@@ -46,15 +46,6 @@ export function formatEventHours(kickoffIso: string, endsIso: string): string {
   return `${fmt(kickoffIso)} - ${fmt(endsIso)}`;
 }
 
-/** Search by équipe/phase: a case-insensitive substring match on the name OR the catégorie. */
-export function searchEvents(list: EventItemView[], query: string): EventItemView[] {
-  const q = query.trim().toLowerCase();
-  if (q === '') return list;
-  return list.filter(
-    (e) => e.name.toLowerCase().includes(q) || (e.category ?? '').toLowerCase().includes(q),
-  );
-}
-
 export type SuggestFormErrors = Partial<Record<keyof SuggestMatchInput, string>>;
 
 /** The client-side mirror of the server's per-field requirements (same French messages). */

@@ -380,6 +380,7 @@ export default function EventPositioning() {
           onDeselectCreative={handleDeselectCreative}
           linking={updateCampaign.isPending}
           eventMode
+          eventMinutes={eventMinutes}
           onNext={() => setCurrentStep(3)}
           onBack={() => setCurrentStep(1)}
         />
