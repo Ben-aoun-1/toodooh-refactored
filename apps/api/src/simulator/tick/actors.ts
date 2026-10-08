@@ -16,7 +16,7 @@ import {
 } from '../../db/schema.js';
 import { decideAllocation } from '../../lib/allocation-decision.js';
 import { decideEventAllocation } from '../../lib/event-allocation-decision.js';
-import { isInBlackout, soldEventBlackouts } from '../../lib/event-blackout.js';
+import { eventBlackouts, isInBlackout, windowsForVenue } from '../../lib/event-blackout.js';
 import { activeEventSpots, parseBlocs } from '../../lib/event-playout/spots.js';
 import { collapseHalvesSql, inEffectSql } from '../../lib/half-hour-slots.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
@@ -300,13 +300,10 @@ export const runPlayout = async (input: {
 
   const result: PlayoutResult = { proofs: 0, venuesAiring: 0, skippedOffline: 0 };
   const airing = new Set<string>();
-  // EVT-STOP — the screens never air a classic spot inside a sold event's bloc (the live
-  // playlist drops them there): this hour's blackout windows, read once for every venue.
+  // EVT-PLAY1 — a venue that shows events never airs a classic spot inside a confirmed match's
+  // window (the live playlist drops them there): this hour's windows, read once for every venue.
   const hourStart = withinHour(input.moment.at, 0);
-  const blackouts = await soldEventBlackouts(
-    hourStart,
-    new Date(hourStart.getTime() + 60 * 60 * 1000),
-  );
+  const blackouts = await eventBlackouts(hourStart, new Date(hourStart.getTime() + 60 * 60 * 1000));
   for (const row of rows) {
     const slot = row.creneaux.find(
       (c) => c.date === input.moment.date && c.hour === input.moment.hour,
@@ -336,7 +333,7 @@ export const runPlayout = async (input: {
       playedDurationMs: duration * 1000,
       eventTs: withinHour(input.moment.at, Math.floor((60 / slot.reps) * i)),
       receivedAt: withinHour(input.moment.at, Math.floor((60 / slot.reps) * i)),
-    })).filter((p) => !isInBlackout(blackouts, p.eventTs));
+    })).filter((p) => !isInBlackout(windowsForVenue(blackouts, row.screenhostId), p.eventTs));
     if (proofs.length === 0) continue;
     await db.insert(proofOfPlay).values(proofs);
     result.proofs += proofs.length;

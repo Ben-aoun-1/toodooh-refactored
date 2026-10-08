@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 
-import { soldEventBlackouts } from '../event-blackout.js';
+import { eventBlackouts } from '../event-blackout.js';
 import { pushPlaylistToAllConnected, pushPlaylistToVenue } from '../playout/push.js';
 
 import { venuesAtBlocEdge } from './spots.js';
@@ -25,7 +25,7 @@ export const BLOC_PUSH_TICK_MS = 60 * 1000;
 export interface BlocPushResult {
   venues: number;
   pushed: number;
-  /** EVT-STOP — a network-wide blackout edge fell in the window: every connected venue re-pushed. */
+  /** EVT-PLAY1 — a match window edge fell in the tick: every connected venue re-pushed. */
   network: boolean;
 }
 
@@ -39,10 +39,10 @@ export const runBlocPushTick = async (
   windowMs: number = BLOC_PUSH_TICK_MS,
 ): Promise<BlocPushResult> => {
   const since = new Date(now.getTime() - windowMs);
-  // EVT-STOP — a sold event's bloc edge is a NETWORK edge: classic stops (start) or resumes
-  // (end) on every screen, so every connected venue re-pushes — the per-venue scan below is then
-  // redundant. Edges are those of the MERGED windows (back-to-back blocs push once).
-  const windows = await soldEventBlackouts(
+  // EVT-PLAY1 — a confirmed match's window edge is a NETWORK edge: classic stops (start) or
+  // resumes (end) on every venue that shows events, so every connected venue re-pushes — the
+  // per-venue scan below is then redundant. Edges are those of the MERGED windows.
+  const { windows } = await eventBlackouts(
     new Date(since.getTime() - 1),
     new Date(now.getTime() + 1),
   );

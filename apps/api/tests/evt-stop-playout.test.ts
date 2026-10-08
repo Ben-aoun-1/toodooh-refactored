@@ -26,11 +26,13 @@ import { runPlayout } from '../src/simulator/tick/actors.js';
 import { momentOf } from '../src/simulator/tick/clock.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { eventSector } from './helpers/installed-screen-matrix.js';
 
-// EVT-STOP (docs/daily/2026-09-28.md §2, R2/R3) — during a SOLD event's bloc, EVERY screen of the
-// network drops its classic entries (only event spots air, where accepted); outside a bloc, each
-// classic entry carries the next 48 h of blackout windows for an offline player; a classic proof
-// played inside a bloc is not airable; and a blackout edge re-pushes the whole network.
+// EVT-STOP (docs/daily/2026-09-28.md §2, R2/R3) + EVT-PLAY1 (2026-10-08) — from kickoff − 1 h to
+// the end + 1 h of a confirmed match, every venue that shows events drops its classic entries
+// (only event spots air, where accepted); outside, each classic entry carries the next 48 h of
+// windows for an offline player; a classic proof played inside a window is not airable; and a
+// window edge re-pushes the whole network.
 //
 // Clock: relative to the real instant — kickoff = now + 50 min puts the first pre-match bloc at
 // [now − 10 min, now + 10 min); kickoff = now + 130 min puts every bloc in the future.
@@ -53,11 +55,18 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
-const seedVenue = async (): Promise<{ shId: string; screenId: string }> => {
+/** A venue; by default one that SHOWS events (event switch on, event-eligible sector). */
+const seedVenue = async (showsEvents = true): Promise<{ shId: string; screenId: string }> => {
   const ownerId = await seedUser({ role: 'individual_owner' });
   const [sh] = await db
     .insert(screenhosts)
-    .values({ name: `EVTSTOP play venue ${seq}`, ownerId, openingHour: 0, closingHour: 23 })
+    .values({
+      name: `EVTSTOP play venue ${seq}`,
+      ownerId,
+      openingHour: 0,
+      closingHour: 23,
+      ...(showsEvents ? { businessSectorId: await eventSector(), broadcastCapacity: 1 } : {}),
+    })
     .returning();
   const [screen] = await db
     .insert(screens)
@@ -193,21 +202,35 @@ describe('EVT-STOP — playout (real Postgres)', () => {
     await sql.end();
   });
 
-  it('inside a sold bloc, EVERY screen drops its classic entries; the event venue airs its spot', async () => {
+  it('inside a match window, the venues that show events drop classic; the others keep it', async () => {
     const eventVenue = await seedVenue();
     const otherVenue = await seedVenue();
+    const plainVenue = await seedVenue(false);
     const classicAtEvent = await seedClassic(eventVenue.shId);
     const classicElsewhere = await seedClassic(otherVenue.shId);
+    const classicPlain = await seedClassic(plainVenue.shId);
     const { positioningId } = await seedEvent(new Date(Date.now() + 50 * MIN), eventVenue.shId);
 
     const atEvent = await computeScreenPlaylist(eventVenue.shId, new Date());
     expect(atEvent.videos.map((v) => v.id)).toEqual([positioningId]);
     const elsewhere = await computeScreenPlaylist(otherVenue.shId, new Date());
     expect(elsewhere.videos).toEqual([]);
+    // A venue that does not show events is not reserved (EVT-PLAY1).
+    const plain = await computeScreenPlaylist(plainVenue.shId, new Date());
+    expect(plain.videos.map((v) => v.id)).toEqual([classicPlain]);
 
-    // and the proof gate agrees: a classic play inside the bloc is not airable
+    // and the proof gate agrees: a classic play inside the window is not airable
     expect(await resolveAirableVideo(otherVenue.shId, classicElsewhere, new Date())).toBeNull();
     expect(await resolveAirableVideo(eventVenue.shId, classicAtEvent, new Date())).toBeNull();
+    expect(await resolveAirableVideo(plainVenue.shId, classicPlain, new Date())).not.toBeNull();
+  });
+
+  it('EVT-PLAY1 — the match itself is reserved too (no classic between the blocs)', async () => {
+    const venue = await seedVenue();
+    await seedClassic(venue.shId);
+    // Kickoff 30 min ago: the pre-match blocs are over, the match is on.
+    await seedEvent(new Date(Date.now() - 30 * MIN), venue.shId);
+    expect((await computeScreenPlaylist(venue.shId, new Date())).videos).toEqual([]);
   });
 
   it('outside any bloc, classic entries air and carry the upcoming windows (offline player)', async () => {
@@ -222,10 +245,13 @@ describe('EVT-STOP — playout (real Postgres)', () => {
     expect(await resolveAirableVideo(venue.shId, classic, new Date())).not.toBeNull();
   });
 
-  it('an UNSOLD (pending) positioning blacks out nothing (P1 A)', async () => {
+  it('EVT-PLAY1 — an unsold confirmed match reserves (Q2 A); a provisional one does not', async () => {
     const venue = await seedVenue();
     const classic = await seedClassic(venue.shId);
     await seedEvent(new Date(Date.now() + 50 * MIN), venue.shId, 'pending');
+    expect((await computeScreenPlaylist(venue.shId, new Date())).videos).toEqual([]);
+
+    await db.update(events).set({ timeTbc: true });
     const playlist = await computeScreenPlaylist(venue.shId, new Date());
     expect(playlist.videos.map((v) => v.id)).toEqual([classic]);
     expect(playlist.videos[0]).not.toHaveProperty('blackouts');
@@ -289,43 +315,29 @@ describe('EVT-STOP — playout (real Postgres)', () => {
     }
   });
 
-  it('SIM — the simulator never writes a classic proof inside a bloc (S7)', async () => {
+  it('SIM — the simulator never writes a classic proof inside a match window (S7)', async () => {
     const venue = await seedVenue();
     const classic = await seedClassic(venue.shId);
-    // A bloc covering the first 20 minutes of a past hour H; the classic créneau plans 6 reps in H.
+    // A past hour H; the classic créneau plans 6 reps in H.
     const hourStart = new Date(Math.floor((Date.now() - 3 * 60 * MIN) / (60 * MIN)) * 60 * MIN);
     const moment = momentOf(hourStart);
     await db
       .update(campaignDispatchAllocation)
       .set({ creneaux: [{ date: moment.date, hour: moment.hour, reps: 6, impressions: 600 }] })
       .where(eq(campaignDispatchAllocation.screenhostId, venue.shId));
-    // kickoff 20 min into H: the bloc [H, H+20) is its last pre-match one (inside the window).
-    const { positioningId } = await seedEvent(new Date(hourStart.getTime() + 20 * MIN), venue.shId);
-    await db
-      .update(eventAllocations)
-      .set({
-        blocs: [
-          {
-            start: hourStart.toISOString(),
-            end: new Date(hourStart.getTime() + 20 * MIN).toISOString(),
-            impressions: 1000,
-          },
-        ],
-      })
-      .where(eq(eventAllocations.campaignId, positioningId));
+    // Kickoff 80 min into H: the window opens at H + 20 min.
+    await seedEvent(new Date(hourStart.getTime() + 80 * MIN), venue.shId);
 
     const result = await runPlayout({
       moment,
       onlineByVenue: new Map([[venue.shId, [venue.screenId]]]),
     });
-    // 6 reps at minutes 0, 10, 20, 30, 40, 50 → the two inside [0, 20) never air.
-    expect(result.proofs).toBe(4);
+    // 6 reps at minutes 0, 10, 20, 30, 40, 50 → only the two before H + 20 air.
+    expect(result.proofs).toBe(2);
     const proofs = await db
       .select({ at: proofOfPlay.eventTs })
       .from(proofOfPlay)
       .where(eq(proofOfPlay.campaignId, classic));
-    expect(proofs.every((p) => (p.at?.getTime() ?? 0) >= hourStart.getTime() + 20 * MIN)).toBe(
-      true,
-    );
+    expect(proofs.every((p) => (p.at?.getTime() ?? 0) < hourStart.getTime() + 20 * MIN)).toBe(true);
   });
 });

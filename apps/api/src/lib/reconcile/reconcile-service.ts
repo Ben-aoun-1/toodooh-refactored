@@ -18,7 +18,7 @@ import {
 import { campaignReportReadyNotification } from '../campaign-report-notification.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { createEngineTrace } from '../engine-journal/trace.js';
-import { blackoutMinutesByCell } from '../event-blackout.js';
+import { blackoutMinutesByVenueCell } from '../event-blackout.js';
 import {
   computeReversement,
   millimesToTnd,
@@ -98,7 +98,7 @@ export const reconcileCampaignById = async (
 
   // EVT-STOP (R5) — the blackout minutes NOW of the plan's cells: a blackout added after the
   // freeze takes its share of a proven hour (valuation.lateBlackoutShare).
-  const blackoutNow = await blackoutMinutesByCell(allocations.flatMap((a) => a.creneaux));
+  const blackoutNow = await blackoutMinutesByVenueCell(allocations);
   const inputs: AllocationInput[] = allocations.map((a) => ({
     screenhostId: a.screenhostId,
     creneaux: a.creneaux.map((c) => ({
@@ -108,7 +108,7 @@ export const reconcileCampaignById = async (
       ...(c.blackoutMin !== undefined ? { blackoutMin: c.blackoutMin } : {}),
     })),
     deliveredSlots: deliveredBySh.get(a.screenhostId) ?? new Set<string>(),
-    blackoutNow,
+    blackoutNow: blackoutNow.get(a.screenhostId),
   }));
   const t = Number(plan.tTierCoef);
   const valuation = reconcileCampaign(inputs, cpm, sMin, {

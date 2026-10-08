@@ -16,7 +16,7 @@ import {
 } from '../../db/schema.js';
 import { ownerApprovedSql } from '../approved-owner.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
-import { blackoutMinutesInHour, soldEventBlackouts } from '../event-blackout.js';
+import { blackoutMinutesInHour, eventBlackouts, windowsForVenue } from '../event-blackout.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 import { venueHasInstalledScreenSql } from '../installed-screen.js';
 import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
@@ -311,10 +311,10 @@ export const assemblePool = async (
           ),
         )
     : [];
-  // EVT-STOP — the network-wide event blackouts over the window (sold events' blocs): a
-  // classic créneau is priced pro rata of the minutes left. The window's Tunis days are padded by
-  // a day each side so an overnight post-midnight hour is covered.
-  const blackouts = await soldEventBlackouts(
+  // EVT-PLAY1 — the confirmed matches' windows over the window, on the venues that show events:
+  // a classic créneau is priced pro rata of the minutes left. The window's Tunis days are padded
+  // by a day each side so an overnight post-midnight hour is covered.
+  const blackouts = await eventBlackouts(
     fromZonedTime(`${addIsoDays(windowStart, -1)}T00:00:00`, 'Africa/Tunis'),
     fromZonedTime(`${addIsoDays(windowEnd, 2)}T00:00:00`, 'Africa/Tunis'),
     executor,
@@ -419,6 +419,7 @@ export const assemblePool = async (
     // Hi — broadcastable slots over the AVAILABLE days, minus any reserved (day, hour) cells
     // (EV1 seam — with no reservations this counts exactly days.length × oHours.length as before).
     const reserved = reservedBySh.get(sh.id);
+    const venueBlackouts = windowsForVenue(blackouts, sh.id);
     // EVT-STOP — per cell, the unsellable minutes (60 = the whole hour: reserved, or fully covered
     // by blocs; 1–59 = blackout minutes, the hour counts pro rata). buildCreneaux reads the SAME
     // map, so capacity (Hi) and the créneaux can never disagree.
@@ -431,7 +432,7 @@ export const assemblePool = async (
         const cellKey = `${cellDate}:${hour}`;
         const blackout = reserved?.has(cellKey)
           ? 60
-          : Math.min(60, blackoutMinutesInHour(blackouts, cellDate, hour));
+          : Math.min(60, blackoutMinutesInHour(venueBlackouts, cellDate, hour));
         if (blackout > 0) blackoutByCell.set(cellKey, blackout);
         if (blackout >= 60) continue;
         const share = (60 - blackout) / 60;

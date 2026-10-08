@@ -15,7 +15,7 @@ import {
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
-import { blackoutMinutesByCell } from '../event-blackout.js';
+import { blackoutMinutesByVenueCell } from '../event-blackout.js';
 import { PLAYOUT_TZ, loadDeliveredSlots } from '../reconcile/delivered-slots.js';
 import { lateBlackoutShare, slotKey } from '../reconcile/valuation.js';
 import { S_MIN_TND } from '../vf-constants.js';
@@ -182,16 +182,13 @@ export const runRedispatchRound = async (
       // Gross manquement: elapsed ∧ undelivered, the shared FIX A bucketing.
       const deliveredBySh = await loadDeliveredSlots(campaign.id);
       // EVT-STOP (R5) — a blackout added after the freeze takes its share of a proven hour.
-      const blackoutNow = await blackoutMinutesByCell(
-        allocations.flatMap((a) => a.creneaux),
-        tx,
-      );
+      const blackoutNow = await blackoutMinutesByVenueCell(allocations, tx);
       const detected = detectMissedSlots(
         allocations.map((a) => ({
           screenhostId: a.screenhostId,
           creneaux: a.creneaux,
           deliveredSlots: deliveredBySh.get(a.screenhostId) ?? new Set<string>(),
-          blackoutNow,
+          blackoutNow: blackoutNow.get(a.screenhostId),
         })),
         nowSlot,
       );

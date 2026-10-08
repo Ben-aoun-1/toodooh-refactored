@@ -7,7 +7,6 @@ import {
   campaignDispatchPlan,
   campaigns,
   creatives,
-  eventAllocations,
   events,
   proofOfPlay,
   screenhosts,
@@ -19,6 +18,7 @@ import { reconcileCampaignById } from '../src/lib/reconcile/reconcile-service.js
 import { lateBlackoutShare, slotKey, valueAllocation } from '../src/lib/reconcile/valuation.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { eventSector } from './helpers/installed-screen-matrix.js';
 
 // EVT-STOP S5 (docs/daily/2026-09-28.md §2 R5, ruling Q2 A) — a blackout that appears AFTER a
 // classic plan was frozen (an event sold later) takes minutes the créneau was priced for. Those
@@ -137,7 +137,7 @@ describe('reconcileCampaignById — a LATE blackout takes its share of a proven 
     await sql.end();
   });
 
-  it('an event sold after the freeze blacks out h8: h8 refunded, the owner paid for h9 only', async () => {
+  it('EVT-PLAY1 — a match confirmed after the freeze reserves h9: h9 refunded, the owner paid for h8 only', async () => {
     const DAY = '2026-07-13';
     const admin = await seedUser({ role: 'admin' });
     const advertiser = await seedUser();
@@ -154,7 +154,16 @@ describe('reconcileCampaignById — a LATE blackout takes its share of a proven 
       })
       .returning();
     const campaignId = campaign?.id ?? '';
-    const [sh] = await db.insert(screenhosts).values({ name: 'A', ownerId: owner }).returning();
+    // A venue that shows events (event switch on, event-eligible sector) — it honours the window.
+    const [sh] = await db
+      .insert(screenhosts)
+      .values({
+        name: 'A',
+        ownerId: owner,
+        businessSectorId: await eventSector(),
+        broadcastCapacity: 1,
+      })
+      .returning();
     const [screen] = await db
       .insert(screens)
       .values({ screenhostId: sh?.id ?? '', name: 'TV-A' })
@@ -213,53 +222,21 @@ describe('reconcileCampaignById — a LATE blackout takes its share of a proven 
         receivedAt: new Date(`${DAY}T${utc}:00Z`),
       });
     }
-    // THEN an event is sold whose three pre-match blocs cover the whole of h8.
-    const [event] = await db
-      .insert(events)
-      .values({
-        name: 'Vendu après le gel',
-        kickoffAt: new Date(`${DAY}T08:00:00Z`),
-        endsAt: new Date(`${DAY}T10:00:00Z`),
-        source: 'official',
-      })
-      .returning();
-    const [positioning] = await db
-      .insert(campaigns)
-      .values({
-        advertiserId: advertiser,
-        name: 'Positionnement',
-        campaignType: 'event',
-        status: 'active',
-        startDate: DAY,
-        endDate: DAY,
-        requestedBudget: '200.00',
-        eventId: event?.id,
-        creativeId: creative?.id,
-      })
-      .returning();
-    const [elsewhere] = await db
-      .insert(screenhosts)
-      .values({ name: 'B', ownerId: owner })
-      .returning();
-    await db.insert(eventAllocations).values({
-      campaignId: positioning?.id ?? '',
-      screenhostId: elsewhere?.id ?? '',
-      blocs: ['07:00', '07:20', '07:40'].map((start, i) => ({
-        start: `${DAY}T${start}:00.000Z`,
-        end: `${DAY}T${['07:20', '07:40', '08:00'][i]}:00.000Z`,
-        impressions: 1000,
-      })),
-      impressionsTotal: 3000,
-      montantTnd: '100.000',
-      statut: 'ACCEPTE',
+    // THEN a match is confirmed (never sold): kickoff 09:00Z → its window 08:00Z–11:00Z takes the
+    // whole of Tunis h9 (08:xx Z) from the frozen plan.
+    await db.insert(events).values({
+      name: 'Confirmé après le gel',
+      kickoffAt: new Date(`${DAY}T09:00:00Z`),
+      endsAt: new Date(`${DAY}T10:00:00Z`),
+      source: 'official',
     });
 
     const result = await reconcileCampaignById(campaignId, admin);
     expect(result.status).toBe('OK');
     if (result.status !== 'OK') return;
-    // h8 lost in full (5 000 phys × 0.6 = 3 000 fact = 30 TND ≥ S_min 20) → refunded.
+    // h9 lost in full (5 000 phys × 0.6 = 3 000 fact = 30 TND ≥ S_min 20) → refunded.
     expect(result.valuation.refundTnd).toBe(30);
-    // The owner is paid its delivered h9 only: 5 000 × 0.6 × 0.01 × 50 % = 15.
+    // The owner is paid its delivered h8 only: 5 000 × 0.6 × 0.01 × 50 % = 15.
     expect(result.payouts.map((p) => Number(p.earningsTnd))).toEqual([15]);
   });
 });
