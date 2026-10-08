@@ -17,7 +17,7 @@ import {
   screens,
   users,
 } from '../src/db/schema.js';
-import { runBlocPushTick } from '../src/lib/event-playout/bloc-pusher.js';
+import { msToNextMinute, runBlocPushTick } from '../src/lib/event-playout/bloc-pusher.js';
 import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { computeScreenPlaylist, resolveAirableVideo } from '../src/lib/playout/playlist-service.js';
 import { screenRegistry } from '../src/lib/playout/registry.js';
@@ -193,6 +193,16 @@ const silentLog = {
   error: () => undefined,
   debug: () => undefined,
 } as never;
+
+describe('EVT-PLAY1 R2 — the bloc pusher ticks ON the minute (pure)', () => {
+  it('aims at the next whole minute, wherever the server booted', () => {
+    // Booted at hh:mm:25 — the old 60 s interval pushed every edge 25 s late.
+    expect(msToNextMinute(Date.parse('2026-10-08T00:10:25.000Z'))).toBe(35_000);
+    expect(msToNextMinute(Date.parse('2026-10-08T00:10:59.999Z'))).toBe(1);
+    // Exactly on the minute: the NEXT one (this one was just ticked).
+    expect(msToNextMinute(Date.parse('2026-10-08T00:11:00.000Z'))).toBe(60_000);
+  });
+});
 
 describe('EVT-STOP — playout (real Postgres)', () => {
   beforeEach(async () => {

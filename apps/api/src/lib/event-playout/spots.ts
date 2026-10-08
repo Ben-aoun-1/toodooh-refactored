@@ -38,6 +38,14 @@ export const EVENT_ANTENNE_SECONDS_PER_HOUR = (ANTENNE_SECONDS_PER_BLOC * 60) / 
 export const eventRepsPerHour = (spotSeconds: number): number =>
   spotSeconds > 0 ? Math.max(1, Math.floor(EVENT_ANTENNE_SECONDS_PER_HOUR / spotSeconds)) : 0;
 
+/**
+ * EVT-PLAY1 (ruling A, 2026-10-08) — a pod reaches the player this long BEFORE it opens, so the
+ * media is downloaded and the slots fire on the player's own clock, to the second. A player that
+ * ignores `slots` (≤ 1.4.4) cadences the entry as soon as it arrives — accepted until the fleet
+ * runs 1.5.2.
+ */
+export const EVENT_POD_LEAD_MS = 2 * 60 * 1000;
+
 /** A placed bloc as stored on event_allocations.blocs (EV4's jsonb shape). */
 interface StoredBloc {
   start: string;
@@ -72,9 +80,9 @@ export interface ActiveEventSpot {
   /** FRESH-1 — the end of the bloc (EVT-MIN1: of the POD) airing now: airable until there. */
   validUntil: Date;
   /**
-   * EVT-MIN1 — the exact instants this spot starts inside the pod, each owning `slotSeconds`
-   * (the spot, then the Toodooh screen until the slot ends). Absent on positionings dispatched
-   * before the minutes model (they keep EV5's spread cadence).
+   * EVT-MIN1 — the exact instants this spot starts inside the pod, each owning `seconds` until
+   * the next slot (EVT-PLAY1: the spot, plus the round's Toodooh screen on a round's last spot).
+   * Absent on positionings dispatched before the minutes model (they keep EV5's spread cadence).
    */
   slots?: { at: Date; seconds: number }[];
 }
@@ -113,11 +121,14 @@ const podOf = (
     blocPhase(bloc, kickoffAt),
     new Date(bloc.start),
     new Date(bloc.end),
-    ordered.map((r) => ({
-      campaignId: r.campaignId,
+    ordered.map((r) => {
       // A spot validated before EVT-MIN1 may sit outside the classes: it airs in a 30 s slot.
-      slotSeconds: eventSlotSeconds(r.creativeType, r.durationSeconds) ?? 30,
-    })),
+      const slotSeconds = eventSlotSeconds(r.creativeType, r.durationSeconds) ?? 30;
+      // An image shows for its whole chosen length; a video plays its own length.
+      const spotSeconds =
+        r.creativeType === 'video' && r.durationSeconds !== null ? r.durationSeconds : slotSeconds;
+      return { campaignId: r.campaignId, slotSeconds, spotSeconds };
+    }),
   );
 };
 
@@ -152,7 +163,8 @@ const airingRows = async (screenhostId: string): Promise<AiringRow[]> =>
 /**
  * The venue's event spots airable RIGHT NOW. A positioning dispatched before EVT-MIN1 airs for its
  * whole bloc at EV5's spread cadence (900 ÷ S). A minutes positioning airs only inside its bloc's
- * POD (ruling 6B: the rest of the bloc stays dark), at its exact slots.
+ * POD (ruling 6B: the rest of the bloc stays dark), at its exact slots — and EVT-PLAY1 hands the
+ * pod to the player {@link EVENT_POD_LEAD_MS} before it opens.
  *
  * `opts.wholeBloc` widens the minutes gate to the whole bloc — proof INGEST uses it, so a
  * VIDEO_ENDED received just after the pod closes (network latency) is still credited to its bloc,
@@ -166,9 +178,8 @@ export const activeEventSpots = async (
   const rows = await airingRows(screenhostId);
 
   const spots: ActiveEventSpot[] = [];
+  const t = now.getTime();
   for (const row of rows) {
-    const airing = parseBlocs(row.blocs).find((bloc) => blocCoversInstant(bloc, now));
-    if (!airing) continue;
     const base = {
       campaignId: row.campaignId,
       campaignName: row.campaignName,
@@ -178,6 +189,8 @@ export const activeEventSpots = async (
       creativeType: row.creativeType,
     };
     if (row.eventMinutes === null) {
+      const airing = parseBlocs(row.blocs).find((bloc) => blocCoversInstant(bloc, now));
+      if (!airing) continue;
       spots.push({
         ...base,
         repsPerHour: eventRepsPerHour(row.durationSeconds ?? 0),
@@ -185,28 +198,38 @@ export const activeEventSpots = async (
       });
       continue;
     }
-    // The seats of THIS bloc at this venue: every minutes positioning with an ACCEPTE allocation
-    // covering the same bloc start.
-    const seatRows = rows.filter(
-      (r) =>
-        r.eventMinutes !== null &&
-        parseBlocs(r.blocs).some(
-          (b) => new Date(b.start).getTime() === new Date(airing.start).getTime(),
-        ),
-    );
-    const pod = podOf(airing, row.kickoffAt, seatRows);
-    if (!pod) continue;
-    const t = now.getTime();
-    if (!opts.wholeBloc && (t < pod.start.getTime() || t >= pod.end.getTime())) continue;
-    const own = pod.slots.filter((slot) => slot.campaignId === row.campaignId);
-    const podSeconds = (pod.end.getTime() - pod.start.getTime()) / 1000;
-    spots.push({
-      ...base,
-      // Older players space by reps/hour: own plays spread over the pod's length.
-      repsPerHour: podSeconds > 0 ? Math.max(1, Math.round((own.length * 3600) / podSeconds)) : 0,
-      validUntil: pod.end,
-      slots: own.map((slot) => ({ at: slot.at, seconds: slot.slotSeconds })),
-    });
+    // A minutes spot: the bloc covering now (proof ingest, wholeBloc), or the bloc whose POD is
+    // airing or opens within the lead (the playlist).
+    for (const bloc of parseBlocs(row.blocs)) {
+      if (opts.wholeBloc && !blocCoversInstant(bloc, now)) continue;
+      // The seats of THIS bloc at this venue: every minutes positioning with an ACCEPTE
+      // allocation covering the same bloc start.
+      const seatRows = rows.filter(
+        (r) =>
+          r.eventMinutes !== null &&
+          parseBlocs(r.blocs).some(
+            (b) => new Date(b.start).getTime() === new Date(bloc.start).getTime(),
+          ),
+      );
+      const pod = podOf(bloc, row.kickoffAt, seatRows);
+      if (!pod) continue;
+      // The announce edge is INCLUDED: the pusher fires exactly at pod start − lead.
+      if (
+        !opts.wholeBloc &&
+        (pod.end.getTime() <= t || pod.start.getTime() > t + EVENT_POD_LEAD_MS)
+      )
+        continue;
+      const own = pod.slots.filter((slot) => slot.campaignId === row.campaignId);
+      const podSeconds = (pod.end.getTime() - pod.start.getTime()) / 1000;
+      spots.push({
+        ...base,
+        // Older players space by reps/hour: own plays spread over the pod's length.
+        repsPerHour: podSeconds > 0 ? Math.max(1, Math.round((own.length * 3600) / podSeconds)) : 0,
+        validUntil: pod.end,
+        slots: own.map((slot) => ({ at: slot.at, seconds: slot.seconds })),
+      });
+      break;
+    }
   }
   return spots;
 };
@@ -267,7 +290,8 @@ export const venuesAtBlocEdge = async (since: Date, until: Date): Promise<string
       cell.n,
     );
     if (!pod) continue;
-    for (const edge of [pod.start.getTime(), pod.end.getTime()]) {
+    // EVT-PLAY1 — the pod is announced EVENT_POD_LEAD_MS before it opens, dropped when it closes.
+    for (const edge of [pod.start.getTime() - EVENT_POD_LEAD_MS, pod.end.getTime()]) {
       if (edge > sinceMs && edge <= untilMs) edged.add(cell.venue);
     }
   }

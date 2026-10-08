@@ -131,8 +131,8 @@ describe('EVT-MIN1 — the pure rules', () => {
 
   it('the pod timeline rotates the seats, back to back, exactly seats × 60 s', () => {
     const pod = eventPodTimeline('avant', at('2027-06-10T18:00:00Z'), at('2027-06-10T18:20:00Z'), [
-      { campaignId: 'A', slotSeconds: 30 },
-      { campaignId: 'B', slotSeconds: 10 },
+      { campaignId: 'A', slotSeconds: 30, spotSeconds: 30 },
+      { campaignId: 'B', slotSeconds: 10, spotSeconds: 10 },
     ]);
     expect(
       pod?.slots.map(
@@ -140,9 +140,53 @@ describe('EVT-MIN1 — the pure rules', () => {
       ),
     ).toEqual(['A+0', 'B+30', 'A+40', 'B+70', 'B+80', 'B+90', 'B+100', 'B+110']);
     const last = pod?.slots[pod.slots.length - 1];
-    expect(last && last.at.getTime() + last.slotSeconds * 1000).toBe(pod?.end.getTime());
+    expect(last && last.at.getTime() + last.seconds * 1000).toBe(pod?.end.getTime());
     expect(pod?.slots.filter((s) => s.campaignId === 'A')).toHaveLength(2);
     expect(pod?.slots.filter((s) => s.campaignId === 'B')).toHaveLength(6);
+  });
+
+  it('EVT-PLAY1 — a round plays its spots back to back, then ONE Toodooh gap: A11 B18 T3', () => {
+    // The operator's example: A 11 s (12 s slot, 5 plays), B 18 s (20 s slot, 3 plays).
+    const start = at('2027-06-10T18:00:00Z');
+    const pod = eventPodTimeline('avant', start, at('2027-06-10T18:20:00Z'), [
+      { campaignId: 'A', slotSeconds: 12, spotSeconds: 11 },
+      { campaignId: 'B', slotSeconds: 20, spotSeconds: 18 },
+    ]);
+    const rel = (d: Date) => (d.getTime() - start.getTime()) / 1000;
+    expect(pod?.slots.map((s) => [s.campaignId, rel(s.at), s.spotSeconds, s.seconds])).toEqual([
+      ['A', 0, 11, 11],
+      ['B', 11, 18, 21], // 18 s of B, then the round's 1 + 2 = 3 s of Toodooh screen
+      ['A', 32, 11, 11],
+      ['B', 43, 18, 21],
+      ['A', 64, 11, 11],
+      ['B', 75, 18, 21],
+      ['A', 96, 11, 12], // B's minute is spent: A 11 s, then 1 s of Toodooh screen
+      ['A', 108, 11, 12],
+    ]);
+    // Contiguous: every slot owns exactly up to the next one, the last one up to the pod end.
+    pod?.slots.forEach((s, i) => {
+      const next = pod.slots[i + 1]?.at ?? pod.end;
+      expect(s.at.getTime() + s.seconds * 1000).toBe(next.getTime());
+    });
+    expect(rel(pod?.end ?? start)).toBe(120);
+  });
+
+  it('EVT-PLAY1 — images and exact-class videos leave no gap; a spot never outgrows its slot', () => {
+    const start = at('2027-06-10T18:00:00Z');
+    const pod = eventPodTimeline('avant', start, at('2027-06-10T18:20:00Z'), [
+      { campaignId: 'I', slotSeconds: 20, spotSeconds: 20 },
+      { campaignId: 'X', slotSeconds: 15, spotSeconds: 99 },
+    ]);
+    const rel = (d: Date) => (d.getTime() - start.getTime()) / 1000;
+    expect(pod?.slots.map((s) => [s.campaignId, rel(s.at), s.seconds])).toEqual([
+      ['I', 0, 20],
+      ['X', 20, 15],
+      ['I', 35, 20],
+      ['X', 55, 15],
+      ['I', 70, 20],
+      ['X', 90, 15],
+      ['X', 105, 15],
+    ]);
   });
 });
 
@@ -302,33 +346,50 @@ describe('EVT-MIN1 — seats, dispatch and airing (real Postgres)', () => {
     expect(inPod.map((s) => s.campaignId).sort()).toEqual([a.id, b.id].sort());
     const spotA = inPod.find((s) => s.campaignId === a.id);
     expect(spotA?.validUntil.toISOString()).toBe('2027-06-10T18:02:00.000Z');
+    // EVT-PLAY1 — A opens each round (23 s), B closes it and owns the round's 7 s of Toodooh.
     expect(spotA?.slots?.map((s) => [s.at.toISOString().slice(14, 19), s.seconds])).toEqual([
-      ['00:00', 30],
-      ['00:40', 30],
+      ['00:00', 23],
+      ['00:40', 23],
+    ]);
+    expect(
+      inPod
+        .find((s) => s.campaignId === b.id)
+        ?.slots?.map((s) => [s.at.toISOString().slice(14, 19), s.seconds]),
+    ).toEqual([
+      ['00:23', 17],
+      ['01:03', 17],
+      ['01:20', 10],
+      ['01:30', 10],
+      ['01:40', 10],
+      ['01:50', 10],
     ]);
     expect(await activeEventSpots(venue, at('2027-06-10T18:05:00Z'))).toEqual([]);
     expect(
       (await activeEventSpots(venue, at('2027-06-10T18:05:00Z'), { wholeBloc: true })).length,
     ).toBe(2);
 
-    // Après bloc 22:40 Tunis (21:40Z): the pod CLOSES the bloc — 21:58–22:00Z.
-    expect(await activeEventSpots(venue, at('2027-06-10T21:57:59Z'))).toEqual([]);
+    // Après bloc 22:40 Tunis (21:40Z): the pod CLOSES the bloc — 21:58–22:00Z. EVT-PLAY1: the
+    // playlist carries it EVENT_POD_LEAD_MS (2 min) before it opens, so the media is on the TV.
+    expect(await activeEventSpots(venue, at('2027-06-10T21:55:59Z'))).toEqual([]);
+    expect((await activeEventSpots(venue, at('2027-06-10T21:56:00Z'))).length).toBe(2);
     expect((await activeEventSpots(venue, at('2027-06-10T21:58:00Z'))).length).toBe(2);
+    expect(await activeEventSpots(venue, at('2027-06-10T22:00:00Z'))).toEqual([]);
 
     // The wire: the slots and the server clock ride the event entries only.
     const playlist = await computeScreenPlaylist(venue, at('2027-06-10T18:00:30Z'));
     const entry = playlist.videos.find((v) => v.id === a.id);
     expect(entry?.slots).toEqual([
-      { at: '2027-06-10T18:00:00.000Z', seconds: 30 },
-      { at: '2027-06-10T18:00:40.000Z', seconds: 30 },
+      { at: '2027-06-10T18:00:00.000Z', seconds: 23 },
+      { at: '2027-06-10T18:00:40.000Z', seconds: 23 },
     ]);
     expect(playlist.server_time).toBe('2027-06-10T18:00:30.000Z');
 
-    // The bloc pusher fires at the mid-bloc pod edges too.
+    // The bloc pusher fires at the mid-bloc pod edges too — the après pod is ANNOUNCED 2 min
+    // before it opens (EVT-PLAY1), and dropped when the avant pod closes.
     expect(await venuesAtBlocEdge(at('2027-06-10T18:01:30Z'), at('2027-06-10T18:02:00Z'))).toEqual([
       venue,
     ]);
-    expect(await venuesAtBlocEdge(at('2027-06-10T21:57:30Z'), at('2027-06-10T21:58:00Z'))).toEqual([
+    expect(await venuesAtBlocEdge(at('2027-06-10T21:55:30Z'), at('2027-06-10T21:56:00Z'))).toEqual([
       venue,
     ]);
     expect(await venuesAtBlocEdge(at('2027-06-10T18:05:00Z'), at('2027-06-10T18:06:00Z'))).toEqual(

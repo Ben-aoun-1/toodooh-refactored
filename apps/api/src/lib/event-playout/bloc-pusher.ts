@@ -12,8 +12,8 @@ import { venuesAtBlocEdge } from './spots.js';
 // entry, at an end edge it no longer does.
 //
 // Design notes:
-//   • ONE minute of granularity is enough — blocs are 20 minutes and the player receives a whole
-//     playlist with a cadence hint, so a sub-minute skew costs at most one rep.
+//   • ONE minute of granularity is enough — every edge (match window, bloc, pod announce/close)
+//     sits on a whole minute and the tick fires on the minute (EVT-PLAY1 R2).
 //   • IDEMPOTENT by construction: the push recomputes the playlist whole, so a double firing
 //     sends the same message twice (the player replaces its list).
 //   • Never throws: a dead socket or an unreachable venue warns; the tick keeps going.
@@ -77,15 +77,28 @@ export const runBlocPushTick = async (
   return { venues: venues.length, pushed, network: false };
 };
 
-/** Boot tick + per-minute unref'd interval — the campaign-lifecycle job posture. */
+/** EVT-PLAY1 (R2) — ms from `nowMs` to the next whole minute (every edge sits on one). */
+export const msToNextMinute = (nowMs: number): number =>
+  BLOC_PUSH_TICK_MS - (nowMs % BLOC_PUSH_TICK_MS);
+
+/**
+ * Boot tick, then one tick per minute ON the minute — not phased on the boot instant: a tick
+ * phased at :25 pushed every edge up to 59 s late and the pod's first slots were lost (R2). Each
+ * tick re-aims at the next minute, so drift never accumulates. Unref'd, like every job.
+ */
 export function startBlocPushJob(log: FastifyBaseLogger): void {
   void runBlocPushTick(log).catch((err: unknown) =>
     log.warn({ err }, 'event bloc push boot tick failed'),
   );
-  const timer = setInterval(() => {
-    void runBlocPushTick(log).catch((err: unknown) =>
-      log.warn({ err }, 'event bloc push tick failed'),
-    );
-  }, BLOC_PUSH_TICK_MS);
-  timer.unref();
+  const schedule = (): void => {
+    const timer = setTimeout(() => {
+      // The window ends ON the minute even when the timer fires a few ms late.
+      const now = new Date(Date.now() - (Date.now() % BLOC_PUSH_TICK_MS));
+      void runBlocPushTick(log, now)
+        .catch((err: unknown) => log.warn({ err }, 'event bloc push tick failed'))
+        .finally(schedule);
+    }, msToNextMinute(Date.now()));
+    timer.unref();
+  };
+  schedule();
 }

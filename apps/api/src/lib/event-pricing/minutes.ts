@@ -174,13 +174,22 @@ export const takeEventMinutes = (
 export interface PodSeat {
   campaignId: string;
   slotSeconds: number;
+  /** The spot itself (a video's length, an image's chosen length): ≤ slotSeconds. */
+  spotSeconds: number;
 }
 
 export interface PodSlot {
   campaignId: string;
-  /** Slot start (the spot starts here; the rest of the slot is the Toodooh screen). */
+  /** The instant the spot starts. */
   at: Date;
-  slotSeconds: number;
+  /** The spot itself. */
+  spotSeconds: number;
+  /**
+   * The time this slot OWNS, from `at` to the next slot (or the pod end): the spot, plus — on the
+   * last spot of a round — the round's Toodooh screen. Slots are therefore contiguous, so a
+   * player that holds the Toodooh screen between owned slots (APK 1.5.1) airs this layout as is.
+   */
+  seconds: number;
 }
 
 export interface EventPod {
@@ -207,10 +216,11 @@ export const eventPodWindow = (
 };
 
 /**
- * The pod timeline (ruling 5B): seats in the given order (the caller passes first-booked first),
- * each owning 60 ÷ slot plays; one play per seat per ROUND, rounds repeat until every seat has
- * aired its minute. Slots are back to back from the pod start, so the timeline lasts exactly
- * seats × 60 s. Pure.
+ * The pod timeline (ruling 5B, EVT-PLAY1 round layout): seats in the given order (the caller
+ * passes first-booked first), each owning 60 ÷ slot plays; one play per seat per ROUND, rounds
+ * repeat until every seat has aired its minute. Inside a round the spots play BACK TO BACK, then
+ * the Toodooh screen fills what the round's slots leave over (Σ slot − spot): A 11 s + B 18 s →
+ * A11 B18 T3, three times, then A11 T1 twice. The timeline lasts exactly seats × 60 s. Pure.
  */
 export const eventPodTimeline = (
   phase: 'avant' | 'apres',
@@ -225,16 +235,24 @@ export const eventPodTimeline = (
   const slots: PodSlot[] = [];
   let cursor = window.start.getTime();
   while (left.some((n) => n > 0)) {
+    let gapMs = 0;
+    let last: PodSlot | null = null;
     aired.forEach((seat, i) => {
       if ((left[i] ?? 0) <= 0) return;
-      slots.push({
+      const spotSeconds = Math.min(Math.max(seat.spotSeconds, 0), seat.slotSeconds);
+      last = {
         campaignId: seat.campaignId,
         at: new Date(cursor),
-        slotSeconds: seat.slotSeconds,
-      });
-      cursor += seat.slotSeconds * 1000;
+        spotSeconds,
+        seconds: spotSeconds,
+      };
+      slots.push(last);
+      cursor += spotSeconds * 1000;
+      gapMs += (seat.slotSeconds - spotSeconds) * 1000;
       left[i] = (left[i] ?? 0) - 1;
     });
+    if (last !== null) (last as PodSlot).seconds += gapMs / 1000;
+    cursor += gapMs;
   }
   return { start: window.start, end: window.end, slots };
 };
