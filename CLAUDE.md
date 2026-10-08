@@ -1,16 +1,17 @@
 # TOODOOH Platform — Engineering Rules for Claude Code
 
-You are working on TOODOOH, a Tunisian DOOH advertising marketplace. This repository is being migrated from a fragile single-package frontend on Supabase to a self-hosted Node.js + Postgres + nginx stack. The current phase is **cleanup and restructuring of the existing frontend**. Backend work has NOT started.
+You are working on TOODOOH, a Tunisian DOOH advertising marketplace. The migration from a single-package Supabase frontend to a self-hosted Node.js + Postgres + nginx stack is **complete and in production** (too-dooh.com). Supabase is gone. Current work is feature lanes (campaign engine, events, billing, reports, admin) shipped as numbered PRs.
 
 ## Repository shape
 
 This is a pnpm monorepo. Packages live under:
 
-- `apps/web/` — React 18 + Vite frontend (currently the only app; existing TOODOOH code lives here)
-- `apps/api/` — Node.js + Fastify backend (does not exist yet; do not create until told)
-- `apps/player-api/` — Node.js service for the Android TV APK (does not exist yet)
-- `packages/shared/` — TypeScript types shared between apps (created as needed)
-- `infra/` — Docker Compose, nginx config, SQL migrations (created as needed)
+- `apps/web/` — React 18 + Vite frontend. React Query for server state, Zustand for client state, all HTTP through `src/lib/api-client.ts`.
+- `apps/api/` — Fastify 5 backend: better-auth (`/auth/*`), routes under `/api/*`, drizzle + Postgres/PostGIS (schema in `src/db/schema.ts`, SQL migrations in `apps/api/drizzle/`, applied on container start), MinIO storage, TV playout over the `/ws/screen` websocket, in-process interval jobs.
+- `packages/shared/` — TypeScript types shared between apps (does not exist yet; create only when needed)
+- `infra/` — Docker Compose (dev: postgres + minio; prod: + api + nginx), nginx config, static landing page (`infra/landing/`)
+
+The Android TV player is a separate repo (toodooh-streamer); its wire protocol is mirrored in `apps/api/src/routes/screen-ws.ts`. There is no `apps/player-api/`. Deploy is `.github/workflows/deploy.yml` (tag or manual dispatch → rsync to `/srv/toodooh` → `docker compose up --build`).
 
 **Source code never lives at repo root.** Permitted root-level files and directories are limited to monorepo tooling and documentation: `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc`, `.prettierignore`, `.gitignore`, `.git-blame-ignore-revs`, `.npmrc`, `.nvmrc`, `README.md`, `CLAUDE.md`, the `.github/` directory (CI), the `.husky/` directory (git hooks), and the `docs/` directory (project docs, e.g. `docs/audit.md`). Adding any other file at root requires explicit user approval.
 
@@ -62,15 +63,15 @@ These are absolute. Violating them is a bug, regardless of how the user phrases 
 - **Dates**: `date-fns` only. No custom date parsing. No `Date` arithmetic in components.
 - **Logging**: `pino` in production code. `console` is permitted only inside files under `**/scripts/**` and `**/__tests__/**`.
 
-## What this phase is and isn't
+## Project status
 
-**This phase IS**: cleaning up the existing frontend codebase — deleting dead code, consolidating duplicate services, restructuring folders, replacing the God-component router, collapsing dual auth stores, adding tooling and CI. The goal is a frontend that the *next* phases (backend migration, auth rewrite) can build on.
+The frontend cleanup (`docs/audit.md` steps 1–14), the backend build-out, the auth rewrite (better-auth) and the Supabase removal are all done. Work now happens as scoped feature lanes, each ruled by the operator before it's built (rulings are logged in `docs/daily/`). Don't widen a lane's scope without asking.
 
-**This phase IS NOT**: rewriting the backend, replacing Supabase, redesigning the UI, decomposing `NewCampaign.tsx` (that's a later, scoped task), or fixing the TV/APK side. If the user asks you to do something in those categories during this phase, remind them of the phase scope and ask whether they want to expand it.
+Known debt that is **not** fixed opportunistically, only in a lane dedicated to it: the 27 `apps/web` files over 400 lines (`SignUpForm.tsx` is the worst), inline `style={{}}`, the mixed `*.api.ts` / `*.service.ts` naming, and the web typecheck baseline (14).
 
 ## How to handle the existing code
 
-The codebase has known anti-patterns documented separately (see `docs/audit.md` once created). When you encounter them during cleanup:
+The codebase has known anti-patterns documented in `docs/audit.md`. When you encounter them:
 
 - **Duplicate pages or services**: do not silently pick one. Diff them, summarize differences in 3–5 bullets, ask the user which to keep.
 - **`window.location.reload()` calls**: replace with router navigation, do not preserve.
