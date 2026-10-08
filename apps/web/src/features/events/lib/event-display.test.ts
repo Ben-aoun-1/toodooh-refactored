@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import type { EventItemView } from '../services/events.api';
-
 import {
   POSITIONNE_CTA,
   STATUT_LABELS,
@@ -9,26 +7,10 @@ import {
   WINDOW_LINE,
   formatEventDate,
   formatEventHours,
-  searchEvents,
   validateSuggestForm,
 } from './event-display';
 
 // EV1 — the pure display + validation rules of the Événements surface.
-
-const item = (over: Partial<EventItemView>): EventItemView => ({
-  id: 'e1',
-  name: 'Tunisie – Brésil',
-  description: null,
-  type: 'sport',
-  category: 'Phase de groupes',
-  kickoff_at: '2027-03-10T19:00:00.000Z',
-  ends_at: '2027-03-10T21:00:00.000Z',
-  statut: 'a_venir',
-  source: 'official',
-  has_image: false,
-  fenetre: { window_start: '', window_end: '', blocs: [] },
-  ...over,
-});
 
 describe('the status + card literals', () => {
   it('labels the three derived statuses in French', () => {
@@ -51,29 +33,6 @@ describe('Tunis formatting', () => {
     expect(formatEventHours('2027-03-10T19:00:00.000Z', '2027-03-10T21:30:00.000Z')).toBe(
       '20h00 - 22h30',
     );
-  });
-});
-
-describe('searchEvents — équipe/phase', () => {
-  const list = [
-    item({ id: '1', name: 'Tunisie – Brésil', category: 'Phase de groupes' }),
-    item({ id: '2', name: 'Espérance – Club Africain', category: 'Derby' }),
-  ];
-
-  it('matches the name (équipe) case-insensitively', () => {
-    expect(searchEvents(list, 'brésil').map((e) => e.id)).toEqual(['1']);
-    expect(searchEvents(list, 'ESPÉRANCE').map((e) => e.id)).toEqual(['2']);
-  });
-
-  it('matches the catégorie (phase)', () => {
-    expect(searchEvents(list, 'groupes').map((e) => e.id)).toEqual(['1']);
-    expect(searchEvents(list, 'derby').map((e) => e.id)).toEqual(['2']);
-  });
-
-  it('an empty or blank query returns everything; no match returns nothing', () => {
-    expect(searchEvents(list, '')).toHaveLength(2);
-    expect(searchEvents(list, '   ')).toHaveLength(2);
-    expect(searchEvents(list, 'zzz')).toHaveLength(0);
   });
 });
 

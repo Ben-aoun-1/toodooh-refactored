@@ -12,6 +12,7 @@ import {
   layoutCatalogue,
   longDate,
   roundLine,
+  searchEvents,
   selectionCta,
   swatch,
 } from './event-catalogue';
@@ -127,5 +128,61 @@ describe('layoutCatalogue', () => {
     expect(selectionCta(0)).toBe('Je me positionne');
     expect(selectionCta(1)).toBe('Je me positionne sur cet événement');
     expect(selectionCta(3)).toBe('Je me positionne sur ces 3 événements');
+  });
+});
+
+describe('searchEvents — the page search (operator ruling 2026-10-08, 1 A)', () => {
+  const derby = ev({
+    id: 'derby',
+    name: 'Derby de Tunis',
+    competition: 'Ligue 1 tunisienne',
+    round: '8ème journée',
+    stadium: 'Stade Hammadi-Agrebi',
+    matches: [
+      {
+        position: 0,
+        home: team('Espérance de Tunis', '#C8102E'),
+        away: team('Club Africain', '#E30613'),
+      },
+    ],
+  });
+  const ldc = ev({
+    id: 'ldc',
+    name: 'Soirée LDC',
+    competition: 'Ligue des champions',
+    matches: [{ position: 0, home: team('Real Madrid', '#FFFFFF'), away: null }],
+  });
+  const suggestion = ev({
+    id: 'sugg',
+    name: 'Tunisie – Brésil',
+    category: 'Amical',
+    source: 'suggested',
+  });
+  const list = [derby, ldc, suggestion];
+  const ids = (q: string) => searchEvents(list, q).map((e) => e.id);
+
+  it('finds a team of any match, ignoring case AND accents', () => {
+    expect(ids('esperance')).toEqual(['derby']);
+    expect(ids('ESPÉRANCE')).toEqual(['derby']);
+    expect(ids('africain')).toEqual(['derby']);
+    expect(ids('real')).toEqual(['ldc']);
+  });
+
+  it('finds the competition, the round, the stadium, the name and the catégorie', () => {
+    expect(ids('ligue')).toEqual(['derby', 'ldc']);
+    expect(ids('8eme journee')).toEqual(['derby']);
+    expect(ids('hammadi')).toEqual(['derby']);
+    expect(ids('bresil')).toEqual(['sugg']);
+    expect(ids('amical')).toEqual(['sugg']);
+  });
+
+  it('finds an undrawn opponent by the card wording', () => {
+    expect(ids('apres tirage')).toEqual(['ldc']);
+  });
+
+  it('a blank query keeps everything; no match keeps nothing', () => {
+    expect(ids('')).toEqual(['derby', 'ldc', 'sugg']);
+    expect(ids('   ')).toEqual(['derby', 'ldc', 'sugg']);
+    expect(ids('zzz')).toEqual([]);
   });
 });

@@ -87,6 +87,37 @@ export function roundLine(e: EventItemView): string | null {
   return e.round?.trim() || e.competition?.trim() || e.category?.trim() || null;
 }
 
+/** Lower-case without accents: « Espérance » and « esperance » are the same search. */
+const fold = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+/**
+ * The page's search (operator ruling 2026-10-08, 1 A): a substring of the event name, its card
+ * title, competition, round, stadium, catégorie or any of its teams, ignoring case and accents. A
+ * blank query keeps everything.
+ */
+export function searchEvents<T extends EventItemView>(list: readonly T[], query: string): T[] {
+  const q = fold(query.trim());
+  if (q === '') return [...list];
+  return list.filter((e) =>
+    [
+      e.name,
+      cardTitle(e),
+      e.category,
+      e.competition,
+      e.round,
+      e.stadium,
+      ...(e.matches ?? []).flatMap((m) => [m.home.name, m.away?.name]),
+    ].some((field) => field != null && fold(field).includes(q)),
+  );
+}
+
+export const SEARCH_PLACEHOLDER = 'Rechercher une équipe, une compétition, un stade…';
+export const SEARCH_EMPTY = 'Aucun événement ne correspond à cette recherche.';
+
 /** The crowd tint of a team in the stadium backdrop. */
 export const crowdColor = (t: TeamView | null): string =>
   (t ?? TBD_TEAM).color_crowd ?? (t ?? TBD_TEAM).color_main;

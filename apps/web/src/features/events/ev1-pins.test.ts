@@ -36,14 +36,15 @@ describe('the Événements page', () => {
     expect(source).not.toContain('components/EventCard'); // the suggestions use the catalogue card
   });
 
-  // EVT-CAT2 (operator ruling 2026-10-06) — Youssef's validated page replaces the search bar:
-  // « À la une » + months through the ONE lib home, « Ma sélection », and « Mes Événements » +
-  // the suggestions kept under it.
+  // EVT-CAT2 (operator ruling 2026-10-06) — Youssef's validated page: « À la une » + months
+  // through the ONE lib home, « Ma sélection », and « Mes Événements » + the suggestions kept
+  // under it. 2026-10-08 (ruling 1 A) the search bar is BACK, through the ONE lib search, on the
+  // catalogue AND the suggestions.
   it('lays the catalogue out through the ONE lib home, with « Ma sélection » and « Mes Événements »', () => {
-    expect(source).toContain('layoutCatalogue(');
+    expect(source).toContain('layoutCatalogue(searchEvents(catalogue');
+    expect(source).toContain('searchEvents(suggested');
     expect(source).toContain('<SelectionPanel');
     expect(source).toContain('<MesEvenementsStrip />');
-    expect(source).not.toContain('searchEvents');
   });
 });
 
