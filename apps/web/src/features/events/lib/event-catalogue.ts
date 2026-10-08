@@ -71,20 +71,27 @@ export function cardBadge(e: EventItemView): string | null {
 
 export const isMultiMatch = (e: EventItemView): boolean => (e.matches?.length ?? 0) > 1;
 
-/** The card title: « Club Africain - Espérance de Tunis », or the evening, or the event name. */
+/**
+ * The card title: the event's name EXACTLY as the admin typed it (operator ruling 2026-10-08 —
+ * not every evening is a « Soirée », names appear as they are). The teams live on the poster.
+ */
 export function cardTitle(e: EventItemView): string {
-  const matches = e.matches ?? [];
-  if (matches.length > 1) {
-    return `${e.competition ? `Soirée ${e.competition}` : e.name}, ${matches.length} affiches au choix`;
-  }
-  const m = matches[0];
-  if (m) return `${m.home.name} - ${(m.away ?? TBD_TEAM).name}`;
   return e.name;
 }
 
-/** The round line (« Ligue 1 tunisienne, 8ème journée »), falling back on the competition. */
+/**
+ * The round line: « Ligue 1 tunisienne, 8ème journée » — the competition, then the round unless
+ * the round already names it; either alone when only one is set.
+ */
 export function roundLine(e: EventItemView): string | null {
-  return e.round?.trim() || e.competition?.trim() || e.category?.trim() || null;
+  const competition = e.competition?.trim() || null;
+  const round = e.round?.trim() || null;
+  if (competition && round) {
+    return round.toLowerCase().includes(competition.toLowerCase())
+      ? round
+      : `${competition}, ${round}`;
+  }
+  return round ?? competition;
 }
 
 /** Lower-case without accents: « Espérance » and « esperance » are the same search. */
@@ -95,9 +102,9 @@ const fold = (s: string): string =>
     .toLowerCase();
 
 /**
- * The page's search (operator ruling 2026-10-08, 1 A): a substring of the event name, its card
- * title, competition, round, stadium, catégorie or any of its teams, ignoring case and accents. A
- * blank query keeps everything.
+ * The page's search (operator ruling 2026-10-08, 1 A): a substring of the event name,
+ * competition, round, stadium, catégorie or any of its teams, ignoring case and accents. A blank
+ * query keeps everything.
  */
 export function searchEvents<T extends EventItemView>(list: readonly T[], query: string): T[] {
   const q = fold(query.trim());
@@ -105,12 +112,11 @@ export function searchEvents<T extends EventItemView>(list: readonly T[], query:
   return list.filter((e) =>
     [
       e.name,
-      cardTitle(e),
       e.category,
       e.competition,
       e.round,
       e.stadium,
-      ...(e.matches ?? []).flatMap((m) => [m.home.name, m.away?.name]),
+      ...(e.matches ?? []).flatMap((m) => [m.home.name, (m.away ?? TBD_TEAM).name]),
     ].some((field) => field != null && fold(field).includes(q)),
   );
 }

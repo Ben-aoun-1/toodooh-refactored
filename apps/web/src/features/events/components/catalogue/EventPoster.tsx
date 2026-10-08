@@ -1,3 +1,4 @@
+import { useEventImageUrl } from '../../hooks/useEvents';
 import {
   TBD_TEAM,
   crowdColor,
@@ -5,6 +6,7 @@ import {
   hourLabel,
   isMultiMatch,
   kickoffBadge,
+  roundLine,
 } from '../../lib/event-catalogue';
 import type { EventItemView, TeamView } from '../../services/events.api';
 
@@ -14,7 +16,7 @@ import StadiumBackdrop from './StadiumBackdrop';
 // fonts): the stadium backdrop, a colour stripe, the competition, the two sides — their logo or
 // flag when the admin uploaded one, always their name — and the kickoff box; an evening of
 // several matches lists them as rows. An event without matches (older rows, suggestions) shows
-// its name.
+// its name. Ruling 2026-10-08: when the admin uploaded an affiche, the affiche IS the poster.
 
 const SHADOW = '0 2px 14px rgba(0,0,0,.85), 0 0 2px rgba(0,0,0,.6)';
 
@@ -58,6 +60,23 @@ export default function EventPoster({ event, variant = 'card' }: EventPosterProp
   const hero = variant === 'hero';
   const seed = seedOf(event.id);
   const badge = kickoffBadge(event);
+  const { data: affiche } = useEventImageUrl(event.id, event.has_image);
+
+  if (event.has_image) {
+    return (
+      <div
+        className={`relative overflow-hidden bg-[#03060F] ${hero ? 'min-h-[400px]' : 'h-[228px]'}`}
+      >
+        {affiche?.url && (
+          <img
+            src={affiche.url}
+            alt={`Affiche ${event.name}`}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+      </div>
+    );
+  }
 
   if (isMultiMatch(event)) {
     const first = matches[0];
@@ -75,7 +94,7 @@ export default function EventPoster({ event, variant = 'card' }: EventPosterProp
             className="text-[19px] font-extrabold uppercase tracking-wide"
             style={{ textShadow: SHADOW }}
           >
-            {event.competition ? `Soirée ${event.competition}` : event.name}
+            {event.name}
           </div>
           <div className="mt-0.5 text-xs font-semibold tracking-wide text-white/90">
             {dateLine(event)}
@@ -120,7 +139,7 @@ export default function EventPoster({ event, variant = 'card' }: EventPosterProp
       <div
         className={`relative z-10 text-center font-semibold tracking-wide text-white/90 ${hero ? 'text-[13px]' : 'text-xs'}`}
       >
-        {event.round ?? event.competition ?? ''}
+        {roundLine(event) ?? ''}
       </div>
       {home && away ? (
         <div
