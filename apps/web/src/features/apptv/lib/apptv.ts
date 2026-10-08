@@ -7,11 +7,12 @@ export const APPTV_APK_HREF = '/downloads/toodooh-tv.apk';
 export const APPTV_TITLE = "L'application TV Toodooh";
 export const APPTV_PITCH = 'Diffusez les campagnes de votre établissement sur votre téléviseur.';
 export const APPTV_DOWNLOAD_LABEL = "Télécharger l'APK (Android TV)";
-export const APPTV_VERSION_LINE = 'Version 1.5.2';
+export const APPTV_VERSION_LINE = 'Version 1.5.3';
 
 export const APPTV_INSTALL_STEPS: readonly string[] = [
   'Autoriser les sources inconnues dans les paramètres de la TV.',
   'Transférer le fichier APK sur la TV (clé USB ou lien direct depuis le navigateur de la TV).',
   "Ouvrir le fichier et installer l'application.",
+  "Autoriser « Afficher par-dessus d'autres applications » pour Toodooh TV (Paramètres → Applications → Accès spécifiques des applications) : sans cette autorisation, les publicités ne passent pas par-dessus la chaîne. Si la TV n'a pas ce menu : adb shell appops set tn.toodooh.streamer SYSTEM_ALERT_WINDOW allow",
   "Lancer Toodooh TV et associer l'écran à votre établissement.",
 ];

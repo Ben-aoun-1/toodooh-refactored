@@ -26,14 +26,17 @@ describe('the chartered French copy', () => {
     expect(APPTV_TITLE).toBe("L'application TV Toodooh");
     expect(APPTV_PITCH).toBe('Diffusez les campagnes de votre établissement sur votre téléviseur.');
     expect(APPTV_DOWNLOAD_LABEL).toBe("Télécharger l'APK (Android TV)");
-    expect(APPTV_VERSION_LINE).toBe('Version 1.5.2');
+    expect(APPTV_VERSION_LINE).toBe('Version 1.5.3');
   });
 
-  it('pins the four install steps in order', () => {
+  // EVT-PRICE2 (ruling 4A, 2026-10-08) — the overlay permission is an install step: without it
+  // the ads play invisibly behind the TV channel (prod 2026-10-08 12:30, a Maxwell TV).
+  it('pins the five install steps in order', () => {
     expect(APPTV_INSTALL_STEPS).toEqual([
       'Autoriser les sources inconnues dans les paramètres de la TV.',
       'Transférer le fichier APK sur la TV (clé USB ou lien direct depuis le navigateur de la TV).',
       "Ouvrir le fichier et installer l'application.",
+      "Autoriser « Afficher par-dessus d'autres applications » pour Toodooh TV (Paramètres → Applications → Accès spécifiques des applications) : sans cette autorisation, les publicités ne passent pas par-dessus la chaîne. Si la TV n'a pas ce menu : adb shell appops set tn.toodooh.streamer SYSTEM_ALERT_WINDOW allow",
       "Lancer Toodooh TV et associer l'écran à votre établissement.",
     ]);
   });
