@@ -7,10 +7,61 @@ import {
   groupMinutesBounds,
   eventMinutesImpressions,
   eventMinutesPrice,
+  eventPlaysPerMinute,
+  eventRepeatsLabel,
   eventSlotLabel,
   eventSlotSeconds,
+  eventTotalPlays,
+  groupMinutesTotal,
   minutesLabel,
 } from './event-minutes';
+
+describe('EVT-PLAY1 — how many times the ad airs in total (operator ruling Q5)', () => {
+  it('plays per minute = 60 ÷ slot, for every class', () => {
+    expect(eventPlaysPerMinute('video', 11)).toBe(5); // 12 s slot
+    expect(eventPlaysPerMinute('video', 18)).toBe(3); // 20 s slot
+    expect(eventPlaysPerMinute('video', 23)).toBe(2); // 30 s slot
+    expect(eventPlaysPerMinute('video', 10)).toBe(6);
+    expect(eventPlaysPerMinute('video', 15)).toBe(4);
+    expect(eventPlaysPerMinute('video', 31)).toBeNull();
+  });
+
+  it('total = minutes bought × plays per minute — the operator’s example: 30 min × 11 s = 150', () => {
+    expect(eventTotalPlays('video', 11, 30)).toBe(150);
+    expect(eventTotalPlays('video', 18, 2)).toBe(6);
+    expect(eventTotalPlays('video', 30, 1)).toBe(2);
+  });
+
+  it('an image uses the length the screencaster chose (10, 20 or 30 s)', () => {
+    expect(eventTotalPlays('photo', 10, 4)).toBe(24);
+    expect(eventTotalPlays('photo', 20, 4)).toBe(12);
+    expect(eventTotalPlays('photo', 30, 4)).toBe(8);
+    expect(eventTotalPlays('photo', 15, 4)).toBeNull(); // not an allowed image length
+  });
+
+  it('nothing to count without minutes, or with a spot that cannot air', () => {
+    expect(eventTotalPlays('video', 11, null)).toBeNull();
+    expect(eventTotalPlays('video', 11, 0)).toBeNull();
+    expect(eventTotalPlays('video', 9, 10)).toBeNull();
+  });
+
+  it('a multi-match parcours counts the minutes of every match (one shared spot)', () => {
+    expect(groupMinutesTotal(['a', 'b', 'c'], { a: 4, b: null, c: 6 })).toBe(10);
+    expect(groupMinutesTotal(['a', 'b'], { a: null })).toBeNull();
+    expect(groupMinutesTotal(['a'], { a: 3, z: 50 })).toBe(3); // only this parcours' matches
+  });
+
+  it('the media step line: the total once minutes are chosen, else the rate', () => {
+    expect(eventRepeatsLabel('video', 11, 30)).toBe(
+      'Votre annonce sera diffusée 150 fois au total (30 minutes × 5 fois par minute achetée).',
+    );
+    expect(eventRepeatsLabel('video', 11, 1200)).toContain('6 000 fois au total');
+    expect(eventRepeatsLabel('video', 18, null)).toBe(
+      'Votre annonce sera diffusée 3 fois par minute achetée — le total s’affiche dès que vous choisissez vos minutes.',
+    );
+    expect(eventRepeatsLabel('video', 40, 3)).toBeNull();
+  });
+});
 
 // EVT-MIN1 — the web mirror of the api's minutes rules (lib/event-pricing/minutes.ts).
 

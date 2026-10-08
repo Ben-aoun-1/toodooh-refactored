@@ -23,6 +23,7 @@ import {
   unreadableVideoMessage,
 } from '@/features/campaigns/services/creative-media';
 import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
+import EventRepeatsNote from '@/features/events/components/EventRepeatsNote';
 import {
   EVENT_VIDEO_MIN_SECONDS,
   eventSlotLabel,
@@ -71,6 +72,8 @@ interface StepCreativeProps {
    * wizard, byte-identical behavior.
    */
   eventMode?: boolean;
+  /** EVT-PLAY1 — eventMode: the minutes bought so far, for the total-repeats line. */
+  eventMinutes?: number | null;
 }
 
 /**
@@ -89,11 +92,13 @@ export default function StepCreative({
   onNext,
   onBack,
   eventMode = false,
+  eventMinutes = null,
 }: StepCreativeProps) {
   const { data: allCreatives = [], isLoading } = useMyCreatives(userId);
   // EV3 — the bibliothèque only offers spots that can air in an event pod slot (EVT-MIN1: videos
   // 10–30 s, images 10/20/30 s). The classic wizard shows everything.
   const creatives = eventMode ? filterEventSpots(allCreatives) : allCreatives;
+  const selectedCreative = creatives.find((c) => c.id === selectedCreativeId);
   const upload = useCreativeUpload(userId);
 
   const [uploadType, setUploadType] = useState<CreativeType>('video');
@@ -339,6 +344,15 @@ export default function StepCreative({
                     </div>
                   );
                 })}
+              </div>
+            )}
+            {eventMode && selectedCreative && (
+              <div className="mt-4">
+                <EventRepeatsNote
+                  creativeType={selectedCreative.creative_type}
+                  durationSeconds={selectedCreative.duration_seconds}
+                  minutes={eventMinutes}
+                />
               </div>
             )}
           </div>

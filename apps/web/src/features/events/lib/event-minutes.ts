@@ -54,6 +54,67 @@ export const eventSlotLabel = (
   return `Créneau de ${slot} s — ${content}, ${plays} fois par minute`;
 };
 
+/** How many times a spot airs in ONE bought minute: 60 ÷ its slot. null when it cannot air. */
+export const eventPlaysPerMinute = (
+  creativeType: string,
+  durationSeconds: number | null,
+): number | null => {
+  const slot = eventSlotSeconds(creativeType, durationSeconds);
+  return slot === null ? null : Math.floor(60 / slot);
+};
+
+/**
+ * EVT-PLAY1 (operator ruling Q5) — how many times the ad airs IN TOTAL: the minutes bought (already
+ * a network total — one minute = one seat in one bloc at one venue) × the plays per minute.
+ * 30 minutes of an 11 s video (12 s slot, 5 plays a minute) = 150. null when the spot cannot air
+ * or no minute is chosen yet.
+ */
+export const eventTotalPlays = (
+  creativeType: string,
+  durationSeconds: number | null,
+  minutes: number | null,
+): number | null => {
+  const perMinute = eventPlaysPerMinute(creativeType, durationSeconds);
+  if (perMinute === null || minutes === null || minutes < EVENT_MIN_MINUTES) return null;
+  return Math.round(minutes) * perMinute;
+};
+
+/**
+ * The multi-match parcours shares ONE spot across its positionings: the minutes behind the total
+ * are their sum. null until at least one match has minutes chosen.
+ */
+export const groupMinutesTotal = (
+  campaignIds: readonly string[],
+  minutes: Readonly<Record<string, number | null>>,
+): number | null => {
+  const chosen = campaignIds.flatMap((id) => {
+    const m = minutes[id];
+    return m != null && m >= EVENT_MIN_MINUTES ? [m] : [];
+  });
+  return chosen.length === 0 ? null : chosen.reduce((s, m) => s + m, 0);
+};
+
+const playsFmt = new Intl.NumberFormat('fr-FR');
+
+/**
+ * The media step's repeat line: the TOTAL once the minutes are known, else the per-minute rate
+ * (the minutes are chosen on the next step). null when the spot cannot air.
+ */
+export const eventRepeatsLabel = (
+  creativeType: string,
+  durationSeconds: number | null,
+  minutes: number | null,
+): string | null => {
+  const perMinute = eventPlaysPerMinute(creativeType, durationSeconds);
+  if (perMinute === null) return null;
+  const rate = `${perMinute} fois par minute achetée`;
+  const total = eventTotalPlays(creativeType, durationSeconds, minutes);
+  if (total === null || minutes === null) {
+    return `Votre annonce sera diffusée ${rate} — le total s’affiche dès que vous choisissez vos minutes.`;
+  }
+  return `Votre annonce sera diffusée ${playsFmt.format(total)} fois au total (${minutesLabel(Math.round(minutes))} × ${rate}).`;
+};
+
 const centimes = (tnd: number): number => Math.round(tnd * 100) / 100;
 
 /** The price of the first `minutes` minutes (what the slider shows). */
