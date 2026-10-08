@@ -84,21 +84,28 @@ export const msToNextMinute = (nowMs: number): number =>
 /**
  * Boot tick, then one tick per minute ON the minute — not phased on the boot instant: a tick
  * phased at :25 pushed every edge up to 59 s late and the pod's first slots were lost (R2). Each
- * tick re-aims at the next minute, so drift never accumulates. Unref'd, like every job.
+ * tick aims at an explicit minute EDGE and runs its window up to that edge. Node's timers run on
+ * libuv's cached loop clock, so a timer may fire a few ms BEFORE the wall-clock minute: it then
+ * waits out the remainder instead of flooring to the previous minute (which skipped the edge).
+ * Unref'd, like every job.
  */
 export function startBlocPushJob(log: FastifyBaseLogger): void {
   void runBlocPushTick(log).catch((err: unknown) =>
     log.warn({ err }, 'event bloc push boot tick failed'),
   );
   const schedule = (): void => {
-    const timer = setTimeout(() => {
-      // The window ends ON the minute even when the timer fires a few ms late.
-      const now = new Date(Date.now() - (Date.now() % BLOC_PUSH_TICK_MS));
-      void runBlocPushTick(log, now)
+    const edge = Date.now() + msToNextMinute(Date.now());
+    const fire = (): void => {
+      const early = edge - Date.now();
+      if (early > 0) {
+        setTimeout(fire, early).unref();
+        return;
+      }
+      void runBlocPushTick(log, new Date(edge))
         .catch((err: unknown) => log.warn({ err }, 'event bloc push tick failed'))
         .finally(schedule);
-    }, msToNextMinute(Date.now()));
-    timer.unref();
+    };
+    setTimeout(fire, edge - Date.now()).unref();
   };
   schedule();
 }
