@@ -21,7 +21,11 @@ export interface OwnerCampaignAllocation {
   screenhost_name: string;
   statut_acceptation: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
   ii_potentiel: number;
-  r_i: number;
+  /** Diffusions per hour of a classic campaign; null on an event positioning (it airs minutes). */
+  r_i: number | null;
+  /** Event positionings only — one bloc = one minute of the advertiser's seat. */
+  minutes?: number;
+  /** The owner's SHARE (50 % of the HT value), TTC — converted by the api (lib/owner-share). */
   revenu_previsionnel: number;
 }
 
@@ -44,6 +48,8 @@ export interface OwnerCampaign {
   /** The OWNER's allocation rows on this campaign (one per venue), venues A→Z. */
   allocations: OwnerCampaignAllocation[];
   totals: { ii_potentiel: number; revenu_previsionnel: number };
+  /** Operator 2026-10-09 — event positionings are listed too; null on a classic campaign. */
+  event?: { kickoff_at: string; ends_at: string } | null;
   /** Derived over the owner's allocations: unanimous → that statut, otherwise MIXTE. */
   owner_decision: OwnerDecision;
   created_at: string;

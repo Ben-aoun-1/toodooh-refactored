@@ -21,10 +21,10 @@ import {
 // CF-Q1 — the owner's money leads each allocation card, and ONLY reject asks for confirmation.
 
 describe('revenueLabel (spec 2.2 « en tête le montant qui me revient »)', () => {
-  it('formats fr-FR with the TND unit', () => {
-    expect(revenueLabel(412)).toBe('412 TND');
-    expect(revenueLabel(1065.5)).toBe('1 065,5 TND'); // fr-FR NNBSP grouping
-    expect(revenueLabel(0)).toBe('0 TND');
+  it('formats fr-FR with the TND TTC unit (the owner sees TTC only)', () => {
+    expect(revenueLabel(412)).toBe('412 TND TTC');
+    expect(revenueLabel(1065.5)).toBe('1 065,5 TND TTC'); // fr-FR NNBSP grouping
+    expect(revenueLabel(0)).toBe('0 TND TTC');
   });
 });
 
