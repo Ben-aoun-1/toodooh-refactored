@@ -360,7 +360,7 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
       expect(body.campaigns[0]?.closed_on).toBe('2026-03-10');
     });
 
-    it('carries the settled figures: impressions = delivered_imp, budget = spend + refund (HT, TTC)', async () => {
+    it('carries the settled figures: impressions = delivered_imp, budget = spend, what was paid after the refund (HT, TTC)', async () => {
       const me = await seedUser();
       const v1 = await seedVenue();
       const v2 = await seedVenue();
@@ -396,8 +396,8 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
         hours: 3,
         plays: 5,
         venues: 2,
-        budget_ht: 200,
-        budget_ttc: 238,
+        budget_ht: 150,
+        budget_ttc: 178.5,
       });
       // RG-PERF-31 — no CPM / SPS / attention / split key on the wire.
       const keys = Object.keys(row ?? {}).join(',');
@@ -865,7 +865,7 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
         nature: 'event',
         impressions: 2000, // 1 of 6 blocs delivered
         venues: 1,
-        budget_ht: 300, // spend (50) + refund (250) = the engaged montant
+        budget_ht: 50, // spend (50) — paid after the refund (250)
       });
     });
   });
