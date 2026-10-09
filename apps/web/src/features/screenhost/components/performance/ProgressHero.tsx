@@ -114,7 +114,7 @@ export function ProgressHero({
         <HeroCard
           label="Revenu généré depuis le début"
           value={hasCastData ? formatTndFr(revenueTotal) : null}
-          suffix="TND"
+          suffix="TND TTC"
           series={revenueSeries}
           color={CHART_ACCENT}
           gradientId="heroRevenue"

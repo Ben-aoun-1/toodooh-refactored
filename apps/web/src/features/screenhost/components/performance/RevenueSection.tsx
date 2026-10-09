@@ -51,7 +51,7 @@ export function RevenueSection({ total, count, hasCastData }: RevenueSectionProp
               ) : (
                 <div className="mt-1.5 text-[30px] font-semibold leading-tight text-brand-accent">
                   {formatTndFr(total)}
-                  <span className="ml-1 text-[15px] font-normal text-perf-grey">TND</span>
+                  <span className="ml-1 text-[15px] font-normal text-perf-grey">TND TTC</span>
                 </div>
               )}
             </div>
