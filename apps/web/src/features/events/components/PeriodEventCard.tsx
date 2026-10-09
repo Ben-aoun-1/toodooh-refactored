@@ -43,9 +43,12 @@ export default function PeriodEventCard({
       <div className="flex flex-1 flex-col gap-2 p-3">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-sm font-semibold leading-snug text-gray-900">{event.name}</h3>
-          <span className="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-            Sport
-          </span>
+          {/* The event's own catégorie (Figma: Sport / Ramadan / Culture) — no fixed « Sport ». */}
+          {event.category?.trim() && (
+            <span className="shrink-0 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+              {event.category}
+            </span>
+          )}
         </div>
         {tags.shown.length > 0 && (
           <div className="flex flex-wrap gap-1.5">

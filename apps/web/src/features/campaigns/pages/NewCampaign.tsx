@@ -334,8 +334,8 @@ export default function NewCampaign() {
       if (state.draftCampaignId) clearResumeStep(state.draftCampaignId); // CF-Q2 key hygiene
       armedRef.current = false; // CF-W1 — no orphan intercept after a successful add
       toast.success('Campagne ajoutée au panier.');
-      // SUGG-1 — the cart-add page (Figma): the confirmation + the period's events; it forwards
-      // to the panier itself when the period holds none (P4 A).
+      // SUGG-1 — the cart-add page (Figma): the confirmation + the period's events (shown even
+      // when the period holds none — Q5A, 2026-10-09).
       navigate(
         state.draftCampaignId ? `/new-campaign/ajoutee/${state.draftCampaignId}` : '/my-cart',
       );
