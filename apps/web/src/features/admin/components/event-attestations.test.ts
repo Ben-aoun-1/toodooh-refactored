@@ -63,12 +63,14 @@ describe('R4 — the reporter + annuler copies', () => {
 });
 
 describe('the settlement summary + the queue-filter rider', () => {
-  it('the placement block renders livré/manqué + the refund once settled', () => {
+  it('the placement block renders the totals + the refund once settled — never a venue (Q4A)', () => {
     const summary = read('../../events/components/EventPlacementSummary.tsx');
     expect(summary).toContain('Diffusion terminée');
     expect(summary).toContain('Remboursé');
-    expect(summary).toContain('blocs_delivered');
-    expect(summary).toContain('non respecté');
+    expect(summary).toContain('placementTotals(');
+    // Operator 2026-10-09 — the screencaster never sees a venue's name nor a per-venue list.
+    expect(summary).not.toContain('screenhost_name');
+    expect(summary).not.toContain('data.allocations.map(');
   });
 
   it('THE RIDER: the admin queue filter reaches À venir and Passées, rendered from the lib', () => {

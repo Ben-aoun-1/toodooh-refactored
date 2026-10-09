@@ -92,7 +92,7 @@ export interface CoverageRead {
 /** CF-U1 — one plottable venue of the coverage preview (GET /:id/coverage, kept at CF-Z1). */
 export interface CoverageVenue {
   id: string;
-  name: string;
+  /** Operator 2026-10-09 — no venue name reaches a screencaster: position + category only. */
   latitude: number;
   longitude: number;
   /** CF-SK1 rider — the venue's sector name for the map popup's category chip (NULL = unset). */
