@@ -12,7 +12,6 @@ import {
   creatives,
   eventAllocations,
   events,
-  screenhosts,
   zones,
 } from '../db/schema.js';
 import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
@@ -759,14 +758,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .select({
         id: eventAllocations.id,
         screenhostId: eventAllocations.screenhostId,
-        screenhostName: screenhosts.name,
         blocs: eventAllocations.blocs,
         impressionsTotal: eventAllocations.impressionsTotal,
         montantTnd: eventAllocations.montantTnd,
         statut: eventAllocations.statut,
       })
       .from(eventAllocations)
-      .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
       .where(eq(eventAllocations.campaignId, parsedParams.data.id))
       .orderBy(desc(eventAllocations.createdAt));
 
@@ -806,7 +803,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         const line = measured?.venues.find((v) => v.screenhostId === r.screenhostId) ?? null;
         return {
           id: r.id,
-          screenhost_name: r.screenhostName,
+          // Operator 2026-10-09 — no venue name reaches the screencaster (Consulter = totals).
           blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
           impressions_total: r.impressionsTotal,
           // IMP-FACT1 — the venue's CHARGEABLE share (billable), derived from the money it carries.

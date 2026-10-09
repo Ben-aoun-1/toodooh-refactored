@@ -15,6 +15,8 @@ import {
   campaignZones,
   creatives,
   type DispatchAcceptation,
+  eventAllocations,
+  events,
   type DispatchCreneau,
   type NewUser,
   screenhosts,
@@ -306,10 +308,72 @@ describe('GET /api/screenhosts/campaigns — the owner « Mes campagnes » read 
       screenhost_id: nord,
       ii_potentiel: 700,
       r_i: 120,
-      revenu_previsionnel: 10.5,
+      // Operator 2026-10-09 — the owner sees its SHARE (50 % of the 10.5 value), labelled TTC.
+      revenu_previsionnel: 5.25,
     });
-    expect(row?.totals).toEqual({ ii_potentiel: 1000, revenu_previsionnel: 14.75 });
+    expect(row?.totals).toEqual({ ii_potentiel: 1000, revenu_previsionnel: 7.375 });
     expect(row?.owner_decision).toBe('MIXTE');
+  });
+
+  it('lists the owner’s EVENT positionings too, with the owner share of the montant (2026-10-09)', async () => {
+    const owner = await seedUser();
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const venue = await seedVenue(owner, 'Café Match');
+    const [ev] = await db
+      .insert(events)
+      .values({
+        name: 'EST - CSS',
+        type: 'sport',
+        source: 'official',
+        kickoffAt: new Date('2027-06-10T20:00:00+01:00'),
+        endsAt: new Date('2027-06-10T22:00:00+01:00'),
+      })
+      .returning({ id: events.id });
+    const [positioning] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: advertiser,
+        name: 'EST - CSS',
+        campaignType: 'event',
+        status: 'upcoming',
+        startDate: '2027-06-10',
+        endDate: '2027-06-10',
+        eventId: ev?.id ?? null,
+        eventMinutes: 2,
+        requestedBudget: '6.18',
+      })
+      .returning({ id: campaigns.id });
+    await db.insert(eventAllocations).values({
+      campaignId: positioning?.id ?? '',
+      screenhostId: venue,
+      blocs: [
+        { start: '2027-06-10T18:00:00.000Z', end: '2027-06-10T18:20:00.000Z', impressions: 47 },
+        { start: '2027-06-10T18:20:00.000Z', end: '2027-06-10T18:40:00.000Z', impressions: 47 },
+      ],
+      impressionsTotal: 94,
+      montantTnd: '6.180',
+      statut: 'ACCEPTE',
+      decidedAt: new Date(),
+    });
+    mockSession(owner);
+
+    const body = await list();
+    const row = body.find((c) => c.id === positioning?.id) as
+      | (WireCampaign & { event: { kickoff_at: string } | null })
+      | undefined;
+    expect(row?.campaign_type).toBe('event');
+    expect(row?.event?.kickoff_at).toBe('2027-06-10T19:00:00.000Z');
+    expect(row?.allocations).toHaveLength(1);
+    expect(row?.allocations[0]).toMatchObject({
+      screenhost_name: 'Café Match',
+      statut_acceptation: 'ACCEPTE',
+      ii_potentiel: 94,
+      r_i: null,
+      minutes: 2,
+      revenu_previsionnel: 3.09, // 50 % of 6.18 — never the full montant
+    });
+    expect(row?.totals).toEqual({ ii_potentiel: 94, revenu_previsionnel: 3.09 });
+    expect(row?.owner_decision).toBe('ACCEPTE');
   });
 
   it('owner_decision is unanimous when every allocation agrees (ACCEPTE / REFUSE), ANY statut listed', async () => {

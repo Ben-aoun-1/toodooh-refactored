@@ -48,8 +48,9 @@ import { sectorDisplayName } from './report/sector-display-name.js';
 //   • établissements diffuseurs = venues with delivered_imp > 0 in the payouts (closed) / with
 //                          ≥ 1 proof (live). Period mode sums per campaign WITHOUT dedup (the
 //                          spec's glossary is normative — do NOT « fix »).
-//   • budget HT           = spend_tnd + refund_tnd — the ENGAGED budget on both paths (classic:
-//                          spend = budget − refund; event: spend = delivered, refund = the rest).
+//   • budget HT           = spend_tnd — what the advertiser ACTUALLY PAID after the refund
+//                          (operator 2026-10-09; it was spend + refund, the engaged budget). Both
+//                          paths: classic spend = budget − refund; event spend = delivered.
 //                          Everything upstream of a PDF is HT; TTC = facture.ts's one rate.
 //   • audience (live)     = Σ over the credited hours of the venue's typical affluence at
 //                          (weekday, hour) — screenhost_affluence, hour-collapsed, in_effect —
@@ -503,7 +504,6 @@ export const loadClosedCampaigns = async (advertiserId: string): Promise<ClosedC
       expectedImp: campaignReconciliation.expectedImp,
       deliveredImp: campaignReconciliation.deliveredImp,
       spendTnd: campaignReconciliation.spendTnd,
-      refundTnd: campaignReconciliation.refundTnd,
     })
     .from(campaigns)
     .innerJoin(campaignReconciliation, eq(campaignReconciliation.campaignId, campaigns.id))
@@ -516,7 +516,7 @@ export const loadClosedCampaigns = async (advertiserId: string): Promise<ClosedC
   ]);
   return rows.map((r) => {
     const d = diffusion.get(r.id);
-    const budgetHt = round2(Number(r.spendTnd) + Number(r.refundTnd));
+    const budgetHt = round2(Number(r.spendTnd));
     return {
       id: r.id,
       name: r.name,

@@ -9,6 +9,7 @@ import PeriodEventCard from '@/features/events/components/PeriodEventCard';
 import { useEventsCatalogue, usePositionner } from '@/features/events/hooks/useEvents';
 import {
   PERIOD_SUGGESTION_ADDED,
+  PERIOD_SUGGESTION_EMPTY,
   PERIOD_SUGGESTION_HEADING,
   suggestEventsForPeriod,
 } from '@/features/events/lib/period-suggestions';
@@ -20,8 +21,9 @@ const log = logger.child({ module: 'CampaignAddedToCart' });
 /**
  * SUGG-1 — the page « Ajouter au panier » lands on (Figma « Lancer une campagne », last frame):
  * the confirmation, then up to 3 events INSIDE the campaign's period (Q3 A) with « Je me
- * positionne », and [Dashboard] / [Voir tous les événements]. No event in the period → straight
- * to the panier, as before (P4 A).
+ * positionne », and [Dashboard] / [Voir tous les événements]. Operator 2026-10-09 (Q5A): no
+ * event in the period → the page still shows, with PERIOD_SUGGESTION_EMPTY (an unknown campaign
+ * id alone forwards to the panier).
  */
 export default function CampaignAddedToCart() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -44,11 +46,8 @@ export default function CampaignAddedToCart() {
   const ownPositioned = new Set(
     campaigns.flatMap((c) => (c.event_id === null ? [] : [c.event_id])),
   );
-  const suggestions =
-    campaign === undefined
-      ? []
-      : suggestEventsForPeriod(campaign, catalogue ?? [], new Date(), ownPositioned);
-  if (suggestions.length === 0) return <Navigate to="/my-cart" replace />;
+  if (campaign === undefined) return <Navigate to="/my-cart" replace />;
+  const suggestions = suggestEventsForPeriod(campaign, catalogue ?? [], new Date(), ownPositioned);
 
   const handlePositionner = async (eventId: string) => {
     setPendingId(eventId);
@@ -72,17 +71,23 @@ export default function CampaignAddedToCart() {
         <p className="text-lg text-gray-500">{PERIOD_SUGGESTION_ADDED}</p>
       </div>
       <h2 className="text-center text-lg font-medium text-gray-900">{PERIOD_SUGGESTION_HEADING}</h2>
-      <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {suggestions.map((event) => (
-          <PeriodEventCard
-            key={event.id}
-            event={event}
-            pending={pendingId === event.id}
-            disabled={positionner.isPending}
-            onPositionner={(id) => void handlePositionner(id)}
-          />
-        ))}
-      </div>
+      {suggestions.length === 0 ? (
+        <p className="w-full rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm text-gray-500">
+          {PERIOD_SUGGESTION_EMPTY}
+        </p>
+      ) : (
+        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {suggestions.map((event) => (
+            <PeriodEventCard
+              key={event.id}
+              event={event}
+              pending={pendingId === event.id}
+              disabled={positionner.isPending}
+              onPositionner={(id) => void handlePositionner(id)}
+            />
+          ))}
+        </div>
+      )}
       <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
         <button
           type="button"

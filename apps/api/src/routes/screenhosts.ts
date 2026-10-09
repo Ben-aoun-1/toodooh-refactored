@@ -39,7 +39,9 @@ import { decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { SLOTS_PER_DAY, inEffectSql } from '../lib/half-hour-slots.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
+import { loadOwnerEventCampaigns } from '../lib/owner-event-campaigns.js';
 import { ownerSensorStatuses } from '../lib/owner-sensors.js';
+import { loadOwnerSharePcts, ownerShareTnd } from '../lib/owner-share.js';
 import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
 import { proofInstantSql } from '../lib/playout/proof-instant.js';
@@ -2042,6 +2044,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     // Category/zone names are 1:many — batched over the owner-scoped campaign ids (no N+1).
     const criteria = await loadCampaignCriteriaNames([...new Set(rows.map((r) => r.campaignId))]);
+    // Operator 2026-10-09 — the owner sees its SHARE of the value (lib/owner-share), as TTC.
+    const pcts = await loadOwnerSharePcts();
 
     return reply.status(200).send(
       rows.map((r) => ({
@@ -2055,7 +2059,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         screenhost_name: r.screenhostName,
         ii_potentiel: r.iiPotentiel,
         r_i: r.rI,
-        revenu_previsionnel: Number(r.revenuPrevisionnel),
+        revenu_previsionnel: ownerShareTnd(Number(r.revenuPrevisionnel), pcts),
         created_at: r.createdAt.toISOString(),
         categories: criteria.categoriesOf(r.campaignId),
         zones: criteria.zonesOf(r.campaignId),
@@ -2131,6 +2135,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       head: (typeof rows)[number];
       allocations: OwnerAllocationRow[];
     };
+    // Operator 2026-10-09 — the owner sees its SHARE of the value (lib/owner-share), as TTC.
+    const pcts = await loadOwnerSharePcts();
     const byCampaign = new Map<string, Grouped>();
     for (const r of rows) {
       const group = byCampaign.get(r.campaignId) ?? { head: r, allocations: [] };
@@ -2141,39 +2147,74 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         statut_acceptation: r.statut,
         ii_potentiel: r.iiPotentiel,
         r_i: r.rI,
-        revenu_previsionnel: Number(r.revenuPrevisionnel),
+        revenu_previsionnel: ownerShareTnd(Number(r.revenuPrevisionnel), pcts),
       });
       byCampaign.set(r.campaignId, group);
     }
-    const criteria = await loadCampaignCriteriaNames([...byCampaign.keys()]);
+    // Operator 2026-10-09 — the owner's event positionings sit in the same list.
+    const eventGroups = await loadOwnerEventCampaigns(userId, pcts);
+    const criteria = await loadCampaignCriteriaNames([
+      ...byCampaign.keys(),
+      ...eventGroups.map((g) => g.campaignId),
+    ]);
+    const sumRevenue = (lines: readonly { revenu_previsionnel: number }[]): number =>
+      // Sum in the millime grain, then round: no float drift on the wire.
+      Math.round(lines.reduce((sum, a) => sum + a.revenu_previsionnel * 1000, 0)) / 1000;
 
-    return reply.status(200).send(
-      [...byCampaign.values()].map(({ head, allocations }) => ({
-        id: head.campaignId,
-        name: head.campaignName,
-        campaign_type: head.campaignType,
-        status: head.campaignStatus,
-        start_date: head.startDate,
-        end_date: head.endDate,
-        advertiser_name: head.advertiserBusinessName ?? head.advertiserContactName,
-        categories: criteria.categoriesOf(head.campaignId),
-        zones: criteria.zonesOf(head.campaignId),
-        creative:
-          head.creativeKind === null
-            ? null
-            : { kind: head.creativeKind, duration_seconds: head.creativeDuration },
-        allocations,
-        totals: {
-          ii_potentiel: allocations.reduce((sum, a) => sum + a.ii_potentiel, 0),
-          // Sum in the numeric's 4-decimal grain, then round: no float drift on the wire.
-          revenu_previsionnel:
-            Math.round(allocations.reduce((sum, a) => sum + a.revenu_previsionnel * 10000, 0)) /
-            10000,
-        },
-        owner_decision: deriveOwnerDecision(allocations.map((a) => a.statut_acceptation)),
-        created_at: head.campaignCreatedAt.toISOString(),
-      })),
-    );
+    const classicEntries = [...byCampaign.values()].map(({ head, allocations }) => ({
+      id: head.campaignId,
+      name: head.campaignName,
+      campaign_type: head.campaignType,
+      status: head.campaignStatus,
+      start_date: head.startDate,
+      end_date: head.endDate,
+      advertiser_name: head.advertiserBusinessName ?? head.advertiserContactName,
+      categories: criteria.categoriesOf(head.campaignId),
+      zones: criteria.zonesOf(head.campaignId),
+      creative:
+        head.creativeKind === null
+          ? null
+          : { kind: head.creativeKind, duration_seconds: head.creativeDuration },
+      allocations,
+      event: null,
+      totals: {
+        ii_potentiel: allocations.reduce((sum, a) => sum + a.ii_potentiel, 0),
+        revenu_previsionnel: sumRevenue(allocations),
+      },
+      owner_decision: deriveOwnerDecision(allocations.map((a) => a.statut_acceptation)),
+      created_at: head.campaignCreatedAt.toISOString(),
+    }));
+    const eventEntries = eventGroups.map((g) => ({
+      id: g.campaignId,
+      name: g.name,
+      campaign_type: g.campaignType,
+      status: g.status,
+      start_date: g.startDate,
+      end_date: g.endDate,
+      advertiser_name: g.advertiserName,
+      categories: criteria.categoriesOf(g.campaignId),
+      zones: criteria.zonesOf(g.campaignId),
+      creative: g.creative,
+      allocations: g.allocations,
+      event: g.event,
+      totals: {
+        ii_potentiel: g.allocations.reduce((sum, a) => sum + a.ii_potentiel, 0),
+        revenu_previsionnel: sumRevenue(g.allocations),
+      },
+      owner_decision: deriveOwnerDecision(g.allocations.map((a) => a.statut_acceptation)),
+      created_at: g.createdAt.toISOString(),
+    }));
+
+    // Newest campaign first, classic and event alike.
+    return reply
+      .status(200)
+      .send(
+        [...classicEntries, ...eventEntries].sort((a, b) =>
+          b.created_at === a.created_at
+            ? b.id.localeCompare(a.id)
+            : b.created_at.localeCompare(a.created_at),
+        ),
+      );
   });
 
   // Shared accept/reject body: owner-scoped status write. The WHERE subselect (the caller's own
@@ -2406,6 +2447,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(and(eq(screenhosts.ownerId, userId), eq(eventAllocations.statut, 'EN_ATTENTE')))
       .orderBy(desc(eventAllocations.createdAt));
+    // Operator 2026-10-09 — the owner sees its SHARE of the montant (lib/owner-share), as TTC.
+    const pcts = await loadOwnerSharePcts();
     return reply.status(200).send(
       rows.map((r) => ({
         id: r.id,
@@ -2418,7 +2461,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         blocs: r.blocs,
         blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
         impressions_total: r.impressionsTotal,
-        montant_tnd: Number(r.montantTnd),
+        montant_tnd: ownerShareTnd(Number(r.montantTnd), pcts),
         creative: r.creativeKind
           ? { kind: r.creativeKind, duration_seconds: r.creativeDuration }
           : null,

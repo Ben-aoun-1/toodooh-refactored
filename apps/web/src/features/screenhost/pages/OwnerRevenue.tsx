@@ -37,7 +37,6 @@ import {
   payoutMethodIsRecorded,
 } from '@/features/wallet/lib/payout-method';
 import { getErrorMessage } from '@/lib/errors';
-import { ttcParenthetical } from '@/lib/money';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
 
@@ -333,16 +332,14 @@ export default function OwnerRevenue() {
                     </div>
                     <div>
                       <p className="text-white/90 text-sm font-medium mb-1">Revenu actuel</p>
-                      {/* MINOR-1/27 — the figure is the owner's HT share (the facture's sous-total
-                          HT); it carries the same « HT (TTC) » marker as every other montant. */}
+                      {/* Operator 2026-10-09 (confirms SH-TTC1) — the figure is the owner's share
+                          (E7 earnings_tnd, 50 % of the HT value) and the screenhost sees TTC only:
+                          one figure, labelled TTC, no 19 % added on top. */}
                       <p className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
                         {formatCurrencyBanner(currentBalance)}{' '}
                         <span className="text-xl sm:text-2xl font-semibold text-white/85">
-                          TND HT
+                          TND TTC
                         </span>
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-white/75">
-                        {ttcParenthetical(currentBalance)}
                       </p>
                     </div>
                   </div>

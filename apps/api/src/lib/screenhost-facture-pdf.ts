@@ -1,7 +1,15 @@
-import PDFDocument from 'pdfkit';
-
-import { BRAND, INK, MUTED, TVA_RATE, loadLogo } from './facture.js';
+import { TVA_RATE } from './facture.js';
+import {
+  docLines,
+  docNote,
+  docParties,
+  docSignature,
+  docTnd,
+  docTotals,
+  renderDocHtml,
+} from './pdf-doc/document.js';
 import { monthLabelFr } from './report/monthly-job.js';
+import { renderPdf } from './report/render.js';
 
 // REV2 — the SCREENHOST facture. A supplier invoice, and the direction is the whole point:
 //
@@ -52,125 +60,55 @@ export const sourceLabelFr = (source: string): string => {
   return 'Revenus de diffusion';
 };
 
-const formatTnd = (n: number): string => `${n.toFixed(2)} TND`;
-
 const formatIssuedAt = (d: Date): string =>
   `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 
-export const renderScreenhostFacturePdf = async (data: ScreenhostFactureData): Promise<Buffer> => {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 50, compress: false });
-    const chunks: Buffer[] = [];
-    doc.on('data', (c: Buffer) => chunks.push(c));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
-
-    const left = 50;
-    const right = doc.page.width - 50;
-    const width = right - left;
-
-    // ── header ────────────────────────────────────────────────────────────────
-    const logo = loadLogo();
-    if (logo) {
-      doc.image(logo, left, 50, { height: 28 });
-    } else {
-      doc.fillColor(BRAND).font('Helvetica-Bold').fontSize(24).text('toodooh', left, 56);
-    }
-    doc.fillColor(INK).font('Helvetica-Bold').fontSize(20).text('FACTURE', left, 52, {
-      width,
-      align: 'right',
-    });
-    doc
-      .fillColor(MUTED)
-      .font('Helvetica')
-      .fontSize(10)
-      .text(`Référence: ${data.reference}`, left, 80, { align: 'right' })
-      .text(`Période: ${monthLabelFr(data.month)}`, { align: 'right' })
-      .text(`Date d'émission: ${formatIssuedAt(data.issuedAt)}`, { align: 'right' });
-
-    // ── the two party blocks, side by side — THE direction, stated plainly ────
-    const colW = (width - 20) / 2;
-    doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Émetteur', left, 140);
-    doc.fillColor(INK).font('Helvetica-Bold').fontSize(13).text(data.venueName, left, 154, {
-      width: colW,
-    });
-    doc
-      .fillColor(MUTED)
-      .font('Helvetica')
-      .fontSize(10)
-      .text(data.ownerName, left, doc.y + 2, { width: colW });
-
-    const rightCol = left + colW + 20;
-    doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Client', rightCol, 140);
-    doc
-      .fillColor(INK)
-      .font('Helvetica-Bold')
-      .fontSize(13)
-      .text(TOODOOH_CLIENT_NAME, rightCol, 154, { width: colW });
-    doc
-      .fillColor(MUTED)
-      .font('Helvetica')
-      .fontSize(10)
-      .text("Réseau d'affichage DOOH — Tunisie", rightCol, doc.y + 2, { width: colW });
-
-    // ── the per-source revenue lines ──────────────────────────────────────────
-    let y = 232;
-    doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Désignation', left, y);
-    doc.text('Montant TTC', left, y, { width, align: 'right' });
-    y += 16;
-    doc.strokeColor('#E5E7EB').lineWidth(1).moveTo(left, y).lineTo(right, y).stroke();
-    y += 10;
-
-    for (const line of data.lines) {
-      doc
-        .fillColor(INK)
-        .font('Helvetica')
-        .fontSize(11)
-        .text(sourceLabelFr(line.source), left, y, {
-          width: width - 120,
-        });
-      doc.text(formatTnd(line.amountTtcTnd), left, y, { width, align: 'right' });
-      y += 22;
-    }
-
-    // ── the money trio ────────────────────────────────────────────────────────
-    y += 8;
-    doc.strokeColor('#E5E7EB').lineWidth(1).moveTo(left, y).lineTo(right, y).stroke();
-    y += 12;
-
-    const moneyLine = (label: string, value: string, bold: boolean, atY: number): void => {
-      doc
-        .fillColor(bold ? INK : MUTED)
-        .font(bold ? 'Helvetica-Bold' : 'Helvetica')
-        .fontSize(bold ? 13 : 11)
-        .text(label, left, atY, { width: width - 140 });
-      doc
-        .fillColor(INK)
-        .font(bold ? 'Helvetica-Bold' : 'Helvetica')
-        .fontSize(bold ? 13 : 11)
-        .text(value, left, atY, { width, align: 'right' });
-    };
-
-    moneyLine('Sous-total HT', formatTnd(data.subtotalHtTnd), false, y);
-    moneyLine(`TVA (${Math.round(TVA_RATE * 100)} %)`, formatTnd(data.tvaTnd), false, y + 20);
-    moneyLine('Total TTC', formatTnd(data.totalTtcTnd), true, y + 46);
-
-    // ── the consigne — what the owner must DO with this document ──────────────
-    doc
-      .fillColor(MUTED)
-      .font('Helvetica')
-      .fontSize(9)
-      .text(CONSIGNE_LINE, left, y + 92, { width });
-
-    doc
-      .fillColor(MUTED)
-      .font('Helvetica')
-      .fontSize(8)
-      .text("toodooh — réseau d'affichage DOOH en Tunisie", left, doc.page.height - 72, {
-        width,
-        align: 'center',
-      });
-
-    doc.end();
+/**
+ * The screenhost facture's HTML — the report's charter on white paper (the owner prints, signs,
+ * stamps and returns it), the real logo, and a signature/stamp box (operator 2026-10-09).
+ */
+export const buildScreenhostFactureHtml = (data: ScreenhostFactureData): string =>
+  renderDocHtml({
+    paper: 'light',
+    kicker: 'Facture',
+    title: data.venueName,
+    meta: [
+      { label: 'Référence', value: data.reference },
+      { label: 'Période', value: monthLabelFr(data.month) },
+      { label: "Date d'émission", value: formatIssuedAt(data.issuedAt) },
+    ],
+    body:
+      // The two party blocks, side by side — THE direction, stated plainly.
+      docParties([
+        { label: 'Émetteur', name: data.venueName, lines: [data.ownerName] },
+        {
+          label: 'Client',
+          name: TOODOOH_CLIENT_NAME,
+          lines: ["Réseau d'affichage DOOH — Tunisie"],
+        },
+      ]) +
+      docLines(
+        { label: 'Désignation', amount: 'Montant TTC' },
+        data.lines.map((line) => ({
+          label: sourceLabelFr(line.source),
+          amount: docTnd(line.amountTtcTnd),
+        })),
+      ) +
+      docTotals(
+        [
+          { label: 'Sous-total HT', amount: docTnd(data.subtotalHtTnd) },
+          { label: `TVA (${Math.round(TVA_RATE * 100)} %)`, amount: docTnd(data.tvaTnd) },
+        ],
+        { label: 'Total TTC', amount: docTnd(data.totalTtcTnd) },
+      ) +
+      // The consigne — what the owner must DO with this document — and where to sign/stamp it.
+      docNote(CONSIGNE_LINE) +
+      docSignature(
+        'Visa de l’établissement',
+        'Lu et approuvé — signature et cachet de l’établissement.',
+      ),
   });
-};
+
+/** Rendered once by the month-end sweep and STORED — the chromium pipeline (lib/report/render). */
+export const renderScreenhostFacturePdf = (data: ScreenhostFactureData): Promise<Buffer> =>
+  renderPdf(buildScreenhostFactureHtml(data));

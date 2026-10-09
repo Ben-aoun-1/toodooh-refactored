@@ -76,9 +76,10 @@ const readLines = async (campaignId: string) => {
 const coverageBody = (eligible: readonly CoverageVenue[]) => {
   const plottable = eligible.filter((v) => v.latitude !== null && v.longitude !== null);
   return {
+    // Operator 2026-10-09 — a screencaster never sees venue NAMES (map, Consulter): the pins
+    // carry their position and category only.
     screenhosts: plottable.map((v) => ({
       id: v.id,
-      name: v.name,
       latitude: Number(v.latitude),
       longitude: Number(v.longitude),
       sector_name: v.sectorName,

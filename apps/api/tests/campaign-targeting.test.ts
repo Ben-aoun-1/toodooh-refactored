@@ -344,7 +344,8 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
     const dots = coverageDots(res);
     expect(dots).toHaveLength(1);
     expect(dots[0]?.id).toBe(match);
-    expect(dots[0]?.name).toBe('Match');
+    // Operator 2026-10-09 — a screencaster's map never carries a venue NAME.
+    expect(dots[0]).not.toHaveProperty('name');
     expect(typeof dots[0]?.latitude).toBe('number');
     expect(typeof dots[0]?.longitude).toBe('number');
   });

@@ -160,11 +160,13 @@ describe('renderReportHtml — the five-page dark document frame', () => {
     expect(html).not.toContain('pageNumber');
   });
 
-  it('every footer carries the Powered by wordmark with the app SVG mark (never a raster)', () => {
+  it('cover + every footer carry the REAL logo (operator 2026-10-09 — supersedes the drawn SVG mark)', () => {
     expect(count(html, /class="footer"/g)).toBe(5);
     expect(count(html, /Powered by/g)).toBe(5);
-    expect(count(html, /class="footer__mark"/g)).toBe(5);
-    expect(html).not.toContain('data:image');
+    // The light variant of assets/logo.png, inlined — never the typed « toodooh » word.
+    expect(count(html, /<img class="footer__logo" src="data:image\/png;base64,/g)).toBe(5);
+    expect(count(html, /<img class="cover__logoimg" src="data:image\/png;base64,/g)).toBe(1);
+    expect(html).not.toContain('class="footer__mark"');
   });
 
   it('carries the dark palette and the mockup fonts; drops the unused --portage token', () => {

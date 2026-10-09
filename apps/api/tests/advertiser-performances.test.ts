@@ -32,7 +32,14 @@ import { sectorDisplayName } from '../src/lib/report/sector-display-name.js';
 import { advertiserPerformancesRoutes } from '../src/routes/advertiser-performances.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { docText } from './helpers/doc-render-stub.js';
 import { resetZonesToSeed } from './helpers/zones.js';
+
+// Every document renders through the report's chromium seam — stubbed (helpers/doc-render-stub).
+vi.mock('../src/lib/report/render.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/report/render.js')>()),
+  renderPdf: (await import('./helpers/doc-render-stub.js')).renderPdfStub,
+}));
 
 // SC-P — « Mes performances » (Screencaster), real Postgres. The data contract under test:
 // clôture = campaign_reconciliation.reconciled_at; impressions générées = delivered_imp (NET-IMP1
@@ -282,15 +289,8 @@ const seedProof = async (
 };
 
 // pdfkit (compress:false) writes text as hex TJ runs — decode them to assert the rendered text.
-const pdfText = (pdf: Buffer): string => {
-  const raw = pdf.toString('latin1');
-  let out = '';
-  for (const m of raw.matchAll(/<([0-9A-Fa-f]+)>/g)) {
-    const hex = m[1] ?? '';
-    if (hex.length % 2 === 0) out += Buffer.from(hex, 'hex').toString('latin1');
-  }
-  return out;
-};
+// 2026-10-09 — documents render through the stubbed chromium seam; read the HTML back as text.
+const pdfText = docText;
 
 const BASE = '/api/advertiser/performances';
 
@@ -360,7 +360,7 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
       expect(body.campaigns[0]?.closed_on).toBe('2026-03-10');
     });
 
-    it('carries the settled figures: impressions = delivered_imp, budget = spend + refund (HT, TTC)', async () => {
+    it('carries the settled figures: impressions = delivered_imp, budget = spend, what was paid after the refund (HT, TTC)', async () => {
       const me = await seedUser();
       const v1 = await seedVenue();
       const v2 = await seedVenue();
@@ -396,8 +396,8 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
         hours: 3,
         plays: 5,
         venues: 2,
-        budget_ht: 200,
-        budget_ttc: 238,
+        budget_ht: 150,
+        budget_ttc: 178.5,
       });
       // RG-PERF-31 — no CPM / SPS / attention / split key on the wire.
       const keys = Object.keys(row ?? {}).join(',');
@@ -865,7 +865,7 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
         nature: 'event',
         impressions: 2000, // 1 of 6 blocs delivered
         venues: 1,
-        budget_ht: 300, // spend (50) + refund (250) = the engaged montant
+        budget_ht: 50, // spend (50) — paid after the refund (250)
       });
     });
   });

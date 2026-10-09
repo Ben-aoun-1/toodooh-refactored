@@ -99,7 +99,8 @@ export default function OwnerCampaignDetailsDrawer({
                 <div className="min-w-0">
                   <p className="font-medium text-[#171717] truncate">{a.screenhost_name}</p>
                   <p className="text-xs text-[#7A7A7A]">
-                    {a.ii_potentiel.toLocaleString('fr-FR')} impressions · {a.r_i} diff./h ·{' '}
+                    {a.ii_potentiel.toLocaleString('fr-FR')} impressions ·{' '}
+                    {a.r_i === null ? `${a.minutes ?? 0} min de diffusion` : `${a.r_i} diff./h`} ·{' '}
                     {revenueLabel(a.revenu_previsionnel)}
                   </p>
                 </div>

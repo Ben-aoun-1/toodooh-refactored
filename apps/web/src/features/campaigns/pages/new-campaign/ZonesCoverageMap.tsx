@@ -45,28 +45,30 @@ const MARKER_STYLE: L.CircleMarkerOptions = {
   fillOpacity: 0.95,
 };
 
-// The click popup, built via DOM nodes (never innerHTML — venue names are user data) with
-// self-contained inline styles so it needs nothing from the app stylesheet.
+// The click popup, built via DOM nodes (never innerHTML — sector names are user data) with
+// self-contained inline styles so it needs nothing from the app stylesheet. Operator 2026-10-09:
+// no venue NAME on a screencaster's map — the popup and tooltip show the category only.
 // CF-SK1 rider — the coverage projection now carries sector_name, so the chip shows the REAL
 // category; the CF-U4 « Établissement couvert » wording stays as the fallback for a NULL sector.
+/** The category a pin speaks — never the venue's name. */
+export const venueCategory = (venue: CoverageVenue): string =>
+  venue.sector_name ?? 'Établissement couvert';
+
 const buildPopupContent = (venue: CoverageVenue): HTMLElement => {
   const root = document.createElement('div');
   root.style.cssText = 'padding:2px 4px;min-width:140px;';
-  const name = document.createElement('p');
-  name.textContent = venue.name;
-  name.style.cssText = 'margin:0;font-weight:700;font-size:14px;color:#1a1a1a;';
   const chip = document.createElement('span');
-  chip.textContent = venue.sector_name ?? 'Établissement couvert';
+  chip.textContent = venueCategory(venue);
   chip.style.cssText =
     'display:inline-block;margin-top:6px;padding:2px 10px;border-radius:9999px;background:#E3F7EC;border:1px solid #76E6AB;color:#1A3C34;font-size:11px;font-weight:600;';
-  root.append(name, chip);
+  root.append(chip);
   return root;
 };
 
 /**
  * MAP-2 — établissements sharing one coordinate (same building, same typed address) painted as
  * ONE dot, so the map showed fewer dots than the caption counted. Spread coincident venues on a
- * small ring (~15 m) so every covered venue has its own visible dot; tooltips keep the names.
+ * small ring (~15 m) so every covered venue has its own visible dot; tooltips keep the categories.
  */
 export const spreadCoincident = (venues: CoverageVenue[]): CoverageVenue[] => {
   const seen = new Map<string, number>();
@@ -97,7 +99,7 @@ const fitToVenues = (map: L.Map, venues: CoverageVenue[]): void => {
  * CF-U1 (Mejri item 3) — the read-only coverage map: the venues of GET /api/campaigns/:id/coverage
  * plotted over Grand Tunis on plain leaflet (imperative map in an effect, lazy-loaded by StepZones
  * so the leaflet chunk stays off the critical path). Read-only: zone SELECTION stays in the chips.
- * CF-U4 — Positron tiles, brand markers with name tooltips + app-styled popups, the venue-count
+ * CF-U4 — Positron tiles, brand markers with category tooltips + app-styled popups, the venue-count
  * badge. MAP-3 — always a full canvas (no collapsed state). The z-isolation discipline is
  * UNCHANGED — every layer class comes from map-layering.ts.
  * MAP-6 — the leaflet container is absolutely inset in the stack, so its height never hangs on an
@@ -156,7 +158,7 @@ export default function ZonesCoverageMap({
     markers.clearLayers();
     for (const venue of spreadCoincident(venues)) {
       L.circleMarker([venue.latitude, venue.longitude], MARKER_STYLE)
-        .bindTooltip(venue.name)
+        .bindTooltip(venueCategory(venue))
         .bindPopup(buildPopupContent(venue), { closeButton: false })
         .addTo(markers);
     }

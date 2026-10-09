@@ -57,6 +57,7 @@ import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import BoostPositioningModal from '@/features/events/components/BoostPositioningModal';
 import EventPlacementSummary from '@/features/events/components/EventPlacementSummary';
+import { POSITIONING_RESUME_STATE } from '@/features/events/lib/positioning-resume';
 import { logger } from '@/lib/logger';
 import { tndOrDash } from '@/lib/money';
 
@@ -209,7 +210,7 @@ export default function MyCampaigns() {
 
     // EV3 — a positioning (event-BOUND row) resumes in ITS parcours, never the classic wizard.
     if (campaign.event_id) {
-      navigate(`/evenements/positionnement/${campaign.id}`, { state: { resumed: true } });
+      navigate(`/evenements/positionnement/${campaign.id}`, { state: POSITIONING_RESUME_STATE });
       return;
     }
 

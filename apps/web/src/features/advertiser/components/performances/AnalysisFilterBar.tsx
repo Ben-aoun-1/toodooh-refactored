@@ -75,7 +75,7 @@ export function AnalysisFilterBar({
     }`;
 
   return (
-    <div className="sticky top-0 z-20 -mx-4 mb-10 border-y border-perf-line bg-white px-4 py-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <div className="sticky -top-6 z-20 -mx-4 mb-10 border-y border-perf-line bg-white px-4 py-4 sm:-mx-6 sm:px-6 lg:-top-8 lg:-mx-8 lg:px-8">
       {/* US-6.5 — the context band */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px]">
         <span className="text-perf-grey">Analyse générée pour</span>

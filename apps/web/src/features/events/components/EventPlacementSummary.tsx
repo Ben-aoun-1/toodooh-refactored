@@ -1,18 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
-import {
-  eventLinePrevues,
-  eventPlacementPrevues,
-} from '@/features/campaigns/lib/campaign-impressions';
+import { eventPlacementPrevues } from '@/features/campaigns/lib/campaign-impressions';
 import { apiClient } from '@/lib/api-client';
+import { tndLabel } from '@/lib/money';
+
+import { placementTotals } from '../lib/placement-totals';
 
 // EV4 — the positioning's placement summary (GET /api/campaigns/:id/event-allocations):
-// N établissements, impressions prévues, one line per venue. Empty until the validation
-// dispatches; the SAME read feeds the Consulter drawer.
+// totals (no venue names — operator 2026-10-09). Empty until the validation dispatches.
 export interface EventPlacementLine {
   id: string;
-  screenhost_name: string;
   blocs_count: number;
   impressions_total: number;
   /** IMP-FACT1 — the venue's chargeable (billable) share; absent on an older api. */
@@ -51,44 +49,40 @@ export function useEventPlacement(campaignId: string | null) {
   });
 }
 
-const STATUT_LABELS: Record<string, string> = {
-  EN_ATTENTE: 'En attente',
-  ACCEPTE: 'Accepté',
-  REFUSE: 'Refusé',
-};
-const STATUT_CLASSES: Record<string, string> = {
-  EN_ATTENTE: 'bg-amber-50 text-amber-700',
-  ACCEPTE: 'bg-green-50 text-green-700',
-  REFUSE: 'bg-gray-100 text-gray-500',
-};
-
 /**
- * EV4/EV5 — the Consulter drawer's placement block for a POSITIONING: totals + per-venue lines,
- * and once the window closed, the SETTLEMENT summary (livré / manqué per venue + the refund).
- * Renders nothing while undispatched (a draft/carted positioning has no placement yet — silence
- * beats a fake zero).
+ * EV4/EV5 — the Consulter drawer's placement block for a POSITIONING. Operator 2026-10-09 (Q4A):
+ * TOTALS only — never a venue's name nor a per-venue list — and once the window closed, the
+ * SETTLEMENT summary (diffusé + the refund). Renders nothing while undispatched (a draft/carted
+ * positioning has no placement yet — silence beats a fake zero).
  */
 export default function EventPlacementSummary({ campaignId }: { campaignId: string }) {
   const { data } = useEventPlacement(campaignId);
   if (!data || data.count === 0) return null;
   const settlement = data.settlement;
+  const totals = placementTotals(data.allocations);
 
   return (
     <div className="space-y-2">
       <p className="text-sm font-semibold text-[#171717]">
-        {data.count} établissement{data.count > 1 ? 's' : ''} ·{' '}
-        {eventPlacementPrevues(data).toLocaleString('fr-FR')} impressions prévues
+        {totals.venues} établissement{totals.venues > 1 ? 's' : ''} · {totals.minutes} minute
+        {totals.minutes > 1 ? 's' : ''} · {eventPlacementPrevues(data).toLocaleString('fr-FR')}{' '}
+        impressions prévues
+      </p>
+      <p className="text-xs text-[#5C5C5C]">
+        Montant placé : {tndLabel(totals.montantTnd)}
+        {totals.pending > 0 &&
+          ` · ${totals.accepted} accepté${totals.accepted > 1 ? 's' : ''}, ${totals.pending} en attente de réponse`}
       </p>
       {settlement && (
         <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs">
           <p className="font-semibold text-[#171717]">Diffusion terminée</p>
           <p className="mt-0.5 text-[#5C5C5C]">
-            Diffusé : {settlement.delivered_tnd.toLocaleString('fr-FR')} TND
+            Diffusé : {tndLabel(settlement.delivered_tnd)}
             {settlement.refund_tnd > 0 ? (
               <>
                 {' · '}
                 <span className="font-medium text-amber-700">
-                  Remboursé : {settlement.refund_tnd.toLocaleString('fr-FR')} TND
+                  Remboursé : {tndLabel(settlement.refund_tnd)}
                 </span>
               </>
             ) : (
@@ -97,33 +91,6 @@ export default function EventPlacementSummary({ campaignId }: { campaignId: stri
           </p>
         </div>
       )}
-      <ul className="space-y-1.5">
-        {data.allocations.map((line) => (
-          <li
-            key={line.id}
-            className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-white px-3 py-2 text-xs"
-          >
-            <span className="min-w-0 truncate font-medium text-[#171717]">
-              {line.screenhost_name}
-            </span>
-            <span className="shrink-0 text-[#7A7A7A]">
-              {/* EV5 — once settled, the line speaks livré/manqué instead of the plan alone. */}
-              {line.blocs_delivered === null
-                ? `${line.blocs_count} bloc${line.blocs_count > 1 ? 's' : ''} · ${eventLinePrevues(line).toLocaleString('fr-FR')} imp.`
-                : `${line.blocs_delivered}/${line.blocs_count} bloc${line.blocs_count > 1 ? 's' : ''} diffusé${line.blocs_delivered > 1 ? 's' : ''}${
-                    line.refund_tnd && line.refund_tnd > 0
-                      ? ` · ${line.refund_tnd.toLocaleString('fr-FR')} TND remboursés`
-                      : ''
-                  }${line.attestation_negated ? ' · non respecté' : ''}`}
-            </span>
-            <span
-              className={`shrink-0 rounded px-2 py-0.5 font-medium ${STATUT_CLASSES[line.statut] ?? 'bg-gray-100 text-gray-600'}`}
-            >
-              {STATUT_LABELS[line.statut] ?? line.statut}
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

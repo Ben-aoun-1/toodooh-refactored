@@ -28,6 +28,7 @@ import { logger } from '@/lib/logger';
 import EventMatchHeader from '../components/EventMatchHeader';
 import EventRecapStep from '../components/EventRecapStep';
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
+import { resumeStepFor } from '../lib/positioning-resume';
 
 const log = logger.child({ module: 'EventPositioning' });
 
@@ -90,7 +91,9 @@ export default function EventPositioning() {
     setZoneIds((campaign.data.zones ?? []).map((z) => z.zone_id));
     setCreativeId(campaign.data.creative_id);
     setEventMinutes(campaign.data.event_minutes ?? null);
-  }, [campaign.data]);
+    // « Modifier » opens the récap (its minutes slider) — the Vidéo step while no spot is chosen.
+    setCurrentStep(resumeStepFor(location.state, campaign.data.creative_id));
+  }, [campaign.data, location.state]);
 
   const zonesQuery = useZones();
   const zoneNames = (zonesQuery.data ?? [])

@@ -6,13 +6,18 @@ import { suggestEventsForCampaigns } from './event-positioning';
 
 // SUGG-1 — the « Votre campagne a été ajoutée au panier » page (Figma « Lancer une campagne »,
 // last frame; operator rulings 2026-09-28: Q3 A = events INSIDE the campaign's own period, no
-// +7-day tail; P4 A = no event in the period → straight to the panier). ONE home for the page's
-// rule and literals — the components only render these.
+// +7-day tail). Operator 2026-10-09 (Q5A) supersedes P4 A: with no event in the period the page
+// still shows (PERIOD_SUGGESTION_EMPTY) instead of jumping to the panier. ONE home for the
+// page's rule and literals — the components only render these.
 
 export const PERIOD_SUGGESTION_ADDED = 'Votre campagne a été ajoutée au panier';
 
 export const PERIOD_SUGGESTION_HEADING =
   'Augmentez votre impact en diffusant votre spot lors d’événements prévus dans la même période';
+
+/** Operator ruling 2026-10-09 (Q5A) — no event in the period: the page still shows, and says so. */
+export const PERIOD_SUGGESTION_EMPTY =
+  'Aucun événement n’est prévu pendant votre campagne pour le moment. Découvrez tous les événements à venir.';
 
 export const PERIOD_SUGGESTION_NOTE =
   '(En incluant automatiquement toutes les catégories de commerces qui diffusent pendant le match)';

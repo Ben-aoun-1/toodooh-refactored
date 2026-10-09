@@ -8,6 +8,13 @@ import { TVA_RATE, renderFacturePdf, ttcFromHt, tvaFromHt } from '../src/lib/fac
 import { rechargesRoutes } from '../src/routes/recharges.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { docText } from './helpers/doc-render-stub.js';
+
+// Every document renders through the report's chromium seam — stubbed (helpers/doc-render-stub).
+vi.mock('../src/lib/report/render.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/report/render.js')>()),
+  renderPdf: (await import('./helpers/doc-render-stub.js')).renderPdfStub,
+}));
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -28,15 +35,8 @@ const mockNoSession = (): void => {
 // e.g. [<464354> 140 <2d...>] — so the literal characters are NOT greppable as ASCII. Reconstruct the
 // rendered text by decoding every <hex> token; concatenation rejoins kerning-split runs. Robust way
 // to assert the facture actually CONTAINS the amount + reference without a heavyweight PDF extractor.
-const pdfText = (pdf: Buffer): string => {
-  const raw = pdf.toString('latin1');
-  let out = '';
-  for (const m of raw.matchAll(/<([0-9A-Fa-f]+)>/g)) {
-    const hex = m[1] ?? '';
-    if (hex.length % 2 === 0) out += Buffer.from(hex, 'hex').toString('latin1');
-  }
-  return out;
-};
+// 2026-10-09 — documents render through the stubbed chromium seam; read the HTML back as text.
+const pdfText = docText;
 
 let seq = 0;
 const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {

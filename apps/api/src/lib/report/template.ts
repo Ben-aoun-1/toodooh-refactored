@@ -1,3 +1,5 @@
+import { logoHtml } from '../pdf-doc/logo.js';
+
 import { PROVENANCE_LABELS, type ProvenanceKind } from './affluence-provenance.js';
 import type { ReportData } from './assemble.js';
 import { coverageLabel, daysInRange } from './coverage.js';
@@ -97,10 +99,6 @@ const esc = (value: string): string =>
     /[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
   );
-
-/** The TOODOOH mark glyph (the app's own favicon paths), scaled by the CSS class. */
-const brandMark = (cls: string): string =>
-  `<svg class="${cls}" viewBox="0 0 448.65 367.85" fill="currentColor"><path d="M448.65 83.88v107.03c0 20.82-8.31 39.71-21.8 53.52l-100.98 100.98c-13.65 13.65-32.43 22.17-53.19 22.44H165.12v-83.21H315.4c11.74 0 22.5-4.24 30.81-11.3 2.8-2.37 5.32-5.06 7.51-8.01 2.93-3.97 5.27-8.4 6.88-13.17 1.6-4.77 2.47-9.88 2.47-15.19V83.88h85.58Z"/><path d="M283.53 0v83.2H133.25c-11.74 0-22.5 4.25-30.81 11.3-2.8 2.37-5.33 5.06-7.51 8.02-2.94 3.96-5.28 8.39-6.88 13.16-1.6 4.77-2.47 9.88-2.47 15.19v153.1H0v-107.03c0-20.82 8.31-39.71 21.8-53.52L122.78 22.44C136.43 8.79 155.21.26 175.97 0h107.56Z"/></svg>`;
 
 /** Section header (kicker bullet + title + lead) — the mockup's .sec-* idiom. */
 const secHead = (num: string, title: string, lead: string): string => `
@@ -300,7 +298,7 @@ export function renderReportHtml(
   <div class="runhead">${esc(data.venueName)} · ${period}</div>`;
   const footer = (page: number): string => `
   <div class="footer">
-    <div class="footer__brand"><span>Powered by</span>${brandMark('footer__mark')}<span class="footer__word">tood<b>oo</b>h</span></div>
+    <div class="footer__brand"><span>Powered by</span>${logoHtml('onDark', 'footer__logo')}</div>
     <div class="footer__page">page ${page} / 5</div>
   </div>`;
 
@@ -320,7 +318,7 @@ export function renderReportHtml(
       : `<span class="cat">${esc(data.category)}</span>`;
   const cover = `
 <div class="page cover">
-  <div class="cover__logo">${brandMark('cover__mark')}<span class="cover__word">tood<b>oo</b>h</span></div>
+  <div class="cover__logo">${logoHtml('onDark', 'cover__logoimg')}</div>
   <div class="cover__hero">
     <div class="cover__kicker">Rapport de performances</div>
     <div class="cover__title"><b>${esc(data.venueName)}</b></div>
@@ -724,6 +722,13 @@ body{
 /* ============ COVER ============ */
 .cover{ justify-content:flex-start; }
 .cover__logo{ display:flex; align-items:center; gap:9px; }
+/* Operator 2026-10-09 — the REAL logo (lib/pdf-doc/logo), light variant on the deep green. */
+.cover__logoimg{ height:9mm; width:auto; display:block; }
+.cover__logoimg--text{ font-size:13.5pt; font-weight:600; color:var(--ink); }
+.cover__logoimg--text b{ color:var(--mint); }
+.footer__logo{ height:3.6mm; width:auto; display:block; }
+.footer__logo--text{ font-size:8.5pt; font-weight:600; color:var(--ink); }
+.footer__logo--text b{ color:var(--mint); }
 .cover__mark{ height:18px; width:22px; color:var(--mint); }
 .cover__word{ font-size:13.5pt; font-weight:600; letter-spacing:-.01em; color:var(--ink); }
 .cover__word b{ color:var(--mint); font-weight:600; }

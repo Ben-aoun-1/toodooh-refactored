@@ -175,6 +175,26 @@ export default function AdvertiserPerformances() {
         </div>
       ) : (
         <>
+          {/* Operator 2026-10-09 — the filter heads the page and stays pinned at the top while the
+              page scrolls (it sat above the analysis, mid-page). */}
+          {!awaiting && (
+            <AnalysisFilterBar
+              scope={scope}
+              closed={closed}
+              campaignCount={
+                analysisQ.data?.mode === 'period' ? analysisQ.data.overview.campaign_count : 0
+              }
+              onSelectPeriod={(key) => setScope(periodScope(key, currentNature))}
+              onSelectNature={(nature) =>
+                setScope(periodScope(currentPeriod, nature, currentCustom))
+              }
+              onSelectCampaign={consult}
+              onApplyCustom={(from, to) =>
+                setScope(periodScope('custom', currentNature, { from, to }))
+              }
+            />
+          )}
+
           <LiveCampaignsSection campaigns={liveQ.data?.campaigns ?? []} />
 
           <LastReportCard
@@ -196,28 +216,13 @@ export default function AdvertiserPerformances() {
             footprint={footprintQ.data ?? { points: [], totals: { impressions: 0, hours: 0 } }}
           />
 
-          <div ref={analysisRef} className="scroll-mt-4">
+          <div ref={analysisRef} className="scroll-mt-48">
             {awaiting ? (
               <section className="mb-[64px]">
                 <WaitingCard title={WAITING_TITLE} text={WAITING_ANALYSIS} />
               </section>
             ) : (
               <>
-                <AnalysisFilterBar
-                  scope={scope}
-                  closed={closed}
-                  campaignCount={
-                    analysisQ.data?.mode === 'period' ? analysisQ.data.overview.campaign_count : 0
-                  }
-                  onSelectPeriod={(key) => setScope(periodScope(key, currentNature))}
-                  onSelectNature={(nature) =>
-                    setScope(periodScope(currentPeriod, nature, currentCustom))
-                  }
-                  onSelectCampaign={consult}
-                  onApplyCustom={(from, to) =>
-                    setScope(periodScope('custom', currentNature, { from, to }))
-                  }
-                />
                 {analysisQuery === null ? (
                   <p className="mb-[64px] text-[13.5px] italic text-perf-mist">
                     Renseignez une date de début et une date de fin, puis actualisez la recherche.

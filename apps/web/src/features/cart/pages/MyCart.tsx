@@ -16,9 +16,10 @@ import { confirmSuccessMessage } from '@/features/cart/lib/confirm-outcome';
 import EventSuggestionsBlock from '@/features/events/components/EventSuggestionsBlock';
 import { formatEventHours } from '@/features/events/lib/event-display';
 import { splitCartSections } from '@/features/events/lib/event-positioning';
+import { POSITIONING_RESUME_STATE } from '@/features/events/lib/positioning-resume';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { tndOrDash, formatTnd, ttcFromHt } from '@/lib/money';
+import { tndLabel, tndOrDash, formatTnd } from '@/lib/money';
 
 const log = logger.child({ module: 'MyCart' });
 
@@ -47,7 +48,6 @@ export default function MyCart() {
   // splits them). The totals stay ONE basket — one solde, one « Confirmer et lancer ».
   const { campagnes, evenements } = splitCartSections(items);
   const totalHt = cart.data?.total_ht ?? 0;
-  const ttc = ttcFromHt(totalHt);
 
   // Compose: the /mine row carries the chips/zones the card idiom already renders.
   const rowFor = (id: string) => campaigns.find((c) => c.id === id);
@@ -268,7 +268,7 @@ export default function MyCart() {
                       type="button"
                       onClick={() =>
                         navigate(`/evenements/positionnement/${item.id}`, {
-                          state: { resumed: true },
+                          state: POSITIONING_RESUME_STATE,
                         })
                       }
                       className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
@@ -304,14 +304,11 @@ export default function MyCart() {
           <div className="h-fit rounded-2xl border border-gray-200 bg-white p-6">
             <h3 className="mb-4 text-lg font-bold text-gray-900">Prêt à diffuser</h3>
             <dl className="space-y-2 text-sm">
-              {/* HT-1 (operator, 2026-10-02): the cart shows its total in HT and TTC. */}
+              {/* Operator 2026-10-09 (Q2A) — the screencaster sees HT only, without letters; TTC
+                  appears only where they recharge their wallet (and on their legal invoices). */}
               <div className="flex justify-between">
-                <dt className="text-gray-500">Total HT</dt>
-                <dd className="font-medium text-gray-900 tabular-nums">{formatTnd(totalHt)} TND</dd>
-              </div>
-              <div className="flex justify-between border-t border-gray-100 pt-2">
-                <dt className="font-semibold text-gray-900">Total TTC</dt>
-                <dd className="font-bold text-brand-deep tabular-nums">{formatTnd(ttc)} TND</dd>
+                <dt className="font-semibold text-gray-900">Total</dt>
+                <dd className="font-bold text-brand-deep tabular-nums">{tndLabel(totalHt)}</dd>
               </div>
             </dl>
 
