@@ -35,6 +35,9 @@ COPY --from=builder /repo/apps/api/package.json ./
 COPY --from=builder /repo/apps/api/drizzle ./drizzle
 COPY --from=builder /repo/apps/api/scripts ./scripts
 COPY --from=builder /repo/apps/api/src ./src
+# The real logo (logo.png / logo-light.png) every document embeds — resolved from dist/ AND src/
+# as ../../../assets (lib/pdf-doc/logo.ts). Missing before 2026-10-09: prod PDFs fell back to text.
+COPY --from=builder /repo/apps/api/assets ./assets
 COPY apps/api/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 EXPOSE 4000
