@@ -8,6 +8,13 @@ import { renderFacturePdf, resolveFactureBankDetails } from '../src/lib/facture.
 import { rechargesRoutes } from '../src/routes/recharges.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { docText } from './helpers/doc-render-stub.js';
+
+// Every document renders through the report's chromium seam — stubbed (helpers/doc-render-stub).
+vi.mock('../src/lib/report/render.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/report/render.js')>()),
+  renderPdf: (await import('./helpers/doc-render-stub.js')).renderPdfStub,
+}));
 
 // FCT2 — two pins on the per-recharge document:
 //  (1) the RELABEL (US-FCT-12): it is a « RÉCAPITULATIF DE COMMANDE », never a « FACTURE » —
@@ -17,15 +24,8 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
-const pdfText = (pdf: Buffer): string => {
-  const raw = pdf.toString('latin1');
-  let out = '';
-  for (const m of raw.matchAll(/<([0-9A-Fa-f]+)>/g)) {
-    const hex = m[1] ?? '';
-    if (hex.length % 2 === 0) out += Buffer.from(hex, 'hex').toString('latin1');
-  }
-  return out;
-};
+// 2026-10-09 — documents render through the stubbed chromium seam; read the HTML back as text.
+const pdfText = docText;
 
 describe('resolveFactureBankDetails (dispatch_config is the ONE home)', () => {
   it('a provisioned config is served field by field', () => {

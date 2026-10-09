@@ -34,6 +34,13 @@ import { walletDocumentsRoutes } from '../src/routes/wallet-documents.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { docText } from './helpers/doc-render-stub.js';
+
+// Every document renders through the report's chromium seam — stubbed (helpers/doc-render-stub).
+vi.mock('../src/lib/report/render.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/report/render.js')>()),
+  renderPdf: (await import('./helpers/doc-render-stub.js')).renderPdfStub,
+}));
 
 // FCT2 (US-FCT-11..12 + relevés) — the month-end billing sweep on PROOF-VERIFIED consumption
 // only: an unproven créneau never bills, engaged-but-undelivered is not consumption, a campaign
@@ -202,15 +209,8 @@ const seedReversementLine = async (
   });
 };
 
-const pdfText = (pdf: Buffer): string => {
-  const raw = pdf.toString('latin1');
-  let out = '';
-  for (const m of raw.matchAll(/<([0-9A-Fa-f]+)>/g)) {
-    const hex = m[1] ?? '';
-    if (hex.length % 2 === 0) out += Buffer.from(hex, 'hex').toString('latin1');
-  }
-  return out;
-};
+// 2026-10-09 — documents render through the stubbed chromium seam; read the HTML back as text.
+const pdfText = docText;
 
 const JULY_CRENEAUX: DispatchCreneau[] = [
   { date: '2026-07-10', hour: 9, reps: 100, impressions: 6000 },

@@ -32,7 +32,14 @@ import { sectorDisplayName } from '../src/lib/report/sector-display-name.js';
 import { advertiserPerformancesRoutes } from '../src/routes/advertiser-performances.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { docText } from './helpers/doc-render-stub.js';
 import { resetZonesToSeed } from './helpers/zones.js';
+
+// Every document renders through the report's chromium seam — stubbed (helpers/doc-render-stub).
+vi.mock('../src/lib/report/render.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/report/render.js')>()),
+  renderPdf: (await import('./helpers/doc-render-stub.js')).renderPdfStub,
+}));
 
 // SC-P — « Mes performances » (Screencaster), real Postgres. The data contract under test:
 // clôture = campaign_reconciliation.reconciled_at; impressions générées = delivered_imp (NET-IMP1
@@ -282,15 +289,8 @@ const seedProof = async (
 };
 
 // pdfkit (compress:false) writes text as hex TJ runs — decode them to assert the rendered text.
-const pdfText = (pdf: Buffer): string => {
-  const raw = pdf.toString('latin1');
-  let out = '';
-  for (const m of raw.matchAll(/<([0-9A-Fa-f]+)>/g)) {
-    const hex = m[1] ?? '';
-    if (hex.length % 2 === 0) out += Buffer.from(hex, 'hex').toString('latin1');
-  }
-  return out;
-};
+// 2026-10-09 — documents render through the stubbed chromium seam; read the HTML back as text.
+const pdfText = docText;
 
 const BASE = '/api/advertiser/performances';
 
