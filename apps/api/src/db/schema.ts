@@ -796,6 +796,10 @@ export const deviceSessions = pgTable(
     accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }).notNull(),
     refreshExpiresAt: timestamp('refresh_expires_at', { withTimezone: true }).notNull(),
     deviceType: text('device_type'),
+    // MOBILE-1 — the screenhost phone app's Expo push token (« ExponentPushToken[…] »), bound to
+    // this session: cleared on logout/revocation, and moved (never duplicated) when the same
+    // phone signs in again. Null for TV sessions and for phones that declined notifications.
+    pushToken: text('push_token'),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
@@ -805,6 +809,7 @@ export const deviceSessions = pgTable(
     uniqueIndex('device_sessions_access_token_hash_uq').on(table.accessTokenHash),
     uniqueIndex('device_sessions_refresh_token_hash_uq').on(table.refreshTokenHash),
     index('device_sessions_user_id_idx').on(table.userId),
+    uniqueIndex('device_sessions_push_token_uq').on(table.pushToken),
   ],
 );
 
@@ -2055,6 +2060,9 @@ export const notifications = pgTable(
     body: text('body').notNull(),
     campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
     readAt: timestamp('read_at', { withTimezone: true }),
+    // MOBILE-1 — stamped when the push outbox sent (or deliberately skipped) this row to the
+    // owner's phone(s); null = not yet handled. Rows older than the outbox window are never sent.
+    pushedAt: timestamp('pushed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('notifications_user_id_idx').on(table.userId)],
