@@ -1,6 +1,7 @@
 # CI — automated verification of the four gates on every push to main and every PR.
 # This is the GATE OF RECORD: deploy.yml no longer re-runs any of it, it checks that this workflow
 # passed on the commit being deployed (DEPLOY-GATE1, 2026-09-11).
+# On a push to main whose tree a passing PR run already verified, `verify` is skipped (CI-DEDUPE1).
 #
 # Baseline-gated gates (typecheck, lint): the cleanup phase handed off to CI with
 # accepted, deferred debt blocked on the Phase-1 Supabase typed client (issue #15).
@@ -24,7 +25,51 @@ on:
   pull_request:
 
 jobs:
+  # CI-DEDUPE1 (2026-10-10): a squash-merge used to re-run the whole ~6 min suite on main for code
+  # its PR had just verified — and deploy.yml waits on that main run. When the merged commit's tree
+  # is IDENTICAL to the head of a PR whose ci.yml run passed, that run already tested exactly this
+  # code (a PR run checks out the merge with main; an up-to-date head makes that merge == head), so
+  # `verify` is skipped and this run concludes green in seconds. Anything else — a direct push, a
+  # branch that was behind main, a PR run that failed or is still running, any API error — falls
+  # through to the full `verify`. The nightly schedule always runs it in full.
+  already-verified:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          skip=false
+          tree=$(gh api "repos/$REPO/git/commits/$SHA" --jq .tree.sha || true)
+          heads=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[] | select(.merged_at != null) | .head.sha' || true)
+          for head in $heads; do
+            head_tree=$(gh api "repos/$REPO/git/commits/$head" --jq .tree.sha || true)
+            if [ -z "$tree" ] || [ "$head_tree" != "$tree" ]; then
+              echo "PR head $head: tree $head_tree differs from $SHA's $tree — full run"; continue
+            fi
+            passed=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$head&event=pull_request&status=success&per_page=1" --jq .total_count || echo 0)
+            if [ "${passed:-0}" -gt 0 ]; then
+              echo "::notice::$SHA has the same tree as PR head $head, whose CI passed — verify skipped"
+              skip=true; break
+            fi
+            echo "PR head $head: same tree but no passing PR run — full run"
+          done
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   verify:
+    needs: already-verified
+    # !cancelled(): already-verified is SKIPPED on pull_request/schedule (and may fail) — verify runs
+    # in every case except a confirmed identical, already-green tree.
+    if: ${{ !cancelled() && needs.already-verified.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     # Phase 1b Commit 3: integration tests (apps/api/tests/signup.test.ts) need a
     # real Postgres. AUTH_SECRET is a throwaway CI value; BETTER_AUTH_URL uses its
