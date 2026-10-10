@@ -5,38 +5,51 @@ import { db } from '../db/client.js';
 import { deviceSessions, users } from '../db/schema.js';
 import { hashDeviceToken } from '../lib/device-tokens.js';
 
-// Device-session bearer guard (MAP M1) — the TV-app counterpart of requireAuth. Validates
+// Device-session bearer guards (MAP M1) — the device counterparts of requireAuth. Validate
 // `Authorization: Bearer <token>` against device_sessions (sha-256 lookup → expiry +
-// revocation), loads the user row, and attaches the SAME request.user shape requireAuth
-// does, so role gates and route handlers stay guard-agnostic. Touches last_used_at
-// (fire-and-forget ordering is fine — it is telemetry, not authorization state).
-export const requireDeviceAuth = async (
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> => {
-  const send401 = async (): Promise<void> => {
-    await reply.status(401).send({
-      error: 'UNAUTHENTICATED',
-      message: 'Authentication required.',
-      statusCode: 401,
-      requestId: request.id,
-    });
-  };
+// revocation), load the user row, and attach the SAME request.user shape requireAuth
+// does. Touch last_used_at (telemetry, not authorization state).
+// The screenhost phone app (toodooh-mobile) signs in on the same /api/device/auth/* surface with
+// device_type 'mobile'. The two token kinds are kept apart: a TV token (stored on a box in a
+// venue) never reaches the owner app surface, and a phone token never acts as a TV.
+export const MOBILE_DEVICE_TYPE = 'mobile';
 
-  const header = request.headers.authorization;
-  if (!header?.startsWith('Bearer ') || header.length <= 'Bearer '.length) {
-    return send401();
+export interface DeviceAuthContext {
+  sessionId: string;
+  deviceType: string | null;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    deviceSession?: DeviceAuthContext;
   }
-  const token = header.slice('Bearer '.length).trim();
-  if (!token) return send401();
+}
 
+/** The bearer token of `Authorization: Bearer <token>`, or null when the header is absent/empty. */
+export const bearerToken = (request: FastifyRequest): string | null => {
+  const header = request.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return null;
+  const token = header.slice('Bearer '.length).trim();
+  return token === '' ? null : token;
+};
+
+/**
+ * Resolves a bearer access token to its live device session + user (sha-256 lookup → expiry +
+ * revocation), touching last_used_at. null for an unknown/expired/revoked token or a gone user.
+ * Attaches request.user (the SAME shape requireAuth does, so role gates and handlers stay
+ * guard-agnostic) and request.deviceSession.
+ */
+export const authenticateDeviceToken = async (
+  request: FastifyRequest,
+  token: string,
+): Promise<DeviceAuthContext | null> => {
   const [session] = await db
     .select()
     .from(deviceSessions)
     .where(eq(deviceSessions.accessTokenHash, hashDeviceToken(token)))
     .limit(1);
   if (!session || session.revokedAt !== null || session.accessExpiresAt.getTime() <= Date.now()) {
-    return send401();
+    return null;
   }
 
   const [user] = await db
@@ -44,12 +57,53 @@ export const requireDeviceAuth = async (
     .from(users)
     .where(eq(users.id, session.userId))
     .limit(1);
-  if (!user) return send401();
+  if (!user) return null;
 
   await db
     .update(deviceSessions)
     .set({ lastUsedAt: new Date() })
     .where(eq(deviceSessions.id, session.id));
 
+  const context = { sessionId: session.id, deviceType: session.deviceType };
   request.user = { id: user.id, role: user.role, status: user.status };
+  request.deviceSession = context;
+  return context;
+};
+
+const send401 = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  await reply.status(401).send({
+    error: 'UNAUTHENTICATED',
+    message: 'Authentication required.',
+    statusCode: 401,
+    requestId: request.id,
+  });
+};
+
+// The TV guard: any non-mobile device session.
+export const requireDeviceAuth = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> => {
+  const token = bearerToken(request);
+  const context = token === null ? null : await authenticateDeviceToken(request, token);
+  if (!context || context.deviceType === MOBILE_DEVICE_TYPE) {
+    request.user = undefined;
+    request.deviceSession = undefined;
+    return send401(request, reply);
+  }
+};
+
+// The phone guard for the /api/device/* routes that act on the phone's own session (logout,
+// push token): a mobile device session only.
+export const requireMobileDeviceAuth = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> => {
+  const token = bearerToken(request);
+  const context = token === null ? null : await authenticateDeviceToken(request, token);
+  if (!context || context.deviceType !== MOBILE_DEVICE_TYPE) {
+    request.user = undefined;
+    request.deviceSession = undefined;
+    return send401(request, reply);
+  }
 };

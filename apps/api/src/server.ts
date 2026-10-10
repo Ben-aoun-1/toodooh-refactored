@@ -13,6 +13,7 @@ import { startBlocPushJob } from './lib/event-playout/bloc-pusher.js';
 import { startEventSettlementJob } from './lib/event-playout/settlement.js';
 import { isMediaProbeEnabled } from './lib/media-probe.js';
 import { startMonthlyBillingJob } from './lib/monthly-billing.js';
+import { startPushOutboxJob } from './lib/push/push-outbox.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
 import { startSpsRecomputeJob } from './lib/sps-score.js';
@@ -122,6 +123,9 @@ const start = async (): Promise<void> => {
     // every (venue, bloc) on the dual proof and refund the undelivered chargeable value. AFTER
     // the pusher so a window that closed during downtime settles in the same boot sequence.
     startEventSettlementJob(app.log);
+    // MOBILE-1 — the push outbox (boot + every 15 s): new notifications reach the screenhost's
+    // phone (Expo Push) without touching the sites that insert them.
+    startPushOutboxJob(app.log);
 
     // SIM-0 — the admin Simulateur. Enabled: drop orphan sandbox databases once at boot and
     // evict idle sandbox pools every 5 min (unref'd). Disabled: ONE boot line, nothing else.
