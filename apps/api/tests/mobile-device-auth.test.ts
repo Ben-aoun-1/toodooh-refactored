@@ -216,6 +216,66 @@ describe('MOBILE-1 — phone sessions on the owner surface (real Postgres)', () 
     });
   });
 
+  it('the phone changes its password: other phones signed out, the TV and this phone kept', async () => {
+    const userId = await createOwner('phone@example.com');
+    const phone = await login('phone@example.com', 'mobile');
+    const otherPhone = await login('phone@example.com', 'mobile');
+    const tv = await login('phone@example.com', 'android_streamer');
+    const NEW = 'An0ther-strong-pass';
+
+    const res = await post('/api/device/password/change', phone, {
+      current_password: PASSWORD,
+      new_password: NEW,
+    });
+    expect(res.statusCode).toBe(204);
+
+    expect((await get('/owner-probe', phone)).statusCode).toBe(200);
+    expect((await get('/owner-probe', otherPhone)).statusCode).toBe(401);
+    expect((await get('/tv-probe', tv)).statusCode).toBe(200);
+    // The old password no longer signs in; the new one does (same hash the web signin checks).
+    const old = await app.inject({
+      method: 'POST',
+      url: '/api/device/auth/login',
+      payload: { email: 'phone@example.com', password: PASSWORD, device_type: 'mobile' },
+    });
+    expect(old.statusCode).toBe(401);
+    const fresh = await app.inject({
+      method: 'POST',
+      url: '/api/device/auth/login',
+      payload: { email: 'phone@example.com', password: NEW, device_type: 'mobile' },
+    });
+    expect(fresh.statusCode).toBe(200);
+    expect(
+      (await db.select().from(deviceSessions).where(eq(deviceSessions.userId, userId))).length,
+    ).toBe(4);
+  });
+
+  it('password change: wrong current → 400 INVALID_CREDENTIALS, short new → 400, TV token → 401', async () => {
+    await createOwner('phone@example.com');
+    const phone = await login('phone@example.com', 'mobile');
+    const tv = await login('phone@example.com', 'android_streamer');
+
+    const wrong = await post('/api/device/password/change', phone, {
+      current_password: 'not-my-password',
+      new_password: 'An0ther-strong-pass',
+    });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.json()).toMatchObject({ error: 'INVALID_CREDENTIALS' });
+
+    const short = await post('/api/device/password/change', phone, {
+      current_password: PASSWORD,
+      new_password: 'Sh0rt',
+    });
+    expect(short.statusCode).toBe(400);
+    expect(short.json()).toMatchObject({ error: 'INVALID_INPUT' });
+
+    const fromTv = await post('/api/device/password/change', tv, {
+      current_password: PASSWORD,
+      new_password: 'An0ther-strong-pass',
+    });
+    expect(fromTv.statusCode).toBe(401);
+  });
+
   it('buildMessages never sends a row older than the outbox window', () => {
     const now = new Date('2026-10-10T12:00:00Z');
     const row = (ageMs: number) => ({

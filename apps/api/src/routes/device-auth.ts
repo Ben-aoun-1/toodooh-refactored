@@ -1,12 +1,12 @@
-import { verifyPassword } from 'better-auth/crypto';
+import { hashPassword, verifyPassword } from 'better-auth/crypto';
 import { and, eq, ne } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { accounts, deviceSessions, users } from '../db/schema.js';
+import { accounts, deviceSessions, sessions, users } from '../db/schema.js';
 import { hashDeviceToken, newTokenPair } from '../lib/device-tokens.js';
-import { requireMobileDeviceAuth } from '../middleware/require-device-auth.js';
+import { MOBILE_DEVICE_TYPE, requireMobileDeviceAuth } from '../middleware/require-device-auth.js';
 
 // Device token auth (MAP M1) — the Android TV app's install → sign in path. NAMESPACE:
 // /api/device/auth/* (NEVER /api/auth/* — better-auth owns that). Credentials are verified
@@ -24,6 +24,12 @@ const refreshBodySchema = z.object({ refresh_token: z.string().min(1) });
 const EXPO_PUSH_TOKEN_RE = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]{1,200}\]$/;
 const pushTokenBodySchema = z.object({
   expo_push_token: z.string().regex(EXPO_PUSH_TOKEN_RE).nullable(),
+});
+// Same floor as the web's /api/password/change (the 1-upper/1-lower/1-digit rules are client copy
+// there too — the server enforces the length only, so both surfaces accept the same passwords).
+const passwordChangeBodySchema = z.object({
+  current_password: z.string().min(1, 'Current password is required'),
+  new_password: z.string().min(10, 'Password must be at least 10 characters'),
 });
 
 // Only screen owners sign in from a TV. Wrong email and wrong password are identical 401s
@@ -204,6 +210,70 @@ export const deviceAuthRoutes: FastifyPluginAsync = async (app) => {
           .update(deviceSessions)
           .set({ pushToken: token })
           .where(eq(deviceSessions.id, sessionId));
+      });
+      return reply.status(204).send();
+    },
+  );
+
+  // MOBILE-1 — POST /api/device/password/change {current_password, new_password}: the phone's
+  // « Confidentialité et sécurité » form. The web route calls better-auth changePassword, which
+  // needs a better-auth session COOKIE, so a bearer phone cannot use it. Same contract here:
+  // verify the current password against the credential row (the hash signin checks), store the
+  // new better-auth scrypt hash, and sign every OTHER browser/phone session out (the web passes
+  // revokeOtherSessions: true). TV sessions are left alone — a password change must not stop a
+  // venue's screens playing; this phone stays signed in.
+  app.post(
+    '/api/device/password/change',
+    { preHandler: requireMobileDeviceAuth },
+    async (request, reply) => {
+      const parsed = passwordChangeBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: 'INVALID_INPUT',
+          message: 'Validation failed',
+          fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+        });
+      }
+      const userId = request.user?.id;
+      const sessionId = request.deviceSession?.sessionId;
+      if (!userId || !sessionId) {
+        return reply
+          .status(401)
+          .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+      }
+      const [credential] = await db
+        .select({ id: accounts.id, password: accounts.password })
+        .from(accounts)
+        .where(and(eq(accounts.userId, userId), eq(accounts.providerId, 'credential')))
+        .limit(1);
+      const valid = credential?.password
+        ? await verifyPassword({
+            hash: credential.password,
+            password: parsed.data.current_password,
+          })
+        : false;
+      if (!credential || !valid) {
+        return reply
+          .status(400)
+          .send({ error: 'INVALID_CREDENTIALS', message: 'The current password is incorrect.' });
+      }
+      const hash = await hashPassword(parsed.data.new_password);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(accounts)
+          .set({ password: hash, updatedAt: new Date() })
+          .where(eq(accounts.id, credential.id));
+        await tx.delete(sessions).where(eq(sessions.userId, userId));
+        await tx
+          .update(deviceSessions)
+          .set({ revokedAt: new Date(), pushToken: null })
+          .where(
+            and(
+              eq(deviceSessions.userId, userId),
+              eq(deviceSessions.deviceType, MOBILE_DEVICE_TYPE),
+              ne(deviceSessions.id, sessionId),
+            ),
+          );
       });
       return reply.status(204).send();
     },
