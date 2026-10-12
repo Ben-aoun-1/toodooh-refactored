@@ -567,7 +567,7 @@ describe('heatmapLevels / heatmapKinds', () => {
 });
 
 // ── PERF-QA2 — Piste 01's teaser input ────────────────────────────────────────────────────────
-describe('assembleReportData — upcomingEvents (the Piste 01 window)', () => {
+describe('assembleReportData — upcomingEvents (the Piste 01 matches)', () => {
   const kickoff = (dayIso: string): Date => new Date(`${dayIso}T18:00:00+01:00`); // Tunis
 
   beforeEach(async () => {
@@ -587,26 +587,45 @@ describe('assembleReportData — upcomingEvents (the Piste 01 window)', () => {
     });
   };
 
-  it('counts OFFICIAL, non-cancelled events inside the 14-day window and dates the soonest', async () => {
+  it('names CONFIRMED official matches inside the 14-day window, nearest first, in Tunis time', async () => {
     const venue = await seedScreenhost(await seedUser());
-    await seedEvent('2026-07-09'); // J+1
     await seedEvent('2026-07-22'); // J+14 — the last day of the window
+    await seedEvent('2026-07-09'); // J+1
     const data = await assembleReportData(venue, RANGE, TODAY);
-    expect(data?.upcomingEvents).toEqual({ count: 2, soonestInDays: 1 });
+    expect(data?.upcomingEvents).toEqual({
+      matches: [
+        { name: 'Match 2026-07-09', day: '2026-07-09', time: '18:00' },
+        { name: 'Match 2026-07-22', day: '2026-07-22', time: '18:00' },
+      ],
+    });
   });
 
-  it('a kickoff TODAY counts (soonestInDays 0); J+15 falls outside', async () => {
+  it('a kickoff TODAY counts; J+15 falls outside', async () => {
     const venue = await seedScreenhost(await seedUser());
     await seedEvent(TODAY);
     await seedEvent('2026-07-23'); // J+15
     const data = await assembleReportData(venue, RANGE, TODAY);
-    expect(data?.upcomingEvents).toEqual({ count: 1, soonestInDays: 0 });
+    expect(data?.upcomingEvents?.matches.map((m) => m.day)).toEqual([TODAY]);
   });
 
-  it('suggested, cancelled and PAST events never reach the report', async () => {
+  it('keeps at most the three nearest matches', async () => {
+    const venue = await seedScreenhost(await seedUser());
+    for (const day of ['2026-07-12', '2026-07-09', '2026-07-15', '2026-07-10'])
+      await seedEvent(day);
+    const data = await assembleReportData(venue, RANGE, TODAY);
+    expect(data?.upcomingEvents?.matches.map((m) => m.day)).toEqual([
+      '2026-07-09',
+      '2026-07-10',
+      '2026-07-12',
+    ]);
+  });
+
+  it('suggested, cancelled, unscheduled (date or time TBC) and PAST events never reach the report', async () => {
     const venue = await seedScreenhost(await seedUser());
     await seedEvent('2026-07-10', { source: 'suggested' });
     await seedEvent('2026-07-11', { annule: true });
+    await seedEvent('2026-07-12', { dateTbc: true });
+    await seedEvent('2026-07-13', { timeTbc: true });
     await seedEvent('2026-07-07'); // yesterday
     expect((await assembleReportData(venue, RANGE, TODAY))?.upcomingEvents).toBeNull();
   });
