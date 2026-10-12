@@ -1,8 +1,10 @@
 import { formatIntFr } from '@/features/screenhost/lib/performance-derive';
+import { FEATURE_FLAGS } from '@/lib/feature-flags';
 import { formatTnd } from '@/lib/money';
 
 import {
   PERIOD_EMPTY,
+  audienceSectionCopy,
   budgetLabel,
   cspCharacteristics,
   isLowCoverage,
@@ -31,6 +33,7 @@ import {
  * never a person (RG-PERF-04/26).
  */
 export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
+  const audienceCopy = audienceSectionCopy(FEATURE_FLAGS.cspLevel);
   const single = analysis.mode === 'campaign';
   const n = analysis.overview.campaign_count;
   const empty = !single && n === 0;
@@ -67,12 +70,14 @@ export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
                       <dt className="text-perf-mist">Catégories</dt>
                       <dd className="text-right text-perf-ink">{listOrDash(c.categories)}</dd>
                     </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-perf-mist">Classes</dt>
-                      <dd className="text-right text-perf-ink">
-                        {listOrDash(cspCharacteristics(c.csp_shares))}
-                      </dd>
-                    </div>
+                    {FEATURE_FLAGS.cspLevel && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-perf-mist">Classes</dt>
+                        <dd className="text-right text-perf-ink">
+                          {listOrDash(cspCharacteristics(c.csp_shares))}
+                        </dd>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-3">
                       <dt className="text-perf-mist">Budget</dt>
                       <dd className="perf-mono text-right text-perf-ink">
@@ -152,36 +157,39 @@ export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
 
       {/* ── Section 03 ─────────────────────────────────────────────────────── */}
       <section className="mb-[64px]">
-        <SectionHeading
-          num="Section 03"
-          title="Profil de l'audience et niveau CSP"
-          lead="Le profil des lieux où votre marque a diffusé, par niveau de gamme, et la composition de l'audience mesurée dans ces lieux pendant la diffusion. Ces nombres décrivent l'audience présente, sans identifier aucune personne."
-        />
-        <div className="mt-6 grid grid-cols-1 gap-[18px] lg:grid-cols-2">
-          <Card>
-            <div className="text-[15px] font-semibold text-perf-ink">Par niveau CSP</div>
-            <div className="text-[12.5px] text-perf-grey">Part des impressions générées</div>
-            {analysis.overview.impressions === 0 ? (
-              <p className="mt-6 text-[13.5px] italic text-perf-mist">{PERIOD_EMPTY}</p>
-            ) : (
-              <>
-                <Donut
-                  segments={analysis.csp.map((s, i) => ({
-                    value: s.value,
-                    color: CSP_COLORS[i % CSP_COLORS.length] ?? CHART_GREEN,
-                  }))}
-                  caption="niveaux CSP"
-                />
-                <div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-1.5">
-                  {analysis.csp.map((s, i) => (
-                    <LegendDot key={s.key} color={CSP_COLORS[i % CSP_COLORS.length] ?? CHART_GREEN}>
-                      {s.label} · {s.pct.toLocaleString('fr-FR')} %
-                    </LegendDot>
-                  ))}
-                </div>
-              </>
-            )}
-          </Card>
+        <SectionHeading num="Section 03" title={audienceCopy.title} lead={audienceCopy.lead} />
+        <div
+          className={`mt-6 grid grid-cols-1 gap-[18px] ${FEATURE_FLAGS.cspLevel ? 'lg:grid-cols-2' : ''}`}
+        >
+          {FEATURE_FLAGS.cspLevel && (
+            <Card>
+              <div className="text-[15px] font-semibold text-perf-ink">Par niveau CSP</div>
+              <div className="text-[12.5px] text-perf-grey">Part des impressions générées</div>
+              {analysis.overview.impressions === 0 ? (
+                <p className="mt-6 text-[13.5px] italic text-perf-mist">{PERIOD_EMPTY}</p>
+              ) : (
+                <>
+                  <Donut
+                    segments={analysis.csp.map((s, i) => ({
+                      value: s.value,
+                      color: CSP_COLORS[i % CSP_COLORS.length] ?? CHART_GREEN,
+                    }))}
+                    caption="niveaux CSP"
+                  />
+                  <div className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-1.5">
+                    {analysis.csp.map((s, i) => (
+                      <LegendDot
+                        key={s.key}
+                        color={CSP_COLORS[i % CSP_COLORS.length] ?? CHART_GREEN}
+                      >
+                        {s.label} · {s.pct.toLocaleString('fr-FR')} %
+                      </LegendDot>
+                    ))}
+                  </div>
+                </>
+              )}
+            </Card>
+          )}
           <Card>
             <div className="text-[15px] font-semibold text-perf-ink">
               Audience mesurée dans les lieux

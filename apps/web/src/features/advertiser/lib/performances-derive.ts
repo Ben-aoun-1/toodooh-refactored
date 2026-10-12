@@ -150,3 +150,20 @@ export function readsState(reads: readonly { pending: boolean; error: boolean }[
 
 /** US-3.2 / 4.3 / 5.2 / 6.6 — the pre-first-clôture state: no closed campaign at all. */
 export const awaitingFirstClosure = (closedCount: number): boolean => closedCount === 0;
+
+/**
+ * Section 03's heading, with or without the CSP level (flag cspLevel, operator 2026-10-12 — off:
+ * the « niveau CSP » block, its donut and the campaigns' « Classes » row are hidden; the api's
+ * campaign-report PDF follows the same flag).
+ */
+export function audienceSectionCopy(cspLevel: boolean): { title: string; lead: string } {
+  return cspLevel
+    ? {
+        title: "Profil de l'audience et niveau CSP",
+        lead: "Le profil des lieux où votre marque a diffusé, par niveau de gamme, et la composition de l'audience mesurée dans ces lieux pendant la diffusion. Ces nombres décrivent l'audience présente, sans identifier aucune personne.",
+      }
+    : {
+        title: "Profil de l'audience",
+        lead: "La composition de l'audience mesurée dans les lieux où votre marque a diffusé, pendant la diffusion. Ces nombres décrivent l'audience présente, sans identifier aucune personne.",
+      };
+}

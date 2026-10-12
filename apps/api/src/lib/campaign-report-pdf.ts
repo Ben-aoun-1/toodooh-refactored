@@ -1,4 +1,5 @@
 import type { AnalysisSections, ClosedCampaign, ShareRow } from './advertiser-performances.js';
+import { FEATURE_FLAGS } from './feature-flags.js';
 import {
   docBars,
   docKpis,
@@ -123,15 +124,23 @@ export const buildCampaignReportHtml = (data: CampaignReportData): string => {
           "La part de vos impressions générées selon le type d'établissement diffuseur.",
           shareBars(s.categories, 'impr.'),
         ),
-      docSection(
-        'Section 03',
-        "Profil de l'audience et niveau CSP",
-        "Le niveau de gamme des lieux diffuseurs, et la composition de l'audience mesurée dans ces lieux pendant la diffusion — sans identifier aucune personne.",
-        docSubhead('Par niveau CSP') +
-          shareBars(s.csp, 'impr.') +
-          docSubhead('Audience mesurée dans les lieux') +
-          audience,
-      ) +
+      // Flag cspLevel (operator 2026-10-12) — off: no « niveau CSP » block, the page's twin too.
+      (FEATURE_FLAGS.cspLevel
+        ? docSection(
+            'Section 03',
+            "Profil de l'audience et niveau CSP",
+            "Le niveau de gamme des lieux diffuseurs, et la composition de l'audience mesurée dans ces lieux pendant la diffusion — sans identifier aucune personne.",
+            docSubhead('Par niveau CSP') +
+              shareBars(s.csp, 'impr.') +
+              docSubhead('Audience mesurée dans les lieux') +
+              audience,
+          )
+        : docSection(
+            'Section 03',
+            "Profil de l'audience",
+            "La composition de l'audience mesurée dans les lieux diffuseurs pendant la diffusion — sans identifier aucune personne.",
+            docSubhead('Audience mesurée dans les lieux') + audience,
+          )) +
         docSection(
           'Section 04',
           'Répartition par zone géographique',
