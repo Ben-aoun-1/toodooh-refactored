@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { db } from '../../db/client.js';
 import { deviceSessions, screenhosts, screens } from '../../db/schema.js';
+import { MOBILE_DEVICE_TYPE } from '../../middleware/require-device-auth.js';
 import { hashDeviceToken } from '../device-tokens.js';
 
 // Custom WS close codes (4000–4999 are app-defined): 4401 = bad/expired/missing token,
@@ -32,11 +33,18 @@ export const authenticateScreenWs = async (
       userId: deviceSessions.userId,
       revokedAt: deviceSessions.revokedAt,
       accessExpiresAt: deviceSessions.accessExpiresAt,
+      deviceType: deviceSessions.deviceType,
     })
     .from(deviceSessions)
     .where(eq(deviceSessions.accessTokenHash, hashDeviceToken(token)))
     .limit(1);
-  if (!session || session.revokedAt !== null || session.accessExpiresAt.getTime() <= Date.now()) {
+  // A phone (screenhost app) session never opens a screen socket — only a TV does.
+  if (
+    !session ||
+    session.revokedAt !== null ||
+    session.accessExpiresAt.getTime() <= Date.now() ||
+    session.deviceType === MOBILE_DEVICE_TYPE
+  ) {
     return { ok: false, closeCode: WS_CLOSE_UNAUTHORIZED, reason: 'invalid or expired token' };
   }
 

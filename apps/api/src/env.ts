@@ -88,6 +88,9 @@ const EnvSchema = z.object({
   // WEDOOH_* pattern: unset, the feature is OFF — every report keeps the generic pistes and boot
   // logs ONE warning. The operator provisions the real key in /srv/toodooh/.env at switch-on.
   ANTHROPIC_API_KEY: z.string().min(16).optional(),
+  // MOBILE-1 — optional Expo access token for the push outbox (only needed once « enhanced push
+  // security » is turned on in the Expo project). Unset = unauthenticated sends, which Expo accepts.
+  EXPO_ACCESS_TOKEN: z.string().min(16).optional(),
   // SIM-0 — the admin « Simulateur ». OPTIONAL by design (the WEDOOH_* posture: eager parse must
   // never fail-fast an entrypoint). Off → every /api/admin/simulations/* answers 503
   // SIMULATOR_DISABLED and the boot orphan sweep does not run. MAX bounds the number of sandbox
