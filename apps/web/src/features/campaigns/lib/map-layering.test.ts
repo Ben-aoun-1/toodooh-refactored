@@ -90,13 +90,14 @@ describe('coverage-map layering', () => {
     expect(MAP_CONTROL_Z_CLASS).toBe('z-[900]');
   });
 
-  it('CF-U4 — the redesign pins: Positron tiles + CARTO attribution, brand markers, popup builder, count badge', () => {
+  it('CF-U4 — the redesign pins: the app basemap (lib/map-tiles), brand markers, popup builder, count badge', () => {
     const src = readFileSync(
       join(__dirname, '..', 'pages', 'new-campaign', 'ZonesCoverageMap.tsx'),
       'utf8',
     );
-    expect(src).toContain('basemaps.cartocdn.com/light_all');
-    expect(src).toContain('CARTO');
+    // Operator 2026-10-12 (option B) — CARTO now watermarks key-less tiles: OSM via the ONE home.
+    expect(src).toContain('MAP_TILE_URL');
+    expect(src).not.toContain('cartocdn');
     expect(src).toContain('buildPopupContent');
     expect(src).toContain('bindPopup');
     // CF-SK1 rider — the chip now shows the REAL category, with the CF-U4 wording as fallback.

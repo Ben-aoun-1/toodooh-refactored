@@ -37,8 +37,9 @@ export const HISTORY_NO_MATCH = 'Aucune campagne ne correspond à votre recherch
 export const SELECTOR_EMPTY = 'Aucune campagne clôturée.';
 export const PERIOD_EMPTY = 'Aucune campagne clôturée ne correspond à ce périmètre.';
 /** US-9.2 (hypothesis) — the opportunities intro marks the bloc as generic pistes. */
+// Operator 2026-10-12 — the « same for every Screencaster » sentence is removed from the screen.
 export const OPPORTUNITIES_INTRO =
-  "Quelques pistes pour renforcer l'impact de vos prochaines campagnes. Ce bloc est le même pour tous les Screencasters et reste affiché quel que soit le filtre sélectionné plus haut.";
+  "Quelques pistes pour renforcer l'impact de vos prochaines campagnes.";
 
 /** US-9.1 — exactly three cards, this order, hardcoded (no data model). */
 export const OPPORTUNITY_CARDS: readonly { title: string; body: string }[] = [
@@ -150,3 +151,41 @@ export function readsState(reads: readonly { pending: boolean; error: boolean }[
 
 /** US-3.2 / 4.3 / 5.2 / 6.6 — the pre-first-clôture state: no closed campaign at all. */
 export const awaitingFirstClosure = (closedCount: number): boolean => closedCount === 0;
+
+/**
+ * Section 03's heading, with or without the CSP level (flag cspLevel, operator 2026-10-12 — off:
+ * the « niveau CSP » block, its donut and the campaigns' « Classes » row are hidden; the api's
+ * campaign-report PDF follows the same flag).
+ */
+export function audienceSectionCopy(cspLevel: boolean): { title: string; lead: string } {
+  return cspLevel
+    ? {
+        title: "Profil de l'audience et niveau CSP",
+        lead: "Le profil des lieux où votre marque a diffusé, par niveau de gamme, et la composition de l'audience mesurée dans ces lieux pendant la diffusion. Ces nombres décrivent l'audience présente, sans identifier aucune personne.",
+      }
+    : {
+        title: "Profil de l'audience",
+        lead: "La composition de l'audience mesurée dans les lieux où votre marque a diffusé, pendant la diffusion. Ces nombres décrivent l'audience présente, sans identifier aucune personne.",
+      };
+}
+
+/** The screencaster « Mes performances » analysis sections, in order. */
+export const SCREENCASTER_SECTIONS = ['overview', 'categories', 'audience', 'zones'] as const;
+export type ScreencasterSection = (typeof SCREENCASTER_SECTIONS)[number];
+
+/**
+ * « Section 0N » for each VISIBLE section (operator 2026-10-12: « Répartition par catégorie de
+ * lieu » and « Répartition par zone géographique » hidden behind flags) — numbered without a gap.
+ * The api's campaign-report PDF (lib/campaign-report-pdf) numbers the same way.
+ */
+export const screencasterSectionNums = (flags: {
+  screencasterPerfCategories: boolean;
+  screencasterPerfZones: boolean;
+}): Partial<Record<ScreencasterSection, string>> =>
+  Object.fromEntries(
+    SCREENCASTER_SECTIONS.filter(
+      (s) =>
+        (s !== 'categories' || flags.screencasterPerfCategories) &&
+        (s !== 'zones' || flags.screencasterPerfZones),
+    ).map((s, i) => [s, `Section ${String(i + 1).padStart(2, '0')}`]),
+  );

@@ -46,12 +46,14 @@ describe('the money-format sweep', () => {
 
   // HT-1 (operator, 2026-10-02): the screencaster sees every amount HT WITHOUT the HT/TTC letters.
   // Operator 2026-10-12 widens it to EVERY app screen (screenhost, admin, recharge, Mes factures):
-  // a montant is plain « 1 234 TND ». Only the invoice-detail screens, which mirror the issued
-  // document line by line (HT / TVA / TTC), keep the letters.
-  it('no app screen renders « TTC » outside the invoice-detail screens', () => {
+  // a montant is plain « 1 234 TND » — the HT figure on screencaster screens. Only the invoice
+  // screens keep the letters: the screencaster's « Mes factures » always shows HT AND TTC
+  // (operator 2026-10-12), and the owner's facture detail mirrors its document line by line.
+  it('no app screen renders « TTC » outside the invoice screens', () => {
     const allowed = new Set([
       join('screenhost', 'pages', 'OwnerFactureDetailPage.tsx'),
       join('wallet', 'components', 'MonthlyInvoicesSection.tsx'),
+      join('wallet', 'pages', 'MyInvoices.tsx'),
     ]);
     const stripComments = (src: string): string =>
       src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');

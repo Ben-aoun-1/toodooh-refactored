@@ -1,4 +1,5 @@
 import type { AnalysisSections, ClosedCampaign, ShareRow } from './advertiser-performances.js';
+import { FEATURE_FLAGS } from './feature-flags.js';
 import {
   docBars,
   docKpis,
@@ -76,8 +77,27 @@ const shareBars = (rows: readonly ShareRow[], unit: string, flagBelowPct?: numbe
  * green paper, Geist/Fraunces, kicker sections) with the real logo (lib/pdf-doc). Content and
  * confidentiality unchanged (RG-PERF-31 / RG-PERF-04; amounts HT without letters, HT-1).
  */
+/** The report's sections, in order. */
+const REPORT_SECTIONS = ['overview', 'categories', 'audience', 'zones'] as const;
+
+/**
+ * « Section 0N » for each VISIBLE section under the flags — numbered without a gap. Twin of the
+ * web's screencasterSectionNums (features/advertiser/lib/performances-derive.ts).
+ */
+export const campaignReportSectionNums = (
+  flags: { screencasterPerfCategories: boolean; screencasterPerfZones: boolean } = FEATURE_FLAGS,
+): Partial<Record<(typeof REPORT_SECTIONS)[number], string>> =>
+  Object.fromEntries(
+    REPORT_SECTIONS.filter(
+      (k) =>
+        (k !== 'categories' || flags.screencasterPerfCategories) &&
+        (k !== 'zones' || flags.screencasterPerfZones),
+    ).map((k, i) => [k, `Section ${String(i + 1).padStart(2, '0')}`]),
+  );
+
 export const buildCampaignReportHtml = (data: CampaignReportData): string => {
   const { campaign: c, sections: s } = data;
+  const nums = campaignReportSectionNums();
   const audience =
     s.audience === null
       ? docNote('Aucune impression générée.')
@@ -101,10 +121,12 @@ export const buildCampaignReportHtml = (data: CampaignReportData): string => {
       { label: 'Clôturée le', value: fmtDate(c.closedOn) },
       { label: 'Généré le', value: fmtDate(data.generatedAt.toISOString().slice(0, 10)) },
     ],
-    // Two fixed sheets, the screenhost report's layout: 01–02, then 03–04.
+    // Two fixed sheets, the screenhost report's layout: 01–02, then 03–04. Flags (operator
+    // 2026-10-12) hide « catégorie de lieu » and « zone géographique » and the CSP block; the
+    // visible sections number without a gap, like the « Mes performances » page.
     body: [
       docSection(
-        'Section 01',
+        nums.overview ?? '',
         "Vue d'ensemble",
         'Les indicateurs clés atteints par cette campagne.',
         docKpis([
@@ -117,27 +139,38 @@ export const buildCampaignReportHtml = (data: CampaignReportData): string => {
             { label: 'Budget investi', value: tndLine(c.budgetHt) },
           ]),
       ) +
-        docSection(
-          'Section 02',
-          'Répartition par catégorie de lieu',
-          "La part de vos impressions générées selon le type d'établissement diffuseur.",
-          shareBars(s.categories, 'impr.'),
-        ),
-      docSection(
-        'Section 03',
-        "Profil de l'audience et niveau CSP",
-        "Le niveau de gamme des lieux diffuseurs, et la composition de l'audience mesurée dans ces lieux pendant la diffusion — sans identifier aucune personne.",
-        docSubhead('Par niveau CSP') +
-          shareBars(s.csp, 'impr.') +
-          docSubhead('Audience mesurée dans les lieux') +
-          audience,
-      ) +
-        docSection(
-          'Section 04',
-          'Répartition par zone géographique',
-          'La couverture de vos impressions sur le Grand Tunis. Les zones peu ou pas couvertes sont signalées.',
-          shareBars(s.zones, 'impressions', 5),
-        ),
+        (nums.categories
+          ? docSection(
+              nums.categories,
+              'Répartition par catégorie de lieu',
+              "La part de vos impressions générées selon le type d'établissement diffuseur.",
+              shareBars(s.categories, 'impr.'),
+            )
+          : ''),
+      (FEATURE_FLAGS.cspLevel
+        ? docSection(
+            nums.audience ?? '',
+            "Profil de l'audience et niveau CSP",
+            "Le niveau de gamme des lieux diffuseurs, et la composition de l'audience mesurée dans ces lieux pendant la diffusion — sans identifier aucune personne.",
+            docSubhead('Par niveau CSP') +
+              shareBars(s.csp, 'impr.') +
+              docSubhead('Audience mesurée dans les lieux') +
+              audience,
+          )
+        : docSection(
+            nums.audience ?? '',
+            "Profil de l'audience",
+            "La composition de l'audience mesurée dans les lieux diffuseurs pendant la diffusion — sans identifier aucune personne.",
+            docSubhead('Audience mesurée dans les lieux') + audience,
+          )) +
+        (nums.zones
+          ? docSection(
+              nums.zones,
+              'Répartition par zone géographique',
+              'La couverture de vos impressions sur le Grand Tunis. Les zones peu ou pas couvertes sont signalées.',
+              shareBars(s.zones, 'impressions', 5),
+            )
+          : ''),
     ],
     footerNote: 'Mes performances · montants hors taxes',
   });

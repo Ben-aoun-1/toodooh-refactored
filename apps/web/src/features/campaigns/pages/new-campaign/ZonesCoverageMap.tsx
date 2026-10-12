@@ -10,6 +10,7 @@ import {
   MAP_STACK_CLASSES,
 } from '@/features/campaigns/lib/map-layering';
 import type { CoverageVenue } from '@/features/campaigns/services/campaigns.api';
+import { MAP_TILE_ATTRIBUTION, MAP_TILE_MAX_ZOOM, MAP_TILE_URL } from '@/lib/map-tiles';
 
 import 'leaflet/dist/leaflet.css';
 
@@ -29,12 +30,6 @@ interface ZonesCoverageMapProps {
 // Grand Tunis — the V1 network's home view (prod is entirely Grand Tunis, CF-Z1).
 const GRAND_TUNIS_CENTER: [number, number] = [36.8065, 10.1815];
 const GRAND_TUNIS_ZOOM = 11;
-
-// CF-U4 — CartoDB Positron: the light, label-quiet basemap the venue dots read cleanly on
-// (a tile URL swap — no new dependency). Attribution per Carto's requirements.
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 // Brand-styled venue dots (the app ramp: mint fill, deep ring), stepped up from the CF-U1 r=7.
 const MARKER_STYLE: L.CircleMarkerOptions = {
@@ -124,7 +119,11 @@ export default function ZonesCoverageMap({
       zoom: GRAND_TUNIS_ZOOM,
       scrollWheelZoom: false,
     });
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
+    // The app's one basemap (lib/map-tiles): OSM standard — CARTO now needs a key we do not have.
+    L.tileLayer(MAP_TILE_URL, {
+      attribution: MAP_TILE_ATTRIBUTION,
+      maxZoom: MAP_TILE_MAX_ZOOM,
+    }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     // MAP-1 (Mejri 08/09 point 2): leaflet measures its container ONCE and only re-measures on

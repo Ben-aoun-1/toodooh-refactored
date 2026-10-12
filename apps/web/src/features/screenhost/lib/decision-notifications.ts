@@ -128,3 +128,24 @@ export const refuseQuestion = (target: 'campaign' | 'event'): string =>
   target === 'event'
     ? 'Êtes-vous sûr de vouloir refuser cet événement ?'
     : 'Êtes-vous sûr de vouloir refuser cette campagne ?';
+
+/**
+ * Operator 2026-10-12 — the decision popup shows what the owner earns by accepting: the sum of
+ * their share (revenu_previsionnel, already the owner's 50 % TTC from the api) over the venues
+ * still AWAITING a decision; once nothing is pending, the campaign's total. Millime-exact.
+ */
+export const campaignDecisionRevenueTnd = (campaign: {
+  allocations: readonly { statut_acceptation: string; revenu_previsionnel: number }[];
+  totals: { revenu_previsionnel: number };
+}): number => {
+  const pending = campaign.allocations.filter((a) => a.statut_acceptation === 'EN_ATTENTE');
+  if (pending.length === 0) return campaign.totals.revenu_previsionnel;
+  return Math.round(pending.reduce((sum, a) => sum + a.revenu_previsionnel * 1000, 0)) / 1000;
+};
+
+/** The same for an event: Σ the pending proposals' montant (the owner's share, from the api). */
+export const eventDecisionRevenueTnd = (proposals: readonly { montant_tnd: number }[]): number =>
+  Math.round(proposals.reduce((sum, p) => sum + p.montant_tnd * 1000, 0)) / 1000;
+
+/** The popup's label for the campaign type chip (operator 2026-10-12: « Particuliers »). */
+export const DECISION_TYPE_LABEL = 'Particuliers';

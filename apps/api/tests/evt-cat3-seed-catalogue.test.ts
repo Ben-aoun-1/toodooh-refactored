@@ -10,6 +10,8 @@ import {
 import { db, sql } from '../src/db/client.js';
 import { eventMatches, events, teams } from '../src/db/schema.js';
 
+import { resetAuthTables } from './helpers/db-test-setup.js';
+
 // EVT-CAT3 — the real catalogue from Youssef's HTML, loaded by a dry-run-by-default script
 // (rulings 2026-10-12: Q1 A time « à confirmer », Q2 A rename the prod test teams, Q3 A existing
 // events untouched, Q4 A no Ramadan card). Real Postgres: the dry-run writes nothing, --execute
@@ -17,7 +19,10 @@ import { eventMatches, events, teams } from '../src/db/schema.js';
 
 const data = loadCatalogueData();
 
+// Campaigns (positionings) left by an EARLIER file in the same worker reference events: clear
+// them first (users CASCADE → campaigns), or « delete from events » trips their foreign key.
 const reset = async (): Promise<void> => {
+  await resetAuthTables();
   await db.delete(eventMatches);
   await db.delete(events);
   await db.delete(teams);

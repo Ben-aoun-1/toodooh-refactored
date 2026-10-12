@@ -5,6 +5,7 @@ import { useState } from 'react';
 import {
   type TargetingLine,
   allNetworkLine,
+  CATEGORIES_LOCKED_LINE,
   categoriesHelperLine,
   duplicateIndexOf,
   firstAvailableLine,
@@ -36,6 +37,9 @@ interface TargetingBuilderProps {
   /** CF-W1 — the wizard targets CATEGORIES only: the class control is HIDDEN (not removed —
    * classes return later), every line carries the all-value class (null), dedup is by category. */
   categoryOnly?: boolean;
+  /** Flag campaignCategoriesLocked — every category shown selected, nothing can be unselected
+   * (« Tout le réseau » on and locked). The parent seeds the whole-network line. */
+  locked?: boolean;
 }
 
 const FLASH_MS = 1800;
@@ -44,9 +48,11 @@ export function TargetingBuilder({
   value,
   onChange,
   categories,
-  disabled = false,
+  disabled: disabledProp = false,
   categoryOnly = false,
+  locked = false,
 }: TargetingBuilderProps) {
+  const disabled = disabledProp || locked;
   // Key of the existing line to flash amber when a duplicate is attempted (transient UI only).
   const [flashKey, setFlashKey] = useState<string | null>(null);
 
@@ -124,7 +130,9 @@ export function TargetingBuilder({
         disabled={disabled}
         onClick={allNetwork ? disableAllNetwork : enableAllNetwork}
         aria-pressed={allNetwork}
-        className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all disabled:opacity-50 ${
+        className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+          locked ? 'cursor-not-allowed' : 'disabled:opacity-50'
+        } ${
           allNetwork
             ? 'border-brand-primary bg-brand-primary/10'
             : 'border-gray-200 bg-white hover:border-gray-300'
@@ -172,10 +180,10 @@ export function TargetingBuilder({
             className="space-y-4"
           >
             <div
-              className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${allNetwork ? 'opacity-50' : ''}`}
+              className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${allNetwork && !locked ? 'opacity-50' : ''}`}
             >
               {categories.map((cat) => {
-                const checked = !allNetwork && checkedIds.includes(cat.id);
+                const checked = locked || (!allNetwork && checkedIds.includes(cat.id));
                 return (
                   <label
                     key={cat.id}
@@ -188,8 +196,14 @@ export function TargetingBuilder({
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={disabled || allNetwork}
-                      onChange={() => toggleCategory(cat.id)}
+                      // Locked: read-only, NOT disabled — a disabled box is drawn grey and would
+                      // not read as « selected »; it keeps the brand tick and ignores clicks.
+                      disabled={!locked && (disabled || allNetwork)}
+                      aria-disabled={locked || undefined}
+                      readOnly={locked}
+                      onChange={() => {
+                        if (!locked) toggleCategory(cat.id);
+                      }}
                       className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-primary disabled:cursor-not-allowed"
                     />
                     <span
@@ -209,9 +223,11 @@ export function TargetingBuilder({
                 i
               </span>
               <p className="text-sm text-gray-600">
-                {allNetwork
-                  ? 'Vous ciblez l’ensemble des écrans — le ciblage par catégorie est désactivé tant que “Tout le réseau” est actif.'
-                  : categoriesHelperLine(checkedIds.length)}
+                {locked
+                  ? CATEGORIES_LOCKED_LINE
+                  : allNetwork
+                    ? 'Vous ciblez l’ensemble des écrans — le ciblage par catégorie est désactivé tant que “Tout le réseau” est actif.'
+                    : categoriesHelperLine(checkedIds.length)}
               </p>
             </div>
           </motion.div>
