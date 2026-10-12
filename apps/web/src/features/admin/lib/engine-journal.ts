@@ -82,6 +82,8 @@ export const EXCLUSION_REASON_LABELS: Record<string, string> = {
   no_installed_screen: 'aucun écran installé',
   // TW-SNAP (operator ruling Q2 B, 2026-09-25) — absent from the week frozen at cart add.
   not_in_frozen_week: 'absent de la semaine type gelée',
+  // DEMO-1 (operator ruling Q2 A, 2026-10-12) — a demo campaign airs only on the demo venues.
+  not_demo_venue: 'hors des établissements de démo',
 };
 
 /** The refusal reasons a rolled-back run can carry (fallback: the raw reason). */

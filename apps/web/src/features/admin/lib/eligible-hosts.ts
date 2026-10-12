@@ -20,6 +20,7 @@ export type ExclusionReason =
   | 'no_sector'
   | 'owner_not_approved'
   | 'no_installed_screen'
+  | 'not_demo_venue'
   | 'not_in_frozen_week';
 
 export interface EligibleHost {
@@ -87,6 +88,8 @@ export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
   // TW-SNAP (operator ruling Q2 B, 2026-09-25) — the campaign's typical week was frozen at cart
   // add; a venue that joined the network afterwards is not part of it.
   not_in_frozen_week: 'Arrivé après la mise au panier (semaine type gelée)',
+  // DEMO-1 (operator ruling Q2 A, 2026-10-12) — a demo campaign airs only on the demo venues.
+  not_demo_venue: 'Hors des établissements de démo',
 };
 
 export const exclusionLabel = (reason: string): string =>

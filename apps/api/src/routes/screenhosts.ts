@@ -2119,7 +2119,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
       .innerJoin(users, eq(campaigns.advertiserId, users.id))
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
-      .where(eq(screenhosts.ownerId, userId))
+      // DEMO-1 (ruled Q1 A) — a demo campaign is not the owner's business: it pays them nothing
+      // and they never decided it, so « Mes campagnes » does not list it.
+      .where(and(eq(screenhosts.ownerId, userId), eq(users.isDemo, false)))
       .orderBy(desc(campaigns.createdAt), desc(campaigns.id), asc(screenhosts.name));
 
     // Group per campaign, first-seen order (= newest campaign first, per the ORDER BY).
@@ -2383,10 +2385,14 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
       )
       .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .innerJoin(users, eq(campaigns.advertiserId, users.id))
       .where(
         and(
           eq(screenhosts.ownerId, userId),
           eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
+          // DEMO-1 (operator 2026-10-12) — demo campaigns stay off the owner's calendar too (their
+          // plays still count in the venue's audience numbers, which the demo shows on purpose).
+          eq(users.isDemo, false),
         ),
       )
       .orderBy(asc(campaigns.startDate), asc(campaignDispatchAllocation.createdAt));

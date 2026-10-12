@@ -9,6 +9,7 @@ import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
 import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
+import { startDemoAirJob } from './lib/demo-air.js';
 import { startBlocPushJob } from './lib/event-playout/bloc-pusher.js';
 import { startEventSettlementJob } from './lib/event-playout/settlement.js';
 import { isMediaProbeEnabled } from './lib/media-probe.js';
@@ -104,6 +105,8 @@ const start = async (): Promise<void> => {
     startMonthlyReportJob(app.log);
     // CF-S1 — upcoming→active→completed transitions (+ the J-3 draft reminder rides this tick).
     startCampaignLifecycleJob(app.log);
+    // DEMO-1 — puts demo campaigns on the TVs the minute their airs_at passes.
+    startDemoAirJob(app.log);
     // E6 — the rattrapage tick (detect manquements on ACTIVE campaigns → re-place forward while
     // the total ≥ S_min). AFTER the lifecycle job: a campaign flipped active this hour gets its
     // first redispatch look in the same boot sequence.

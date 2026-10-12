@@ -9,6 +9,7 @@ import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
+import { demoAirsAt, demoDelayMinutes, isDemoUser } from '../lib/demo.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { positioningPlaysPerMinute } from '../lib/event-pricing/spot.js';
@@ -49,7 +50,18 @@ interface GateRow {
  * when the campaign is launchable. Mirrors the submit gates (CF-S1 dates, CF-Q2 floor, CF-U3
  * budget minimum, E5 ceiling) so the cart can never hold a promise the submit would refuse.
  */
-const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<string | null> => {
+/** The screencaster's start-date rule (DEMO-1: a demo account may start today, sells no event). */
+interface CartRule {
+  lead: number;
+  demo: boolean;
+}
+
+const cartRuleFor = async (userId: string): Promise<CartRule> => ({
+  lead: (await getDispatchConfig()).campaignLeadWorkingDays,
+  demo: await isDemoUser(db, userId),
+});
+
+const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | null> => {
   const c = row.campaign;
   // EV3 — a POSITIONING is an event-BOUND row (event_id set): the binding, not the type string,
   // is the discriminator (a legacy 'event'-typed row without a binding stays fully classic).
@@ -59,7 +71,9 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
   // EV3 — an event positioning's dates are the SNAPSHOTTED diffusion window (the kickoff is the
   // truth, not the advertiser's choice): the J+2 working-day floor does not apply. The too-late
   // guard is the lifecycle's (past-kickoff drafts are auto-deleted).
-  if (!isEvent && startDateViolation(c.startDate, new Date(), leadWorkingDays))
+  // DEMO-1 — a demo account shows the classic network only: no event positioning.
+  if (isEvent && rule.demo) return 'DEMO_EVENTS_UNAVAILABLE';
+  if (!isEvent && startDateViolation(c.startDate, new Date(), rule.lead, rule.demo))
     return 'INVALID_START_DATE';
   if (
     c.creativeId === null ||
@@ -130,6 +144,25 @@ const loadGateRow = async (campaignId: string, userId: string): Promise<GateRow 
   return row ?? null;
 };
 
+/** DEMO-1 — approve the spots of a demo account's carted campaigns (no admin review, Q3 A). */
+const approveDemoSpots = async (campaignIds: string[], userId: string): Promise<void> => {
+  if (campaignIds.length === 0) return;
+  const linked = await db
+    .select({ creativeId: campaigns.creativeId })
+    .from(campaigns)
+    .where(and(inArray(campaigns.id, campaignIds), eq(campaigns.advertiserId, userId)));
+  const ids = linked.flatMap((l) => (l.creativeId === null ? [] : [l.creativeId]));
+  if (ids.length === 0) return;
+  await db
+    .update(creatives)
+    .set({
+      validationStatus: 'approved',
+      validatedAt: new Date(),
+      validationNotes: 'Démo — validé automatiquement',
+    })
+    .where(and(inArray(creatives.id, ids), eq(creatives.validationStatus, 'pending')));
+};
+
 export const cartRoutes: FastifyPluginAsync = async (app) => {
   const advertiserGuard = { preHandler: [requireAuth, requireAdvertiser] };
 
@@ -151,8 +184,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     if (!row)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
 
-    const lead = (await getDispatchConfig()).campaignLeadWorkingDays;
-    const reason = await cartGateReason(row, lead);
+    const reason = await cartGateReason(row, await cartRuleFor(userId));
     if (reason !== null) {
       return reply.status(400).send({
         error: reason,
@@ -265,7 +297,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'CART_EMPTY', message: 'The cart is empty.' });
     }
 
-    const lead = (await getDispatchConfig()).campaignLeadWorkingDays;
+    const rule = await cartRuleFor(userId);
     const failures: { campaign_id: string; reason: string }[] = [];
     let requiredHt = 0;
     for (const { campaignId } of carted) {
@@ -274,7 +306,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         failures.push({ campaign_id: campaignId, reason: 'NOT_FOUND' });
         continue;
       }
-      const reason = await cartGateReason(row, lead);
+      const reason = await cartGateReason(row, rule);
       if (reason !== null) failures.push({ campaign_id: campaignId, reason });
       else requiredHt += Number(row.campaign.requestedBudget ?? 0);
     }
@@ -319,6 +351,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     // (no re-pool, no duplicate owner notifications — those were inserted inside the one-shot
     // freeze tx) and the gate re-prices fairly because computeCampaignCmax excludes the
     // campaign's OWN allocations from the engagement netting.
+    // DEMO-1 (ruled Q3 A) — a demo account skips the admin review: its spots are approved here,
+    // so every item takes the SKIP path below and launches at confirm.
+    if (rule.demo)
+      await approveDemoSpots(
+        carted.map((c) => c.campaignId),
+        userId,
+      );
+
     const skipItems: {
       campaignId: string;
       row: NonNullable<Awaited<ReturnType<typeof loadGateRow>>>;
@@ -370,6 +410,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       preparedSkips.push({ full });
     }
 
+    // DEMO-1 (ruled Q3 A) — the on-air instant: confirm + the admin's delay.
+    const confirmedAt = new Date();
+    const delay = rule.demo ? await demoDelayMinutes() : 0;
+
     // PHASE 2 — ONE transaction: every flip (skip AND review) + the cart clear, all-or-nothing.
     const result = await db
       .transaction(async (tx) => {
@@ -380,6 +424,12 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
             fromStatus: 'draft',
           });
           if ('currentStatus' in flipped) throw new Error('CART_CONFIRM_RACE');
+          if (rule.demo && full.startDate !== null) {
+            await tx
+              .update(campaigns)
+              .set({ airsAt: demoAirsAt(confirmedAt, delay, full.startDate) })
+              .where(eq(campaigns.id, full.id));
+          }
           launched.push(flipped.activated as CampaignRow);
         }
         let updated: CampaignRow[] = [];

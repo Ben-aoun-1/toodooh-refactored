@@ -8,6 +8,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
+import { acceptDemoAllocations, isDemoCampaign } from '../demo.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
 import { computeR, computeRi, physicalFromFacturable } from './eligibility.js';
@@ -190,6 +191,9 @@ export const runRefusalCascade = async (
     }
   }
 
+  // DEMO-1 (ruled Q1 A) — a demo campaign is re-accepted on the owners' behalf, unannounced.
+  const demo = await isDemoCampaign(tx, campaign.id);
+  if (demo) await acceptDemoAllocations(tx, plan.id);
   // Notify each DISTINCT owner whose venue must (re-)accept — the dispatch producer pattern,
   // inside the same transaction.
   if (retainedIds.length > 0) {
@@ -200,7 +204,7 @@ export const runRefusalCascade = async (
     const ownerIds = [
       ...new Set(ownerRows.map((r) => r.ownerId).filter((id): id is string => id !== null)),
     ];
-    if (ownerIds.length > 0) {
+    if (!demo && ownerIds.length > 0) {
       await tx.insert(notifications).values(
         ownerIds.map((ownerId) => ({
           userId: ownerId,

@@ -30,6 +30,8 @@ export const CART_REASON_FR: Record<string, string> = {
   // CPM-3 — an admin CPM change raced the confirm: nothing was launched, a new confirm prices at
   // the new CPM (retryable).
   CPM_CHANGED: 'Le CPM de cette campagne vient de changer — confirmez de nouveau.',
+  // DEMO-1 — a demo account shows the classic network only.
+  DEMO_EVENTS_UNAVAILABLE: 'Les événements ne sont pas disponibles sur un compte démo.',
 };
 
 export const cartReasonFr = (reason: string): string =>

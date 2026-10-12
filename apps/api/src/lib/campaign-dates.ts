@@ -58,7 +58,10 @@ export const effectiveLeadWorkingDays = (configured: number): number =>
 export function premiereDateDisponible(
   today: Date = new Date(),
   leadWorkingDays: number = DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS,
+  // DEMO-1 — a demo screencaster's campaign may start today (it airs minutes after the confirm).
+  sameDay = false,
 ): string {
+  if (sameDay) return tunisDateOf(today);
   const lead = effectiveLeadWorkingDays(leadWorkingDays);
   let d = tunisDateOf(today);
   let ouvres = 0;
@@ -79,7 +82,8 @@ export function startDateViolation(
   startIso: string,
   today: Date = new Date(),
   leadWorkingDays: number = DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS,
+  sameDay = false,
 ): StartDateViolation | null {
-  if (startIso < premiereDateDisponible(today, leadWorkingDays)) return 'TOO_SOON';
+  if (startIso < premiereDateDisponible(today, leadWorkingDays, sameDay)) return 'TOO_SOON';
   return null;
 }
