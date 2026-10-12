@@ -588,7 +588,7 @@ export function renderReportHtml(
     .map(pisteCard)
     .join('');
   const s07 = `
-  <div class="section">
+  <div class="section section--pistes">
     ${secHead('Section 07', "Vos pistes d'optimisation futures", "Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus.")}
     <div class="callout"><b>Lecture personnalisée.</b> Ces pistes s'appuient sur les données mesurées dans votre lieu - audience, profil typologique, performance des campagnes diffusées.</div>
     ${pisteCards}
@@ -615,7 +615,7 @@ export function renderReportHtml(
     )
     .join('\n        ');
   const s08 = `
-  <div class="section" style="margin-top:0">
+  <div class="section">
     ${secHead('Section 08', 'Votre score de priorité', 'Le score de priorité reflète votre engagement sur la plateforme. Plus il est élevé, plus vous êtes positionné en priorité quand de nouvelles campagnes sont à diffuser dans le réseau.')}
     <div class="score-hero">
       <div class="score-current">
@@ -989,17 +989,19 @@ body{
 
 /* ============ PISTES (Section 07) ============ */
 .piste{
-  margin-top:8px; background:var(--card-soft); border:1px solid var(--line-soft);
-  border-radius:9px; padding:7px 14px;
+  margin-top:6px; background:var(--card-soft); border:1px solid var(--line-soft);
+  border-radius:9px; padding:6px 14px;
 }
-.piste-k{ font-family:var(--mono); font-size:7pt; letter-spacing:.2em; text-transform:uppercase; color:var(--mint); margin-bottom:5px; display:flex; align-items:center; gap:7px; }
+/* PISTES-V2 — S07 shares page 5 with S08: a clear gap before the SPS section. */
+.section--pistes + .section{ margin-top:12px; }
+.piste-k{ font-family:var(--mono); font-size:7pt; letter-spacing:.2em; text-transform:uppercase; color:var(--mint); margin-bottom:3px; display:flex; align-items:center; gap:7px; }
 .piste-k .b{ width:5px; height:5px; border-radius:50%; background:var(--mint); }
-.piste-t{ font-size:11pt; font-weight:600; color:var(--ink); margin-bottom:3px; }
-/* PDF-P4-1 — a body that wraps to a THIRD line overflows page 4 by ~16px (measured 2→3-line break
-   between 225c and 253c). The 210-char cap on AI bodies is the first guard; this is the width-safe
-   one: whatever the text, the block renders AT MOST two lines and ellipsises the rest, so the fixed
-   page can never be pushed. Chromium (the renderer) honours -webkit-line-clamp on a -webkit-box. */
-.piste-body{ font-size:9pt; color:var(--muted); line-height:1.42; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.piste-t{ font-size:11pt; font-weight:600; color:var(--ink); margin-bottom:2px; }
+/* PISTES-V2 (operator 2026-10-12, Q9 A) — the cards GROW: Piste 02 is a 45–70-word paragraph and
+   Piste 01 names up to three matches, so S07 moved to page 5 (above S08) where they fit in full.
+   The old 2-line clamp of page 4 is retired; the 6-line clamp is only a guard against a runaway
+   body pushing the fixed page (the post-checks already cap Piste 02 at 80 words). */
+.piste-body{ font-size:9pt; color:var(--muted); line-height:1.36; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:6; overflow:hidden; }
 .piste-body.wait{ font-family:var(--serif); font-style:italic; color:var(--faint); }
 
 /* ============ SPS SCORE (Section 08) ============ */
@@ -1048,11 +1050,11 @@ ${cover}
 
 <div class="page">${runhead}
   ${s06}
-  ${s07}
   ${footer(4)}
 </div>
 
 <div class="page">${runhead}
+  ${s07}
   ${s08}
   ${footer(5)}
 </div>

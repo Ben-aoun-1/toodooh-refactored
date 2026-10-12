@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  BODY_MAX_CHARS,
   PISTE_01_MAX_MATCHES,
   PISTE_01_NO_EVENTS_BODY,
   PISTE_01_TITLE,
@@ -203,14 +202,6 @@ describe('the three cards as a whole', () => {
       const pistes = buildPistes({ ...input, aiBody: null });
       expect(pistes.map((p) => p.num)).toEqual(['01', '02', '03']);
       expect(pistes.map((p) => p.title)).toEqual([PISTE_01_TITLE, PISTE_02_TITLE, PISTE_03_TITLE]);
-    }
-  });
-
-  it('every generated body fits the S07 card (a 3rd line overflows page 4)', () => {
-    for (const input of matrix) {
-      for (const piste of buildPistes({ ...input, aiBody: null })) {
-        expect(piste.body.length).toBeLessThanOrEqual(BODY_MAX_CHARS);
-      }
     }
   });
 

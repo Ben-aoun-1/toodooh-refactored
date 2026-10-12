@@ -530,14 +530,21 @@ describe('renderReportHtml — S07 renders the pistes generator (PERF-QA2)', () 
     }
   });
 
-  // PDF-P4-1 (Mejri/Kais QA) — a piste body wrapping to 3 lines overflowed page 4 by ~16px. The
-  // stylesheet clamps every body to TWO lines with an ellipsis, whatever the text length: a source
-  // pin, since the fixed-page frame (overflow hidden) would otherwise clip silently.
-  it('PDF-P4-1: the piste body is width-safe — clamped to 2 lines in the stylesheet', () => {
+  // PISTES-V2 (Q9 A) — the cards grow: S07 moved to page 5 above S08, and the body clamp is a
+  // 6-line guard only (Piste 02 is 45–70 words, Piste 01 names up to three matches). A source pin,
+  // since the fixed-page frame (overflow hidden) would otherwise clip silently.
+  it('PISTES-V2: S07 sits on page 5 above S08, the body clamp is a 6-line guard', () => {
     for (const html of bothBranches) {
       expect(html).toContain(
-        '.piste-body{ font-size:9pt; color:var(--muted); line-height:1.42; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }',
+        '.piste-body{ font-size:9pt; color:var(--muted); line-height:1.36; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:6; overflow:hidden; }',
       );
+      const pages = html.split('<div class="page">');
+      const s07Page = pages.findIndex((p) => p.includes("Vos pistes d'optimisation futures"));
+      expect(s07Page).toBe(pages.length - 1); // the LAST page…
+      const last = pages[s07Page] ?? '';
+      expect(last.indexOf("Vos pistes d'optimisation futures")).toBeLessThan(
+        last.indexOf('Section 08'),
+      ); // …above S08
     }
     // A pathological 3-line body still renders inside the same clamped block (no layout branch).
     const longBody = 'Mot '.repeat(80).trim();

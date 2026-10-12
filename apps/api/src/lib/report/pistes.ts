@@ -9,8 +9,8 @@
  *
  * Everything here is PURE: the DB reads live in assemble.ts, so both surfaces
  * (GET /:id/pistes and the rendered PDF) build their three cards from the SAME function and
- * cannot drift. Bodies are capped at BODY_MAX_CHARS — the S07 card fits 2 lines and a 3rd
- * overflows page 4 (the R3.1 layout interlock, re-pinned here for the generated bodies).
+ * cannot drift. PISTES-V2: the S07 cards grow (S07 moved to page 5), so the old 2-line interlock
+ * of page 4 is retired.
  */
 
 export interface PisteView {
@@ -20,9 +20,6 @@ export interface PisteView {
   /** true → the italic wait-state styling (page + PDF). */
   pending: boolean;
 }
-
-/** The layout interlock: a body over this wraps to a 3rd line and overflows page 4. */
-export const BODY_MAX_CHARS = 225;
 
 // ── titles (survive the R3 → 13-juil supersession) ────────────────────────────────────────────
 export const PISTE_01_TITLE = 'Anticipez les temps forts';
