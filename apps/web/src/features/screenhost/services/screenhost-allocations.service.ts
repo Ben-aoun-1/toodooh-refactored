@@ -44,10 +44,10 @@ export interface PendingAllocation {
 // ── CF-Q1 — pinned card/decision helpers (the page has no render-test harness) ─────────────────
 /**
  * The owner's money leads each allocation card (spec 2.2 « en tête le montant qui me revient »).
- * Operator 2026-10-09 — the screenhost sees every amount TTC: its share (50 % of the HT the
- * screencaster pays), served already converted by the api (lib/owner-share), labelled TTC.
+ * Its share (50 % of the HT the screencaster pays), served already converted by the api
+ * (lib/owner-share). Operator 2026-10-12 — screens show the plain amount, without « TTC ».
  */
-export const revenueLabel = (tnd: number): string => `${tnd.toLocaleString('fr-FR')} TND TTC`;
+export const revenueLabel = (tnd: number): string => `${tnd.toLocaleString('fr-FR')} TND`;
 
 /** Reject is consequential and irreversible — it alone needs confirmation. */
 export const decisionNeedsConfirm = (kind: 'accept' | 'reject'): boolean => kind === 'reject';

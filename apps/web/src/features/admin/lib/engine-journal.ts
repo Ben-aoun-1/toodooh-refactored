@@ -1,4 +1,4 @@
-import { htTtcLabel } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 // LOG1 — the « Journal du moteur » pure display model (node-env tests; no render harness).
 // ONE French label map for every event the api emits; the coverage test pins the emitted set so a
@@ -132,7 +132,7 @@ export const outcomeChip = (run: {
 };
 
 /**
- * The event's key payload figures as compact French text: impressions (fr-FR), montants HT (TTC)
+ * The event's key payload figures as compact French text: impressions (fr-FR), plain montants
  * via the ONE money home. Only known keys render; internals (seq…) never do.
  */
 export const eventDetail = (event: EngineJournalEvent): string => {
@@ -143,7 +143,7 @@ export const eventDetail = (event: EngineJournalEvent): string => {
   }
   const money = (key: string, prefix?: string): void => {
     if (typeof p[key] === 'number') {
-      parts.push(`${prefix ? `${prefix} ` : ''}${htTtcLabel(p[key])}`);
+      parts.push(`${prefix ? `${prefix} ` : ''}${tndLabel(p[key])}`);
     }
   };
   money('valueTnd');

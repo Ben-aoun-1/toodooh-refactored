@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { TVA_RATE, formatTnd, htTtcLabel, htTtcOrDash, ttcFromHt, ttcParenthetical } from './money';
+import { TVA_RATE, formatTnd, tndLabel, tndOrDash, ttcFromHt } from './money';
 
 // CF-U1 (Mejri item 6) — the ONE money formatter: fr-FR spacing, ≤2 decimals, TTC = HT × 1.19
 // rounded to the centime. The 19% rate lives in TVA_RATE and NOWHERE else (grep-pinned in CF-9).
@@ -29,19 +29,15 @@ describe('money lib (CF-U1 — HT/TTC single home)', () => {
     expect(ttcFromHt(0)).toBe(0);
   });
 
-  it('renders the mockup label « 1 000 TND HT (1 190 TND TTC) »', () => {
-    expect(plain(htTtcLabel(1000))).toBe('1 000 TND HT (1 190 TND TTC)');
-    expect(plain(htTtcLabel(50))).toBe('50 TND HT (59,5 TND TTC)');
-  });
-
-  it('renders the parenthetical alone for big-figure surfaces', () => {
-    expect(plain(ttcParenthetical(1000))).toBe('(1 190 TND TTC)');
+  it('renders the plain screen label « 1 000 TND » (operator 2026-10-12: no « TTC » on screens)', () => {
+    expect(plain(tndLabel(1000))).toBe('1 000 TND');
+    expect(plain(tndLabel(50))).toBe('50 TND');
   });
 
   it('a NULL montant renders « — » (no phantom defaults — Mejri item 6)', () => {
-    expect(htTtcOrDash(null)).toBe('—');
-    expect(htTtcOrDash(undefined)).toBe('—');
-    expect(plain(htTtcOrDash(1000))).toBe('1 000 TND HT (1 190 TND TTC)');
+    expect(tndOrDash(null)).toBe('—');
+    expect(tndOrDash(undefined)).toBe('—');
+    expect(plain(tndOrDash(1000))).toBe('1 000 TND');
   });
 });
 

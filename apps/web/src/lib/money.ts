@@ -27,23 +27,11 @@ export const htFromTtc = (amountTtc: number): number =>
 
 /**
  * HT-1 (operator, 2026-10-02) — the screencaster sees every amount HT, WITHOUT the « HT »/« TTC »
- * letters: « 1 000 TND ». TTC only appears where they pay (recharge) and in the documents issued
- * after paying, which keep htTtcLabel.
+ * letters: « 1 000 TND ». Operator 2026-10-12 — no app screen shows « TTC » any more (recharge and
+ * Mes factures included); only the issued documents (api PDFs) and the invoice-detail lines do.
  */
 export const tndLabel = (amountHt: number): string => `${formatTnd(amountHt)} TND`;
 
 /** tndLabel, or « — » for a missing amount. */
 export const tndOrDash = (amountHt: number | null | undefined): string =>
   amountHt == null ? '—' : tndLabel(amountHt);
-
-/** « 1 000 TND HT (1 190 TND TTC) » — the full label every advertiser montant renders. */
-export const htTtcLabel = (amountHt: number): string =>
-  `${formatTnd(amountHt)} TND HT (${formatTnd(ttcFromHt(amountHt))} TND TTC)`;
-
-/** The parenthetical alone — for surfaces whose main figure is already rendered big. */
-export const ttcParenthetical = (amountHt: number): string =>
-  `(${formatTnd(ttcFromHt(amountHt))} TND TTC)`;
-
-/** A nullable montant: null renders « — » (no phantom defaults — Mejri item 6), else HT (TTC). */
-export const htTtcOrDash = (amountHt: number | null | undefined): string =>
-  amountHt == null ? '—' : htTtcLabel(amountHt);

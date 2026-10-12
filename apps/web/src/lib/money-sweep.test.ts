@@ -45,21 +45,20 @@ describe('the money-format sweep', () => {
   });
 
   // HT-1 (operator, 2026-10-02): the screencaster sees every amount HT WITHOUT the HT/TTC letters.
-  // TTC is allowed only where they pay (the recharge modal + its minimum-amount copy) and in the
-  // documents issued after paying (« Mes factures »).
-  it('HT-1 — no screencaster screen uses the HT (TTC) formatters outside payment + documents', () => {
+  // Operator 2026-10-12 widens it to EVERY app screen (screenhost, admin, recharge, Mes factures):
+  // a montant is plain « 1 234 TND ». Only the invoice-detail screens, which mirror the issued
+  // document line by line (HT / TVA / TTC), keep the letters.
+  it('no app screen renders « TTC » outside the invoice-detail screens', () => {
     const allowed = new Set([
-      join('wallet', 'components', 'NewRechargeModal.tsx'),
-      join('wallet', 'lib', 'recharge-methods.ts'),
-      join('wallet', 'pages', 'MyInvoices.tsx'),
+      join('screenhost', 'pages', 'OwnerFactureDetailPage.tsx'),
+      join('wallet', 'components', 'MonthlyInvoicesSection.tsx'),
     ]);
-    const offenders = ['campaigns', 'cart', 'events', 'advertiser', 'wallet']
-      .flatMap((feature) => walk(join(WEB_SRC, 'features', feature)))
+    const stripComments = (src: string): string =>
+      src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const offenders = walk(join(WEB_SRC, 'features'))
       .filter((file) => !allowed.has(file.slice(join(WEB_SRC, 'features').length + 1)))
       .filter((file) =>
-        /\b(htTtcLabel|htTtcOrDash|ttcParenthetical)\(|'TND HT'|TND HT \(/.test(
-          readFileSync(file, 'utf8'),
-        ),
+        /\bTTC\b|'TND HT'|TND HT \(/.test(stripComments(readFileSync(file, 'utf8'))),
       );
     expect(offenders).toEqual([]);
   });

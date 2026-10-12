@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 
 import { useEventTarification } from '@/features/admin/hooks/useAdminEvents';
-import { htTtcOrDash } from '@/lib/money';
+import { tndOrDash } from '@/lib/money';
 
 interface EventTarificationModalProps {
   eventId: string;
@@ -52,7 +52,7 @@ export default function EventTarificationModal({
                 <div className="rounded-xl bg-gray-50 border border-gray-200 p-3">
                   <p className="text-xs text-[#5C5C5C]">Budget maximum (C_max)</p>
                   <p className="mt-1 text-sm font-semibold text-[#171717]">
-                    {htTtcOrDash(data.c_max_evt_tnd)}
+                    {tndOrDash(data.c_max_evt_tnd)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-gray-50 border border-gray-200 p-3">

@@ -328,13 +328,12 @@ export default function OwnerRevenue() {
                     <div>
                       <p className="text-white/90 text-sm font-medium mb-1">Revenu actuel</p>
                       {/* Operator 2026-10-09 (confirms SH-TTC1) — the figure is the owner's share
-                          (E7 earnings_tnd, 50 % of the HT value) and the screenhost sees TTC only:
-                          one figure, labelled TTC, no 19 % added on top. */}
+                          (E7 earnings_tnd, 50 % of the HT value), no 19 % added on top. Operator
+                          2026-10-12 — screens show the plain amount, without the « TTC » letters
+                          (documents keep them). */}
                       <p className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
                         {formatCurrencyBanner(currentBalance)}{' '}
-                        <span className="text-xl sm:text-2xl font-semibold text-white/85">
-                          TND TTC
-                        </span>
+                        <span className="text-xl sm:text-2xl font-semibold text-white/85">TND</span>
                       </p>
                     </div>
                   </div>
