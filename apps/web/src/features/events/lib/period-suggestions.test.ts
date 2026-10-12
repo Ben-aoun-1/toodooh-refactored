@@ -3,13 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { EventItemView } from '../services/events.api';
 
 import { eventSuggestedForWindow } from './event-positioning';
-import {
-  PERIOD_SUGGESTION_MAX_TAGS,
-  addedPageState,
-  formatApproxImpressions,
-  sectorTags,
-  suggestEventsForPeriod,
-} from './period-suggestions';
+import { addedPageState, suggestEventsForPeriod } from './period-suggestions';
 
 // SUGG-1 — « Votre campagne a été ajoutée au panier », operator 2026-10-13: every event the
 // screencaster can position on — during the campaign first, then « à la une », then the rest,
@@ -84,21 +78,6 @@ describe('suggestEventsForPeriod — during the campaign, then à la une, then t
     expect(
       suggestEventsForPeriod({ start_date: null, end_date: null }, list).map((e) => e.id),
     ).toEqual(['a', 'b']);
-  });
-});
-
-describe('the card figures', () => {
-  it('« ~ N impressions » groups thousands the French way', () => {
-    expect(formatApproxImpressions(184_500).replace(/\s/g, ' ')).toBe('~ 184 500 impressions');
-    expect(formatApproxImpressions(0)).toBe('~ 0 impressions');
-  });
-
-  it('sector tags: display labels, at most two shown, the rest counted', () => {
-    expect(PERIOD_SUGGESTION_MAX_TAGS).toBe(2);
-    const tags = sectorTags(['Café', 'Espace de loisir', 'Restaurant']);
-    expect(tags.shown).toHaveLength(2);
-    expect(tags.extra).toBe(1);
-    expect(sectorTags([])).toEqual({ shown: [], extra: 0 });
   });
 });
 

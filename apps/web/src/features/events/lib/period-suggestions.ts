@@ -1,5 +1,3 @@
-import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
-
 import type { EventItemView } from '../services/events.api';
 
 import { eventSuggestedForWindow } from './event-positioning';
@@ -19,12 +17,6 @@ export const PERIOD_SUGGESTION_HEADING =
 
 /** Operator ruling 2026-10-09 (Q5A) — no event to offer: the page still shows, and says so. */
 export const PERIOD_SUGGESTION_EMPTY = 'Aucun événement n’est prévu pour le moment.';
-
-export const PERIOD_SUGGESTION_NOTE =
-  '(En incluant automatiquement toutes les catégories de commerces qui diffusent pendant le match)';
-
-/** The card shows at most this many sector tags; the rest is counted (« +N »). */
-export const PERIOD_SUGGESTION_MAX_TAGS = 2;
 
 /**
  * What the page renders for its campaign id. The list it reads is React Query's CACHED
@@ -71,16 +63,3 @@ export const suggestEventsForPeriod = (
     .filter((e) => !ownPositionedEventIds.has(e.id))
     .sort((a, b) => band(a) - band(b) || kickoffMs(a) - kickoffMs(b));
 };
-
-/** « ~ 184 500 impressions » — the event's I_max, French grouping. */
-export const formatApproxImpressions = (n: number): string =>
-  `~ ${Math.round(n).toLocaleString('fr-FR')} impressions`;
-
-/** The card's sector tags: display labels (UI-1), the first two shown, the rest counted. */
-export const sectorTags = (
-  sectors: string[],
-  max: number = PERIOD_SUGGESTION_MAX_TAGS,
-): { shown: string[]; extra: number } => ({
-  shown: sectors.slice(0, max).map(sectorDisplayName),
-  extra: Math.max(0, sectors.length - max),
-});
