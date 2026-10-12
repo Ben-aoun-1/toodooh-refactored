@@ -30,6 +30,9 @@ describe('campaign categories locked (flag)', () => {
     const builder = read('components', 'TargetingBuilder.tsx');
     expect(builder).toContain('const disabled = disabledProp || locked;');
     expect(builder).toContain('const checked = locked || ');
+    // Read-only, not disabled: a disabled box is drawn grey and would not read as « selected ».
+    expect(builder).toContain('readOnly={locked}');
+    expect(builder).toContain('disabled={!locked && (disabled || allNetwork)}');
     expect(builder).toContain('CATEGORIES_LOCKED_LINE');
     expect(CATEGORIES_LOCKED_LINE).toContain('Toutes les catégories');
   });

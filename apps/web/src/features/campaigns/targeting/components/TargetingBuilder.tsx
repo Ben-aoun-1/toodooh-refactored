@@ -130,7 +130,9 @@ export function TargetingBuilder({
         disabled={disabled}
         onClick={allNetwork ? disableAllNetwork : enableAllNetwork}
         aria-pressed={allNetwork}
-        className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all disabled:opacity-50 ${
+        className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
+          locked ? 'cursor-not-allowed' : 'disabled:opacity-50'
+        } ${
           allNetwork
             ? 'border-brand-primary bg-brand-primary/10'
             : 'border-gray-200 bg-white hover:border-gray-300'
@@ -194,8 +196,14 @@ export function TargetingBuilder({
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={disabled || allNetwork}
-                      onChange={() => toggleCategory(cat.id)}
+                      // Locked: read-only, NOT disabled — a disabled box is drawn grey and would
+                      // not read as « selected »; it keeps the brand tick and ignores clicks.
+                      disabled={!locked && (disabled || allNetwork)}
+                      aria-disabled={locked || undefined}
+                      readOnly={locked}
+                      onChange={() => {
+                        if (!locked) toggleCategory(cat.id);
+                      }}
                       className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-primary disabled:cursor-not-allowed"
                     />
                     <span
