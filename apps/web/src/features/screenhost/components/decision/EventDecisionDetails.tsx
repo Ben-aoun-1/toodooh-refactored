@@ -1,9 +1,11 @@
 import CreativePreviewTile from '@/features/campaigns/pages/new-campaign/CreativePreviewTile';
 import { formatEventDate, formatEventHours } from '@/features/events/lib/event-display';
+import DecisionRevenue from '@/features/screenhost/components/decision/DecisionRevenue';
 import DecisionSection, {
   DecisionChip,
 } from '@/features/screenhost/components/decision/DecisionSection';
 import { useEventAllocationCreativeUrl } from '@/features/screenhost/hooks/useScreenhostEventAllocations';
+import { eventDecisionRevenueTnd } from '@/features/screenhost/lib/decision-notifications';
 import {
   EVENT_PERIODE_LINE,
   type PendingEventAllocation,
@@ -26,6 +28,8 @@ export default function EventDecisionDetails({
 
   return (
     <>
+      <DecisionRevenue amountTnd={eventDecisionRevenueTnd(proposals)} />
+
       <DecisionSection label="Type">
         <div className="flex flex-wrap gap-2">
           <DecisionChip>Événement</DecisionChip>
