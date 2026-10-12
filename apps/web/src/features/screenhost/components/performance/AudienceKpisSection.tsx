@@ -56,8 +56,6 @@ function KpiValue({
 }
 
 interface AudienceKpisSectionProps {
-  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
-  num?: string;
   kpis: AudienceKpis;
   /** HOST first-data flag — once true, KPIs show real values, 0 rendered as 0 (Mejri ruling). */
   hasHostData: boolean;
@@ -67,14 +65,17 @@ interface AudienceKpisSectionProps {
 
 /** S01 — "Votre audience en chiffres": the mockups' ruled KPI row (2px green top border). */
 export function AudienceKpisSection({
-  num = 'Section 01',
   kpis,
   hasHostData,
   hoursEstimated,
 }: AudienceKpisSectionProps) {
   return (
     <section className="mb-[76px]">
-      <SectionHeading num={num} title="Votre audience en chiffres" lead={AUDIENCE_KPIS_LEAD} />
+      <SectionHeading
+        num="Section 01"
+        title="Votre audience en chiffres"
+        lead={AUDIENCE_KPIS_LEAD}
+      />
       <div className="mt-8 grid grid-cols-1 border-t-2 border-t-perf-green md:grid-cols-3 md:border-b md:border-b-perf-line">
         <div className="border-b border-perf-line py-[22px] md:border-b-0 md:border-r md:border-r-perf-soft md:py-[26px] md:pr-6">
           <KpiLabel>Audience globale</KpiLabel>

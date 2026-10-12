@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AnalysisSections, ClosedCampaign } from '../src/lib/advertiser-performances.js';
-import { buildCampaignReportHtml } from '../src/lib/campaign-report-pdf.js';
+import {
+  buildCampaignReportHtml,
+  campaignReportSectionNums,
+} from '../src/lib/campaign-report-pdf.js';
 import { FEATURE_FLAGS } from '../src/lib/feature-flags.js';
 
-// Flag cspLevel (operator 2026-10-12, Q2 both + Q3 A) — off: the screencaster's campaign report
-// prints no « niveau CSP » block, like the « Mes performances » page.
+// Operator 2026-10-12 (B) — screencaster only: the campaign report hides « Répartition par
+// catégorie de lieu », « Répartition par zone géographique » and the « niveau CSP » block, like
+// the « Mes performances » page, and numbers the remaining sections 01–02.
 
 const campaign: ClosedCampaign = {
   id: 'c1',
@@ -40,9 +44,24 @@ const sections: AnalysisSections = {
   zones: [],
 };
 
-describe('the campaign report under the cspLevel flag', () => {
-  it('ships OFF and prints no « niveau CSP » block', () => {
-    expect(FEATURE_FLAGS.cspLevel).toBe(false);
+describe('the campaign report under the screencaster flags', () => {
+  it('numbers the visible sections without a gap', () => {
+    expect(campaignReportSectionNums()).toEqual({
+      overview: 'Section 01',
+      audience: 'Section 02',
+    });
+    expect(
+      campaignReportSectionNums({ screencasterPerfCategories: true, screencasterPerfZones: true })
+        .zones,
+    ).toBe('Section 04');
+  });
+
+  it('ships OFF: no « niveau CSP », no categories, no zones', () => {
+    expect(FEATURE_FLAGS).toEqual({
+      screencasterPerfCategories: false,
+      screencasterPerfZones: false,
+      cspLevel: false,
+    });
     const html = buildCampaignReportHtml({
       campaign,
       sections,
@@ -53,5 +72,8 @@ describe('the campaign report under the cspLevel flag', () => {
     expect(html).not.toContain('Premium');
     expect(html).toContain('Profil de l');
     expect(html).toContain('Audience mesurée dans les lieux');
+    expect(html).not.toContain('Répartition par catégorie de lieu');
+    expect(html).not.toContain('Répartition par zone géographique');
+    expect(html).not.toContain('Section 03');
   });
 });

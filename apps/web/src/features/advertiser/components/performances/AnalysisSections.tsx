@@ -6,6 +6,7 @@ import {
   PERIOD_EMPTY,
   audienceSectionCopy,
   budgetLabel,
+  screencasterSectionNums,
   cspCharacteristics,
   isLowCoverage,
   listOrDash,
@@ -34,6 +35,8 @@ import {
  */
 export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
   const audienceCopy = audienceSectionCopy(FEATURE_FLAGS.cspLevel);
+  // Flags screencasterPerfCategories / screencasterPerfZones — hidden sections leave no gap.
+  const nums = screencasterSectionNums(FEATURE_FLAGS);
   const single = analysis.mode === 'campaign';
   const n = analysis.overview.campaign_count;
   const empty = !single && n === 0;
@@ -43,7 +46,7 @@ export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
       {/* ── Section 01 ─────────────────────────────────────────────────────── */}
       <section className="mb-[64px]">
         <SectionHeading
-          num="Section 01"
+          num={nums.overview ?? ''}
           title="Vue d'ensemble"
           lead={
             single
@@ -135,29 +138,37 @@ export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
         )}
       </section>
 
-      {/* ── Section 02 ─────────────────────────────────────────────────────── */}
-      <section className="mb-[64px]">
-        <SectionHeading
-          num="Section 02"
-          title="Répartition par catégorie de lieu"
-          lead="La part de vos impressions générées selon le type d'établissement diffuseur. Vérifiez l'adéquation avec votre ciblage."
-        />
-        <Card className="mt-6">
-          {analysis.categories.length === 0 ? (
-            <p className="text-[13.5px] italic text-perf-mist">{PERIOD_EMPTY}</p>
-          ) : (
-            <div className="space-y-4">
-              {analysis.categories.map((row) => (
-                <BarRow key={row.key} row={row} rows={analysis.categories} unit="impr." />
-              ))}
-            </div>
-          )}
-        </Card>
-      </section>
+      {nums.categories && (
+        <>
+          {/* ── Section 02 ─────────────────────────────────────────────────────── */}
+          <section className="mb-[64px]">
+            <SectionHeading
+              num={nums.categories}
+              title="Répartition par catégorie de lieu"
+              lead="La part de vos impressions générées selon le type d'établissement diffuseur. Vérifiez l'adéquation avec votre ciblage."
+            />
+            <Card className="mt-6">
+              {analysis.categories.length === 0 ? (
+                <p className="text-[13.5px] italic text-perf-mist">{PERIOD_EMPTY}</p>
+              ) : (
+                <div className="space-y-4">
+                  {analysis.categories.map((row) => (
+                    <BarRow key={row.key} row={row} rows={analysis.categories} unit="impr." />
+                  ))}
+                </div>
+              )}
+            </Card>
+          </section>
+        </>
+      )}
 
       {/* ── Section 03 ─────────────────────────────────────────────────────── */}
       <section className="mb-[64px]">
-        <SectionHeading num="Section 03" title={audienceCopy.title} lead={audienceCopy.lead} />
+        <SectionHeading
+          num={nums.audience ?? ''}
+          title={audienceCopy.title}
+          lead={audienceCopy.lead}
+        />
         <div
           className={`mt-6 grid grid-cols-1 gap-[18px] ${FEATURE_FLAGS.cspLevel ? 'lg:grid-cols-2' : ''}`}
         >
@@ -241,41 +252,45 @@ export function AnalysisSections({ analysis }: { analysis: AnalysisWire }) {
         </div>
       </section>
 
-      {/* ── Section 04 ─────────────────────────────────────────────────────── */}
-      <section className="mb-[64px]">
-        <SectionHeading
-          num="Section 04"
-          title="Répartition par zone géographique"
-          lead="La couverture de vos impressions sur le Grand Tunis. Repérez vos zones fortes et vos zones absentes."
-        />
-        <Card className="mt-6">
-          {analysis.zones.length === 0 ? (
-            <p className="text-[13.5px] italic text-perf-mist">{PERIOD_EMPTY}</p>
-          ) : (
-            <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2">
-              {analysis.zones.map((row) => {
-                const low = isLowCoverage(row.pct);
-                return (
-                  <BarRow
-                    key={row.key}
-                    row={row}
-                    rows={analysis.zones}
-                    unit="impressions"
-                    muted={low}
-                    trailing={
-                      low ? (
-                        <span className="perf-mono ml-2 rounded-full bg-perf-soft px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.06em] not-italic text-perf-grey">
-                          peu couverte
-                        </span>
-                      ) : null
-                    }
-                  />
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      </section>
+      {nums.zones && (
+        <>
+          {/* ── Section 04 ─────────────────────────────────────────────────────── */}
+          <section className="mb-[64px]">
+            <SectionHeading
+              num={nums.zones}
+              title="Répartition par zone géographique"
+              lead="La couverture de vos impressions sur le Grand Tunis. Repérez vos zones fortes et vos zones absentes."
+            />
+            <Card className="mt-6">
+              {analysis.zones.length === 0 ? (
+                <p className="text-[13.5px] italic text-perf-mist">{PERIOD_EMPTY}</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2">
+                  {analysis.zones.map((row) => {
+                    const low = isLowCoverage(row.pct);
+                    return (
+                      <BarRow
+                        key={row.key}
+                        row={row}
+                        rows={analysis.zones}
+                        unit="impressions"
+                        muted={low}
+                        trailing={
+                          low ? (
+                            <span className="perf-mono ml-2 rounded-full bg-perf-soft px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.06em] not-italic text-perf-grey">
+                              peu couverte
+                            </span>
+                          ) : null
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </section>
+        </>
+      )}
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
 import { logger } from '@/lib/logger';
 
 import OwnerNavigation from '../components/OwnerNavigation';
@@ -77,7 +76,6 @@ import {
   writePeriodSelection,
   writeVenueSelection,
 } from '../lib/performance-period';
-import { ownerSectionNums } from '../lib/performance-sections';
 import {
   OUT_OF_WINDOW,
   type PreparedReport,
@@ -296,13 +294,10 @@ export default function OwnerPerformance() {
     };
     return zeroFillDays(inWindow, clamped);
   }, [days, range, fetchWindow]);
-  // Flag cspLevel — off: the venue's CSP level (« · Premium ») is not shown (operator 2026-10-12).
   const category = categoryLabel(
     profile.data?.business_sector ?? null,
-    FEATURE_FLAGS.cspLevel ? (profile.data?.class ?? null) : null,
+    profile.data?.class ?? null,
   );
-  // Flags ownerPerfPeakHours / ownerPerfDemographics — hidden sections leave no numbering gap.
-  const nums = ownerSectionNums();
   const breakdown = useMemo(
     () => (profile.data?.ratios ? demographicBreakdown(profile.data.ratios, kpis.global) : null),
     [profile.data, kpis.global],
@@ -572,48 +567,35 @@ export default function OwnerPerformance() {
                       />
 
                       <AudienceKpisSection
-                        num={nums.audience}
                         kpis={kpis}
                         hasHostData={hostHasData}
                         hoursEstimated={hoursInfo.estimated}
                       />
 
-                      {nums.peakHours && (
-                        <PeakHoursHeatmap
-                          num={nums.peakHours}
-                          grid={affluenceGrid}
-                          sources={affluenceSources}
-                          hasData={affluence.data?.has_data ?? false}
-                          counts={affluenceCounts}
-                          openingHour={profile.data?.opening_hour ?? null}
-                          closingHour={profile.data?.closing_hour ?? null}
-                        />
-                      )}
-
-                      <ImpressionsChartSection
-                        num={nums.impressions}
-                        days={periodDays}
-                        hasCastData={castHasData}
+                      <PeakHoursHeatmap
+                        grid={affluenceGrid}
+                        sources={affluenceSources}
+                        hasData={affluence.data?.has_data ?? false}
+                        counts={affluenceCounts}
+                        openingHour={profile.data?.opening_hour ?? null}
+                        closingHour={profile.data?.closing_hour ?? null}
                       />
 
-                      {nums.demographics && (
-                        <DemographicsSection
-                          num={nums.demographics}
-                          breakdown={breakdown}
-                          category={category}
-                          hasHostData={hostHasData}
-                        />
-                      )}
+                      <ImpressionsChartSection days={periodDays} hasCastData={castHasData} />
+
+                      <DemographicsSection
+                        breakdown={breakdown}
+                        category={category}
+                        hasHostData={hostHasData}
+                      />
 
                       <RevenueSection
-                        num={nums.revenue}
                         total={periodLines.reduce((sum, l) => sum + l.earnings_tnd, 0)}
                         count={periodLines.length}
                         hasCastData={castHasData}
                       />
 
                       <CampaignsSection
-                        num={nums.campaigns}
                         count={periodLines.length}
                         cumulativeImpressions={cumulativeImpressions}
                         top3={top3}
@@ -621,13 +603,9 @@ export default function OwnerPerformance() {
                         hasCastData={castHasData}
                       />
 
-                      <OptimisationSection
-                        num={nums.optimisation}
-                        pistes={pistes.data?.pistes}
-                        isError={pistes.isError}
-                      />
+                      <OptimisationSection pistes={pistes.data?.pistes} isError={pistes.isError} />
 
-                      <SpsSection num={nums.sps} sps={sps.data} isError={sps.isError} />
+                      <SpsSection sps={sps.data} isError={sps.isError} />
 
                       <DownloadCta
                         hasData={hostHasData || castHasData}

@@ -725,7 +725,7 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
   });
 
   describe('GET /campaigns/:id/report.pdf — the rapport de clôture (Q4 hypothesis)', () => {
-    it('renders sections 01–04 for the caller’s campaign; RG-PERF-31 sweep inside the file', async () => {
+    it('renders the visible sections for the caller’s campaign; RG-PERF-31 sweep inside the file', async () => {
       const me = await seedUser({ businessName: 'Marque Test' });
       const venue = await seedVenue({ venueClass: 'populaire', ratios: true });
       const c = await seedCampaign(me, [venue.id], { name: 'Soldes Été' });
@@ -747,7 +747,10 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
       expect(text).toContain('Sold');
       expect(text).toContain('Marque Test');
       expect(text).toContain('SECTION 01');
-      expect(text).toContain('SECTION 04');
+      // Operator 2026-10-12 — the screencaster flags hide « catégorie de lieu » and « zone
+      // géographique »: the report ends at Section 02 (Profil de l'audience).
+      expect(text).toContain('SECTION 02');
+      expect(text).not.toContain('SECTION 03');
       // HT-1 (ruling 2A) — the budget is HT without the HT/TTC letters.
       expect(text).toContain('TND');
       expect(text).not.toContain('TND HT');

@@ -52,8 +52,6 @@ function DemoRow({
 }
 
 interface DemographicsSectionProps {
-  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
-  num?: string;
   /** null → the venue's ratios have not been synced (no counts computable). */
   breakdown: DemographicBreakdown | null;
   /** The §7 category string, quoted in the how-to-read note. */
@@ -68,7 +66,6 @@ interface DemographicsSectionProps {
  * stay pending until hasHostData AND the ratios exist (both feed the computation).
  */
 export function DemographicsSection({
-  num = 'Section 04',
   breakdown,
   category,
   hasHostData,
@@ -80,7 +77,7 @@ export function DemographicsSection({
   return (
     <section className="mb-[76px]">
       <SectionHeading
-        num={num}
+        num="Section 04"
         title="Profil typologique de votre clientèle"
         lead="Photographie typologique de l'audience qui fréquente votre lieu, établie à partir des mesures réalisées dans un établissement pilote de votre catégorie."
       />

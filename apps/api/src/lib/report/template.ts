@@ -11,7 +11,6 @@ import {
   formatIntFr,
 } from './derive.js';
 import { buildPistes } from './pistes.js';
-import { reportSectionNums } from './sections.js';
 
 // ONE self-contained HTML document for the report — R1.6: the DEDICATED DARK-THEME design,
 // reproduced from the operator-approved mockup (planner: Toodooh_Rapport_Performances.html) —
@@ -285,9 +284,6 @@ export function renderReportHtml(
   opts: { aiPistes?: string | null } = {},
 ): string {
   const { kpis, hostHasData, castHasData } = data;
-  // Flags ownerPerfPeakHours / ownerPerfDemographics — hidden sections leave no numbering gap
-  // (the page's twin numbers the same way).
-  const nums = reportSectionNums();
   const period = `${formatDateFr(data.range.from)} – ${formatDateFr(data.range.to)}`;
   // RPT-COV1 — « 1 jour de données sur 31 », so a thin month says so ON ITS FACE. Mejri had an
   // August report resting on 31/08 alone with nothing in the document admitting it. Deliberately
@@ -343,7 +339,7 @@ export function renderReportHtml(
   };
   const s01 = `
   <div class="section" style="margin-top:26px">
-    ${secHead(nums.audience ?? '', 'Votre audience en chiffres', AUDIENCE_KPIS_LEAD)}
+    ${secHead('Section 01', 'Votre audience en chiffres', AUDIENCE_KPIS_LEAD)}
     <div class="statrow">
       <div class="col">
         <div class="stat-lbl">Audience globale</div>
@@ -393,7 +389,7 @@ export function renderReportHtml(
   // ── S02 ──────────────────────────────────────────────────────────────────────────────────────
   const s02 = `
   <div class="section">
-    ${secHead(nums.peakHours ?? '', 'Vos peak hours', PEAK_HOURS_LEAD)}
+    ${secHead('Section 02', 'Vos peak hours', PEAK_HOURS_LEAD)}
     <div class="panel heat">${heatmapHtml(data.heatLevels, data.heatKinds, data.heatEmpty, data.heatSlots)}
     </div>
   </div>`;
@@ -401,7 +397,7 @@ export function renderReportHtml(
   // ── S03 ──────────────────────────────────────────────────────────────────────────────────────
   const s03 = `
   <div class="section" style="margin-top:0">
-    ${secHead(nums.impressions ?? '', 'Évolution des impressions', "Volume d'impressions servies dans votre lieu, jour par jour, sur la période analysée.")}
+    ${secHead('Section 03', 'Évolution des impressions', "Volume d'impressions servies dans votre lieu, jour par jour, sur la période analysée.")}
     <div class="panel">
       <div class="chartcard-head">
         <span class="t">Impressions par jour</span>
@@ -448,7 +444,7 @@ export function renderReportHtml(
     .join('');
   const s04 = `
   <div class="section">
-    ${secHead(nums.demographics ?? '', 'Profil typologique de votre clientèle', "Photographie typologique de l'audience qui fréquente votre lieu, établie à partir des mesures réalisées dans un établissement pilote de votre catégorie.")}
+    ${secHead('Section 04', 'Profil typologique de votre clientèle', "Photographie typologique de l'audience qui fréquente votre lieu, établie à partir des mesures réalisées dans un établissement pilote de votre catégorie.")}
     <div class="callout">
       <b>Comment lire ce profil.</b> Les répartitions par sexe et tranche d'âge proviennent des mesures réalisées dans un lieu pilote représentatif de la catégorie « <span class="tag">${esc(data.category === '—' ? 'Catégorie de lieu' : data.category)}</span> ». Elles sont exprimées ici en nombre de personnes estimées, et non en pourcentage.
     </div>
@@ -491,7 +487,7 @@ export function renderReportHtml(
       </div>`;
   const s05 = `
   <div class="section">
-    ${secHead(nums.revenue ?? '', 'Vos revenus de la période', 'Voici le total de vos revenus pour la période analysée, avec le détail des campagnes qui les ont générés.')}
+    ${secHead('Section 05', 'Vos revenus de la période', 'Voici le total de vos revenus pour la période analysée, avec le détail des campagnes qui les ont générés.')}
     <div class="rev-card">
       <div class="rev-head">
         <div>
@@ -540,7 +536,7 @@ export function renderReportHtml(
       </table>`;
   const s06 = `
   <div class="section" style="margin-top:0">
-    ${secHead(nums.campaigns ?? '', 'Vos campagnes', 'Synthèse et historique des campagnes diffusées dans votre lieu sur la période analysée.')}
+    ${secHead('Section 06', 'Vos campagnes', 'Synthèse et historique des campagnes diffusées dans votre lieu sur la période analysée.')}
     <div style="margin-top:10px">
       <div class="sub-h">Vos campagnes en chiffres</div>
       <div class="sub-lead">Synthèse des campagnes diffusées dans votre lieu sur la période analysée.</div>
@@ -593,7 +589,7 @@ export function renderReportHtml(
     .join('');
   const s07 = `
   <div class="section section--pistes">
-    ${secHead(nums.optimisation ?? '', "Vos pistes d'optimisation futures", "Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus.")}
+    ${secHead('Section 07', "Vos pistes d'optimisation futures", "Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus.")}
     <div class="callout"><b>Lecture personnalisée.</b> Ces pistes s'appuient sur les données mesurées dans votre lieu - audience, profil typologique, performance des campagnes diffusées.</div>
     ${pisteCards}
   </div>`;
@@ -620,7 +616,7 @@ export function renderReportHtml(
     .join('\n        ');
   const s08 = `
   <div class="section">
-    ${secHead(nums.sps ?? '', 'Votre score de priorité', 'Le score de priorité reflète votre engagement sur la plateforme. Plus il est élevé, plus vous êtes positionné en priorité quand de nouvelles campagnes sont à diffuser dans le réseau.')}
+    ${secHead('Section 08', 'Votre score de priorité', 'Le score de priorité reflète votre engagement sur la plateforme. Plus il est élevé, plus vous êtes positionné en priorité quand de nouvelles campagnes sont à diffuser dans le réseau.')}
     <div class="score-hero">
       <div class="score-current">
         <div class="l">Score actuel</div>
@@ -1041,13 +1037,13 @@ ${cover}
 <div class="page">${runhead}
   ${metastrip}
   ${s01}
-  ${nums.peakHours ? s02 : ''}
+  ${s02}
   ${footer(2)}
 </div>
 
 <div class="page">${runhead}
   ${s03}
-  ${nums.demographics ? s04 : ''}
+  ${s04}
   ${s05}
   ${footer(3)}
 </div>

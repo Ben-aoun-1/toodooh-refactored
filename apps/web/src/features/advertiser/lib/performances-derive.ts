@@ -168,3 +168,24 @@ export function audienceSectionCopy(cspLevel: boolean): { title: string; lead: s
         lead: "La composition de l'audience mesurée dans les lieux où votre marque a diffusé, pendant la diffusion. Ces nombres décrivent l'audience présente, sans identifier aucune personne.",
       };
 }
+
+/** The screencaster « Mes performances » analysis sections, in order. */
+export const SCREENCASTER_SECTIONS = ['overview', 'categories', 'audience', 'zones'] as const;
+export type ScreencasterSection = (typeof SCREENCASTER_SECTIONS)[number];
+
+/**
+ * « Section 0N » for each VISIBLE section (operator 2026-10-12: « Répartition par catégorie de
+ * lieu » and « Répartition par zone géographique » hidden behind flags) — numbered without a gap.
+ * The api's campaign-report PDF (lib/campaign-report-pdf) numbers the same way.
+ */
+export const screencasterSectionNums = (flags: {
+  screencasterPerfCategories: boolean;
+  screencasterPerfZones: boolean;
+}): Partial<Record<ScreencasterSection, string>> =>
+  Object.fromEntries(
+    SCREENCASTER_SECTIONS.filter(
+      (s) =>
+        (s !== 'categories' || flags.screencasterPerfCategories) &&
+        (s !== 'zones' || flags.screencasterPerfZones),
+    ).map((s, i) => [s, `Section ${String(i + 1).padStart(2, '0')}`]),
+  );

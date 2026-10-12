@@ -17,8 +17,6 @@ function CriterionBar({ pct }: { pct: number }) {
 }
 
 interface SpsSectionProps {
-  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
-  num?: string;
   /** undefined while loading — the card keeps its wait-state until the wire answers. */
   sps: VenueSps | undefined;
   isError: boolean;
@@ -31,7 +29,7 @@ interface SpsSectionProps {
  * (wire nulls, loading, or error) — never invented numbers. The Classement stays « À venir »
  * (no ranking data yet).
  */
-export function SpsSection({ num = 'Section 08', sps, isError }: SpsSectionProps) {
+export function SpsSection({ sps, isError }: SpsSectionProps) {
   const live = !isError && sps !== undefined && sps.sps !== null && sps.variables !== null;
   const criteria = live && sps.variables ? spsCriteria(sps.variables) : null;
   const scoreLabel = live ? spsScoreLabel(sps.sps) : 'À venir';
@@ -42,7 +40,7 @@ export function SpsSection({ num = 'Section 08', sps, isError }: SpsSectionProps
   return (
     <section className="mb-[76px]">
       <SectionHeading
-        num={num}
+        num="Section 08"
         title="Votre score de priorité"
         lead="Le score de priorité reflète votre engagement sur la plateforme. Plus il est élevé, plus vous êtes positionné en priorité quand de nouvelles campagnes sont à diffuser dans le réseau."
       />
