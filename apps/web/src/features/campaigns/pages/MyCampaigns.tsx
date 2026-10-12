@@ -686,7 +686,7 @@ export default function MyCampaigns() {
                       <span>BUDGET</span>
                     </div>
                     {/* CF-U1 (Mejri item 6) — null renders « — » (no phantom 5 000); a set
-                        budget carries its TTC. */}
+                        budget is the HT figure, without letters (HT-1). */}
                     <p className="text-base font-bold text-gray-900 tabular-nums">
                       {tndOrDash(campaign.budget)}
                     </p>

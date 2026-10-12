@@ -26,7 +26,7 @@ import {
 import { type InvoiceRow, recapitulatifDesignation } from '@/features/wallet/lib/wallet-ledger';
 import { recapitulatifFilename, walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
-import { tndLabel } from '@/lib/money';
+import { tndLabel, ttcFromHt } from '@/lib/money';
 
 const log = logger.child({ module: 'MyInvoices' });
 
@@ -193,10 +193,15 @@ export default function MyInvoices() {
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
                     Désignation
                   </th>
+                  {/* Operator 2026-10-12 — « Mes factures » always shows HT AND TTC (every other
+                      screencaster screen shows the HT figure alone, without letters). */}
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
                     <span className="inline-flex items-center gap-1">
-                      <Banknote className="h-3 w-3" /> Montant
+                      <Banknote className="h-3 w-3" /> Montant HT
                     </span>
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
+                    Montant TTC
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
                     <span className="inline-flex items-center gap-1">
@@ -220,6 +225,9 @@ export default function MyInvoices() {
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-gray-900">
                       {tndLabel(facture.montant)}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-gray-700">
+                      {tndLabel(ttcFromHt(facture.montant))}
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">
                       {formatDate(facture.date_emission)}
