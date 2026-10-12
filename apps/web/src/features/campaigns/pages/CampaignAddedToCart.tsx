@@ -1,12 +1,10 @@
 import { Loader2, PartyPopper } from 'lucide-react';
-import { useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
-import PeriodEventCard from '@/features/events/components/PeriodEventCard';
-import { useEventsCatalogue, usePositionner } from '@/features/events/hooks/useEvents';
+import CatalogueEventCard from '@/features/events/components/catalogue/CatalogueEventCard';
+import { useEventsCatalogue } from '@/features/events/hooks/useEvents';
 import {
   PERIOD_SUGGESTION_ADDED,
   PERIOD_SUGGESTION_EMPTY,
@@ -14,11 +12,6 @@ import {
   addedPageState,
   suggestEventsForPeriod,
 } from '@/features/events/lib/period-suggestions';
-import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-
-const log = logger.child({ module: 'CampaignAddedToCart' });
-
 /**
  * SUGG-1 — the page « Ajouter au panier » lands on (Figma « Lancer une campagne », last frame):
  * the confirmation, then every positionable event (during the campaign first, then « à la une »,
@@ -34,8 +27,6 @@ export default function CampaignAddedToCart() {
   // (a cached list predates it), and decide « missing » only once that read is done.
   const { campaigns, loading, fetching } = useMyCampaigns(user?.id, { refetchOnMount: 'always' });
   const { data: catalogue, isLoading: catalogueLoading } = useEventsCatalogue();
-  const positionner = usePositionner();
-  const [pendingId, setPendingId] = useState<string | null>(null);
 
   const campaign = campaigns.find((c) => c.id === campaignId);
   const pageState = addedPageState({ found: campaign !== undefined, loading, fetching });
@@ -53,19 +44,6 @@ export default function CampaignAddedToCart() {
   );
   const suggestions = suggestEventsForPeriod(campaign, catalogue ?? [], ownPositioned);
 
-  const handlePositionner = async (eventId: string) => {
-    setPendingId(eventId);
-    try {
-      const created = await positionner.mutateAsync(eventId);
-      navigate(`/evenements/positionnement/${created.id}`);
-    } catch (error) {
-      toast.error(getErrorMessage(error) || 'Le positionnement n’a pas pu être créé.');
-      log.error({ err: error }, 'period suggestion positionner failed');
-    } finally {
-      setPendingId(null);
-    }
-  };
-
   return (
     <div className="mx-auto flex max-w-5xl flex-col items-center gap-6 px-4 py-8">
       <div className="flex flex-col items-center gap-3">
@@ -80,15 +58,11 @@ export default function CampaignAddedToCart() {
           {PERIOD_SUGGESTION_EMPTY}
         </p>
       ) : (
-        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        // The Événements page's own card (poster, date, window, « Je me positionne »), as in
+        // the panier's suggestions — one look for an event everywhere.
+        <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
           {suggestions.map((event) => (
-            <PeriodEventCard
-              key={event.id}
-              event={event}
-              pending={pendingId === event.id}
-              disabled={positionner.isPending}
-              onPositionner={(id) => void handlePositionner(id)}
-            />
+            <CatalogueEventCard key={event.id} event={event} />
           ))}
         </div>
       )}
