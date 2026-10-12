@@ -2385,10 +2385,14 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
       )
       .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .innerJoin(users, eq(campaigns.advertiserId, users.id))
       .where(
         and(
           eq(screenhosts.ownerId, userId),
           eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
+          // DEMO-1 (operator 2026-10-12) — demo campaigns stay off the owner's calendar too (their
+          // plays still count in the venue's audience numbers, which the demo shows on purpose).
+          eq(users.isDemo, false),
         ),
       )
       .orderBy(asc(campaigns.startDate), asc(campaignDispatchAllocation.createdAt));

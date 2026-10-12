@@ -31,9 +31,16 @@ import { walletSpendable } from '../src/lib/recharges.js';
 import { reconcileCampaignById } from '../src/lib/reconcile/reconcile-service.js';
 import { adminDemoRoutes } from '../src/routes/admin-demo.js';
 import { cartRoutes } from '../src/routes/cart.js';
+import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
+
+// The screenhost router imports the wedooh sync — mocked so the test never touches the wire.
+vi.mock('../src/lib/wedooh-sync.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/wedooh-sync.js')>();
+  return { ...actual, pushApprovedOwnerLocations: vi.fn(() => Promise.resolve()) };
+});
 
 // DEMO-1 (operator 2026-10-12, rulings A A A A A A) — demo mode end to end on a real Postgres:
 // the admin creates a demo screencaster, opens ONE of two real venues to demos and sets the
@@ -144,6 +151,7 @@ describe('DEMO-1 — demo mode (real Postgres)', () => {
     app = buildApp();
     await app.register(adminDemoRoutes);
     await app.register(cartRoutes);
+    await app.register(screenhostsRoutes);
     await app.ready();
   });
 
@@ -337,6 +345,20 @@ describe('DEMO-1 — demo mode (real Postgres)', () => {
     mockSession(someone);
     const res = await app.inject({ method: 'GET', url: '/api/admin/demo' });
     expect(res.statusCode).toBe(403);
+  });
+
+  it("the owner's campaign list and calendar do not show a demo campaign", async () => {
+    const w = await world();
+    const id = await seedDraft(w.demo.id, w.sector);
+    expect((await launch(w.demo.id, id)).statusCode).toBe(200);
+    vi.restoreAllMocks();
+    mockSession(w.owner, 'individual_owner');
+    const list = await app.inject({ method: 'GET', url: '/api/screenhosts/campaigns' });
+    expect(list.statusCode).toBe(200);
+    expect(JSON.stringify(list.json())).not.toContain(id);
+    const calendar = await app.inject({ method: 'GET', url: '/api/screenhosts/calendar' });
+    expect(calendar.statusCode).toBe(200);
+    expect(calendar.json()).toEqual([]);
   });
 
   it('deleting a demo account stops its campaigns and bans it', async () => {
