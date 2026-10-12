@@ -25,6 +25,24 @@ export const PERIOD_SUGGESTION_NOTE =
 /** The card shows at most this many sector tags; the rest is counted (« +N »). */
 export const PERIOD_SUGGESTION_MAX_TAGS = 2;
 
+/**
+ * What the page renders for its campaign id. The list it reads is React Query's CACHED
+ * GET /campaigns/mine: a draft created inside the wizard is not in a list cached earlier (the
+ * Dashboard reads it), and that cache was not refetched while nothing observed it — so « not in
+ * the list » only means « missing » once no read is in flight. Before this, the stale list
+ * forwarded every NEW campaign to the panier and the page never showed.
+ */
+export type AddedPageState = 'loading' | 'missing' | 'ready';
+
+export const addedPageState = (input: {
+  found: boolean;
+  loading: boolean;
+  fetching: boolean;
+}): AddedPageState => {
+  if (input.found) return 'ready';
+  return input.loading || input.fetching ? 'loading' : 'missing';
+};
+
 interface CampaignPeriod {
   start_date: string | null;
   end_date: string | null;

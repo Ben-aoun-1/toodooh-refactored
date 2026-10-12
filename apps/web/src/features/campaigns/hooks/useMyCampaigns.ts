@@ -96,16 +96,22 @@ function toRow(c: CampaignView): MyCampaignRow {
  * `campaignsKeys.list(userId)`, the key the create / update / submit / delete mutations already
  * invalidate — and maps the wire `CampaignView` rows into the page's render shape.
  */
-export function useMyCampaigns(userId: string | undefined): {
+export function useMyCampaigns(
+  userId: string | undefined,
+  opts: { refetchOnMount?: 'always' } = {},
+): {
   campaigns: MyCampaignRow[];
   loading: boolean;
+  /** true while ANY read is in flight, a background refetch of cached data included. */
+  fetching: boolean;
   isError: boolean;
 } {
-  const query = useMyCampaignsList(userId);
+  const query = useMyCampaignsList(userId, opts);
   const campaigns = useMemo(() => (query.data ?? []).map(toRow), [query.data]);
   return {
     campaigns,
     loading: query.isLoading,
+    fetching: query.isFetching,
     isError: query.isError,
   };
 }
