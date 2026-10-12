@@ -89,6 +89,9 @@ export const adminKeys = {
   /** CPM-3 — the « CPM par screencaster » table (GET /api/admin/screencasters/cpm). */
   screencasterCpm: () => [...adminKeys.all, 'screencasterCpm'] as const,
 
+  /** DEMO-1 — the « Démo » page: delay, demo venues, demo accounts (GET /api/admin/demo). */
+  demo: () => [...adminKeys.all, 'demo'] as const,
+
   /** End-user list for UserManagement (`adminUserService.getUsers`). */
   users: () => [...adminKeys.all, 'users'] as const,
   /** EL1 — one venue's dispatch-eligibility view (`adminScreenhostService.getEligibility`). */
