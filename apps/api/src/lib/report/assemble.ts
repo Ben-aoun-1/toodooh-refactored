@@ -13,6 +13,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { getDispatchConfig } from '../dispatch/config.js';
+import { FEATURE_FLAGS } from '../feature-flags.js';
 import { SLOTS_PER_DAY, hourOfSlot } from '../half-hour-slots.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
 import { broadcastableHours, isOpenAt } from '../opening-hours.js';
@@ -505,7 +506,8 @@ export async function assembleReportData(
 
   return {
     venueName: venue.name,
-    category: categoryLabel(venue.sectorName, venue.class),
+    // Flag cspLevel — off: the venue's CSP level is not printed (operator 2026-10-12).
+    category: categoryLabel(venue.sectorName, FEATURE_FLAGS.cspLevel ? venue.class : null),
     range,
     // RPT-COV1 — the merge's days ARE the days that carry data: a date with no cell never becomes
     // a data point. Whether they are measured or estimated is disclosed separately by

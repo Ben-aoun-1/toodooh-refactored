@@ -17,16 +17,22 @@ const PISTE_STYLES = [
 ] as const;
 
 interface OptimisationSectionProps {
+  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
+  num?: string;
   /** undefined while loading; the section keeps its frame either way. */
   pistes: VenuePiste[] | undefined;
   isError: boolean;
 }
 
-export function OptimisationSection({ pistes, isError }: OptimisationSectionProps) {
+export function OptimisationSection({
+  num = 'Section 07',
+  pistes,
+  isError,
+}: OptimisationSectionProps) {
   return (
     <section className="mb-[76px]">
       <SectionHeading
-        num="Section 07"
+        num={num}
         title="Vos pistes d'optimisation futures"
         lead="Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus."
       />

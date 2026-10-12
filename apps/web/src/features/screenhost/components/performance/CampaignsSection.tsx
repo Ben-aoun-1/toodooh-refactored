@@ -16,6 +16,8 @@ export interface CampaignTableRow {
 }
 
 interface CampaignsSectionProps {
+  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
+  num?: string;
   count: number;
   cumulativeImpressions: number;
   top3: string[];
@@ -42,6 +44,7 @@ function KpiLabel({ children }: { children: React.ReactNode }) {
 
 /** S06 — "Vos campagnes": KPI trio (count / cumulative impressions / top 3) + the history table. */
 export function CampaignsSection({
+  num = 'Section 06',
   count,
   cumulativeImpressions,
   top3,
@@ -52,7 +55,7 @@ export function CampaignsSection({
   return (
     <section className="mb-[76px]">
       <SectionHeading
-        num="Section 06"
+        num={num}
         title="Vos campagnes"
         lead="Synthèse et historique des campagnes diffusées dans votre lieu sur la période analysée."
       />

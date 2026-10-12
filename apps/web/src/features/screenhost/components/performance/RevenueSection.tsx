@@ -7,6 +7,8 @@ import { SectionHeading } from './SectionHeading';
 import { Var } from './Var';
 
 interface RevenueSectionProps {
+  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
+  num?: string;
   total: number;
   count: number;
   /** CAST first-data flag — until true, the 'À venir' variant; after, values with 0s. */
@@ -19,12 +21,17 @@ interface RevenueSectionProps {
  * US-P.9's « Vos campagnes » table, and showing it twice made the two lists drift apart in the
  * reader's head. The 'À venir' empty state is unchanged.
  */
-export function RevenueSection({ total, count, hasCastData }: RevenueSectionProps) {
+export function RevenueSection({
+  num = 'Section 05',
+  total,
+  count,
+  hasCastData,
+}: RevenueSectionProps) {
   const empty = !hasCastData;
   return (
     <section className="mb-[76px]">
       <SectionHeading
-        num="Section 05"
+        num={num}
         title="Vos revenus de la période"
         lead="Voici le total de vos revenus pour la période analysée."
       />

@@ -43,6 +43,8 @@ const closedHour = (
 };
 
 interface PeakHoursHeatmapProps {
+  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
+  num?: string;
   /** The api's 7×48 MERGED typical-week grid (grid[0]=Monday), values as served — SLOT columns;
    * null = no cell (HOUR-AVG2). */
   grid: (number | null)[][];
@@ -73,6 +75,7 @@ interface PeakHoursHeatmapProps {
  * carries the same string for assistive tech.
  */
 export function PeakHoursHeatmap({
+  num = 'Section 02',
   grid,
   sources,
   hasData,
@@ -119,7 +122,7 @@ export function PeakHoursHeatmap({
 
   return (
     <section className="mb-[76px]">
-      <SectionHeading num="Section 02" title="Vos peak hours" lead={PEAK_HOURS_LEAD} />
+      <SectionHeading num={num} title="Vos peak hours" lead={PEAK_HOURS_LEAD} />
 
       {empty ? (
         <div className="mt-8 rounded-xl border-2 border-dashed border-perf-line bg-white px-6 py-12 text-center">

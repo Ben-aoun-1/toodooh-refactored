@@ -16,6 +16,8 @@ import { ChartPlaceholder } from './Pending';
 import { SectionHeading } from './SectionHeading';
 
 interface ImpressionsChartSectionProps {
+  /** The section's « Section 0N » label — numbered by lib/performance-sections (flags hide some). */
+  num?: string;
   /** The period's days — ZERO-FILLED by the page once hasCastData (0 on days without data). */
   days: DailyImpressionsPoint[];
   /** CAST first-data flag — until true, the chart shows the pending placeholder. */
@@ -27,11 +29,15 @@ interface ImpressionsChartSectionProps {
  * hasCastData the chart always draws (zero-filled days); the placeholder only remains for the
  * pre-first-data state or a period entirely outside the 400-day fetch window.
  */
-export function ImpressionsChartSection({ days, hasCastData }: ImpressionsChartSectionProps) {
+export function ImpressionsChartSection({
+  num = 'Section 03',
+  days,
+  hasCastData,
+}: ImpressionsChartSectionProps) {
   return (
     <section className="mb-[76px]">
       <SectionHeading
-        num="Section 03"
+        num={num}
         title="Évolution des impressions"
         lead="Volume d'impressions servies dans votre lieu, jour par jour, sur la période analysée."
       />

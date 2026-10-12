@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { HEATMAP_SLOTS, type ReportData } from '../src/lib/report/assemble.js';
 import {
@@ -16,6 +16,13 @@ import {
   impressionsChartSvg,
   renderReportHtml,
 } from '../src/lib/report/template.js';
+
+// This suite pins the CONTENT of every section, the flag-hidden ones included: it renders with
+// every display flag ON. The flags-off document (hidden S02/S04, renumbering, no CSP suffix) is
+// pinned in report-feature-flags.test.ts.
+vi.mock('../src/lib/feature-flags.js', () => ({
+  FEATURE_FLAGS: { ownerPerfPeakHours: true, ownerPerfDemographics: true, cspLevel: true },
+}));
 
 /** Two named matches — pinned here so the PDF can't drift from the generator's copy. */
 const TWO_MATCHES = {
