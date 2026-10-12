@@ -144,7 +144,10 @@ describe('epic 9 — « Prochaines opportunités » is static (US-9.1 / US-9.2)'
       'Augmenter les impressions prévues pour élargir la portée.',
     );
     expect(OPPORTUNITY_CARDS[2]?.body).toContain('QR code');
-    expect(OPPORTUNITIES_INTRO).toContain('Quelques pistes pour renforcer');
+    expect(OPPORTUNITIES_INTRO).toBe(
+      "Quelques pistes pour renforcer l'impact de vos prochaines campagnes.",
+    );
+    expect(OPPORTUNITIES_INTRO).not.toContain('même pour tous'); // operator 2026-10-12
     // The maquette's 4th card is excluded.
     expect(OPPORTUNITY_CARDS.some((c) => /couverture des lieux/i.test(c.title))).toBe(false);
   });

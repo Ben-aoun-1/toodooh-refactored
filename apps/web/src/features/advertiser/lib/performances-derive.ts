@@ -37,8 +37,9 @@ export const HISTORY_NO_MATCH = 'Aucune campagne ne correspond à votre recherch
 export const SELECTOR_EMPTY = 'Aucune campagne clôturée.';
 export const PERIOD_EMPTY = 'Aucune campagne clôturée ne correspond à ce périmètre.';
 /** US-9.2 (hypothesis) — the opportunities intro marks the bloc as generic pistes. */
+// Operator 2026-10-12 — the « same for every Screencaster » sentence is removed from the screen.
 export const OPPORTUNITIES_INTRO =
-  "Quelques pistes pour renforcer l'impact de vos prochaines campagnes. Ce bloc est le même pour tous les Screencasters et reste affiché quel que soit le filtre sélectionné plus haut.";
+  "Quelques pistes pour renforcer l'impact de vos prochaines campagnes.";
 
 /** US-9.1 — exactly three cards, this order, hardcoded (no data model). */
 export const OPPORTUNITY_CARDS: readonly { title: string; body: string }[] = [
