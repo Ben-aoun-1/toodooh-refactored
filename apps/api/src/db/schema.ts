@@ -716,6 +716,50 @@ export const screenhostMonthlyReports = pgTable(
 export type ScreenhostMonthlyReport = typeof screenhostMonthlyReports.$inferSelect;
 export type NewScreenhostMonthlyReport = typeof screenhostMonthlyReports.$inferInsert;
 
+// ── screenhost_pistes (PISTES-V2, mig 0083) ──
+// The S07 Piste 02 « Repérez vos angles morts », generated ONCE per completed month by the
+// month-end job and stored: the page and the PDF show the last complete month's row, and the rows
+// are the history the next generation rotates on (famille_levier, titre, créneaux — spec §9.8).
+// hypothese_formulee is internal traceability, never shown to the owner.
+export const screenhostPistes = pgTable(
+  'screenhost_pistes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(), // 'YYYY-MM'
+    statut: text('statut').$type<'genere' | 'degrade' | 'insuffisant'>().notNull(),
+    titre: text('titre'),
+    corps: text('corps').notNull(),
+    familleLevier: text('famille_levier'),
+    creneauxCites: jsonb('creneaux_cites')
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    hypotheseFormulee: text('hypothese_formulee'),
+    confiance: text('confiance').$type<'haute' | 'moyenne' | 'faible'>(),
+    model: text('model'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('screenhost_pistes_sh_month_uq').on(table.screenhostId, table.month),
+    check('screenhost_pistes_month_fmt', sql`${table.month} ~ '^\\d{4}-\\d{2}$'`),
+    check('screenhost_pistes_statut', sql`${table.statut} IN ('genere', 'degrade', 'insuffisant')`),
+    check(
+      'screenhost_pistes_famille',
+      sql`${table.familleLevier} IS NULL OR ${table.familleLevier} ~ '^[A-H]$'`,
+    ),
+    check(
+      'screenhost_pistes_confiance',
+      sql`${table.confiance} IS NULL OR ${table.confiance} IN ('haute', 'moyenne', 'faible')`,
+    ),
+  ],
+);
+
+export type ScreenhostPiste = typeof screenhostPistes.$inferSelect;
+export type NewScreenhostPiste = typeof screenhostPistes.$inferInsert;
+
 // ── agents + agent_referrals (P1 — agent unique codes + referral linkage) ──
 // Each agent user (role screenhost_agent | screencast_agent) owns ONE issued
 // referral code, held here in `agents.code`. This is the agent's OWN code and

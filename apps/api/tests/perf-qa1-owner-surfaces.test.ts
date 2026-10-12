@@ -440,7 +440,7 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       );
     });
 
-    it('goes through the SAME cache-wrapped seam as the period report, keyed venue × period', async () => {
+    it('goes through the SAME stored-piste seam as the period report, keyed by venue only (PISTES-V2)', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me);
       await seedInspection(sh, me); // MEJ-14b — idem: Piste 03 needs a computable score to exist
@@ -452,11 +452,8 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       expect(body.pistes[1]?.body).toBe('Corps IA du créneau faible.');
       expect(body.pistes[1]?.title).toBe(PISTE_02_TITLE); // the title stays FIXED either way
       expect(pistesCachedSpy).toHaveBeenCalledTimes(1);
-      expect(pistesCachedSpy.mock.calls[0]?.[0]).toBe(sh);
-      expect(pistesCachedSpy.mock.calls[0]?.[1]?.range).toEqual({
-        from: '2026-06-01',
-        to: '2026-06-30',
-      });
+      // PISTES-V2 — the last STORED month, whatever période the pills select: no range rides.
+      expect(pistesCachedSpy.mock.calls[0]).toEqual([sh]);
       // …and the ai body only ever displaces Piste 02 — 01/03 stay generator-authored.
       expect(body.pistes[0]?.body).toBe(PISTE_01_NO_EVENTS_BODY);
       expect(body.pistes[2]?.body).toContain('Votre score de priorité est de');

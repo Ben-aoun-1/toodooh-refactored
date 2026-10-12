@@ -18,6 +18,10 @@ import { storage } from '../src/storage/s3-storage.js';
 //
 // Caveat (operator-accepted): the S02 heatmap reads the venue's CURRENT affluence window, so a
 // regenerated report reflects the regeneration date's rolling window, not the original one.
+//
+// PISTES-V2 — each month's Piste 02 goes through pistesForReport: a month with a stored piste
+// reuses it, a month without one is generated and STORED (oldest month first, so the lever
+// rotation history builds in order). A first run after the deploy is therefore also the backfill.
 
 export interface RegenTarget {
   screenhostId: string;

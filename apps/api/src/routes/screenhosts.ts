@@ -1541,9 +1541,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
-    // R2 — cache-wrapped AI pistes (per venue × period, 24h); null → the generic pistes. The
-    // generator can never fail the render (hard fallback contract + belt-and-braces catch).
-    const aiPistes = await pistesForReportCached(owned.id, data).catch(() => null);
+    // PISTES-V2 — Piste 02 is the venue's last STORED month (generated once at month end; never
+    // on a request). A read failure can never fail the render (belt-and-braces catch).
+    const aiPistes = await pistesForReportCached(owned.id).catch(() => null);
 
     let pdf: Buffer;
     try {
@@ -1571,7 +1571,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // never disagree. PERF-QA2: the three bodies come from lib/report/pistes.ts over the SAME
   // assembled data the PDF renders (événements + SPS), so « same engine » is now structural
   // rather than a pair of shared constants. Piste 02 is the cached AI body when available, the
-  // generic body otherwise — a pistes failure NEVER fails the response. NO new AI contract.
+  // wait state otherwise — a pistes failure NEVER fails the response. PISTES-V2: Piste 02 is the
+  // venue's last stored month (whatever période the pills select) — the model never runs here.
   app.get('/api/screenhosts/:id/pistes', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -1633,7 +1634,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     if (!data) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
-    const aiBody = await pistesForReportCached(owned.id, data).catch(() => null);
+    const aiBody = await pistesForReportCached(owned.id).catch(() => null);
     return reply.status(200).send({
       pistes: buildPistes({ events: data.upcomingEvents, sps: data.sps, aiBody }),
     });
