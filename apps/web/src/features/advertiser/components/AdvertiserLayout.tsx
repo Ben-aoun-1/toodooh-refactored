@@ -23,6 +23,7 @@ import ContentErrorBoundary from '@/components/ContentErrorBoundary';
 import { ModalProvider, useModal } from '@/contexts/ModalContext';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import CartWidget from '@/features/cart/components/CartWidget';
+import { EVENTS_PATHS } from '@/features/events/lib/events-home';
 
 import PageHeader from './PageHeader';
 import SidebarNavItem from './SidebarNavItem';
@@ -140,7 +141,8 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
             onNavigate={() => setIsMenuOpen(false)}
           />
           <SidebarNavItem
-            path="/evenements"
+            path={EVENTS_PATHS.home}
+            activeOn={[EVENTS_PATHS.football, EVENTS_PATHS.ramadan]}
             label="Événements"
             activeIcon={agendaIconActive}
             inactiveIcon={agendaIcon}

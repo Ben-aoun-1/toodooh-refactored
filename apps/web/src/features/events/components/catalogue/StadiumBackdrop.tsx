@@ -1,19 +1,10 @@
 import { useId, useMemo } from 'react';
 
+import { seededRandom as seeded } from '../../lib/seeded-random';
+
 // EVT-CAT2 — the poster's stadium (Youssef's validated design): a night sky, two floodlights and
 // their beams, a crowd tinted with each side's colours, the LED boards reading « toodooh », and a
 // mowed pitch. Seeded, so a card always draws the same crowd. Decorative (aria-hidden).
-
-/** mulberry32 — a tiny deterministic PRNG (the same seed always yields the same crowd). */
-function seeded(seed: number): () => number {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 interface Dot {
   x: number;

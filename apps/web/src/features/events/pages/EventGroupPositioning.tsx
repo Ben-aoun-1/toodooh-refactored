@@ -20,6 +20,7 @@ import { useEventsCatalogue } from '../hooks/useEvents';
 import { cardTitle, dateLine, hourLabel } from '../lib/event-catalogue';
 import { parseGroupIds } from '../lib/event-group';
 import { groupMinutesTotal } from '../lib/event-minutes';
+import { EVENTS_PATHS } from '../lib/events-home';
 
 const log = logger.child({ module: 'EventGroupPositioning' });
 
@@ -147,11 +148,11 @@ export default function EventGroupPositioning() {
   const handleQuit = () =>
     run('Erreur lors de la suppression des brouillons', async () => {
       for (const id of ids) await deleteCampaign.mutateAsync(id);
-      navigate(exitTo ?? '/evenements');
+      navigate(exitTo ?? EVENTS_PATHS.football);
     });
 
   if (ids.length === 0) {
-    navigate('/evenements');
+    navigate(EVENTS_PATHS.football);
     return null;
   }
 
@@ -167,7 +168,7 @@ export default function EventGroupPositioning() {
           </div>
           <button
             type="button"
-            onClick={() => setExitTo('/evenements')}
+            onClick={() => setExitTo(EVENTS_PATHS.football)}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
           >
             <X className="h-5 w-5" />
@@ -224,7 +225,7 @@ export default function EventGroupPositioning() {
           draftCampaignId={ids[0] ?? null}
           saving={busy}
           onNext={handleZonesNext}
-          onBack={() => setExitTo('/evenements')}
+          onBack={() => setExitTo(EVENTS_PATHS.football)}
         />
       )}
       {step === 2 && (

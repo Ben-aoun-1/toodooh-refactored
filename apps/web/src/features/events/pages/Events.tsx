@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 
 import CatalogueEventCard from '../components/catalogue/CatalogueEventCard';
 import SelectionPanel from '../components/catalogue/SelectionPanel';
-import MesEvenementsStrip from '../components/MesEvenementsStrip';
+import EventsCrumb from '../components/home/EventsCrumb';
 import SuggestMatchForm from '../components/SuggestMatchForm';
 import {
   useEventsCatalogue,
@@ -33,7 +33,8 @@ const log = logger.child({ module: 'Events' });
  * Toodooh fonts. « À la une » (the hero + pinned cards), then the matches month by month, each
  * card « Ajouter à ma sélection » + « Je me positionne »; « Ma sélection » sums the selection's
  * maximum impressions and opens the multi-match parcours (one big minutes slider, one small one
- * per match). Under it, unchanged: « Mes Événements » and the screencasters' suggestions.
+ * per match). Under it: the screencasters' suggestions. Operator 2026-10-12: this is the FOOTBALL
+ * universe (/evenements/football) of the Événements home; « Mes Événements » moved to the home.
  * The search (ruling 2026-10-08, 1 A) filters the catalogue and the suggestions; « Ma sélection »
  * keeps what was picked even when a search hides it.
  */
@@ -94,6 +95,8 @@ export default function Events() {
         title="Événements"
         subtitle="Profitez des pics d’audience des grands matchs pour amplifier votre impact"
       />
+
+      <EventsCrumb />
 
       <div className="relative max-w-xl">
         <Search
@@ -170,10 +173,8 @@ export default function Events() {
         />
       </div>
 
-      {/* Kept under the new design (operator ruling): the screencaster's own positionings … */}
-      <MesEvenementsStrip />
-
-      {/* … and the screencasters' suggestions + « Suggérer un match ». */}
+      {/* The screencasters' suggestions + « Suggérer un match » (« Mes Événements » lives on the
+          Événements home since 2026-10-12, Q3 A). */}
       <div>
         <button
           type="button"

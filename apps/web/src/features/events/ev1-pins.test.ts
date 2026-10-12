@@ -40,11 +40,11 @@ describe('the Événements page', () => {
   // through the ONE lib home, « Ma sélection », and « Mes Événements » + the suggestions kept
   // under it. 2026-10-08 (ruling 1 A) the search bar is BACK, through the ONE lib search, on the
   // catalogue AND the suggestions.
-  it('lays the catalogue out through the ONE lib home, with « Ma sélection » and « Mes Événements »', () => {
+  it('lays the catalogue out through the ONE lib home, with « Ma sélection » (« Mes Événements » moved to the home, 2026-10-12 Q3 A)', () => {
     expect(source).toContain('layoutCatalogue(searchEvents(catalogue');
     expect(source).toContain('searchEvents(suggested');
     expect(source).toContain('<SelectionPanel');
-    expect(source).toContain('<MesEvenementsStrip />');
+    expect(read('pages/EventsHome.tsx')).toContain('<MesEvenementsStrip />');
   });
 });
 
