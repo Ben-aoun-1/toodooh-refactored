@@ -2,22 +2,23 @@ import { sectorDisplayName } from '@/features/advertiser/constants/sector-displa
 
 import type { EventItemView } from '../services/events.api';
 
-import { suggestEventsForCampaigns } from './event-positioning';
+import { eventSuggestedForWindow } from './event-positioning';
 
 // SUGG-1 — the « Votre campagne a été ajoutée au panier » page (Figma « Lancer une campagne »,
-// last frame; operator rulings 2026-09-28: Q3 A = events INSIDE the campaign's own period, no
-// +7-day tail). Operator 2026-10-09 (Q5A) supersedes P4 A: with no event in the period the page
-// still shows (PERIOD_SUGGESTION_EMPTY) instead of jumping to the panier. ONE home for the
-// page's rule and literals — the components only render these.
+// last frame). Operator 2026-10-13 supersedes Q3 A (period only, top 3): the page lists EVERY
+// event the screencaster can position on — first those during the campaign, then the « à la
+// une » ones, then the rest, soonest first — each with « Je me positionne », nothing more.
+// Operator 2026-10-09 (Q5A) still holds: with no event at all the page shows
+// PERIOD_SUGGESTION_EMPTY instead of jumping to the panier. ONE home for the page's rule and
+// literals — the components only render these.
 
 export const PERIOD_SUGGESTION_ADDED = 'Votre campagne a été ajoutée au panier';
 
 export const PERIOD_SUGGESTION_HEADING =
-  'Augmentez votre impact en diffusant votre spot lors d’événements prévus dans la même période';
+  'Augmentez votre impact en diffusant votre spot lors des prochains événements';
 
-/** Operator ruling 2026-10-09 (Q5A) — no event in the period: the page still shows, and says so. */
-export const PERIOD_SUGGESTION_EMPTY =
-  'Aucun événement n’est prévu pendant votre campagne pour le moment. Découvrez tous les événements à venir.';
+/** Operator ruling 2026-10-09 (Q5A) — no event to offer: the page still shows, and says so. */
+export const PERIOD_SUGGESTION_EMPTY = 'Aucun événement n’est prévu pour le moment.';
 
 export const PERIOD_SUGGESTION_NOTE =
   '(En incluant automatiquement toutes les catégories de commerces qui diffusent pendant le match)';
@@ -48,13 +49,28 @@ interface CampaignPeriod {
   end_date: string | null;
 }
 
-/** The page's events: kickoff INSIDE the period, upcoming, not the advertiser's own, top 3. */
+const isFeatured = (e: EventItemView): boolean => e.featured === 'hero' || e.featured === 'pinned';
+
+const kickoffMs = (e: EventItemView): number => new Date(e.kickoff_at).getTime();
+
+/**
+ * The page's events (operator 2026-10-13): every upcoming event the screencaster can position on
+ * (« Je me positionne » works: not « à confirmer », not already theirs), in three bands —
+ * 1. kickoff during the campaign, 2. « à la une » (hero / pinned), 3. all the others — each band
+ * soonest first. No cap.
+ */
 export const suggestEventsForPeriod = (
   campaign: CampaignPeriod,
   events: EventItemView[],
-  now: Date = new Date(),
   ownPositionedEventIds: ReadonlySet<string> = new Set(),
-): EventItemView[] => suggestEventsForCampaigns([campaign], events, now, ownPositionedEventIds, 0);
+): EventItemView[] => {
+  const band = (e: EventItemView): number =>
+    eventSuggestedForWindow(e.kickoff_at, campaign, 0) ? 0 : isFeatured(e) ? 1 : 2;
+  return events
+    .filter((e) => e.statut === 'a_venir' && e.positionable !== false)
+    .filter((e) => !ownPositionedEventIds.has(e.id))
+    .sort((a, b) => band(a) - band(b) || kickoffMs(a) - kickoffMs(b));
+};
 
 /** « ~ 184 500 impressions » — the event's I_max, French grouping. */
 export const formatApproxImpressions = (n: number): string =>
