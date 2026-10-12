@@ -3,9 +3,16 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 
 import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
+import { FEATURE_FLAGS } from '@/lib/feature-flags';
 
 import { useCampaignTargeting } from '../hooks/useCampaignTargeting';
-import { fromWire, needsTargetingFlush, toCategoryOnly, toWire } from '../lib/targeting-lines';
+import {
+  allNetworkLine,
+  fromWire,
+  needsTargetingFlush,
+  toCategoryOnly,
+  toWire,
+} from '../lib/targeting-lines';
 
 import { type BuilderLine, TargetingBuilder, newBuilderLine } from './TargetingBuilder';
 
@@ -42,7 +49,13 @@ export const CampaignTargetingPanel = forwardRef<
   useEffect(() => {
     if (!hydrated.current && !targeting.isLoading) {
       const wire = fromWire(targeting.rows);
-      setLines((categoryOnly ? toCategoryOnly(wire) : wire).map(newBuilderLine));
+      // Flag campaignCategoriesLocked — every category, locked: the working set IS the whole
+      // network; a draft persisted with a narrower set is dirty and the next flush rewrites it.
+      setLines(
+        FEATURE_FLAGS.campaignCategoriesLocked
+          ? [newBuilderLine(allNetworkLine())]
+          : (categoryOnly ? toCategoryOnly(wire) : wire).map(newBuilderLine),
+      );
       hydrated.current = true;
     }
   }, [targeting.isLoading, targeting.rows, categoryOnly]);
@@ -94,6 +107,7 @@ export const CampaignTargetingPanel = forwardRef<
         onChange={setLines}
         categories={categories}
         categoryOnly={categoryOnly}
+        locked={FEATURE_FLAGS.campaignCategoriesLocked}
       />
 
       {targeting.isError && (

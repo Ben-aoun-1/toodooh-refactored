@@ -173,3 +173,7 @@ export const toggleCategoryLine = (
 /** The mockup's helper line — « Vous avez sélectionné N catégorie(s). … » */
 export const categoriesHelperLine = (count: number): string =>
   `Vous avez sélectionné ${count} catégorie(s). Plus votre ciblage est large, plus vous augmentez votre portée.`;
+
+/** Flag campaignCategoriesLocked — the grid's line when every category is included and locked. */
+export const CATEGORIES_LOCKED_LINE =
+  'Toutes les catégories de lieux sont incluses dans votre campagne : elle est diffusée sur l’ensemble du réseau.';
