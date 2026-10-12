@@ -18,6 +18,8 @@ interface SidebarNavItemProps {
   /** Toast message when disabled and clicked */
   disabledMessage?: string;
   onNavigate?: () => void;
+  /** Extra paths that also light the entry (a section with sub-pages, e.g. Événements). */
+  activeOn?: readonly string[];
 }
 
 export default function SidebarNavItem({
@@ -30,10 +32,11 @@ export default function SidebarNavItem({
   disabled = false,
   disabledMessage = '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
   onNavigate,
+  activeOn = [],
 }: SidebarNavItemProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const isActive = location.pathname === path;
+  const isActive = location.pathname === path || activeOn.includes(location.pathname);
 
   return (
     <button

@@ -5,6 +5,7 @@ import headerAgendaIcon from '@/assets/header/agenda.png';
 import headerCampagnesIcon from '@/assets/header/campagnes.png';
 import headerFinanceIcon from '@/assets/header/finance.png';
 import headerParamsIcon from '@/assets/header/params.png';
+import { isEventsBrowsePath } from '@/features/events/lib/events-home';
 
 import AdvertiserNotificationsBell from './AdvertiserNotificationsBell';
 
@@ -26,7 +27,7 @@ export default function PageHeader({
 }: PageHeaderProps) {
   const location = useLocation();
   const pathname = location.pathname;
-  const emphasized = EMPHASIZED_PATHS.includes(pathname);
+  const emphasized = EMPHASIZED_PATHS.includes(pathname) || isEventsBrowsePath(pathname);
 
   return (
     <header className="flex-none h-16 bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
@@ -55,7 +56,7 @@ export default function PageHeader({
                 </p>
               </div>
             </>
-          ) : pathname === '/evenements' ? (
+          ) : isEventsBrowsePath(pathname) ? (
             <>
               <img
                 src={headerAgendaIcon}

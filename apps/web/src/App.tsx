@@ -28,6 +28,8 @@ const NewCampaign = lazy(() => import('@/features/campaigns/pages/NewCampaign'))
 const CampaignAddedToCart = lazy(() => import('@/features/campaigns/pages/CampaignAddedToCart'));
 const MyCampaigns = lazy(() => import('@/features/campaigns/pages/MyCampaigns'));
 const Events = lazy(() => import('@/features/events/pages/Events'));
+const EventsHome = lazy(() => import('@/features/events/pages/EventsHome'));
+const RamadanEvents = lazy(() => import('@/features/events/pages/RamadanEvents'));
 const EventPositioning = lazy(() => import('@/features/events/pages/EventPositioning'));
 const EventGroupPositioning = lazy(() => import('@/features/events/pages/EventGroupPositioning'));
 const MyRecharges = lazy(() => import('@/features/wallet/pages/MyRecharges'));
@@ -395,7 +397,27 @@ export default function App() {
               element={
                 <AdvertiserRoute>
                   <AdvertiserLayout>
+                    <EventsHome />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/evenements/football"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
                     <Events />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/evenements/ramadan"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <RamadanEvents />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }

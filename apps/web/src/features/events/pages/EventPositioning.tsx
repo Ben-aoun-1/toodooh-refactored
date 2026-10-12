@@ -28,6 +28,7 @@ import { logger } from '@/lib/logger';
 import EventMatchHeader from '../components/EventMatchHeader';
 import EventRecapStep from '../components/EventRecapStep';
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
+import { EVENTS_PATHS } from '../lib/events-home';
 import { resumeStepFor } from '../lib/positioning-resume';
 
 const log = logger.child({ module: 'EventPositioning' });
@@ -133,7 +134,7 @@ export default function EventPositioning() {
     const onPop = () => {
       if (!armedRef.current) return;
       window.history.pushState(null, '', window.location.href);
-      setExitPrompt({ to: '/evenements' });
+      setExitPrompt({ to: EVENTS_PATHS.football });
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -190,7 +191,7 @@ export default function EventPositioning() {
   // Quitter: a FRESH parcours deletes the row (no campaign left behind — the wizard's ruled
   // idiom); a RESUMED one only discards the unsaved edits (the Brouillon survives).
   const handleExitQuit = useCallback(async () => {
-    const destination = exitPrompt?.to ?? '/evenements';
+    const destination = exitPrompt?.to ?? EVENTS_PATHS.football;
     setExitBusy(true);
     try {
       if (!resumed && campaignId) {
@@ -291,7 +292,7 @@ export default function EventPositioning() {
   }, [campaignId, persistDraft, addToCart, navigate, queryClient]);
 
   if (!campaignId) {
-    navigate('/evenements');
+    navigate(EVENTS_PATHS.football);
     return null;
   }
 
@@ -317,7 +318,7 @@ export default function EventPositioning() {
             </button>
             <button
               type="button"
-              onClick={() => requestExit('/evenements')}
+              onClick={() => requestExit(EVENTS_PATHS.football)}
               className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
             >
               <X className="h-5 w-5" />
@@ -371,7 +372,7 @@ export default function EventPositioning() {
           draftCampaignId={campaignId}
           saving={savingZones}
           onNext={handleZonesNext}
-          onBack={() => requestExit('/evenements')}
+          onBack={() => requestExit(EVENTS_PATHS.football)}
         />
       )}
       {currentStep === 2 && (
