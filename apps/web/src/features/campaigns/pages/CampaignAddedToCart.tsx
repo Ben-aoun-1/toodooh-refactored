@@ -11,6 +11,7 @@ import {
   PERIOD_SUGGESTION_ADDED,
   PERIOD_SUGGESTION_EMPTY,
   PERIOD_SUGGESTION_HEADING,
+  addedPageState,
   suggestEventsForPeriod,
 } from '@/features/events/lib/period-suggestions';
 import { getErrorMessage } from '@/lib/errors';
@@ -29,12 +30,17 @@ export default function CampaignAddedToCart() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const navigate = useNavigate();
   const user = useAuthStore((st) => st.user);
-  const { campaigns, loading } = useMyCampaigns(user?.id);
+  // The campaign was usually created moments ago inside the wizard: read the list FRESH on mount
+  // (a cached list predates it), and decide « missing » only once that read is done.
+  const { campaigns, loading, fetching } = useMyCampaigns(user?.id, { refetchOnMount: 'always' });
   const { data: catalogue, isLoading: catalogueLoading } = useEventsCatalogue();
   const positionner = usePositionner();
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  if (loading || catalogueLoading) {
+  const campaign = campaigns.find((c) => c.id === campaignId);
+  const pageState = addedPageState({ found: campaign !== undefined, loading, fetching });
+  if (pageState === 'missing') return <Navigate to="/my-cart" replace />;
+  if (campaign === undefined || catalogueLoading) {
     return (
       <div className="flex justify-center py-24">
         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -42,11 +48,9 @@ export default function CampaignAddedToCart() {
     );
   }
 
-  const campaign = campaigns.find((c) => c.id === campaignId);
   const ownPositioned = new Set(
     campaigns.flatMap((c) => (c.event_id === null ? [] : [c.event_id])),
   );
-  if (campaign === undefined) return <Navigate to="/my-cart" replace />;
   const suggestions = suggestEventsForPeriod(campaign, catalogue ?? [], new Date(), ownPositioned);
 
   const handlePositionner = async (eventId: string) => {

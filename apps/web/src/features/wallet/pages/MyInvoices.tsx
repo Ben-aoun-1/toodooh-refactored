@@ -26,7 +26,7 @@ import {
 import { type InvoiceRow, recapitulatifDesignation } from '@/features/wallet/lib/wallet-ledger';
 import { recapitulatifFilename, walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
-import { htTtcLabel } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 const log = logger.child({ module: 'MyInvoices' });
 
@@ -219,7 +219,7 @@ export default function MyInvoices() {
                       <p className="text-xs text-gray-400 mt-0.5">{facture.numero}</p>
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-gray-900">
-                      {htTtcLabel(facture.montant)}
+                      {tndLabel(facture.montant)}
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">
                       {formatDate(facture.date_emission)}

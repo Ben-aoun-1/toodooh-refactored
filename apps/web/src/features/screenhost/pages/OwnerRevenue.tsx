@@ -38,8 +38,6 @@ import {
 } from '@/features/wallet/lib/payout-method';
 import { getErrorMessage } from '@/lib/errors';
 
-type TxFilter = 'all' | 'recharges' | 'depenses';
-
 interface OwnerTransactionRow {
   id: string;
   label: string;
@@ -55,7 +53,6 @@ export default function OwnerRevenue() {
   const isDisabled = needsApproval && validationStatus === 'pending';
 
   const [txSearch, setTxSearch] = useState('');
-  const [txFilter, setTxFilter] = useState<TxFilter>('all');
 
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [showBankDetailsModal, setShowBankDetailsModal] = useState(false);
@@ -234,8 +231,6 @@ export default function OwnerRevenue() {
   const filteredTransactions = useMemo(() => {
     const q = txSearch.trim().toLowerCase();
     return transactions.filter((row) => {
-      if (txFilter === 'recharges' && row.amount <= 0) return false;
-      if (txFilter === 'depenses' && row.amount >= 0) return false;
       if (!q) return true;
       const dateFr = formatDateFr(row.date).toLowerCase();
       const amountStr = formatSignedAmount(row.amount).toLowerCase();
@@ -246,7 +241,7 @@ export default function OwnerRevenue() {
         row.paymentMode.toLowerCase().includes(q)
       );
     });
-  }, [transactions, txSearch, txFilter]);
+  }, [transactions, txSearch]);
 
   const formatCurrencyBanner = (value: number) => {
     return new Intl.NumberFormat('fr-TN', {
@@ -333,13 +328,12 @@ export default function OwnerRevenue() {
                     <div>
                       <p className="text-white/90 text-sm font-medium mb-1">Revenu actuel</p>
                       {/* Operator 2026-10-09 (confirms SH-TTC1) — the figure is the owner's share
-                          (E7 earnings_tnd, 50 % of the HT value) and the screenhost sees TTC only:
-                          one figure, labelled TTC, no 19 % added on top. */}
+                          (E7 earnings_tnd, 50 % of the HT value), no 19 % added on top. Operator
+                          2026-10-12 — screens show the plain amount, without the « TTC » letters
+                          (documents keep them). */}
                       <p className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
                         {formatCurrencyBanner(currentBalance)}{' '}
-                        <span className="text-xl sm:text-2xl font-semibold text-white/85">
-                          TND TTC
-                        </span>
+                        <span className="text-xl sm:text-2xl font-semibold text-white/85">TND</span>
                       </p>
                     </div>
                   </div>
@@ -393,28 +387,6 @@ export default function OwnerRevenue() {
                           onChange={(e) => setTxSearch(e.target.value)}
                           className="w-full sm:w-56 pl-9 pr-3 py-2 rounded-xl border border-gray-200 bg-gray-50/80 text-gray-900 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400"
                         />
-                      </div>
-                      <div className="inline-flex rounded-xl bg-gray-100 p-1 gap-0.5">
-                        {(
-                          [
-                            ['all', 'Tous'],
-                            ['recharges', 'Recharges'],
-                            ['depenses', 'Dépenses'],
-                          ] as const
-                        ).map(([key, label]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setTxFilter(key)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                              txFilter === key
-                                ? 'bg-white text-gray-900 shadow-sm'
-                                : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
                       </div>
                     </div>
                   </div>

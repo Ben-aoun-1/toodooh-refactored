@@ -17,7 +17,7 @@ import {
   bankCoordsProvided,
   parseRechargeAmount,
 } from '@/features/wallet/lib/recharge-methods';
-import { htTtcLabel } from '@/lib/money';
+import { tndLabel } from '@/lib/money';
 
 interface NewRechargeModalProps {
   /** Preset by the quick-recharge buttons; '' for a blank form. */
@@ -147,7 +147,7 @@ export default function NewRechargeModal({
                 id="amount"
               />
               <p className="text-xs text-gray-400 mt-1">
-                Montant minimum : {htTtcLabel(MIN_RECHARGE_TND)}
+                Montant minimum : {tndLabel(MIN_RECHARGE_TND)}
               </p>
             </div>
             <div className="flex gap-3">
@@ -172,7 +172,7 @@ export default function NewRechargeModal({
             <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
               <span className="text-sm font-medium text-gray-700">Montant</span>
               <span className="text-sm font-semibold text-gray-900">
-                {parsedAmount === null ? `${amount} TND` : htTtcLabel(parsedAmount)}
+                {parsedAmount === null ? `${amount} TND` : tndLabel(parsedAmount)}
               </span>
             </div>
 

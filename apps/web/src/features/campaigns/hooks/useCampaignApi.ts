@@ -14,11 +14,15 @@ import { campaignsKeys } from './queryKeys';
 // MyCampaigns refreshes, and seed the detail cache so edit-mode reads are warm.
 
 /** The signed-in advertiser's campaigns (GET /api/campaigns/mine). */
-export function useMyCampaignsList(userId: string | undefined) {
+export function useMyCampaignsList(
+  userId: string | undefined,
+  opts: { refetchOnMount?: 'always' } = {},
+) {
   return useQuery({
     queryKey: campaignsKeys.list(userId ?? ''),
     queryFn: () => campaignsApi.mine(),
     enabled: Boolean(userId),
+    ...(opts.refetchOnMount ? { refetchOnMount: opts.refetchOnMount } : {}),
   });
 }
 

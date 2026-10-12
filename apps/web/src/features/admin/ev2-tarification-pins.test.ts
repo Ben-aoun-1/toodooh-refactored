@@ -12,8 +12,8 @@ const read = (rel: string): string =>
 describe('the Tarification modal', () => {
   const source = read('./components/EventTarificationModal.tsx');
 
-  it('prices through the ONE web TVA home (HT (TTC)) — never a local rate', () => {
-    expect(source).toContain('htTtcOrDash');
+  it('prices through the ONE web money home (plain TND, no « TTC ») — never a local rate', () => {
+    expect(source).toContain('tndOrDash');
     expect(source).not.toMatch(/1\.19|0\.19/); // no local TVA math
   });
 

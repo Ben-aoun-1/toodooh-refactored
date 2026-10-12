@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { htTtcOrDash } from '@/lib/money';
+import { tndOrDash } from '@/lib/money';
 
 import { buildInitialWizardState } from './wizard-init';
 import { performCreateDraft, performSaveDraft, serializeCreate } from './wizard-serialize';
@@ -74,7 +74,7 @@ describe('her repro — Enregistrer at steps 1/2/3 (header AND exit-popup: one s
 
 describe('her repro — what Mes campagnes renders for the untouched draft', () => {
   it('a NULL budget renders « — », never a phantom amount', () => {
-    expect(htTtcOrDash(null)).toBe('—');
-    expect(htTtcOrDash(undefined)).toBe('—');
+    expect(tndOrDash(null)).toBe('—');
+    expect(tndOrDash(undefined)).toBe('—');
   });
 });

@@ -130,7 +130,7 @@ describe('eventLabel', () => {
 });
 
 describe('eventDetail', () => {
-  it('renders impressions + montant HT (TTC) when present', () => {
+  it('renders impressions + the plain montant when present (no « TTC » on screens)', () => {
     const detail = eventDetail({
       event_type: 'allocation_placed',
       screenhost_id: 'x',
@@ -138,7 +138,8 @@ describe('eventDetail', () => {
       payload: { impressions: 5000, valueTnd: 50 },
     });
     expect(detail).toContain(`${(5000).toLocaleString('fr-FR')} imp.`);
-    expect(detail).toContain('50 TND HT');
+    expect(detail).toContain('50 TND');
+    expect(detail).not.toContain('TTC');
   });
 
   it('renders the settlement split amounts', () => {
@@ -149,7 +150,7 @@ describe('eventDetail', () => {
       payload: { baseTnd: 200, shTnd: 100 },
     });
     expect(detail).toContain('base');
-    expect(detail).toContain('200 TND HT');
+    expect(detail).toContain('200 TND');
   });
 
   it('is empty for a payload with no displayable keys', () => {

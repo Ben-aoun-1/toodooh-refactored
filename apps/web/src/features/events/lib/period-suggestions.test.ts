@@ -5,6 +5,7 @@ import type { EventItemView } from '../services/events.api';
 import { eventSuggestedForWindow } from './event-positioning';
 import {
   PERIOD_SUGGESTION_MAX_TAGS,
+  addedPageState,
   formatApproxImpressions,
   sectorTags,
   suggestEventsForPeriod,
@@ -79,5 +80,24 @@ describe('the card figures', () => {
     expect(tags.shown).toHaveLength(2);
     expect(tags.extra).toBe(1);
     expect(sectorTags([])).toEqual({ shown: [], extra: 0 });
+  });
+});
+
+describe('addedPageState — a stale cached list never forwards a NEW campaign to the panier', () => {
+  it('the campaign is in the list → the page shows, even while a refetch runs', () => {
+    expect(addedPageState({ found: true, loading: false, fetching: false })).toBe('ready');
+    expect(addedPageState({ found: true, loading: false, fetching: true })).toBe('ready');
+  });
+
+  it('not in a CACHED list while it refetches (the wizard-created draft) → wait, never redirect', () => {
+    expect(addedPageState({ found: false, loading: false, fetching: true })).toBe('loading');
+  });
+
+  it('first load in flight → wait', () => {
+    expect(addedPageState({ found: false, loading: true, fetching: true })).toBe('loading');
+  });
+
+  it('not in a FRESH list (an unknown id) → missing, the page forwards to the panier', () => {
+    expect(addedPageState({ found: false, loading: false, fetching: false })).toBe('missing');
   });
 });

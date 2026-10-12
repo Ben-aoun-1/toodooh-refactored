@@ -90,7 +90,7 @@ export default function MonthlyInvoicesSection({ invoices, loading }: MonthlyInv
                     <p className="text-xs text-gray-400 mt-0.5">{invoice.reference}</p>
                   </td>
                   {/* The invoice states its own TVA breakdown — plain HT and TTC columns, not
-                      the htTtcLabel composite (the TTC is a real printed line here). */}
+                      a composite label (the TTC is a real printed line here). */}
                   <td className="px-5 py-4 text-sm font-semibold text-gray-900 tabular-nums">
                     {formatTnd(invoice.total_ht)} TND
                   </td>

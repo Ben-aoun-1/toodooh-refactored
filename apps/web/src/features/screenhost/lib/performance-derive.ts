@@ -347,9 +347,9 @@ export function formatTndFr(value: number): string {
   return value.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-/** Operator 2026-10-09 — the screenhost's money is labelled TTC (its share, E7 earnings_tnd). */
+/** The screenhost's share (E7 earnings_tnd). Operator 2026-10-12 — screens drop the « TTC ». */
 export function formatTndCellFr(value: number): string {
-  return `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND TTC`;
+  return `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
 }
 
 /** Venue category line: 'business_sector · Class' ('Café · Premium'). */
