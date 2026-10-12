@@ -1,0 +1,697 @@
+{
+  "source": "Youssef's « Toodooh Page événements.html » (operator, 2026-10-12)",
+  "teams": {
+    "tun": {
+      "name": "Tunisie",
+      "is_national": true,
+      "color_main": "#E70013",
+      "color_second": "#FFFFFF",
+      "color_crowd": null
+    },
+    "lby": {
+      "name": "Libye",
+      "is_national": true,
+      "color_main": "#0B0B0B",
+      "color_second": "#239E46",
+      "color_crowd": "#239E46"
+    },
+    "ca": {
+      "name": "Club Africain",
+      "is_national": false,
+      "color_main": "#D2001F",
+      "color_second": "#FFFFFF",
+      "color_crowd": null
+    },
+    "est": {
+      "name": "Espérance de Tunis",
+      "is_national": false,
+      "color_main": "#C8001E",
+      "color_second": "#F7D117",
+      "color_crowd": null
+    },
+    "bay": {
+      "name": "Bayern Munich",
+      "is_national": false,
+      "color_main": "#DC052D",
+      "color_second": "#0066B2",
+      "color_crowd": null
+    },
+    "bvb": {
+      "name": "Borussia Dortmund",
+      "is_national": false,
+      "color_main": "#FDE100",
+      "color_second": "#000000",
+      "color_crowd": null
+    },
+    "liv": {
+      "name": "Liverpool",
+      "is_national": false,
+      "color_main": "#C8102E",
+      "color_second": "#00B2A9",
+      "color_crowd": null
+    },
+    "ars": {
+      "name": "Arsenal",
+      "is_national": false,
+      "color_main": "#EF0107",
+      "color_second": "#FFFFFF",
+      "color_crowd": null
+    },
+    "mil": {
+      "name": "AC Milan",
+      "is_national": false,
+      "color_main": "#FB090B",
+      "color_second": "#000000",
+      "color_crowd": null
+    },
+    "int": {
+      "name": "Inter Milan",
+      "is_national": false,
+      "color_main": "#010E80",
+      "color_second": "#000000",
+      "color_crowd": "#2E5BFF"
+    },
+    "juv": {
+      "name": "Juventus",
+      "is_national": false,
+      "color_main": "#000000",
+      "color_second": "#FFFFFF",
+      "color_crowd": "#E8E8E8"
+    },
+    "nap": {
+      "name": "SSC Naples",
+      "is_national": false,
+      "color_main": "#12A0D7",
+      "color_second": "#003C82",
+      "color_crowd": null
+    },
+    "bar": {
+      "name": "FC Barcelone",
+      "is_national": false,
+      "color_main": "#A50044",
+      "color_second": "#004D98",
+      "color_crowd": null
+    },
+    "avl": {
+      "name": "Aston Villa",
+      "is_national": false,
+      "color_main": "#670E36",
+      "color_second": "#95BFE5",
+      "color_crowd": "#A3245E"
+    },
+    "vil": {
+      "name": "Villarreal",
+      "is_national": false,
+      "color_main": "#FFE667",
+      "color_second": "#005187",
+      "color_crowd": null
+    },
+    "psg": {
+      "name": "Paris Saint-Germain",
+      "is_national": false,
+      "color_main": "#004170",
+      "color_second": "#DA291C",
+      "color_crowd": "#2A6FB5"
+    },
+    "atm": {
+      "name": "Atlético Madrid",
+      "is_national": false,
+      "color_main": "#CB3524",
+      "color_second": "#272E61",
+      "color_crowd": null
+    },
+    "rbl": {
+      "name": "RB Leipzig",
+      "is_national": false,
+      "color_main": "#DD0741",
+      "color_second": "#001F47",
+      "color_crowd": null
+    },
+    "mci": {
+      "name": "Manchester City",
+      "is_national": false,
+      "color_main": "#6CABDD",
+      "color_second": "#1C2C5B",
+      "color_crowd": null
+    },
+    "por": {
+      "name": "FC Porto",
+      "is_national": false,
+      "color_main": "#003893",
+      "color_second": "#FFFFFF",
+      "color_crowd": "#2F6BD8"
+    },
+    "sla": {
+      "name": "Slavia Prague",
+      "is_national": false,
+      "color_main": "#E30613",
+      "color_second": "#FFFFFF",
+      "color_crowd": null
+    },
+    "rma": {
+      "name": "Real Madrid",
+      "is_national": false,
+      "color_main": "#FFFFFF",
+      "color_second": "#FEBE10",
+      "color_crowd": null
+    },
+    "psv": {
+      "name": "PSV Eindhoven",
+      "is_national": false,
+      "color_main": "#ED1C24",
+      "color_second": "#FFFFFF",
+      "color_crowd": null
+    },
+    "rom": {
+      "name": "AS Roma",
+      "is_national": false,
+      "color_main": "#8E1F2F",
+      "color_second": "#F0BC42",
+      "color_crowd": "#C23A4D"
+    },
+    "spo": {
+      "name": "Sporting CP",
+      "is_national": false,
+      "color_main": "#008057",
+      "color_second": "#FFFFFF",
+      "color_crowd": "#14A86E"
+    },
+    "mun": {
+      "name": "Manchester United",
+      "is_national": false,
+      "color_main": "#DA291C",
+      "color_second": "#FBE122",
+      "color_crowd": null
+    },
+    "bru": {
+      "name": "Club Bruges",
+      "is_national": false,
+      "color_main": "#0068B3",
+      "color_second": "#000000",
+      "color_crowd": "#2F8BE0"
+    },
+    "om": {
+      "name": "Olympique de Marseille",
+      "is_national": false,
+      "color_main": "#2FAEE0",
+      "color_second": "#FFFFFF",
+      "color_crowd": null
+    },
+    "lev": {
+      "name": "Levski Sofia",
+      "is_national": false,
+      "color_main": "#0033A0",
+      "color_second": "#FFFFFF",
+      "color_crowd": "#2F64E0"
+    },
+    "che": {
+      "name": "Chelsea",
+      "is_national": false,
+      "color_main": "#034694",
+      "color_second": "#DBA111",
+      "color_crowd": "#2D6BE0"
+    }
+  },
+  "events": [
+    {
+      "name": "Bayern Munich - Borussia Dortmund",
+      "competition": "Bundesliga",
+      "round": "Bundesliga, 8ème journée",
+      "day": "2026-10-31",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": false,
+      "date_label": "Week-end du 30 octobre au 1er novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "bay",
+          "away": "bvb"
+        }
+      ]
+    },
+    {
+      "name": "Liverpool - Arsenal",
+      "competition": "Premier League",
+      "round": "Premier League, 9ème journée",
+      "day": "2026-11-01",
+      "kickoff_tunis": "17:30",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Dimanche 1er novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "liv",
+          "away": "ars"
+        }
+      ]
+    },
+    {
+      "name": "AC Milan - Inter Milan",
+      "competition": "Serie A",
+      "round": "Serie A, 10ème journée",
+      "day": "2026-11-01",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Dimanche 1er novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "mil",
+          "away": "int"
+        }
+      ]
+    },
+    {
+      "name": "Juventus - SSC Naples",
+      "competition": "Serie A",
+      "round": "Serie A, 10ème journée",
+      "day": "2026-11-01",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Dimanche 1er novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "juv",
+          "away": "nap"
+        }
+      ]
+    },
+    {
+      "name": "Soirée Ligue des champions du mardi 3 novembre 2026",
+      "competition": "Ligue des champions",
+      "round": "Ligue des champions, 4ème journée",
+      "day": "2026-11-03",
+      "kickoff_tunis": "21:00",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Mardi 3 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "bar",
+          "away": "avl"
+        },
+        {
+          "home": "vil",
+          "away": "psg"
+        },
+        {
+          "home": "atm",
+          "away": "bay"
+        }
+      ]
+    },
+    {
+      "name": "Soirée Ligue des champions du mercredi 4 novembre 2026",
+      "competition": "Ligue des champions",
+      "round": "Ligue des champions, 4ème journée",
+      "day": "2026-11-04",
+      "kickoff_tunis": "21:00",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Mercredi 4 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "rbl",
+          "away": "mci"
+        },
+        {
+          "home": "por",
+          "away": "nap"
+        },
+        {
+          "home": "sla",
+          "away": "ars"
+        }
+      ]
+    },
+    {
+      "name": "Atlético Madrid - FC Barcelone",
+      "competition": "LaLiga",
+      "round": "LaLiga, 12ème journée",
+      "day": "2026-11-08",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": false,
+      "date_label": "Week-end du 7 et 8 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "atm",
+          "away": "bar"
+        }
+      ]
+    },
+    {
+      "name": "Libye - Tunisie",
+      "competition": "Éliminatoires CAN 2027",
+      "round": "Éliminatoires CAN 2027, 4ème journée",
+      "day": "2026-11-15",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Dimanche 15 novembre 2026",
+      "featured": "pinned",
+      "matches": [
+        {
+          "home": "lby",
+          "away": "tun"
+        }
+      ]
+    },
+    {
+      "name": "Club Africain - Espérance de Tunis",
+      "competition": "Ligue 1 tunisienne",
+      "round": "Ligue 1 tunisienne, 8ème journée",
+      "day": "2026-11-22",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Dimanche 22 novembre 2026",
+      "featured": "pinned",
+      "matches": [
+        {
+          "home": "ca",
+          "away": "est"
+        }
+      ]
+    },
+    {
+      "name": "Soirée Ligue des champions du mardi 24 novembre 2026",
+      "competition": "Ligue des champions",
+      "round": "Ligue des champions, 5ème journée",
+      "day": "2026-11-24",
+      "kickoff_tunis": "21:00",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Mardi 24 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "mci",
+          "away": "nap"
+        },
+        {
+          "home": "rma",
+          "away": "psv"
+        },
+        {
+          "home": "ars",
+          "away": "bvb"
+        }
+      ]
+    },
+    {
+      "name": "Soirée Ligue des champions du mercredi 25 novembre 2026",
+      "competition": "Ligue des champions",
+      "round": "Ligue des champions, 5ème journée",
+      "day": "2026-11-25",
+      "kickoff_tunis": "21:00",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Mercredi 25 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "psg",
+          "away": "rom"
+        },
+        {
+          "home": "spo",
+          "away": "mun"
+        },
+        {
+          "home": "bru",
+          "away": "liv"
+        }
+      ]
+    },
+    {
+      "name": "Olympique de Marseille - Levski Sofia",
+      "competition": "Ligue Europa",
+      "round": "Ligue Europa, 5ème journée",
+      "day": "2026-11-26",
+      "kickoff_tunis": "18:45",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Jeudi 26 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "om",
+          "away": "lev"
+        }
+      ]
+    },
+    {
+      "name": "Espérance de Tunis - Adversaire après tirage",
+      "competition": "Ligue des champions CAF",
+      "round": "Ligue des champions CAF, 1ère journée",
+      "day": "2026-11-27",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": true,
+      "date_label": "Entre le 27 et le 29 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "est",
+          "away": null
+        }
+      ]
+    },
+    {
+      "name": "Club Africain - Adversaire après tirage",
+      "competition": "Ligue des champions CAF",
+      "round": "Ligue des champions CAF, 1ère journée",
+      "day": "2026-11-27",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": true,
+      "date_label": "Entre le 27 et le 29 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "ca",
+          "away": null
+        }
+      ]
+    },
+    {
+      "name": "Arsenal - Manchester City",
+      "competition": "Premier League",
+      "round": "Premier League, 12ème journée",
+      "day": "2026-11-29",
+      "kickoff_tunis": "17:30",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Dimanche 29 novembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "ars",
+          "away": "mci"
+        }
+      ]
+    },
+    {
+      "name": "Espérance de Tunis - Adversaire après tirage",
+      "competition": "Ligue des champions CAF",
+      "round": "Ligue des champions CAF, 2ème journée",
+      "day": "2026-12-04",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": true,
+      "date_label": "Entre le 4 et le 6 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "est",
+          "away": null
+        }
+      ]
+    },
+    {
+      "name": "Club Africain - Adversaire après tirage",
+      "competition": "Ligue des champions CAF",
+      "round": "Ligue des champions CAF, 2ème journée",
+      "day": "2026-12-04",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": true,
+      "date_label": "Entre le 4 et le 6 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "ca",
+          "away": null
+        }
+      ]
+    },
+    {
+      "name": "Chelsea - Liverpool",
+      "competition": "Premier League",
+      "round": "Premier League, 14ème journée",
+      "day": "2026-12-05",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Samedi 5 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "che",
+          "away": "liv"
+        }
+      ]
+    },
+    {
+      "name": "Soirée Ligue des champions du mardi 8 décembre 2026",
+      "competition": "Ligue des champions",
+      "round": "Ligue des champions, 6ème journée",
+      "day": "2026-12-08",
+      "kickoff_tunis": "21:00",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Mardi 8 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "bar",
+          "away": "mci"
+        },
+        {
+          "home": "avl",
+          "away": "psg"
+        },
+        {
+          "home": "rom",
+          "away": "spo"
+        }
+      ]
+    },
+    {
+      "name": "Soirée Ligue des champions du mercredi 9 décembre 2026",
+      "competition": "Ligue des champions",
+      "round": "Ligue des champions, 6ème journée",
+      "day": "2026-12-09",
+      "kickoff_tunis": "21:00",
+      "time_tbc": false,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Mercredi 9 décembre 2026",
+      "featured": "pinned",
+      "matches": [
+        {
+          "home": "ars",
+          "away": "rma"
+        },
+        {
+          "home": "bvb",
+          "away": "int"
+        },
+        {
+          "home": "liv",
+          "away": "por"
+        }
+      ]
+    },
+    {
+      "name": "Manchester City - Chelsea",
+      "competition": "Premier League",
+      "round": "Premier League, 15ème journée",
+      "day": "2026-12-12",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Samedi 12 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "mci",
+          "away": "che"
+        }
+      ]
+    },
+    {
+      "name": "Espérance de Tunis - Adversaire après tirage",
+      "competition": "Ligue des champions CAF",
+      "round": "Ligue des champions CAF, 3ème journée",
+      "day": "2026-12-18",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": true,
+      "date_label": "Entre le 18 et le 20 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "est",
+          "away": null
+        }
+      ]
+    },
+    {
+      "name": "Club Africain - Adversaire après tirage",
+      "competition": "Ligue des champions CAF",
+      "round": "Ligue des champions CAF, 3ème journée",
+      "day": "2026-12-18",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": true,
+      "qualification_pending": true,
+      "date_label": "Entre le 18 et le 20 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "ca",
+          "away": null
+        }
+      ]
+    },
+    {
+      "name": "Arsenal - Manchester United",
+      "competition": "Premier League",
+      "round": "Premier League, 16ème journée",
+      "day": "2026-12-19",
+      "kickoff_tunis": "20:00",
+      "time_tbc": true,
+      "date_tbc": false,
+      "qualification_pending": false,
+      "date_label": "Samedi 19 décembre 2026",
+      "featured": null,
+      "matches": [
+        {
+          "home": "ars",
+          "away": "mun"
+        }
+      ]
+    }
+  ]
+}
