@@ -20,6 +20,7 @@ import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminZones, useZoneMutations } from '@/features/screens/hooks/usePredefinedZones';
 import type { PredefinedZone } from '@/features/screens/services/predefined-zones.service';
 import { getErrorMessage } from '@/lib/errors';
+import { MAP_TILE_ATTRIBUTION, MAP_TILE_MAX_ZOOM, MAP_TILE_URL } from '@/lib/map-tiles';
 import 'leaflet/dist/leaflet.css';
 
 // Fix pour les icônes Leaflet
@@ -606,18 +607,12 @@ export default function GeographicZonesManagement() {
                     style={{ height: '100%', width: '100%' }}
                     className="rounded-lg"
                   >
+                    {/* The app's one basemap (lib/map-tiles) — CARTO's light layer now needs a
+                        key; OSM standard already carries the labels the osmfr overlay added. */}
                     <TileLayer
-                      url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                      subdomains="abcd"
-                      maxZoom={14}
-                    />
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png"
-                      attribution=""
-                      opacity={0.5}
-                      maxZoom={12}
-                      minZoom={8}
+                      url={MAP_TILE_URL}
+                      attribution={MAP_TILE_ATTRIBUTION}
+                      maxZoom={MAP_TILE_MAX_ZOOM}
                     />
                     <MapClickHandler onLocationSelect={handleAddLocation} />
 
