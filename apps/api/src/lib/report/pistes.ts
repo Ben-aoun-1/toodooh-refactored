@@ -9,8 +9,8 @@
  *
  * Everything here is PURE: the DB reads live in assemble.ts, so both surfaces
  * (GET /:id/pistes and the rendered PDF) build their three cards from the SAME function and
- * cannot drift. Bodies are capped at BODY_MAX_CHARS — the S07 card fits 2 lines and a 3rd
- * overflows page 4 (the R3.1 layout interlock, re-pinned here for the generated bodies).
+ * cannot drift. PISTES-V2: the S07 cards grow (S07 moved to page 5), so the old 2-line interlock
+ * of page 4 is retired.
  */
 
 export interface PisteView {
@@ -21,39 +21,54 @@ export interface PisteView {
   pending: boolean;
 }
 
-/** The layout interlock: a body over this wraps to a 3rd line and overflows page 4. */
-export const BODY_MAX_CHARS = 225;
-
 // ── titles (survive the R3 → 13-juil supersession) ────────────────────────────────────────────
 export const PISTE_01_TITLE = 'Anticipez les temps forts';
 export const PISTE_02_TITLE = 'Repérez vos angles morts';
 export const PISTE_03_TITLE = 'Résumé du SPS et recommandations';
 
-// ── Piste 01 — l'aguiche événementielle ───────────────────────────────────────────────────────
-// Her spec verbatim: « pas nécessaire de les mentionner en détails, juste par exemple cette
-// semaine on a des matchs importants ». So: NO name, NO date, NO count — only the fact that
-// something is coming, and what to do about it. The window (14 days) is expressed in words
-// (« cette semaine » / « ces prochains jours »), never as a number (ruling 2026-08-20).
-// Events are `type = 'sport'` by DB check constraint, hence « match ».
+// ── Piste 01 — les matchs à venir ─────────────────────────────────────────────────────────────
+// Operator 2026-10-12 (supersedes Mejri's 13-juil « pas nécessaire de les mentionner en détails »
+// and the 2026-08-20 words-only window): the card NAMES the upcoming matches with their day and
+// kickoff time, so the owner can announce them. Only CONFIRMED official matches (date AND time
+// fixed, not cancelled — the EVT-PLAY1 definition) in the 14-day window, nearest first, at most
+// PISTE_01_MAX_MATCHES. Events are `type = 'sport'` by DB check constraint, hence « match ».
 export const PISTE_01_NO_EVENTS_BODY =
   "Aucun temps fort n'est programmé pour l'instant. Dès qu'un match important sera à l'affiche, annoncez sa diffusion à vos clients pour remplir votre lieu ce jour-là.";
 
-/** Days from the anchor day at/under which the teaser says « cette semaine ». */
-export const THIS_WEEK_DAYS = 7;
+/** The card names at most this many matches (the nearest ones). */
+export const PISTE_01_MAX_MATCHES = 3;
 
-export interface UpcomingEvents {
-  /** Official, non-cancelled events whose kickoff falls inside the window. Always ≥ 1. */
-  count: number;
-  /** Whole Tunis days from the anchor day to the soonest kickoff (0 = today). */
-  soonestInDays: number;
+export interface UpcomingMatch {
+  name: string;
+  /** Tunis calendar day of the kickoff, YYYY-MM-DD. */
+  day: string;
+  /** Tunis kickoff time, HH:MM. */
+  time: string;
 }
 
+export interface UpcomingEvents {
+  /** Confirmed official matches in the window, nearest first. Always ≥ 1 entry. */
+  matches: UpcomingMatch[];
+}
+
+const WEEKDAYS_FR = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'] as const;
+
+/** « mar. 20/10 à 20h » / « sam. 24/10 à 18h30 » — the kickoff as the owner reads it. */
+export const formatKickoffFr = (day: string, time: string): string => {
+  const [y, m, d] = day.split('-').map(Number);
+  const weekday = WEEKDAYS_FR[new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1)).getUTCDay()] ?? '';
+  const [hh = '00', mm = '00'] = time.split(':');
+  const clock = mm === '00' ? `${Number(hh)}h` : `${Number(hh)}h${mm}`;
+  return `${weekday} ${day.slice(8, 10)}/${day.slice(5, 7)} à ${clock}`;
+};
+
 const piste01Body = (events: UpcomingEvents | null): string => {
-  if (!events || events.count <= 0) return PISTE_01_NO_EVENTS_BODY;
-  const when = events.soonestInDays <= THIS_WEEK_DAYS ? 'cette semaine' : 'ces prochains jours';
-  return events.count === 1
-    ? `Un match important est à l'affiche ${when} — annoncez sa diffusion à vos clients dès maintenant pour remplir votre lieu ce jour-là.`
-    : `Plusieurs matchs importants sont à l'affiche ${when} — annoncez leur diffusion à vos clients dès maintenant pour remplir votre lieu ces jours-là.`;
+  const matches = (events?.matches ?? []).slice(0, PISTE_01_MAX_MATCHES);
+  if (matches.length === 0) return PISTE_01_NO_EVENTS_BODY;
+  const listed = matches.map((m) => `${m.name}, ${formatKickoffFr(m.day, m.time)}`).join(' · ');
+  return matches.length === 1
+    ? `À l'affiche : ${listed}. Annoncez sa diffusion à vos clients dès maintenant pour remplir votre lieu ce jour-là.`
+    : `À l'affiche : ${listed}. Annoncez leur diffusion à vos clients dès maintenant pour remplir votre lieu ces jours-là.`;
 };
 
 // ── Piste 02 — l'angle mort (AI-authored) ─────────────────────────────────────────────────────

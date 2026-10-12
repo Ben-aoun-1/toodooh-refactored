@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  BODY_MAX_CHARS,
+  PISTE_01_MAX_MATCHES,
   PISTE_01_NO_EVENTS_BODY,
   PISTE_01_TITLE,
   PISTE_02_WAIT_BODY,
@@ -11,6 +11,7 @@ import {
   type SpsBlock,
   type SpsKey,
   buildPistes,
+  formatKickoffFr,
   weakestCriterion,
 } from '../src/lib/report/pistes.js';
 
@@ -49,47 +50,42 @@ const sps = (over: Partial<Record<SpsKey, number>> = {}, score = 70): SpsBlock =
   ],
 });
 
-describe('Piste 01 — the event teaser (13-juil spec)', () => {
-  it('says « cette semaine » up to J+7 and « ces prochains jours » beyond it', () => {
-    for (const days of [0, 1, 7]) {
-      expect(
-        buildPistes({ events: { count: 1, soonestInDays: days }, sps: null, aiBody: null })[0].body,
-      ).toContain('cette semaine');
-    }
-    for (const days of [8, 14]) {
-      expect(
-        buildPistes({ events: { count: 1, soonestInDays: days }, sps: null, aiBody: null })[0].body,
-      ).toContain('ces prochains jours');
-    }
+describe('Piste 01 — the upcoming matches, named (operator 2026-10-12)', () => {
+  const derby = { name: 'Derby Tunis VS Sfax', day: '2026-10-20', time: '20:00' };
+  const classico = { name: 'CA - EST', day: '2026-10-24', time: '18:30' };
+
+  it('one match: its name, weekday, date and kickoff, then the singular call to action', () => {
+    expect(buildPistes({ events: { matches: [derby] }, sps: null, aiBody: null })[0].body).toBe(
+      "À l'affiche : Derby Tunis VS Sfax, mar. 20/10 à 20h. Annoncez sa diffusion à vos clients dès maintenant pour remplir votre lieu ce jour-là.",
+    );
   });
 
-  it('a single event reads singular, several read « Plusieurs matchs » — never a count', () => {
-    const one = buildPistes({ events: { count: 1, soonestInDays: 2 }, sps: null, aiBody: null })[0]
-      .body;
-    const many = buildPistes({ events: { count: 4, soonestInDays: 2 }, sps: null, aiBody: null })[0]
-      .body;
-    expect(one).toContain('Un match important est à');
-    expect(many).toContain('Plusieurs matchs importants sont à');
-    // Her spec: « pas nécessaire de les mentionner en détails ». No count, no name, no date, and
-    // no window NUMBER either (ruling 2026-08-20 — the window is expressed in words only).
-    for (const body of [one, many]) {
-      expect(body).not.toMatch(/\d/);
-    }
+  it('several matches: listed nearest first, plural call to action, minutes kept when not :00', () => {
+    expect(
+      buildPistes({ events: { matches: [derby, classico] }, sps: null, aiBody: null })[0].body,
+    ).toBe(
+      "À l'affiche : Derby Tunis VS Sfax, mar. 20/10 à 20h · CA - EST, sam. 24/10 à 18h30. Annoncez leur diffusion à vos clients dès maintenant pour remplir votre lieu ces jours-là.",
+    );
   });
 
-  it('no upcoming events → the honest no-events variant (never a fabricated temps fort)', () => {
-    for (const events of [null, { count: 0, soonestInDays: 3 }]) {
+  it('never names more than PISTE_01_MAX_MATCHES', () => {
+    const many = Array.from({ length: 5 }, (_, i) => ({ ...derby, name: `Match ${i}` }));
+    const body = buildPistes({ events: { matches: many }, sps: null, aiBody: null })[0].body;
+    expect(body).toContain('Match 2');
+    expect(body).not.toContain('Match 3');
+    expect(PISTE_01_MAX_MATCHES).toBe(3);
+  });
+
+  it('formats a kickoff as the owner reads it', () => {
+    expect(formatKickoffFr('2026-10-18', '17:00')).toBe('dim. 18/10 à 17h');
+    expect(formatKickoffFr('2026-10-24', '18:30')).toBe('sam. 24/10 à 18h30');
+  });
+
+  it('no upcoming match → the honest no-events variant (never a fabricated temps fort)', () => {
+    for (const events of [null, { matches: [] }]) {
       expect(buildPistes({ events, sps: null, aiBody: null })[0].body).toBe(
         PISTE_01_NO_EVENTS_BODY,
       );
-    }
-  });
-
-  it('the retired R3 hardcode is gone from every branch', () => {
-    for (const events of [null, { count: 1, soonestInDays: 0 }, { count: 9, soonestInDays: 14 }]) {
-      const body = buildPistes({ events, sps: null, aiBody: null })[0].body;
-      expect(body).not.toContain('Coupe du Monde');
-      expect(body).not.toContain('ce mois-ci');
     }
   });
 });
@@ -171,10 +167,34 @@ describe('Piste 02 — the AI body, or an honest wait (US-P.10)', () => {
 describe('the three cards as a whole', () => {
   const matrix = [
     { events: null, sps: null },
-    { events: { count: 1, soonestInDays: 0 }, sps: sps({ acceptation: 0 }) },
-    { events: { count: 5, soonestInDays: 9 }, sps: sps({ respect_evenements: 0 }) },
-    { events: { count: 2, soonestInDays: 7 }, sps: sps({ activite: 0 }, 12.5) },
-    { events: { count: 1, soonestInDays: 14 }, sps: sps({ remplissage: 0 }, 99.9) },
+    {
+      events: { matches: [{ name: 'Derby Tunis VS Sfax', day: '2026-10-20', time: '20:00' }] },
+      sps: sps({ acceptation: 0 }),
+    },
+    {
+      events: {
+        matches: [
+          { name: 'Derby Tunis VS Sfax', day: '2026-10-20', time: '20:00' },
+          { name: 'CA - EST', day: '2026-10-24', time: '18:30' },
+          { name: 'CSS - USM', day: '2026-10-25', time: '15:00' },
+        ],
+      },
+      sps: sps({ respect_evenements: 0 }),
+    },
+    {
+      events: { matches: [{ name: 'Derby Tunis VS Sfax', day: '2026-10-20', time: '20:00' }] },
+      sps: sps({ activite: 0 }, 12.5),
+    },
+    {
+      events: {
+        matches: [
+          { name: 'Derby Tunis VS Sfax', day: '2026-10-20', time: '20:00' },
+          { name: 'CA - EST', day: '2026-10-24', time: '18:30' },
+          { name: 'CSS - USM', day: '2026-10-25', time: '15:00' },
+        ],
+      },
+      sps: sps({ remplissage: 0 }, 99.9),
+    },
   ];
 
   it('keeps the ruled numbering, titles and order in every branch', () => {
@@ -182,14 +202,6 @@ describe('the three cards as a whole', () => {
       const pistes = buildPistes({ ...input, aiBody: null });
       expect(pistes.map((p) => p.num)).toEqual(['01', '02', '03']);
       expect(pistes.map((p) => p.title)).toEqual([PISTE_01_TITLE, PISTE_02_TITLE, PISTE_03_TITLE]);
-    }
-  });
-
-  it('every generated body fits the S07 card (a 3rd line overflows page 4)', () => {
-    for (const input of matrix) {
-      for (const piste of buildPistes({ ...input, aiBody: null })) {
-        expect(piste.body.length).toBeLessThanOrEqual(BODY_MAX_CHARS);
-      }
     }
   });
 

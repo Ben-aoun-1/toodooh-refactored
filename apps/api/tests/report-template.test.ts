@@ -17,9 +17,15 @@ import {
   renderReportHtml,
 } from '../src/lib/report/template.js';
 
-/** The « plusieurs matchs, cette semaine » teaser — pinned here so the PDF can't drift from it. */
-const PISTE_01_TEASER_MANY_THIS_WEEK =
-  "Plusieurs matchs importants sont à l'affiche cette semaine — annoncez leur diffusion à vos clients dès maintenant pour remplir votre lieu ces jours-là.";
+/** Two named matches — pinned here so the PDF can't drift from the generator's copy. */
+const TWO_MATCHES = {
+  matches: [
+    { name: 'Derby Tunis VS Sfax', day: '2026-10-20', time: '20:00' },
+    { name: 'CA - EST', day: '2026-10-24', time: '18:30' },
+  ],
+};
+const PISTE_01_TWO_MATCHES =
+  "À l'affiche : Derby Tunis VS Sfax, mar. 20/10 à 20h · CA - EST, sam. 24/10 à 18h30. Annoncez leur diffusion à vos clients dès maintenant pour remplir votre lieu ces jours-là.";
 
 // Snapshot-style contract tests for the R1.6 DARK document: five fixed pages reproducing the
 // operator-approved mockup — palette, structure and FRENCH COPY VERBATIM — with the HOST/CAST
@@ -461,7 +467,7 @@ describe('renderReportHtml — S07 renders the pistes generator (PERF-QA2)', () 
 
   it('renders EXACTLY the generator bodies for the same data (page ↔ PDF, one engine)', () => {
     const data = fullData({
-      upcomingEvents: { count: 3, soonestInDays: 2 },
+      upcomingEvents: TWO_MATCHES,
     });
     const html = renderReportHtml(data, { aiPistes: aiBody });
     for (const piste of buildPistes({
@@ -475,11 +481,9 @@ describe('renderReportHtml — S07 renders the pistes generator (PERF-QA2)', () 
     }
   });
 
-  it('Piste 01 is EVENT-DRIVEN: the teaser fires on upcoming events, the honest variant without', () => {
-    const withEvents = renderReportHtml(
-      fullData({ upcomingEvents: { count: 2, soonestInDays: 1 } }),
-    );
-    expect(withEvents).toContain(esc(PISTE_01_TEASER_MANY_THIS_WEEK));
+  it('Piste 01 is EVENT-DRIVEN: the matches are named when upcoming, the honest variant without', () => {
+    const withEvents = renderReportHtml(fullData({ upcomingEvents: TWO_MATCHES }));
+    expect(withEvents).toContain(esc(PISTE_01_TWO_MATCHES));
     const without = renderReportHtml(fullData({ upcomingEvents: null }));
     expect(without).toContain(esc(PISTE_01_NO_EVENTS_BODY));
     // The retired R3 hardcode never renders again.
@@ -526,14 +530,21 @@ describe('renderReportHtml — S07 renders the pistes generator (PERF-QA2)', () 
     }
   });
 
-  // PDF-P4-1 (Mejri/Kais QA) — a piste body wrapping to 3 lines overflowed page 4 by ~16px. The
-  // stylesheet clamps every body to TWO lines with an ellipsis, whatever the text length: a source
-  // pin, since the fixed-page frame (overflow hidden) would otherwise clip silently.
-  it('PDF-P4-1: the piste body is width-safe — clamped to 2 lines in the stylesheet', () => {
+  // PISTES-V2 (Q9 A) — the cards grow: S07 moved to page 5 above S08, and the body clamp is a
+  // 6-line guard only (Piste 02 is 45–70 words, Piste 01 names up to three matches). A source pin,
+  // since the fixed-page frame (overflow hidden) would otherwise clip silently.
+  it('PISTES-V2: S07 sits on page 5 above S08, the body clamp is a 6-line guard', () => {
     for (const html of bothBranches) {
       expect(html).toContain(
-        '.piste-body{ font-size:9pt; color:var(--muted); line-height:1.42; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }',
+        '.piste-body{ font-size:9pt; color:var(--muted); line-height:1.36; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:6; overflow:hidden; }',
       );
+      const pages = html.split('<div class="page">');
+      const s07Page = pages.findIndex((p) => p.includes("Vos pistes d'optimisation futures"));
+      expect(s07Page).toBe(pages.length - 1); // the LAST page…
+      const last = pages[s07Page] ?? '';
+      expect(last.indexOf("Vos pistes d'optimisation futures")).toBeLessThan(
+        last.indexOf('Section 08'),
+      ); // …above S08
     }
     // A pathological 3-line body still renders inside the same clamped block (no layout branch).
     const longBody = 'Mot '.repeat(80).trim();

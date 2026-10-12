@@ -165,20 +165,16 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     expect(res.json<{ error: string }>().error).toBe('REPORT_RENDER_FAILED');
   });
 
-  it('goes through the CACHE-WRAPPED pistes seam and renders the AI Piste 02 body it returns (R3)', async () => {
+  it('goes through the stored-piste seam and renders the Piste 02 body it returns (PISTES-V2)', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
     mockSession(me);
     pistesCachedSpy.mockResolvedValue('Corps IA du créneau faible.');
     const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
     expect(res.statusCode).toBe(200);
-    // the cached variant, keyed by THIS venue (the period rides in data.range)
+    // the venue's last STORED month (PISTES-V2) — keyed by THIS venue only, no period
     expect(pistesCachedSpy).toHaveBeenCalledTimes(1);
-    expect(pistesCachedSpy.mock.calls[0]?.[0]).toBe(sh);
-    expect(pistesCachedSpy.mock.calls[0]?.[1]?.range).toEqual({
-      from: '2026-06-01',
-      to: '2026-06-30',
-    });
+    expect(pistesCachedSpy.mock.calls[0]).toEqual([sh]);
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Corps IA du créneau faible.');
     expect(html).toContain('Repérez vos angles morts'); // the FIXED title stays either way

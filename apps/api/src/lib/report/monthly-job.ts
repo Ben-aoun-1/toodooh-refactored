@@ -286,8 +286,9 @@ export async function runMonthlyReportSweep(
 
         const data = await assembleReportData(venue.id, { from, to });
         if (!data) continue; // venue vanished mid-sweep
-        // R2 — generated ONCE here and frozen into the stored PDF (no cache). A generator failure
-        // of ANY kind resolves to null → the generic pistes; it can never fail the report.
+        // PISTES-V2 — the month's Piste 02 is generated ONCE here, stored (screenhost_pistes) and
+        // frozen into the PDF; the page then shows that stored row. A generator failure of ANY
+        // kind resolves to null → the « À venir » wait state; it can never fail the report.
         const aiPistes = await pistesForReport(venue.id, data).catch(() => null);
         const pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
 

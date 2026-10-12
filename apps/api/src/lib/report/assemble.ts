@@ -1,5 +1,5 @@
-import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
-import { and, desc, eq, gte, lte, count as sqlCount, sql } from 'drizzle-orm';
+import { addDays, format, parseISO } from 'date-fns';
+import { and, asc, desc, eq, gte, lte, count as sqlCount, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import {
@@ -54,7 +54,7 @@ import {
   openHoursPerDay,
   zeroFillDays,
 } from './derive.js';
-import type { SpsBlock, UpcomingEvents } from './pistes.js';
+import { PISTE_01_MAX_MATCHES, type SpsBlock, type UpcomingEvents } from './pistes.js';
 
 // One data truth: this module runs the SAME queries the owner reads use (screenhosts.ts —
 // profile / monthly-stats / affluence / impressions-daily / earnings) and derives the template's
@@ -146,9 +146,9 @@ export interface ReportData {
   /** E4 — the venue's SPS breakdown (computed live at assembly; null only on a compute failure). */
   sps: SpsBlock | null;
   /**
-   * PERF-QA2 — the S07 Piste 01 teaser input: OFFICIAL, non-cancelled events whose kickoff falls
-   * in the EVENT_TEASER_DAYS window after the render day. null = nothing upcoming (the honest
-   * no-events variant). Suggested and past events never reach here.
+   * The S07 Piste 01 input: CONFIRMED official matches (date and time fixed, not cancelled) whose
+   * kickoff falls in the EVENT_TEASER_DAYS window after the render day, nearest first, at most
+   * PISTE_01_MAX_MATCHES. null = nothing upcoming (the honest no-events variant).
    */
   upcomingEvents: UpcomingEvents | null;
 }
@@ -479,30 +479,29 @@ export async function assembleReportData(
     spsBlock = null;
   }
 
-  // PERF-QA2 — Piste 01's teaser input: OFFICIAL, non-cancelled events whose kickoff falls in the
+  // Piste 01 (operator 2026-10-12) — the CONFIRMED official matches whose kickoff falls in the
   // EVENT_TEASER_DAYS window after the render day, bucketed on the TUNIS calendar (the reconcile
-  // convention). Suggested events (source = 'suggested') and cancelled ones can never reach an
-  // owner's report — the teaser must only ever promise what the catalogue actually holds.
+  // convention), nearest first. Suggested, cancelled and still-unscheduled (date or time TBC)
+  // events can never reach an owner's report — the card must only name what is actually on.
   const eventDay = sql<string>`to_char(${events.kickoffAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+  const eventTime = sql<string>`to_char(${events.kickoffAt} at time zone 'Africa/Tunis', 'HH24:MI')`;
   const windowEnd = format(addDays(parseISO(todayIso), EVENT_TEASER_DAYS), 'yyyy-MM-dd');
-  const [eventAgg] = await db
-    .select({ n: sqlCount(), soonest: sql<string | null>`min(${eventDay})` })
+  const matches = await db
+    .select({ name: events.name, day: eventDay, time: eventTime })
     .from(events)
     .where(
       and(
         eq(events.source, 'official'),
         eq(events.annule, false),
+        eq(events.dateTbc, false),
+        eq(events.timeTbc, false),
         gte(eventDay, todayIso),
         lte(eventDay, windowEnd),
       ),
-    );
-  const upcomingEvents =
-    eventAgg && eventAgg.n > 0 && eventAgg.soonest
-      ? {
-          count: eventAgg.n,
-          soonestInDays: differenceInCalendarDays(parseISO(eventAgg.soonest), parseISO(todayIso)),
-        }
-      : null;
+    )
+    .orderBy(asc(events.kickoffAt))
+    .limit(PISTE_01_MAX_MATCHES);
+  const upcomingEvents = matches.length > 0 ? { matches } : null;
 
   return {
     venueName: venue.name,
