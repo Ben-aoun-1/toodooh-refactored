@@ -5,6 +5,7 @@ import { env } from '../env.js';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
+import { adminDemoRoutes } from './admin-demo.js';
 import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
 import { adminEngineJournalRoutes } from './admin-engine-journal.js';
 import { adminEventsRoutes } from './admin-events.js';
@@ -138,6 +139,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminRechargesRoutes);
   // FCT2 — the admin wallet adjustment (signed, audited, reason-required) + its audit trail.
   await app.register(adminWalletRoutes);
+  // DEMO-1 — the admin « Démo » page.
+  await app.register(adminDemoRoutes);
   // ACTIVATION WIRING — admin campaign moderation: the review queue + activate (gate on pending +
   // approved creative + funded, then dispatch → status='active') / reject. The keystone that lets
   // the dispatch → playout → proof-of-play chain run end-to-end.

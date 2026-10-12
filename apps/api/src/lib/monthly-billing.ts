@@ -130,11 +130,16 @@ export async function runMonthlyBillingSweep(
         continue;
       }
       const [advertiser] = await db
-        .select({ contactName: users.contactName, businessName: users.businessName })
+        .select({
+          contactName: users.contactName,
+          businessName: users.businessName,
+          isDemo: users.isDemo,
+        })
         .from(users)
         .where(eq(users.id, advertiserId))
         .limit(1);
-      if (!advertiser) continue;
+      // DEMO-1 — a demo screencaster is never invoiced (its balance is a demo credit).
+      if (!advertiser || advertiser.isDemo) continue;
 
       const id = randomUUID();
       const reference = makeBillingReference('FM', id);

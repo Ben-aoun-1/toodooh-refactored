@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 
+import { db } from '../db/client.js';
 import { premiereDateDisponible } from '../lib/campaign-dates.js';
+import { isDemoUser } from '../lib/demo.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { screencasterCpmRates } from '../lib/screencaster-cpm.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -30,7 +32,12 @@ export const campaignsPricingRoutes: FastifyPluginAsync = async (app) => {
         event_cpm_tnd: own?.eventCpmTnd ?? cfg.eventCpmTnd,
         // CF-Q2 (spec §1.4) — the working-day start floor, computed server-side in ONE place
         // (lib/campaign-dates) so the wizard consumes it instead of hardcoding the rule.
-        first_available_start_date: premiereDateDisponible(new Date(), cfg.campaignLeadWorkingDays),
+        // DEMO-1 — a demo screencaster may start today.
+        first_available_start_date: premiereDateDisponible(
+          new Date(),
+          cfg.campaignLeadWorkingDays,
+          request.user ? await isDemoUser(db, request.user.id) : false,
+        ),
       });
     },
   );

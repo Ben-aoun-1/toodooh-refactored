@@ -15,6 +15,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { ownerApprovedSql } from '../approved-owner.js';
+import { demoVenueIds, isDemoCampaign } from '../demo.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { blackoutMinutesInHour, eventBlackouts, windowsForVenue } from '../event-blackout.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
@@ -170,7 +171,11 @@ export const assemblePool = async (
   const frozenVenues = (await hasTypicalWeekFreeze(executor, campaign.id))
     ? await frozenVenueIds(executor, campaign.id)
     : null;
-  const filterContext = { lines, zoneIds: campaignZoneIds, excluded, frozenVenues };
+  // DEMO-1 (ruled Q2 A) — a demo screencaster's campaign is bounded to the demo venues.
+  const demoVenues = (await isDemoCampaign(executor, campaign.id))
+    ? await demoVenueIds(executor)
+    : null;
+  const filterContext = { lines, zoneIds: campaignZoneIds, excluded, frozenVenues, demoVenues };
   const verdicts = activeRows.map((sh) => ({ sh, reason: poolExclusionReason(sh, filterContext) }));
   const candidates = verdicts.flatMap(({ sh, reason }) => (reason === null ? [sh] : []));
 

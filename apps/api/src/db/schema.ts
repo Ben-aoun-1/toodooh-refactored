@@ -115,6 +115,10 @@ export const users = pgTable(
     // Server-stamped on each PATCH /api/profile/bank (money-adjacent audit marker).
     bankDetailsUpdatedAt: timestamp('bank_details_updated_at', { withTimezone: true }),
     onboardingCompleted: boolean('onboarding_completed').notNull().default(false),
+    // DEMO-1 — an admin-created demonstration screencaster (routes/admin-demo.ts): its campaigns
+    // skip review and owner acceptance, air only on the demo venues (demo_screenhosts) after
+    // dispatch_config.demo_delay_minutes, and never pay a screenhost (lib/demo.ts).
+    isDemo: boolean('is_demo').notNull().default(false),
     // ── notification preferences (Phase 1c) — columns only this commit; the
     // notify endpoint is Commit 4. Defaults from the legacy schema (inventory §2.2).
     notifyNewsUpdates: boolean('notify_news_updates').notNull().default(false),
@@ -1029,6 +1033,11 @@ export const campaigns = pgTable(
     activatedBy: uuid('activated_by').references(() => users.id),
     rejectedAt: timestamp('rejected_at', { withTimezone: true }),
     rejectReason: text('reject_reason'),
+    // DEMO-1 — a demo campaign's exact on-air instant (confirm + demo_delay_minutes): the playout
+    // gate holds it back until then; airs_pushed_at stamps the re-push that put it on the TVs.
+    // NULL on every non-demo campaign (the gate then reads the date window only).
+    airsAt: timestamp('airs_at', { withTimezone: true }),
+    airsPushedAt: timestamp('airs_pushed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -1295,6 +1304,9 @@ export const dispatchConfig = pgTable(
     // field testing; 0 = the floor is TODAY). Admin-editable 0–30; weekend-start legality
     // (ruling #10) is untouched — only the lead moves.
     campaignLeadWorkingDays: integer('campaign_lead_working_days').notNull().default(2),
+    // DEMO-1 — minutes between a demo screencaster's cart confirm and its campaign on the TVs
+    // (admin « Démo » page, 0–1440).
+    demoDelayMinutes: integer('demo_delay_minutes').notNull().default(5),
     // E7 (VF EPIC 5) — the reversement split, calibratable but defaulting to the canonical
     // 50 % SH / 44 % Toodooh / 3 % Agent SH / 3 % Agent SC. The rail validates Σ = 100 at every
     // split — a drifted config fails the settlement loudly rather than mis-splitting money.
@@ -2455,3 +2467,15 @@ export const simulationActors = pgTable(
 
 export type SimulationActor = typeof simulationActors.$inferSelect;
 export type NewSimulationActor = typeof simulationActors.$inferInsert;
+
+// ── demo venues (DEMO-1) ────────────────────────────────────────────────────
+// The REAL venues the admin opened to demo campaigns (admin « Démo » page). A demo screencaster's
+// pool is bounded to these (lib/dispatch/exclusion-reason.ts 'not_demo_venue'); real campaigns
+// ignore the table.
+export const demoScreenhosts = pgTable('demo_screenhosts', {
+  screenhostId: uuid('screenhost_id')
+    .primaryKey()
+    .references(() => screenhosts.id, { onDelete: 'cascade' }),
+  addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
+  addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+});

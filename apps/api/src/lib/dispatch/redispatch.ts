@@ -14,6 +14,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
+import { acceptDemoAllocations, isDemoCampaign } from '../demo.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { blackoutMinutesByVenueCell } from '../event-blackout.js';
 import { PLAYOUT_TZ, loadDeliveredSlots } from '../reconcile/delivered-slots.js';
@@ -379,6 +380,9 @@ export const runRedispatchRound = async (
           .where(eq(campaignDispatchPlan.id, plan.id));
       }
 
+      // DEMO-1 (ruled Q1 A) — a demo campaign is re-accepted on the owners' behalf, unannounced.
+      const demo = await isDemoCampaign(tx, campaign.id);
+      if (demo) await acceptDemoAllocations(tx, plan.id);
       // Notify each DISTINCT owner whose venue must (re-)accept — the dispatch/cascade producer
       // pattern, inside the same transaction.
       const ownerRows = await tx
@@ -388,7 +392,7 @@ export const runRedispatchRound = async (
       const ownerIds = [
         ...new Set(ownerRows.map((r) => r.ownerId).filter((id): id is string => id !== null)),
       ];
-      if (ownerIds.length > 0) {
+      if (!demo && ownerIds.length > 0) {
         await tx.insert(notifications).values(
           ownerIds.map((ownerId) => ({
             userId: ownerId,

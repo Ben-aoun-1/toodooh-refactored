@@ -16,6 +16,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { campaignReportReadyNotification } from '../campaign-report-notification.js';
+import { isDemoCampaign } from '../demo.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { createEngineTrace } from '../engine-journal/trace.js';
 import { blackoutMinutesByVenueCell } from '../event-blackout.js';
@@ -211,6 +212,10 @@ export const reconcileCampaignById = async (
     if (residueTnd > 0) trace.event('residue_kept', { amountTnd: residueTnd });
   }
 
+  // DEMO-1 (ruled Q1 A) — a demo campaign settles its demo wallet like any campaign, but pays no
+  // screenhost: no payout row, no reversement line (so no facture, no versement).
+  const demo = await isDemoCampaign(db, campaignId);
+
   const persisted = await db
     .transaction(async (tx) => {
       const [recon] = await tx
@@ -229,7 +234,7 @@ export const reconcileCampaignById = async (
         .returning();
       if (!recon) throw new Error('reconciliation insert failed');
       const payouts =
-        valuation.perScreenhost.length > 0
+        !demo && valuation.perScreenhost.length > 0
           ? await tx
               .insert(campaignScreenhostPayout)
               .values(
@@ -245,7 +250,7 @@ export const reconcileCampaignById = async (
               )
               .returning()
           : [];
-      if (splits.length > 0) {
+      if (!demo && splits.length > 0) {
         await tx.insert(reversementLines).values(
           splits.map(({ screenhostId, split }) => {
             const ownerId = ownerBySh.get(screenhostId) ?? null;

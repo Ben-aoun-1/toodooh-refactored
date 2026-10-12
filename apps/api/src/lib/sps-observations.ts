@@ -11,6 +11,7 @@ import {
 } from '../db/schema.js';
 
 import { plusCalendarDays } from './campaign-dates.js';
+import { notDemoAllocationSql } from './demo.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
 import { blackoutMinutesByCell, blackoutMinutesByVenueCell } from './event-blackout.js';
 import { PLAYOUT_TZ } from './reconcile/delivered-slots.js';
@@ -74,6 +75,8 @@ export const loadDecided = async (screenhostId: string, w: CreatedWindow) => {
       and(
         eq(campaignDispatchAllocation.screenhostId, screenhostId),
         ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
+        // DEMO-1 — a demo allocation was accepted on the owner's behalf, not decided by them.
+        notDemoAllocationSql(),
         gte(campaignDispatchAllocation.createdAt, w.since),
         w.until === undefined ? undefined : lt(campaignDispatchAllocation.createdAt, w.until),
       ),
@@ -214,6 +217,7 @@ export const spsObservationsFor = async (
         and(
           inArray(campaignDispatchAllocation.screenhostId, ids),
           ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
+          notDemoAllocationSql(),
           gte(campaignDispatchAllocation.createdAt, decidedSince),
         ),
       ),

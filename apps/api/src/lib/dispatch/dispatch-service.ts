@@ -11,6 +11,7 @@ import {
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
 import type { CpmFreezeCheck } from '../cpm-freeze-guard.js';
+import { acceptDemoAllocations, isDemoCampaign } from '../demo.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
 import { type TTiers, getDispatchConfig } from './config.js';
@@ -178,6 +179,12 @@ export const runDispatch = async (
         // with several allocated venues gets a single notification → their accept/reject surface
         // lists all their EN_ATTENTE allocations). Screenhosts with no owner are skipped. Inside the
         // same transaction as the freeze: the plan, allocations, and notifications are all-or-nothing.
+        // DEMO-1 (ruled Q1 A) — a demo campaign is accepted on the owners' behalf: ACCEPTE at
+        // once, no owner notification.
+        if (await isDemoCampaign(tx, campaign.id)) {
+          await acceptDemoAllocations(tx, planRow.id);
+          return { status: 'OK', plan: planRow, allocationCount: built.allocations.length };
+        }
         const allocatedScreenhostIds = built.allocations.map((a) => a.screenhostId);
         const ownerRows = await tx
           .select({ ownerId: screenhosts.ownerId })

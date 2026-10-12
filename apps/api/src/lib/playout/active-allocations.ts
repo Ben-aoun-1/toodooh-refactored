@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, lte, or } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import {
@@ -29,7 +29,8 @@ export interface ActiveAllocation {
 //   • the campaign is status = 'active' (defense-in-depth: a draft/pending/rejected campaign with a
 //     frozen plan + approved creative + active window must NOT air — the activation lane flips it),
 //   • its linked creative is validation_status = 'approved' (content gate),
-//   • the campaign window covers `now` (Africa/Tunis).
+//   • the campaign window covers `now` (Africa/Tunis),
+//   • DEMO-1 — a demo campaign's airs_at has passed (NULL on every other campaign).
 // computeScreenPlaylist (what to send) and the proof-of-play ingest (what to record) BOTH call this,
 // so a screen only ever records proof for content the server authorized it to air. Pass campaignId
 // to resolve a single campaign (proof ingest); omit for the full list (playlist push).
@@ -43,6 +44,7 @@ export const activeAllocationsForScreenhost = async (
     eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
     eq(campaigns.status, 'active'),
     eq(creatives.validationStatus, 'approved'),
+    or(isNull(campaigns.airsAt), lte(campaigns.airsAt, now)),
   ];
   if (campaignId !== undefined) conditions.push(eq(campaigns.id, campaignId));
 

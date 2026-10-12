@@ -23,6 +23,7 @@ import {
   premiereDateDisponible,
   startDateViolation,
 } from '../lib/campaign-dates.js';
+import { isDemoUser } from '../lib/demo.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
@@ -45,16 +46,26 @@ import { requireAuth } from '../middleware/require-auth.js';
 // activation is untouched (parked).
 // CF-D1 — the lead is calibratable (dispatch_config.campaign_lead_working_days, default 2); the
 // rejection payload reflects the lead that actually gated the request.
-const startDateRejection = (violation: StartDateViolation, leadWorkingDays: number) => ({
+const startDateRejection = (violation: StartDateViolation, rule: StartRule) => ({
   error: 'INVALID_START_DATE',
   reason: violation,
-  message: `La date de début doit être au moins ${effectiveLeadWorkingDays(leadWorkingDays)} jour(s) ouvré(s) plus tard.`,
-  first_available_start_date: premiereDateDisponible(new Date(), leadWorkingDays),
+  message: rule.sameDay
+    ? 'La date de début ne peut pas être passée.'
+    : `La date de début doit être au moins ${effectiveLeadWorkingDays(rule.lead)} jour(s) ouvré(s) plus tard.`,
+  first_available_start_date: premiereDateDisponible(new Date(), rule.lead, rule.sameDay),
 });
 
-/** The configured campaign start-date lead (working days). */
-const campaignLead = async (): Promise<number> =>
-  (await getDispatchConfig()).campaignLeadWorkingDays;
+interface StartRule {
+  lead: number;
+  /** DEMO-1 — a demo screencaster may start today. */
+  sameDay: boolean;
+}
+
+/** The start-date rule for this screencaster: the configured lead, or today for a demo account. */
+const campaignStartRule = async (userId: string): Promise<StartRule> => ({
+  lead: (await getDispatchConfig()).campaignLeadWorkingDays,
+  sameDay: await isDemoUser(db, userId),
+});
 
 // CF-Z1 — zone_ids must all reference ACTIVE zones; anything else is a 400 INVALID_ZONE.
 async function invalidZoneIds(zoneIds: readonly string[]): Promise<string[]> {
@@ -285,9 +296,14 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     if (parsed.data.start_date) {
-      const lead = await campaignLead();
-      const violation = startDateViolation(parsed.data.start_date, new Date(), lead);
-      if (violation) return reply.status(400).send(startDateRejection(violation, lead));
+      const rule = await campaignStartRule(userId);
+      const violation = startDateViolation(
+        parsed.data.start_date,
+        new Date(),
+        rule.lead,
+        rule.sameDay,
+      );
+      if (violation) return reply.status(400).send(startDateRejection(violation, rule));
     }
     if (parsed.data.zone_ids?.length) {
       const unknown = await invalidZoneIds(parsed.data.zone_ids);
@@ -449,9 +465,14 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     // CF-Q2 — an explicit null still clears the date; only a SET start date meets the floor.
     if (parsed.data.start_date) {
-      const lead = await campaignLead();
-      const violation = startDateViolation(parsed.data.start_date, new Date(), lead);
-      if (violation) return reply.status(400).send(startDateRejection(violation, lead));
+      const rule = await campaignStartRule(userId);
+      const violation = startDateViolation(
+        parsed.data.start_date,
+        new Date(),
+        rule.lead,
+        rule.sameDay,
+      );
+      if (violation) return reply.status(400).send(startDateRejection(violation, rule));
     }
     // CF-Z1 — zone_ids: absent = untouched; [] = clear; ids must reference active zones.
     if (parsed.data.zone_ids !== undefined && parsed.data.zone_ids.length > 0) {
@@ -888,9 +909,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     // too-late guard. Legacy 'event'-TYPED rows without a binding stay fully classic.
     const isEventRow = existing.eventId !== null;
     if (!isEventRow) {
-      const lead = await campaignLead();
-      const violation = startDateViolation(existing.startDate, new Date(), lead);
-      if (violation) return reply.status(400).send(startDateRejection(violation, lead));
+      const rule = await campaignStartRule(userId);
+      const violation = startDateViolation(existing.startDate, new Date(), rule.lead, rule.sameDay);
+      if (violation) return reply.status(400).send(startDateRejection(violation, rule));
     }
     // CF-U1 — the budget-null contract: requested_budget stays NULL until the advertiser sets it
     // at Validation, so the positive-budget requirement the wizard gated CLIENT-side now holds

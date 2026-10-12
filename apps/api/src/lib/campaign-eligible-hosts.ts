@@ -71,6 +71,7 @@ export type ExclusionReason =
   | 'no_sector'
   | 'owner_not_approved'
   | 'no_installed_screen'
+  | 'not_demo_venue'
   | 'not_in_frozen_week';
 
 export interface EligibleHost {
@@ -135,6 +136,7 @@ const KNOWN_REASONS = new Set<string>([
   'no_residual_capacity',
   'owner_not_approved',
   'no_installed_screen',
+  'not_demo_venue',
   'not_in_frozen_week',
 ]);
 
