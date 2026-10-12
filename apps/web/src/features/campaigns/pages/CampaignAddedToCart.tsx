@@ -21,10 +21,10 @@ const log = logger.child({ module: 'CampaignAddedToCart' });
 
 /**
  * SUGG-1 — the page « Ajouter au panier » lands on (Figma « Lancer une campagne », last frame):
- * the confirmation, then up to 3 events INSIDE the campaign's period (Q3 A) with « Je me
- * positionne », and [Dashboard] / [Voir tous les événements]. Operator 2026-10-09 (Q5A): no
- * event in the period → the page still shows, with PERIOD_SUGGESTION_EMPTY (an unknown campaign
- * id alone forwards to the panier).
+ * the confirmation, then every positionable event (during the campaign first, then « à la une »,
+ * then the rest — operator 2026-10-13) with « Je me positionne », and [Dashboard] / [Voir tous
+ * les événements]. Operator 2026-10-09 (Q5A): no event → the page still shows, with
+ * PERIOD_SUGGESTION_EMPTY (an unknown campaign id alone forwards to the panier).
  */
 export default function CampaignAddedToCart() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -51,7 +51,7 @@ export default function CampaignAddedToCart() {
   const ownPositioned = new Set(
     campaigns.flatMap((c) => (c.event_id === null ? [] : [c.event_id])),
   );
-  const suggestions = suggestEventsForPeriod(campaign, catalogue ?? [], new Date(), ownPositioned);
+  const suggestions = suggestEventsForPeriod(campaign, catalogue ?? [], ownPositioned);
 
   const handlePositionner = async (eventId: string) => {
     setPendingId(eventId);

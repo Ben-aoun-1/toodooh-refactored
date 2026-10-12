@@ -11,9 +11,9 @@ import {
   suggestEventsForPeriod,
 } from './period-suggestions';
 
-// SUGG-1 — « Votre campagne a été ajoutée au panier » (Figma « Lancer une campagne », last frame;
-// operator ruling Q3 A 2026-09-28): the events whose kickoff falls INSIDE the campaign's own
-// period — no +7-day tail (that tail stays the panier block's rule) — top 3 by proximity.
+// SUGG-1 — « Votre campagne a été ajoutée au panier », operator 2026-10-13: every event the
+// screencaster can position on — during the campaign first, then « à la une », then the rest,
+// soonest first in each band, no cap.
 
 const ev = (id: string, kickoff: string, over: Partial<EventItemView> = {}): EventItemView => ({
   id,
@@ -31,40 +31,59 @@ const ev = (id: string, kickoff: string, over: Partial<EventItemView> = {}): Eve
 });
 
 const campaign = { start_date: '2027-03-10', end_date: '2027-03-19' };
-const now = new Date('2027-03-01T10:00:00Z');
 
-describe('suggestEventsForPeriod — inside the campaign period ONLY', () => {
-  it('keeps kickoffs inside [start, end] (Tunis days) and drops the +7-day tail', () => {
+describe('suggestEventsForPeriod — during the campaign, then à la une, then the rest', () => {
+  it('orders the three bands, each soonest first, with no cap', () => {
     const list = [
-      ev('first-day', '2027-03-10T00:30:00+01:00'),
-      ev('last-day', '2027-03-19T23:30:00+01:00'),
-      ev('day-after', '2027-03-20T00:00:00+01:00'), // the panier block would keep this one
-      ev('before', '2027-03-09T23:59:00+01:00'),
+      ev('later', '2027-04-20T20:00:00+01:00'),
+      ev('hero-late', '2027-05-01T20:00:00+01:00', { featured: 'hero' }),
+      ev('in-2', '2027-03-18T20:00:00+01:00'),
+      ev('soon-after', '2027-03-20T20:00:00+01:00'),
+      ev('pinned', '2027-04-02T20:00:00+01:00', { featured: 'pinned' }),
+      ev('in-1', '2027-03-11T20:00:00+01:00'),
+      ev('in-featured', '2027-03-12T20:00:00+01:00', { featured: 'hero' }),
     ];
-    expect(suggestEventsForPeriod(campaign, list, now).map((e) => e.id)).toEqual([
-      'first-day',
+    expect(suggestEventsForPeriod(campaign, list).map((e) => e.id)).toEqual([
+      'in-1',
+      'in-featured',
+      'in-2',
+      'pinned',
+      'hero-late',
+      'soon-after',
+      'later',
+    ]);
+  });
+
+  it('the period is the campaign’s own Tunis days (the day after is no longer « during »)', () => {
+    const list = [
+      ev('day-after', '2027-03-20T00:00:00+01:00'),
+      ev('last-day', '2027-03-19T23:30:00+01:00'),
+    ];
+    expect(suggestEventsForPeriod(campaign, list).map((e) => e.id)).toEqual([
       'last-day',
+      'day-after',
     ]);
     // the panier block's rule is untouched: the day after still counts there
     expect(eventSuggestedForWindow('2027-03-20T00:00:00+01:00', campaign)).toBe(true);
   });
 
-  it('top 3 by proximity, skipping non-upcoming events and the advertiser’s own positionings', () => {
+  it('only events with « Je me positionne »: upcoming, confirmed, not already the advertiser’s', () => {
     const list = [
-      ev('d', '2027-03-18T20:00:00+01:00'),
-      ev('a', '2027-03-11T20:00:00+01:00'),
+      ev('ok', '2027-03-11T20:00:00+01:00'),
       ev('live', '2027-03-12T20:00:00+01:00', { statut: 'en_cours' }),
-      ev('mine', '2027-03-12T21:00:00+01:00'),
-      ev('b', '2027-03-13T20:00:00+01:00'),
-      ev('c', '2027-03-15T20:00:00+01:00'),
+      ev('tbc', '2027-03-13T20:00:00+01:00', { positionable: false }),
+      ev('mine', '2027-03-14T21:00:00+01:00'),
     ];
-    const got = suggestEventsForPeriod(campaign, list, now, new Set(['mine']));
-    expect(got.map((e) => e.id)).toEqual(['a', 'b', 'c']);
+    expect(suggestEventsForPeriod(campaign, list, new Set(['mine'])).map((e) => e.id)).toEqual([
+      'ok',
+    ]);
   });
 
-  it('a campaign without dates suggests nothing', () => {
-    const list = [ev('a', '2027-03-11T20:00:00+01:00')];
-    expect(suggestEventsForPeriod({ start_date: null, end_date: null }, list, now)).toEqual([]);
+  it('a campaign without dates still lists the events (no « during » band)', () => {
+    const list = [ev('b', '2027-03-12T20:00:00+01:00'), ev('a', '2027-03-11T20:00:00+01:00')];
+    expect(
+      suggestEventsForPeriod({ start_date: null, end_date: null }, list).map((e) => e.id),
+    ).toEqual(['a', 'b']);
   });
 });
 
