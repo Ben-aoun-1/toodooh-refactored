@@ -26,6 +26,12 @@ export const useAgentAffiliations = (id: string) =>
     queryFn: () => adminAgentsService.affiliations(id),
   });
 
+export const useAgentPayouts = (month: string) =>
+  useQuery({
+    queryKey: adminKeys.agentPayouts(month),
+    queryFn: () => adminAgentsService.payouts(month),
+  });
+
 export const useAgentRibs = (status: 'en_attente' | 'valide' | 'refuse') =>
   useQuery({
     queryKey: adminKeys.agentRibs(status),
@@ -74,4 +80,12 @@ export const usePublishCge = () =>
 export const useAffiliationAction = () =>
   useAgentsMutation((v: { id: string; action: AffiliationAction }) =>
     adminAgentsService.affiliationAction(v.id, v.action),
+  );
+
+export const usePreparePayouts = () =>
+  useAgentsMutation((month: string) => adminAgentsService.preparePayouts(month));
+
+export const useMarkPayoutPaid = () =>
+  useAgentsMutation((v: { id: string; transferDate: string }) =>
+    adminAgentsService.markPayoutPaid(v.id, v.transferDate),
   );

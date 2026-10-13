@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { AgentCgePanel } from '@/features/admin/components/agents/AgentCgePanel';
+import { AgentPayoutsPanel } from '@/features/admin/components/agents/AgentPayoutsPanel';
 import { AgentRibQueue } from '@/features/admin/components/agents/AgentRibQueue';
 import { AgentSheetDrawer } from '@/features/admin/components/agents/AgentSheetDrawer';
 import { AgentsTable } from '@/features/admin/components/agents/AgentsTable';
@@ -10,10 +11,11 @@ import { useAgentsList } from '@/features/admin/hooks/useAdminAgents';
 
 // AGT-1 (agent specs v1.0 §2, ruling Q1 A) — « Agents »: every Agent Screencaster and Agent
 // Screenhost with its account status and onboarding progress (the sheet opens in a drawer), the
-// RIB validation queue and the CGE versions. Agents are created from « Créer rôle ».
+// monthly payouts (AGT-3), the RIB validation queue and the CGE versions. Agents are created from « Créer rôle ».
 
 const TABS = [
   ['list', 'Agents'],
+  ['payouts', 'Versements'],
   ['ribs', 'RIB'],
   ['cge', 'CGE'],
 ] as const;
@@ -31,7 +33,8 @@ export default function AgentsManagement() {
           <div>
             <h1 className="text-xl font-semibold">Agents</h1>
             <p className="text-sm text-gray-500">
-              Fiches, statuts et onboarding des agents, validation des RIB et publication des CGE.
+              Fiches, statuts et onboarding des agents, versements, validation des RIB et
+              publication des CGE.
             </p>
           </div>
         </header>
@@ -54,6 +57,7 @@ export default function AgentsManagement() {
             ) : (
               <AgentsTable agents={list.data?.agents ?? []} onOpen={setOpenId} />
             ))}
+          {tab === 'payouts' && <AgentPayoutsPanel />}
           {tab === 'ribs' && <AgentRibQueue />}
           {tab === 'cge' && <AgentCgePanel />}
         </div>

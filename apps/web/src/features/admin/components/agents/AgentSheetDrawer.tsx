@@ -11,6 +11,7 @@ import {
 } from '@/features/admin/hooks/useAdminAgents';
 import { AGENT_STATUS_FR, onboardingLabel } from '@/features/admin/lib/agent-sheet';
 import { getErrorMessage } from '@/lib/errors';
+import { tndLabel } from '@/lib/money';
 
 const RIB_FR = {
   non_fourni: 'Non fourni',
@@ -97,6 +98,9 @@ export function AgentSheetDrawer({ id, onClose }: { id: string; onClose: () => v
               />
               <Row label="Certifié le" value={a.certified_at} />
               <Row label="Taux appliqué" value={`${a.effective_commission_pct} %`} />
+              <Row label="Revenu actuel" value={tndLabel(a.wallet.balance_tnd)} />
+              <Row label="Revenus cumulés" value={tndLabel(a.wallet.cumulative_tnd)} />
+              <Row label="Revenu prévisionnel" value={tndLabel(a.wallet.forecast_tnd)} />
             </section>
 
             <section className="space-y-3 rounded-lg border p-4">

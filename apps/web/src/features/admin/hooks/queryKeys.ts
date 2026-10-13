@@ -96,6 +96,7 @@ export const adminKeys = {
   agentsAll: () => [...adminKeys.all, 'agents'] as const,
   agentSheet: (id: string) => [...adminKeys.all, 'agents', 'sheet', id] as const,
   agentAffiliations: (id: string) => [...adminKeys.all, 'agents', 'affiliations', id] as const,
+  agentPayouts: (month: string) => [...adminKeys.all, 'agents', 'payouts', month] as const,
   agentRibs: (status: string) => [...adminKeys.all, 'agents', 'ribs', status] as const,
   agentCge: () => [...adminKeys.all, 'agents', 'cge'] as const,
 

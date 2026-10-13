@@ -53,6 +53,40 @@ export interface AgentSheetView {
   rib_status: 'non_fourni' | 'en_attente' | 'valide' | 'refuse';
   rib_validated: boolean;
   cge_acceptances: { version: string; accepted_at: string; ip: string | null }[];
+  wallet: AgentWalletView;
+}
+
+/** AGT-3 — the agent wallet (spec §10): cumulés, actuel, prévisionnel. */
+export interface AgentWalletView {
+  cumulative_tnd: number;
+  paid_tnd: number;
+  balance_tnd: number;
+  forecast_tnd: number;
+  unprepared_tnd: number;
+}
+
+export interface AgentPayoutRow {
+  id: string;
+  month: string;
+  amount_tnd: number;
+  status: 'en_preparation' | 'effectue';
+  transfer_date: string | null;
+  invoice_file_name: string | null;
+  invoice_uploaded_at: string | null;
+  prepared_at: string;
+  paid_at: string | null;
+  agent_id: string;
+  agent_name: string;
+  agent_code: string;
+  role: AgentRoleKey;
+  rib_validated: boolean;
+  invoice_required: boolean;
+}
+
+export interface PayoutPreparation {
+  prepared: { agent_user_id: string; amount_tnd: number }[];
+  waiting_rib: string[];
+  already_prepared: string[];
 }
 
 export interface AgentRibRow {
@@ -134,6 +168,18 @@ export const adminAgentsService = {
   },
   affiliationAction(id: string, action: AffiliationAction): Promise<{ ok: true }> {
     return apiClient.post(`/admin/agent-affiliations/${id}/action`, action);
+  },
+  payouts(month: string): Promise<{ payouts: AgentPayoutRow[] }> {
+    return apiClient.get(`/admin/agent-payouts?month=${month}`);
+  },
+  preparePayouts(month: string): Promise<PayoutPreparation> {
+    return apiClient.post('/admin/agent-payouts/prepare', { month });
+  },
+  markPayoutPaid(id: string, transferDate: string): Promise<{ ok: true }> {
+    return apiClient.post(`/admin/agent-payouts/${id}/paid`, { transfer_date: transferDate });
+  },
+  payoutInvoiceUrl(id: string): Promise<{ url: string }> {
+    return apiClient.get(`/admin/agent-payouts/${id}/invoice-url`);
   },
   ribs(status: 'en_attente' | 'valide' | 'refuse'): Promise<{ ribs: AgentRibRow[] }> {
     return apiClient.get(`/admin/agent-ribs?status=${status}`);
