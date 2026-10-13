@@ -624,6 +624,13 @@
       "when": 1791930000000,
       "tag": "0088_agent_appointments",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1791940000000,
+      "tag": "0089_agent_notifications",
+      "breakpoints": true
     }
   ]
 }

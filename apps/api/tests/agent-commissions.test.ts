@@ -315,7 +315,7 @@ describe('AGT-3 — agent commissions (real Postgres)', () => {
       .select()
       .from(notifications)
       .where(and(eq(notifications.userId, agent), eq(notifications.type, 'agent_payout_done')));
-    expect(notes[0]?.title).toBe('Votre versement de octobre 2026 a été effectué');
+    expect(notes[0]?.title).toBe('Nouveau versement effectué pour le mois de octobre 2026');
 
     // The agent reads it through GET /api/agent/wallet.
     const app = Fastify({ logger: false });

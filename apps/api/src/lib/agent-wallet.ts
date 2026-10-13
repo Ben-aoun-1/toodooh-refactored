@@ -130,7 +130,7 @@ export const markAgentPayoutPaid = async (
     await tx.insert(notifications).values({
       userId: row.payout.agentUserId,
       type: 'agent_payout_done',
-      title: `Votre versement de ${monthLabelFr(row.payout.month)} a été effectué`,
+      title: `Nouveau versement effectué pour le mois de ${monthLabelFr(row.payout.month)}`,
       body: `${amount} TND ont été virés sur votre RIB.`,
     });
     return true;

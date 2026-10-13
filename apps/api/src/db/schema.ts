@@ -1159,6 +1159,25 @@ export const agentAppointments = pgTable(
 
 export type AgentAppointment = typeof agentAppointments.$inferSelect;
 
+// AGT-6 (agent specs v1.0 §8 « Actualité Toodooh ») — news the hub publishes to agents.
+export const agentNews = pgTable(
+  'agent_news',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    audience: text('audience').$type<'all' | 'screencast_agent' | 'screenhost_agent'>().notNull(),
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'agent_news_audience',
+      sql`${table.audience} in ('all', 'screencast_agent', 'screenhost_agent')`,
+    ),
+  ],
+);
+
 export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
 export type AgentReferral = typeof agentReferrals.$inferSelect;
@@ -2455,6 +2474,8 @@ export const notifications = pgTable(
       onDelete: 'set null',
     }),
     readAt: timestamp('read_at', { withTimezone: true }),
+    // AGT-6 — when the email double of an agent notification went out (spec §8).
+    emailedAt: timestamp('emailed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('notifications_user_id_idx').on(table.userId)],

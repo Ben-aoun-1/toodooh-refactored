@@ -13,6 +13,7 @@ import {
   campaignReconciliation,
   campaigns,
   eventAllocations,
+  notifications,
   proofOfPlay,
   reversementLines,
 } from '../db/schema.js';
@@ -22,6 +23,7 @@ import { isDemoCampaign } from './demo.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { proofInstantSql } from './playout/proof-instant.js';
 import { type ReversementPcts, reversementBaseMillimes } from './reversement/split.js';
+import { userLabelById } from './user-label.js';
 
 // AGT-3 (agent specs v1.0 §10, rulings 2026-10-13) — THE AGENT COMMISSION LINES, one home.
 //
@@ -183,7 +185,7 @@ const upsertForecast = async (
     return;
   }
   const rate = await agentCommissionPct(a.agentUserId, a.agentRole);
-  await db
+  const inserted = await db
     .insert(agentCommissionLines)
     .values({
       agentUserId: a.agentUserId,
@@ -194,7 +196,26 @@ const upsertForecast = async (
       ratePct: String(rate),
       forecastTnd: String(round4((valueTnd * rate) / 100)),
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: agentCommissionLines.id });
+  // AGT-6 — « Nouvelle campagne lancée par {nom} » (spec §8): once, when the Screencaster agent's
+  // line is first written, i.e. at the confirmed launch.
+  if (inserted.length > 0 && screenhostId === null) {
+    const [c] = await db
+      .select({ advertiserId: campaigns.advertiserId })
+      .from(campaigns)
+      .where(eq(campaigns.id, campaignId))
+      .limit(1);
+    const name = c ? await userLabelById(c.advertiserId) : 'un Screencaster affilié';
+    await db.insert(notifications).values({
+      userId: a.agentUserId,
+      type: 'agent_campaign_launched',
+      title: `Nouvelle campagne lancée par ${name}`,
+      body: 'Consultez le détail de la campagne dans « Mes campagnes affiliées ».',
+      campaignId,
+      link: '/agent/campagnes',
+    });
+  }
 };
 
 const cancel = async (ids: string[]) => {
