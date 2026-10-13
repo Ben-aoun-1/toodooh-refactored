@@ -2,6 +2,7 @@ import { Loader2, Mail, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { AgentAffiliationsPanel } from '@/features/admin/components/agents/AgentAffiliationsPanel';
 import {
   useAgentSheet,
   usePatchAgent,
@@ -25,7 +26,8 @@ const Row = ({ label, value }: { label: string; value: string | null }) => (
   </div>
 );
 
-/** AGT-1 — one agent's sheet: data, rate and zone edit, lifecycle, access link, CGE history. */
+/** AGT-1 — one agent's sheet: data, rate and zone edit, lifecycle, access link, affiliations,
+ * CGE history. */
 export function AgentSheetDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const sheet = useAgentSheet(id);
   const patch = usePatchAgent();
@@ -169,6 +171,8 @@ export function AgentSheetDrawer({ id, onClose }: { id: string; onClose: () => v
                 Renvoyer le lien d’accès
               </button>
             </section>
+
+            <AgentAffiliationsPanel agentId={id} role={a.role} />
 
             <section>
               <p className="text-sm font-semibold">CGE acceptées</p>

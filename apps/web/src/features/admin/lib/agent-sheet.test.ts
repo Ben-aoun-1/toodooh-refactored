@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { EMPTY_AGENT_SHEET, agentSheetPayload, onboardingLabel } from './agent-sheet';
+import {
+  EMPTY_AGENT_SHEET,
+  affiliationIsLive,
+  affiliationWindowLabel,
+  agentSheetPayload,
+  onboardingLabel,
+} from './agent-sheet';
 
 const full = {
   ...EMPTY_AGENT_SHEET,
@@ -54,5 +60,19 @@ describe('AGT-1 — the agent sheet at creation', () => {
       '2 étapes sur 4',
     );
     expect(onboardingLabel({ done: 3, steps: [1, 2, 3, 4], complete: true })).toBe('Terminé');
+  });
+});
+
+describe('AGT-2 — affiliation labels', () => {
+  it('shows the 24-month window in French dates, or the pending activation', () => {
+    expect(affiliationWindowLabel('2026-09-03', '2028-09-03')).toBe('03/09/2026 → 03/09/2028');
+    expect(affiliationWindowLabel(null, null)).toBe('Démarre à la première campagne terminée');
+  });
+
+  it('only live affiliations take hub actions', () => {
+    expect(affiliationIsLive('en_cours')).toBe(true);
+    expect(affiliationIsLive('en_attente_activation')).toBe(true);
+    expect(affiliationIsLive('terminee')).toBe(false);
+    expect(affiliationIsLive('exclue')).toBe(false);
   });
 });

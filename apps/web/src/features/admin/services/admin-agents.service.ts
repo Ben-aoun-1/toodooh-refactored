@@ -77,6 +77,28 @@ export interface AgentCgeRow {
   acceptances: number;
 }
 
+export type AffiliationStatus = 'en_attente_activation' | 'en_cours' | 'terminee' | 'exclue';
+
+export interface AgentAffiliationRow {
+  id: string;
+  name: string;
+  kind: 'screenhost' | 'screencaster';
+  status: AffiliationStatus;
+  attached_at: string;
+  start_date: string | null;
+  end_date: string | null;
+  exploited_by_agent: boolean;
+  convention_ref: string | null;
+  exclusion_reason: string | null;
+}
+
+/** AGT-2 — the hub actions on one affiliation (spec §6). */
+export type AffiliationAction =
+  | { kind: 'exclude'; reason: 'key_account' | 'secteur_reserve' | 'exclu' }
+  | { kind: 'reassign'; agent_user_id: string }
+  | { kind: 'exploited'; exploited: boolean; convention_ref?: string | null }
+  | { kind: 'avenant'; end_date: string };
+
 export type AgentSheetPatch = Partial<{
   first_name: string;
   last_name: string;
@@ -106,6 +128,12 @@ export const adminAgentsService = {
   },
   resendAccess(id: string): Promise<void> {
     return apiClient.post(`/admin/agents/${id}/resend-access`);
+  },
+  affiliations(id: string): Promise<{ affiliations: AgentAffiliationRow[] }> {
+    return apiClient.get(`/admin/agents/${id}/affiliations`);
+  },
+  affiliationAction(id: string, action: AffiliationAction): Promise<{ ok: true }> {
+    return apiClient.post(`/admin/agent-affiliations/${id}/action`, action);
   },
   ribs(status: 'en_attente' | 'valide' | 'refuse'): Promise<{ ribs: AgentRibRow[] }> {
     return apiClient.get(`/admin/agent-ribs?status=${status}`);

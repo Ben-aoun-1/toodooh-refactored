@@ -108,3 +108,29 @@ export const onboardingLabel = (o: { done: number; steps: unknown[]; complete: b
     : o.complete
       ? 'Terminé'
       : `${o.done} étape${o.done > 1 ? 's' : ''} sur ${o.steps.length}`;
+
+/** AGT-2 — affiliation statuses as the hub shows them (spec §6). */
+export const AFFILIATION_STATUS_FR = {
+  en_attente_activation: 'En attente d’activation',
+  en_cours: 'En cours',
+  terminee: 'Terminée',
+  exclue: 'Exclue',
+} as const;
+
+export const EXCLUSION_FR: Record<string, string> = {
+  key_account: 'Key account',
+  secteur_reserve: 'Secteur réservé',
+  exclu: 'Exclu par le hub',
+  reaffecte: 'Réaffecté',
+};
+
+/** « 03/09/2026 → 03/09/2028 », or the pending activation when no window starts yet. */
+export const affiliationWindowLabel = (start: string | null, end: string | null) => {
+  if (!start || !end) return 'Démarre à la première campagne terminée';
+  const fr = (d: string) => d.split('-').reverse().join('/');
+  return `${fr(start)} → ${fr(end)}`;
+};
+
+/** Only a live affiliation takes hub actions; an ended or excluded one is history. */
+export const affiliationIsLive = (status: keyof typeof AFFILIATION_STATUS_FR) =>
+  status === 'en_cours' || status === 'en_attente_activation';

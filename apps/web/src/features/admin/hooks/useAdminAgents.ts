@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  type AffiliationAction,
   type AgentRoleKey,
   type AgentSheetPatch,
   adminAgentsService,
@@ -17,6 +18,12 @@ export const useAgentSheet = (id: string | null) =>
     queryKey: adminKeys.agentSheet(id ?? ''),
     queryFn: () => adminAgentsService.get(id ?? ''),
     enabled: id !== null,
+  });
+
+export const useAgentAffiliations = (id: string) =>
+  useQuery({
+    queryKey: adminKeys.agentAffiliations(id),
+    queryFn: () => adminAgentsService.affiliations(id),
   });
 
 export const useAgentRibs = (status: 'en_attente' | 'valide' | 'refuse') =>
@@ -62,4 +69,9 @@ export const useDecideRib = () =>
 export const usePublishCge = () =>
   useAgentsMutation((v: { role: AgentRoleKey; version: string; file: File }) =>
     adminAgentsService.publishCge(v.role, v.version, v.file),
+  );
+
+export const useAffiliationAction = () =>
+  useAgentsMutation((v: { id: string; action: AffiliationAction }) =>
+    adminAgentsService.affiliationAction(v.id, v.action),
   );
