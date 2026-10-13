@@ -54,6 +54,23 @@ const seedAgent = async (
   return id;
 };
 
+const planValues = (campaignId: string) => ({
+  campaignId,
+  iCible: 1000,
+  cpm: '10',
+  sSpotSeconds: 10,
+  tTierCoef: '1',
+  seuilDiffusable: 10,
+  sMin: '1',
+  gJour: '1',
+  fMaxSeconds: 300,
+  rMinEfficace: 2,
+  couvert: 1000,
+  nMin: 1,
+  nMax: 1,
+  nRetenus: 1,
+});
+
 const fakeSender = () => {
   const sent: { to: string; subject: string; html: string }[] = [];
   const sender: EmailSender = {
@@ -132,22 +149,7 @@ describe('AGT-6 — agent notifications (real Postgres)', () => {
       .returning();
     const [plan] = await db
       .insert(campaignDispatchPlan)
-      .values({
-        campaignId: c?.id ?? '',
-        iCible: 1000,
-        cpm: '10',
-        sSpotSeconds: 10,
-        tTierCoef: '1',
-        seuilDiffusable: 10,
-        sMin: '1',
-        gJour: '1',
-        fMaxSeconds: 300,
-        rMinEfficace: 2,
-        couvert: 1000,
-        nMin: 1,
-        nMax: 1,
-        nRetenus: 1,
-      })
+      .values(planValues(c?.id ?? ''))
       .returning();
     const [sh] = await db.insert(screenhosts).values({ name: 'Café', ownerId: owner }).returning();
     await db.insert(campaignDispatchAllocation).values({
@@ -164,6 +166,37 @@ describe('AGT-6 — agent notifications (real Postgres)', () => {
     expect(notes.map((n) => [n.type, n.title, n.campaignId])).toEqual([
       ['agent_campaign_launched', 'Nouvelle campagne lancée par Pâtisserie Lina', c?.id],
     ]);
+
+    // A campaign dispatched long ago (the first sync after deploy) announces nothing.
+    const [old] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: sc,
+        name: 'Ancienne',
+        campaignType: 'standard',
+        status: 'active',
+        startDate: '2026-10-01',
+        endDate: '2026-11-30',
+      })
+      .returning();
+    const longAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    const [oldPlan] = await db
+      .insert(campaignDispatchPlan)
+      .values({ ...planValues(old?.id ?? ''), createdAt: longAgo })
+      .returning();
+    await db.insert(campaignDispatchAllocation).values({
+      planId: oldPlan?.id ?? '',
+      screenhostId: sh?.id ?? '',
+      iiPotentiel: 1000,
+      rI: 1,
+      revenuPrevisionnel: '10',
+      createdAt: longAgo,
+      creneaux: [{ date: '2026-11-01', hour: 10, reps: 10, impressions: 1000 }],
+    });
+    await syncAgentCommissions(old?.id ?? '');
+    expect(
+      await db.select().from(notifications).where(eq(notifications.userId, agent)),
+    ).toHaveLength(1);
   });
 
   it('the feed carries « Consulter »’s link; « Marquer tout comme lu » clears the badge', async () => {

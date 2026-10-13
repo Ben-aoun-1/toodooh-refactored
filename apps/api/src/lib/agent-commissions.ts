@@ -163,6 +163,42 @@ const linesOf = (campaignId: string) =>
       ),
     );
 
+const ANNOUNCE_WINDOW_MS = 72 * 60 * 60 * 1000;
+
+/** Whether the campaign's dispatch (or this venue's offer) is less than 72 h old. */
+const recentOffer = async (campaignId: string, screenhostId: string | null): Promise<boolean> => {
+  const since = new Date(Date.now() - ANNOUNCE_WINDOW_MS);
+  const [plan] = await db
+    .select({ id: campaignDispatchPlan.id, createdAt: campaignDispatchPlan.createdAt })
+    .from(campaignDispatchPlan)
+    .where(eq(campaignDispatchPlan.campaignId, campaignId))
+    .limit(1);
+  const offers = plan
+    ? await db
+        .select({ createdAt: campaignDispatchAllocation.createdAt })
+        .from(campaignDispatchAllocation)
+        .where(
+          and(
+            eq(campaignDispatchAllocation.planId, plan.id),
+            screenhostId ? eq(campaignDispatchAllocation.screenhostId, screenhostId) : sql`true`,
+          ),
+        )
+    : await db
+        .select({ createdAt: eventAllocations.createdAt })
+        .from(eventAllocations)
+        .where(
+          and(
+            eq(eventAllocations.campaignId, campaignId),
+            screenhostId ? eq(eventAllocations.screenhostId, screenhostId) : sql`true`,
+          ),
+        );
+  const times = [
+    ...(plan && !screenhostId ? [plan.createdAt] : []),
+    ...offers.map((o) => o.createdAt),
+  ];
+  return times.some((t) => t >= since);
+};
+
 /** Write (or revive) one forecast line, keeping the rate frozen on an existing line. */
 const upsertForecast = async (
   existing: AgentCommissionLine | undefined,
@@ -202,7 +238,10 @@ const upsertForecast = async (
   // AGT-6 / AGT-8 — « Nouvelle campagne acceptée par {nom} » (Screenhost agent, at the venue's
   // acceptance) and « Nouvelle campagne lancée par {nom} » (Screencaster agent, at the confirmed
   // launch): once each, when the line is first written.
-  if (inserted.length > 0 && screenhostId !== null) {
+  // Only a FRESH launch / acceptance is announced: the first sync after deploy writes lines for
+  // campaigns already running, and those must not notify (or email) anyone.
+  const fresh = inserted.length > 0 && (await recentOffer(campaignId, screenhostId));
+  if (fresh && screenhostId !== null) {
     const [v] = await db
       .select({ name: screenhosts.name })
       .from(screenhosts)
@@ -217,7 +256,7 @@ const upsertForecast = async (
       link: '/agent/campagnes',
     });
   }
-  if (inserted.length > 0 && screenhostId === null) {
+  if (fresh && screenhostId === null) {
     const [c] = await db
       .select({ advertiserId: campaigns.advertiserId })
       .from(campaigns)

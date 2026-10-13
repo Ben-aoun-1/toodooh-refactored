@@ -38,6 +38,8 @@ export const useAgentAppointments = () =>
     queryKey: appointmentKeys.agentList(),
     queryFn: () => appointmentsService.agentAppointments(),
     refetchOnMount: 'always',
+    // Same 15 s cadence as the bell, so a new request shows in « Mes rendez-vous » too.
+    refetchInterval: 15_000,
   });
 
 export function useAppointmentMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
