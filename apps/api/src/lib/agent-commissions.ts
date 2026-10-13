@@ -16,6 +16,7 @@ import {
   notifications,
   proofOfPlay,
   reversementLines,
+  screenhosts,
 } from '../db/schema.js';
 
 import { agentCommissionPct } from './agent-sheet.js';
@@ -198,8 +199,24 @@ const upsertForecast = async (
     })
     .onConflictDoNothing()
     .returning({ id: agentCommissionLines.id });
-  // AGT-6 — « Nouvelle campagne lancée par {nom} » (spec §8): once, when the Screencaster agent's
-  // line is first written, i.e. at the confirmed launch.
+  // AGT-6 / AGT-8 — « Nouvelle campagne acceptée par {nom} » (Screenhost agent, at the venue's
+  // acceptance) and « Nouvelle campagne lancée par {nom} » (Screencaster agent, at the confirmed
+  // launch): once each, when the line is first written.
+  if (inserted.length > 0 && screenhostId !== null) {
+    const [v] = await db
+      .select({ name: screenhosts.name })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, screenhostId))
+      .limit(1);
+    await db.insert(notifications).values({
+      userId: a.agentUserId,
+      type: 'agent_campaign_accepted',
+      title: `Nouvelle campagne acceptée par ${v?.name ?? 'un Screenhost affilié'}`,
+      body: 'Consultez le détail de la campagne dans « Mes campagnes affiliées ».',
+      campaignId,
+      link: '/agent/campagnes',
+    });
+  }
   if (inserted.length > 0 && screenhostId === null) {
     const [c] = await db
       .select({ advertiserId: campaigns.advertiserId })

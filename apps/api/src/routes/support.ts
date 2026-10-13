@@ -1,11 +1,17 @@
+import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { emailSender } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { supportMessages } from '../db/schema.js';
+import { supportMessages, users } from '../db/schema.js';
+import {
+  agentNoticeEmailPlainText,
+  agentNoticeEmailTemplate,
+} from '../email/agent-notice-template.js';
 import { env } from '../env.js';
 import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
+import { userLabel } from '../lib/user-label.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 // SUP-1 (Mejri 11/09 point 8) — POST /api/support: the « Support » and « Prendre rendez-vous »
@@ -99,6 +105,31 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
       });
       if ('error' in result)
         request.log.warn({ error: result.error }, 'support mailbox copy failed');
+    }
+
+    // AGT-8 (agent specs v1.0 §9) — an agent's ticket gets an email acknowledgement.
+    const role = request.user?.role;
+    if (role === 'screenhost_agent' || role === 'screencast_agent') {
+      const [me] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (me) {
+        const ack = await emailSender.send({
+          to: me.email,
+          subject: 'Toodooh — nous avons bien reçu votre demande',
+          html: agentNoticeEmailTemplate({
+            name: userLabel(me),
+            title: 'Nous avons bien reçu votre demande',
+            body: `Motif : ${b.objective}. L’équipe Toodooh vous répond au plus vite.`,
+            url: `${env.WEB_ORIGIN}/agent`,
+          }),
+          text: agentNoticeEmailPlainText({
+            name: userLabel(me),
+            title: 'Nous avons bien reçu votre demande',
+            body: `Motif : ${b.objective}. L’équipe Toodooh vous répond au plus vite.`,
+            url: `${env.WEB_ORIGIN}/agent`,
+          }),
+        });
+        if ('error' in ack) request.log.warn({ error: ack.error }, 'agent support ack failed');
+      }
     }
 
     return reply.status(201).send({

@@ -33,6 +33,7 @@ const DEFAULT_LINKS: Record<string, string> = {
   agent_affiliate_activated: '/agent/affilies',
   agent_affiliation_ending: '/agent/affilies',
   agent_campaign_launched: '/agent/campagnes',
+  agent_campaign_accepted: '/agent/campagnes',
   agent_payout_done: '/agent',
   agent_rib_validated: '/agent/parametres',
   agent_rib_refused: '/agent/parametres',

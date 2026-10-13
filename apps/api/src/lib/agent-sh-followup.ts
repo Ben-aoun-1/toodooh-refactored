@@ -345,7 +345,7 @@ export const runAgentShFollowupTick = async (now: Date = new Date()) => {
       await db.insert(notifications).values({
         userId: aff.agentUserId,
         type: 'agent_attention',
-        title: `Point d’attention : ${venue.name} — ${ATTENTION_FR[s]}`,
+        title: `Point d’attention : ${venue.name}, ${ATTENTION_FR[s]}`,
         body: 'Consultez le suivi de ce Screenhost dans « Mes Screenhosts ».',
         link: '/agent/affilies',
       });

@@ -25,7 +25,7 @@ const STATUS_FR = {
 } as const;
 
 const SCORE_TIP =
-  'Le score de priorité détermine l’ordre dans lequel les campagnes sont proposées. Il n’entraîne aucune pénalité financière.';
+  'Le score de priorité détermine l’ordre dans lequel les campagnes sont proposées. Il n’a aucune conséquence financière.';
 
 /**
  * AGT-7 (Agent Screenhost spec v1.0 §6 « Fiche Screenhost ») — identity and affiliation;

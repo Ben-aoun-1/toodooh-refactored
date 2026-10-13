@@ -229,7 +229,7 @@ describe('AGT-7 — the Screenhost agent (real Postgres)', () => {
       );
     expect(open.map((e) => e.signal)).toEqual(['refus_frequents']);
     const notes = await db.select().from(notifications).where(eq(notifications.userId, s.agent));
-    expect(notes.map((n) => n.title)).toEqual(['Point d’attention : Café Nord — Refus fréquents']);
+    expect(notes.map((n) => n.title)).toEqual(['Point d’attention : Café Nord, Refus fréquents']);
 
     const app = await asAgent(s.agent);
     const panel = (await app.inject({ method: 'GET', url: '/api/agent/followup' })).json<{
