@@ -32,6 +32,12 @@ export const useAgentPayouts = (month: string) =>
     queryFn: () => adminAgentsService.payouts(month),
   });
 
+export const useAgentObjectives = () =>
+  useQuery({
+    queryKey: adminKeys.agentObjectives(),
+    queryFn: () => adminAgentsService.objectives(),
+  });
+
 export const useAgentRibs = (status: 'en_attente' | 'valide' | 'refuse') =>
   useQuery({
     queryKey: adminKeys.agentRibs(status),
@@ -88,4 +94,14 @@ export const usePreparePayouts = () =>
 export const useMarkPayoutPaid = () =>
   useAgentsMutation((v: { id: string; transferDate: string }) =>
     adminAgentsService.markPayoutPaid(v.id, v.transferDate),
+  );
+
+export const useAddObjective = () =>
+  useAgentsMutation((v: { role: AgentRoleKey; label: string }) =>
+    adminAgentsService.addObjective(v.role, v.label),
+  );
+
+export const usePatchObjective = () =>
+  useAgentsMutation((v: { id: string; body: Partial<{ label: string; active: boolean }> }) =>
+    adminAgentsService.patchObjective(v.id, v.body),
   );

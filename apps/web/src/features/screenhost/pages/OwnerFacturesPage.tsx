@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
+import { OwnerAppointmentButton } from '@/features/appointments/components/OwnerAppointmentButton';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
@@ -101,6 +102,7 @@ export default function OwnerFacturesPage() {
                     <Calendar className="h-4 w-4 flex-shrink-0" />
                     <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
                   </button>
+                  <OwnerAppointmentButton />
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
               </div>

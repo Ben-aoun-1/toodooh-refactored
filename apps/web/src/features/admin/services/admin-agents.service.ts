@@ -133,6 +133,14 @@ export type AffiliationAction =
   | { kind: 'exploited'; exploited: boolean; convention_ref?: string | null }
   | { kind: 'avenant'; end_date: string };
 
+export interface AppointmentObjectiveRow {
+  id: string;
+  agent_role: AgentRoleKey;
+  label: string;
+  position: number;
+  active: boolean;
+}
+
 export type AgentSheetPatch = Partial<{
   first_name: string;
   last_name: string;
@@ -180,6 +188,18 @@ export const adminAgentsService = {
   },
   payoutInvoiceUrl(id: string): Promise<{ url: string }> {
     return apiClient.get(`/admin/agent-payouts/${id}/invoice-url`);
+  },
+  objectives(): Promise<{ objectives: AppointmentObjectiveRow[] }> {
+    return apiClient.get('/admin/agent-appointment-objectives');
+  },
+  addObjective(agentRole: AgentRoleKey, label: string): Promise<{ id: string }> {
+    return apiClient.post('/admin/agent-appointment-objectives', { agent_role: agentRole, label });
+  },
+  patchObjective(
+    id: string,
+    body: Partial<{ label: string; position: number; active: boolean }>,
+  ): Promise<{ ok: true }> {
+    return apiClient.patch(`/admin/agent-appointment-objectives/${id}`, body);
   },
   ribs(status: 'en_attente' | 'valide' | 'refuse'): Promise<{ ribs: AgentRibRow[] }> {
     return apiClient.get(`/admin/agent-ribs?status=${status}`);

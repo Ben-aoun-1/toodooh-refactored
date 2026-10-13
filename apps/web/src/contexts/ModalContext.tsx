@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { ReferentGate } from '@/features/appointments/components/ReferentGate';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import SupportModal from '@/features/support/components/SupportModal';
 import {
@@ -147,233 +148,235 @@ export function ModalProvider({ children }: { children: ReactNode }) {
       {/* Support modal — SUP-1: the shared component, one for every role. */}
       {isSupportOpen && <SupportModal onClose={closeSupport} />}
 
-      {/* Appointment modal */}
+      {/* Appointment modal — AGT-5: the referring agent's booking when the user has one. */}
       {isAppointmentOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 pb-2 flex-shrink-0">
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
-                    <Users className="h-4 w-4 text-gray-600" />
+        <ReferentGate onClose={closeAppointment}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-4 pb-2 flex-shrink-0">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-gray-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-base font-bold text-gray-900 uppercase tracking-tight">
+                        Prendre rendez-vous
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Rencontrez un agent Toodooh pour répondre à vos besoins
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="text-base font-bold text-gray-900 uppercase tracking-tight">
-                      Prendre rendez-vous
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Rencontrez un agent Toodooh pour répondre à vos besoins
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={closeAppointment}
+                    className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 flex-shrink-0"
+                    aria-label="Fermer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeAppointment}
-                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 flex-shrink-0"
-                  aria-label="Fermer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
               </div>
-            </div>
-            <form
-              className="px-4 pb-4 space-y-3 flex-1 min-h-0 flex flex-col"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const payload = {
-                  kind: 'appointment' as const,
-                  objective: appointmentObjective,
-                  other_detail: appointmentOtherDetail.trim() || undefined,
-                  message: appointmentMessage.trim() || undefined,
-                  appointment_date: appointmentDate ? toIsoDate(appointmentDate) : undefined,
-                };
-                const error = supportPayloadError(payload);
-                if (error) {
-                  toast.error(error);
-                  return;
-                }
-                // SUP-1 — « demandé » only once the api has the row.
-                setAppointmentSending(true);
-                supportService
-                  .send(payload)
-                  .then(() => {
-                    toast.success(APPOINTMENT_SENT_TOAST);
-                    closeAppointment();
-                    setAppointmentObjective('');
-                    setAppointmentOtherDetail('');
-                    setAppointmentDate(null);
-                    setAppointmentMessage('');
-                  })
-                  .catch((err: unknown) =>
-                    toast.error(getErrorMessage(err) || SUPPORT_FAILED_TOAST),
-                  )
-                  .finally(() => setAppointmentSending(false));
-              }}
-            >
-              <div className="flex-shrink-0">
-                <label
-                  className="block text-sm font-bold text-gray-900 mb-1"
-                  htmlFor="appointment-objective"
-                >
-                  Choisissez vos objectifs *
-                </label>
-                <select
-                  value={appointmentObjective}
-                  onChange={(e) => setAppointmentObjective(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary appearance-none cursor-pointer"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.75rem center',
-                    backgroundSize: '1.25rem',
-                    paddingRight: '2.5rem',
-                  }}
-                  id="appointment-objective"
-                >
-                  <option value="">Choisissez vos objectifs</option>
-                  {appointmentObjectives.map((obj) => (
-                    <option key={obj} value={obj}>
-                      {obj}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {isAutreObjective(appointmentObjective) && (
+              <form
+                className="px-4 pb-4 space-y-3 flex-1 min-h-0 flex flex-col"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const payload = {
+                    kind: 'appointment' as const,
+                    objective: appointmentObjective,
+                    other_detail: appointmentOtherDetail.trim() || undefined,
+                    message: appointmentMessage.trim() || undefined,
+                    appointment_date: appointmentDate ? toIsoDate(appointmentDate) : undefined,
+                  };
+                  const error = supportPayloadError(payload);
+                  if (error) {
+                    toast.error(error);
+                    return;
+                  }
+                  // SUP-1 — « demandé » only once the api has the row.
+                  setAppointmentSending(true);
+                  supportService
+                    .send(payload)
+                    .then(() => {
+                      toast.success(APPOINTMENT_SENT_TOAST);
+                      closeAppointment();
+                      setAppointmentObjective('');
+                      setAppointmentOtherDetail('');
+                      setAppointmentDate(null);
+                      setAppointmentMessage('');
+                    })
+                    .catch((err: unknown) =>
+                      toast.error(getErrorMessage(err) || SUPPORT_FAILED_TOAST),
+                    )
+                    .finally(() => setAppointmentSending(false));
+                }}
+              >
                 <div className="flex-shrink-0">
                   <label
                     className="block text-sm font-bold text-gray-900 mb-1"
-                    htmlFor="appointment-other-detail"
+                    htmlFor="appointment-objective"
                   >
-                    Précision *
+                    Choisissez vos objectifs *
                   </label>
-                  <input
-                    type="text"
-                    value={appointmentOtherDetail}
-                    onChange={(e) => setAppointmentOtherDetail(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary text-sm"
-                    placeholder="Veuillez préciser dans la description"
-                    id="appointment-other-detail"
+                  <select
+                    value={appointmentObjective}
+                    onChange={(e) => setAppointmentObjective(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary appearance-none cursor-pointer"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'right 0.75rem center',
+                      backgroundSize: '1.25rem',
+                      paddingRight: '2.5rem',
+                    }}
+                    id="appointment-objective"
+                  >
+                    <option value="">Choisissez vos objectifs</option>
+                    {appointmentObjectives.map((obj) => (
+                      <option key={obj} value={obj}>
+                        {obj}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {isAutreObjective(appointmentObjective) && (
+                  <div className="flex-shrink-0">
+                    <label
+                      className="block text-sm font-bold text-gray-900 mb-1"
+                      htmlFor="appointment-other-detail"
+                    >
+                      Précision *
+                    </label>
+                    <input
+                      type="text"
+                      value={appointmentOtherDetail}
+                      onChange={(e) => setAppointmentOtherDetail(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary text-sm"
+                      placeholder="Veuillez préciser dans la description"
+                      id="appointment-other-detail"
+                    />
+                  </div>
+                )}
+                <div className="flex-shrink-0">
+                  <span className="block text-sm font-bold text-gray-900 mb-1">
+                    Choisissez un créneau *
+                  </span>
+                  <div className="border border-gray-200 rounded-xl p-2 bg-gray-50/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAppointmentCalendarMonth(
+                            (d) => new Date(d.getFullYear(), d.getMonth() - 1),
+                          )
+                        }
+                        className="p-1 rounded-lg hover:bg-gray-200 text-gray-600"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-xs font-semibold text-gray-900">
+                        {MONTHS_FR[appointmentCalendarMonth.getMonth()]}{' '}
+                        {appointmentCalendarMonth.getFullYear()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAppointmentCalendarMonth(
+                            (d) => new Date(d.getFullYear(), d.getMonth() + 1),
+                          )
+                        }
+                        className="p-1 rounded-lg hover:bg-gray-200 text-gray-600"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-0.5 text-center">
+                      {WEEKDAYS_FR.map((wd) => (
+                        <div key={wd} className="text-[10px] font-medium text-gray-500 py-0.5">
+                          {wd}
+                        </div>
+                      ))}
+                      {getCalendarDays(
+                        appointmentCalendarMonth.getFullYear(),
+                        appointmentCalendarMonth.getMonth(),
+                      ).map((cell, idx) => {
+                        const selected =
+                          appointmentDate &&
+                          cell.currentMonth &&
+                          appointmentDate.getDate() === cell.day &&
+                          appointmentDate.getMonth() === appointmentCalendarMonth.getMonth() &&
+                          appointmentDate.getFullYear() === appointmentCalendarMonth.getFullYear();
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            disabled={!cell.currentMonth || isDatePast(cell.date)}
+                            onClick={() => {
+                              if (
+                                cell.currentMonth &&
+                                !isDatePast(cell.date) &&
+                                !isDateUnavailable(cell.date)
+                              ) {
+                                setAppointmentDate(cell.date);
+                              }
+                            }}
+                            className={`py-1 rounded-md text-xs font-medium transition-colors ${
+                              !cell.currentMonth
+                                ? 'text-gray-300'
+                                : isDatePast(cell.date)
+                                  ? 'text-gray-400 cursor-not-allowed'
+                                  : isDateUnavailable(cell.date)
+                                    ? 'bg-red-100 text-red-700 cursor-not-allowed'
+                                    : selected
+                                      ? 'bg-brand-primary text-black'
+                                      : 'bg-[#E6F7ED] text-gray-900 hover:bg-brand-primary/80'
+                            }`}
+                          >
+                            {cell.day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  <label
+                    className="block text-sm font-bold text-gray-900 mb-1"
+                    htmlFor="appointment-message"
+                  >
+                    Aidez-nous à préparer au mieux l&apos;entretien
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={appointmentMessage}
+                    onChange={(e) => setAppointmentMessage(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none text-sm"
+                    placeholder="Votre Message ici.."
+                    id="appointment-message"
                   />
                 </div>
-              )}
-              <div className="flex-shrink-0">
-                <span className="block text-sm font-bold text-gray-900 mb-1">
-                  Choisissez un créneau *
-                </span>
-                <div className="border border-gray-200 rounded-xl p-2 bg-gray-50/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAppointmentCalendarMonth(
-                          (d) => new Date(d.getFullYear(), d.getMonth() - 1),
-                        )
-                      }
-                      className="p-1 rounded-lg hover:bg-gray-200 text-gray-600"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <span className="text-xs font-semibold text-gray-900">
-                      {MONTHS_FR[appointmentCalendarMonth.getMonth()]}{' '}
-                      {appointmentCalendarMonth.getFullYear()}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAppointmentCalendarMonth(
-                          (d) => new Date(d.getFullYear(), d.getMonth() + 1),
-                        )
-                      }
-                      className="p-1 rounded-lg hover:bg-gray-200 text-gray-600"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-7 gap-0.5 text-center">
-                    {WEEKDAYS_FR.map((wd) => (
-                      <div key={wd} className="text-[10px] font-medium text-gray-500 py-0.5">
-                        {wd}
-                      </div>
-                    ))}
-                    {getCalendarDays(
-                      appointmentCalendarMonth.getFullYear(),
-                      appointmentCalendarMonth.getMonth(),
-                    ).map((cell, idx) => {
-                      const selected =
-                        appointmentDate &&
-                        cell.currentMonth &&
-                        appointmentDate.getDate() === cell.day &&
-                        appointmentDate.getMonth() === appointmentCalendarMonth.getMonth() &&
-                        appointmentDate.getFullYear() === appointmentCalendarMonth.getFullYear();
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          disabled={!cell.currentMonth || isDatePast(cell.date)}
-                          onClick={() => {
-                            if (
-                              cell.currentMonth &&
-                              !isDatePast(cell.date) &&
-                              !isDateUnavailable(cell.date)
-                            ) {
-                              setAppointmentDate(cell.date);
-                            }
-                          }}
-                          className={`py-1 rounded-md text-xs font-medium transition-colors ${
-                            !cell.currentMonth
-                              ? 'text-gray-300'
-                              : isDatePast(cell.date)
-                                ? 'text-gray-400 cursor-not-allowed'
-                                : isDateUnavailable(cell.date)
-                                  ? 'bg-red-100 text-red-700 cursor-not-allowed'
-                                  : selected
-                                    ? 'bg-brand-primary text-black'
-                                    : 'bg-[#E6F7ED] text-gray-900 hover:bg-brand-primary/80'
-                          }`}
-                        >
-                          {cell.day}
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="flex items-center gap-3 pt-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={closeAppointment}
+                    className="px-5 py-2.5 rounded-xl font-medium text-gray-900 border border-gray-300 bg-white hover:bg-gray-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={appointmentSending}
+                    className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
+                    style={{ background: '#76E6AB' }}
+                  >
+                    {appointmentSending ? 'Envoi…' : 'Prendre rendez-vous'}
+                  </button>
                 </div>
-              </div>
-              <div className="flex-shrink-0">
-                <label
-                  className="block text-sm font-bold text-gray-900 mb-1"
-                  htmlFor="appointment-message"
-                >
-                  Aidez-nous à préparer au mieux l&apos;entretien
-                </label>
-                <textarea
-                  rows={2}
-                  value={appointmentMessage}
-                  onChange={(e) => setAppointmentMessage(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none text-sm"
-                  placeholder="Votre Message ici.."
-                  id="appointment-message"
-                />
-              </div>
-              <div className="flex items-center gap-3 pt-2 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={closeAppointment}
-                  className="px-5 py-2.5 rounded-xl font-medium text-gray-900 border border-gray-300 bg-white hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={appointmentSending}
-                  className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
-                  style={{ background: '#76E6AB' }}
-                >
-                  {appointmentSending ? 'Envoi…' : 'Prendre rendez-vous'}
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
-        </div>
+        </ReferentGate>
       )}
     </ModalContext.Provider>
   );

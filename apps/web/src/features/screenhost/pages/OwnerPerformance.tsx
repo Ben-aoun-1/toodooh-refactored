@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
+import { OwnerAppointmentButton } from '@/features/appointments/components/OwnerAppointmentButton';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { logger } from '@/lib/logger';
 
@@ -444,6 +445,7 @@ export default function OwnerPerformance() {
                     <Calendar className="h-[15px] w-[15px] flex-shrink-0" aria-hidden />
                     <span>Piloter mon calendrier de diffusion</span>
                   </button>
+                  <OwnerAppointmentButton />
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
               </div>

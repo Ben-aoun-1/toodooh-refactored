@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
+import { OwnerAppointmentButton } from '@/features/appointments/components/OwnerAppointmentButton';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerCampaignDetailsDrawer from '@/features/screenhost/components/OwnerCampaignDetailsDrawer';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
@@ -192,6 +193,7 @@ export default function OwnerCampaigns() {
                     <Calendar className="h-4 w-4 flex-shrink-0" />
                     <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
                   </button>
+                  <OwnerAppointmentButton />
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
               </div>

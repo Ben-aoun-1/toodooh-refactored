@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { AgentCgePanel } from '@/features/admin/components/agents/AgentCgePanel';
+import { AgentObjectivesPanel } from '@/features/admin/components/agents/AgentObjectivesPanel';
 import { AgentPayoutsPanel } from '@/features/admin/components/agents/AgentPayoutsPanel';
 import { AgentRibQueue } from '@/features/admin/components/agents/AgentRibQueue';
 import { AgentSheetDrawer } from '@/features/admin/components/agents/AgentSheetDrawer';
@@ -18,6 +19,7 @@ const TABS = [
   ['payouts', 'Versements'],
   ['ribs', 'RIB'],
   ['cge', 'CGE'],
+  ['objectives', 'Rendez-vous'],
 ] as const;
 
 export default function AgentsManagement() {
@@ -60,6 +62,7 @@ export default function AgentsManagement() {
           {tab === 'payouts' && <AgentPayoutsPanel />}
           {tab === 'ribs' && <AgentRibQueue />}
           {tab === 'cge' && <AgentCgePanel />}
+          {tab === 'objectives' && <AgentObjectivesPanel />}
         </div>
       </div>
       {openId && <AgentSheetDrawer id={openId} onClose={() => setOpenId(null)} />}

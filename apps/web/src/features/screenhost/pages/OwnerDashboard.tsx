@@ -17,6 +17,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
+import { OwnerAppointmentButton } from '@/features/appointments/components/OwnerAppointmentButton';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 import { useSectors } from '@/features/auth/hooks/useSectors';
@@ -398,6 +399,8 @@ export default function OwnerDashboard() {
                     <span className="text-sm font-medium">Compte actif</span>
                   </div>
                 ) : null}
+
+                <OwnerAppointmentButton />
 
                 <OwnerNotificationsBell userId={user?.id} />
               </div>

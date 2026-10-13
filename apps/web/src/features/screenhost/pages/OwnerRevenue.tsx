@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
+import { OwnerAppointmentButton } from '@/features/appointments/components/OwnerAppointmentButton';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -310,6 +311,7 @@ export default function OwnerRevenue() {
                     <Calendar className="h-4 w-4 flex-shrink-0" />
                     <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
                   </button>
+                  <OwnerAppointmentButton />
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
               </div>
