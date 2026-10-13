@@ -28,6 +28,7 @@ import {
   agentRibState,
   isAgentRole,
 } from '../lib/agent-sheet.js';
+import { agentWallet } from '../lib/agent-wallet.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 import { validatePhone } from '../validation/phone.js';
@@ -159,6 +160,8 @@ const sheetView = async (row: NonNullable<Awaited<ReturnType<typeof loadAgent>>>
       accepted_at: a.acceptedAt.toISOString(),
       ip: a.ip,
     })),
+    // AGT-3 — the agent wallet as the hub sees it.
+    wallet: await agentWallet(row.user.id),
   };
 };
 

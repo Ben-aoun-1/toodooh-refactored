@@ -992,6 +992,100 @@ export const agentAffiliations = pgTable(
 
 export type AgentAffiliation = typeof agentAffiliations.$inferSelect;
 
+// AGT-3 (agent specs v1.0 §10, rulings 2026-10-13) — one commission line per (agent, campaign)
+// for a Screencaster agent, per (agent, campaign, venue) for a Screenhost agent. The rate is
+// FROZEN on the line when it is first written; the forecast follows the dispatch until the
+// settlement, which makes the line 'acquise' (or 'annulee'). A later correction is a separate
+// 'regularisation' line, never an edit of the original. 'historique' = a pre-AGT-3 settlement
+// line carried into the wallet (ruling A).
+export const agentCommissionLines = pgTable(
+  'agent_commission_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id),
+    agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, {
+      onDelete: 'cascade',
+    }),
+    affiliationId: uuid('affiliation_id').references(() => agentAffiliations.id, {
+      onDelete: 'set null',
+    }),
+    kind: text('kind')
+      .$type<'commission' | 'historique' | 'regularisation'>()
+      .notNull()
+      .default('commission'),
+    status: text('status')
+      .$type<'previsionnel' | 'acquise' | 'annulee'>()
+      .notNull()
+      .default('previsionnel'),
+    ratePct: numeric('rate_pct', { precision: 5, scale: 2 }).notNull(),
+    forecastTnd: numeric('forecast_tnd', { precision: 14, scale: 4 }).notNull().default('0'),
+    acquiredTnd: numeric('acquired_tnd', { precision: 14, scale: 4 }),
+    acquiredAt: timestamp('acquired_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_commission_lines_agent_idx').on(table.agentUserId),
+    index('agent_commission_lines_campaign_idx').on(table.campaignId),
+    uniqueIndex('agent_commission_lines_sc_uq')
+      .on(table.agentUserId, table.campaignId)
+      .where(sql`${table.screenhostId} IS NULL AND ${table.kind} <> 'regularisation'`),
+    uniqueIndex('agent_commission_lines_sh_uq')
+      .on(table.agentUserId, table.campaignId, table.screenhostId)
+      .where(sql`${table.screenhostId} IS NOT NULL AND ${table.kind} <> 'regularisation'`),
+    check(
+      'agent_commission_lines_kind',
+      sql`${table.kind} in ('commission', 'historique', 'regularisation')`,
+    ),
+    check(
+      'agent_commission_lines_status',
+      sql`${table.status} in ('previsionnel', 'acquise', 'annulee')`,
+    ),
+  ],
+);
+
+export type AgentCommissionLine = typeof agentCommissionLines.$inferSelect;
+
+// AGT-3 — the agent's monthly payout (spec §10 « Versements »): prepared in the hub for a
+// positive balance with a validated RIB; a Screencaster agent's needs his invoice (ruling Q5 A)
+// before the admin marks it 'effectue', which is what debits the wallet.
+export const agentPayouts = pgTable(
+  'agent_payouts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id),
+    month: text('month').notNull(),
+    amountTnd: numeric('amount_tnd', { precision: 14, scale: 4 }).notNull(),
+    status: text('status')
+      .$type<'en_preparation' | 'effectue'>()
+      .notNull()
+      .default('en_preparation'),
+    invoiceKey: text('invoice_key'),
+    invoiceFileName: text('invoice_file_name'),
+    invoiceUploadedAt: timestamp('invoice_uploaded_at', { withTimezone: true }),
+    preparedAt: timestamp('prepared_at', { withTimezone: true }).notNull().defaultNow(),
+    preparedBy: uuid('prepared_by').references(() => users.id),
+    transferDate: date('transfer_date'),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    paidBy: uuid('paid_by').references(() => users.id),
+  },
+  (table) => [
+    unique('agent_payouts_agent_month_uq').on(table.agentUserId, table.month),
+    check('agent_payouts_status', sql`${table.status} in ('en_preparation', 'effectue')`),
+    check('agent_payouts_month', sql`${table.month} ~ '^[0-9]{4}-[0-9]{2}$'`),
+  ],
+);
+
+export type AgentPayout = typeof agentPayouts.$inferSelect;
+
 export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
 export type AgentReferral = typeof agentReferrals.$inferSelect;

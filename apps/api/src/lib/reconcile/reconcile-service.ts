@@ -1,10 +1,9 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import {
   type CampaignReconciliation,
   type CampaignScreenhostPayout,
-  agentReferrals,
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignRedispatchRounds,
@@ -13,11 +12,10 @@ import {
   campaigns,
   notifications,
   reversementLines,
-  screenhosts,
 } from '../../db/schema.js';
+import { acquireAgentCommissions, settlementAgentTerms } from '../agent-commissions.js';
 import { campaignReportReadyNotification } from '../campaign-report-notification.js';
 import { isDemoCampaign } from '../demo.js';
-import { getDispatchConfig } from '../dispatch/config.js';
 import { createEngineTrace } from '../engine-journal/trace.js';
 import { blackoutMinutesByVenueCell } from '../event-blackout.js';
 import {
@@ -130,25 +128,40 @@ export const reconcileCampaignById = async (
   // ALREADY_RECONCILED / NO_PLAN short-circuits: only a run that actually settles is journaled.
   const trace = createEngineTrace('settlement', campaignId);
 
-  const cfg = await getDispatchConfig();
-  const pcts = {
-    sh: cfg.pctSh,
-    toodooh: cfg.pctToodooh,
-    agentSh: cfg.pctAgentSh,
-    agentSc: cfg.pctAgentSc,
-  };
+  // AGT-3 — the agent side of the split: each venue's frozen agent rates (the defaults when no
+  // agent earns) and the agents the line is attributed to, from the live commission lines
+  // (lib/agent-commissions). Toodooh takes what the agents' rates leave.
+  const [campaignRow] = await db
+    .select({ advertiserId: campaigns.advertiserId, name: campaigns.name })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    .limit(1);
   const cCibleTnd = (plan.iCible * cpm) / 1000;
-  let splits: { screenhostId: string; split: ReturnType<typeof computeReversement> }[];
+  let splits: {
+    screenhostId: string;
+    split: ReturnType<typeof computeReversement>;
+    agentShId: string | null;
+    agentScId: string | null;
+  }[];
   try {
-    splits = valuation.perScreenhost
-      .filter((p) => p.deliveredImp > 0)
-      .map((p) => ({
+    const paying = valuation.perScreenhost.filter((p) => p.deliveredImp > 0);
+    const terms = await settlementAgentTerms(
+      campaignId,
+      paying.map((p) => p.screenhostId),
+    );
+    splits = paying.map((p) => {
+      const term = terms.get(p.screenhostId);
+      if (!term) throw new Error(`no split terms for ${p.screenhostId}`);
+      return {
         screenhostId: p.screenhostId,
         split: computeReversement(
           reversementBaseMillimes(p.deliveredImp * t, plan.iCible, cCibleTnd),
-          pcts,
+          term.pcts,
         ),
-      }));
+        agentShId: term.agentShId,
+        agentScId: term.agentScId,
+      };
+    });
   } catch (err: unknown) {
     // A drifted Σ≠100 config refuses the settlement BEFORE anything persists — journal it.
     await trace.finish('rolled_back', { reason: 'INVALID_SPLIT_CONFIG' });
@@ -157,38 +170,6 @@ export const reconcileCampaignById = async (
   const shAmountBySh = new Map(
     splits.map((s) => [s.screenhostId, millimesToTnd(s.split.shMillimes)]),
   );
-
-  // Agent attribution (read-only): the venue owner's / the advertiser's referring agent, NULL when
-  // no referral exists (the 3 % amounts are recorded regardless — payout mechanics are later).
-  const [campaignRow] = await db
-    .select({ advertiserId: campaigns.advertiserId, name: campaigns.name })
-    .from(campaigns)
-    .where(eq(campaigns.id, campaignId))
-    .limit(1);
-  const advertiserId = campaignRow?.advertiserId ?? null;
-  const splitShIds = splits.map((s) => s.screenhostId);
-  const ownerRows = splitShIds.length
-    ? await db
-        .select({ id: screenhosts.id, ownerId: screenhosts.ownerId })
-        .from(screenhosts)
-        .where(inArray(screenhosts.id, splitShIds))
-    : [];
-  const ownerBySh = new Map(ownerRows.map((r) => [r.id, r.ownerId]));
-  const referredIds = [
-    ...new Set(
-      [...ownerRows.map((r) => r.ownerId), advertiserId].filter((v): v is string => v !== null),
-    ),
-  ];
-  const referralRows = referredIds.length
-    ? await db
-        .select({
-          agentUserId: agentReferrals.agentUserId,
-          referredUserId: agentReferrals.referredUserId,
-        })
-        .from(agentReferrals)
-        .where(inArray(agentReferrals.referredUserId, referredIds))
-    : [];
-  const agentByReferred = new Map(referralRows.map((r) => [r.referredUserId, r.agentUserId]));
 
   // LOG1 — the split lines + refund/residue, buffered pre-tx (the amounts are already final).
   for (const { screenhostId, split } of splits) {
@@ -252,8 +233,7 @@ export const reconcileCampaignById = async (
           : [];
       if (!demo && splits.length > 0) {
         await tx.insert(reversementLines).values(
-          splits.map(({ screenhostId, split }) => {
-            const ownerId = ownerBySh.get(screenhostId) ?? null;
+          splits.map(({ screenhostId, split, agentShId, agentScId }) => {
             return {
               source: 'campaign',
               campaignId,
@@ -263,8 +243,8 @@ export const reconcileCampaignById = async (
               toodoohAmountTnd: String(millimesToTnd(split.toodoohMillimes)),
               agentShAmountTnd: String(millimesToTnd(split.agentShMillimes)),
               agentScAmountTnd: String(millimesToTnd(split.agentScMillimes)),
-              agentShId: ownerId === null ? null : (agentByReferred.get(ownerId) ?? null),
-              agentScId: advertiserId === null ? null : (agentByReferred.get(advertiserId) ?? null),
+              agentShId,
+              agentScId,
               settledAt: recon.reconciledAt,
             };
           }),
@@ -280,6 +260,10 @@ export const reconcileCampaignById = async (
       throw err;
     });
   if (persisted === null) return { status: 'ALREADY_RECONCILED' }; // race loser: no run journaled
+
+  // AGT-3 — the commission lines become acquired from the lines just written (outside the tx: a
+  // failure here is retried by the commission tick, it never unsettles).
+  await acquireAgentCommissions(campaignId);
 
   // SC-P epic 2 — the clôture IS the reconciliation row: the report is ready the instant it
   // commits, so notify the screencaster here (both the auto-tick and the admin trigger pass
