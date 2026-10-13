@@ -17,6 +17,7 @@ import {
   rejectionEmailSubject,
   rejectionEmailTemplate,
 } from '../email/rejection-template.js';
+import { createAffiliationsOnApproval } from '../lib/agent-affiliations.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
 import {
@@ -291,6 +292,9 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       })
       .where(eq(users.id, id))
       .returning();
+
+    // AGT-2 — the referring agent's affiliation(s) start at the validation of the signup.
+    if (updated) await createAffiliationsOnApproval(db, updated.id);
 
     // MAP M1 — approving a screenhost owner materializes their screens rows ("Écran 1..N"
     // per screenhost, idempotent: a screenhost that already has screens is left alone, so

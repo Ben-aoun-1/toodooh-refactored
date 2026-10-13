@@ -603,6 +603,13 @@
       "when": 1791900000000,
       "tag": "0085_agent_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1791910000000,
+      "tag": "0086_agent_affiliations",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import { authPlugin } from './auth/plugin.js';
 import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
+import { startAgentAffiliationJob } from './lib/agent-affiliations.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
 import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
 import { startDemoAirJob } from './lib/demo-air.js';
@@ -107,6 +108,8 @@ const start = async (): Promise<void> => {
     startCampaignLifecycleJob(app.log);
     // DEMO-1 — puts demo campaigns on the TVs the minute their airs_at passes.
     startDemoAirJob(app.log);
+    // AGT-2 — agent affiliations: attach new venues, activate, remind, end.
+    startAgentAffiliationJob(app.log);
     // E6 — the rattrapage tick (detect manquements on ACTIVE campaigns → re-place forward while
     // the total ≥ S_min). AFTER the lifecycle job: a campaign flipped active this hour gets its
     // first redispatch look in the same boot sequence.

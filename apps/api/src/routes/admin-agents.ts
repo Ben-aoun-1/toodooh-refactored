@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import {
+  agentAffiliations,
   agentCgeAcceptances,
   agentCgeVersions,
   agentProfileChanges,
@@ -19,6 +20,7 @@ import {
   users,
 } from '../db/schema.js';
 import { env } from '../env.js';
+import { affiliateName, applyAffiliationAction } from '../lib/agent-affiliations.js';
 import {
   type AgentRole,
   agentCommissionPct,
@@ -61,6 +63,19 @@ const patchSchema = z
   .refine((d) => Object.keys(d).length > 0, 'Empty body');
 
 const statusSchema = z.object({ status: z.enum(['actif', 'suspendu', 'cloture']) });
+const affiliationActionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('exclude'),
+    reason: z.enum(['key_account', 'secteur_reserve', 'exclu']),
+  }),
+  z.object({ kind: z.literal('reassign'), agent_user_id: z.uuid() }),
+  z.object({
+    kind: z.literal('exploited'),
+    exploited: z.boolean(),
+    convention_ref: z.string().trim().max(200).nullable().optional(),
+  }),
+  z.object({ kind: z.literal('avenant'), end_date: z.iso.date() }),
+]);
 const refuseSchema = z.object({ reason: z.string().trim().min(1).max(1000) });
 const cgeQuerySchema = z.object({
   role: z.enum(['screenhost_agent', 'screencast_agent']),
@@ -255,6 +270,57 @@ export const adminAgentsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(502).send({ error: 'EMAIL_FAILED', message: 'Email failed.' });
     }
     return reply.status(204).send();
+  });
+
+  // GET /api/admin/agents/:id/affiliations — the agent's portfolio, every status (AGT-2).
+  app.get('/api/admin/agents/:id/affiliations', staffGuard, async (request, reply) => {
+    const params = idParam.safeParse(request.params);
+    if (!params.success) return invalid(reply, params.error.issues);
+    const rows = await db
+      .select()
+      .from(agentAffiliations)
+      .where(eq(agentAffiliations.agentUserId, params.data.id))
+      .orderBy(desc(agentAffiliations.attachedAt));
+    const views = await Promise.all(
+      rows.map(async (a) => ({
+        id: a.id,
+        name: await affiliateName(a),
+        kind: a.screenhostId ? 'screenhost' : 'screencaster',
+        status: a.status,
+        attached_at: a.attachedAt.toISOString(),
+        start_date: a.startDate,
+        end_date: a.endDate,
+        exploited_by_agent: a.exploitedByAgent,
+        convention_ref: a.conventionRef,
+        exclusion_reason: a.exclusionReason,
+      })),
+    );
+    return reply.status(200).send({ affiliations: views });
+  });
+
+  // POST /api/admin/agent-affiliations/:id/action — exclude, reassign, « exploité par l'agent »,
+  // avenant (AGT-2, spec §6 « Gérer les affiliations depuis le hub »).
+  app.post('/api/admin/agent-affiliations/:id/action', staffGuard, async (request, reply) => {
+    const params = idParam.safeParse(request.params);
+    if (!params.success) return invalid(reply, params.error.issues);
+    const body = affiliationActionSchema.safeParse(request.body ?? {});
+    if (!body.success) return invalid(reply, body.error.issues);
+    const b = body.data;
+    const result = await applyAffiliationAction(
+      params.data.id,
+      b.kind === 'exclude'
+        ? { kind: 'exclude', reason: b.reason }
+        : b.kind === 'reassign'
+          ? { kind: 'reassign', agentUserId: b.agent_user_id }
+          : b.kind === 'exploited'
+            ? { kind: 'exploited', exploited: b.exploited, conventionRef: b.convention_ref ?? null }
+            : { kind: 'avenant', endDate: b.end_date },
+    );
+    if (!result.ok) {
+      const status = result.error === 'NOT_FOUND' ? 404 : 409;
+      return reply.status(status).send({ error: result.error, message: result.error });
+    }
+    return reply.status(200).send({ ok: true });
   });
 
   // GET /api/admin/agent-ribs?status=en_attente — the RIB validation queue (default: pending).

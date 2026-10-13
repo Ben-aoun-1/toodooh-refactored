@@ -929,6 +929,69 @@ export const agentReferrals = pgTable(
   (table) => [index('agent_referrals_agent_user_id_idx').on(table.agentUserId)],
 );
 
+// AGT-2 (agent specs v1.0 §6, rulings 2026-10-13) — the affiliation an agent earns commission on,
+// with its 24-month window. A Screencaster agent: one row per screencaster, from the validation
+// of its signup. A Screenhost agent: one row per VENUE (« un Screenhost est un établissement »),
+// 'en_attente_activation' until a first campaign completes there — its first day of diffusion
+// starts the 24 months. agent_referrals stays the signup audit trail; this table is what the
+// commission engine, the agent interfaces and the appointment modal read.
+export const agentAffiliationStatus = pgEnum('agent_affiliation_status', [
+  'en_attente_activation',
+  'en_cours',
+  'terminee',
+  'exclue',
+]);
+
+export const agentAffiliations = pgTable(
+  'agent_affiliations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id),
+    agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+    // The screencaster (SC) or the venue's owner (SH).
+    referredUserId: uuid('referred_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // SH only — the venue this affiliation is.
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'cascade' }),
+    attachedAt: timestamp('attached_at', { withTimezone: true }).notNull().defaultNow(),
+    // SC: the signup validation day. SH: the activation day (NULL until activated).
+    startDate: date('start_date'),
+    // start_date + 24 months, unless the admin amends it (avenant).
+    endDate: date('end_date'),
+    status: agentAffiliationStatus('status').notNull(),
+    // SH — a venue run by the agent itself earns nothing, unless a written convention exists.
+    exploitedByAgent: boolean('exploited_by_agent').notNull().default(false),
+    conventionRef: text('convention_ref'),
+    // 'key_account' | 'secteur_reserve' (SC), 'reaffecte', 'exclu' — why the row is 'exclue'.
+    exclusionReason: text('exclusion_reason'),
+    activationCampaignId: uuid('activation_campaign_id').references(() => campaigns.id, {
+      onDelete: 'set null',
+    }),
+    endReminderSentAt: timestamp('end_reminder_sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_affiliations_agent_idx').on(table.agentUserId),
+    // One live affiliation per venue (SH) and per screencaster (SC); an excluded row (a
+    // reassignment leaves one behind) does not count.
+    uniqueIndex('agent_affiliations_sh_live_uq')
+      .on(table.screenhostId)
+      .where(sql`${table.screenhostId} IS NOT NULL AND ${table.status} <> 'exclue'`),
+    uniqueIndex('agent_affiliations_sc_live_uq')
+      .on(table.referredUserId)
+      .where(sql`${table.screenhostId} IS NULL AND ${table.status} <> 'exclue'`),
+    check(
+      'agent_affiliations_shape',
+      sql`(${table.agentRole} = 'screenhost_agent') = (${table.screenhostId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export type AgentAffiliation = typeof agentAffiliations.$inferSelect;
+
 export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
 export type AgentReferral = typeof agentReferrals.$inferSelect;
