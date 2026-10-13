@@ -216,6 +216,12 @@ describe('AGT-7 — the Screenhost agent (real Postgres)', () => {
     await offer(s.venueId, s.advertiser, 'REFUSE', 'A');
     await offer(s.venueId, s.advertiser, 'REFUSE', 'B');
     await offer(s.venueId, s.advertiser, 'ACCEPTE', 'C');
+    // The first computation is a silent baseline: no notice for signals already there.
+    await runAgentShFollowupTick(new Date(NOW.getTime() - 2 * 24 * 60 * 60 * 1000));
+    expect(
+      await db.select().from(notifications).where(eq(notifications.userId, s.agent)),
+    ).toHaveLength(0);
+    await db.delete(agentAttentionEvents).where(eq(agentAttentionEvents.screenhostId, s.venueId));
     await runAgentShFollowupTick(NOW);
     await runAgentShFollowupTick(NOW);
     const open = await db

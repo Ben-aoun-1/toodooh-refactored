@@ -282,6 +282,9 @@ export const runAgentShFollowupTick = async (now: Date = new Date()) => {
   const today = tunisDateOf(now);
   let appeared = 0;
   for (const { aff, venue } of followed) {
+    // A venue's FIRST computation is a silent baseline: its points are journaled but not
+    // notified, so deploy day (or a new affiliation) does not send every existing signal at once.
+    const baseline = (await snapshotOn(venue.id, tunisDateOf(subDays(now, 1)))) === null;
     const m = await venueMetrics(venue.id, now);
     const past = await snapshotOn(venue.id, tunisDateOf(subDays(now, 30)));
     const signals = attentionSignals(m, thresholds, {
@@ -340,7 +343,7 @@ export const runAgentShFollowupTick = async (now: Date = new Date()) => {
         .values({ screenhostId: venue.id, signal: s, appearedAt: now })
         .onConflictDoNothing()
         .returning({ id: agentAttentionEvents.id });
-      if (inserted.length === 0) continue;
+      if (inserted.length === 0 || baseline) continue;
       appeared += 1;
       await db.insert(notifications).values({
         userId: aff.agentUserId,

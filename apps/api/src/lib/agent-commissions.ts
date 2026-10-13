@@ -23,7 +23,7 @@ import { agentCommissionPct } from './agent-sheet.js';
 import { isDemoCampaign } from './demo.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { proofInstantSql } from './playout/proof-instant.js';
-import { type ReversementPcts, reversementBaseMillimes } from './reversement/split.js';
+import type { ReversementPcts } from './reversement/split.js';
 import { userLabelById } from './user-label.js';
 
 // AGT-3 (agent specs v1.0 §10, rulings 2026-10-13) — THE AGENT COMMISSION LINES, one home.
@@ -122,8 +122,6 @@ const venueValues = async (
     .where(eq(campaignDispatchPlan.campaignId, campaignId))
     .limit(1);
   if (!plan) return [];
-  const t = Number(plan.tTierCoef);
-  const cCible = (plan.iCible * Number(plan.cpm)) / 1000;
   const rows = await db
     .select()
     .from(campaignDispatchAllocation)
@@ -133,11 +131,12 @@ const venueValues = async (
         ne(campaignDispatchAllocation.statutAcceptation, 'REFUSE'),
       ),
     );
+  // The dispatch's own value of each venue's share (revenu_previsionnel = ii_potentiel × CPM):
+  // the forecast is an engine output (spec §10), not a recomputation from the créneaux.
   return rows.map((r) => {
-    const imp = r.creneaux.reduce((s, c) => s + c.impressions, 0);
     return {
       screenhostId: r.screenhostId,
-      valueTnd: reversementBaseMillimes(imp * t, plan.iCible, cCible) / 1000,
+      valueTnd: Number(r.revenuPrevisionnel),
       accepted: r.statutAcceptation === 'ACCEPTE',
     };
   });
