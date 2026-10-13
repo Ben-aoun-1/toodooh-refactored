@@ -617,6 +617,13 @@
       "when": 1791920000000,
       "tag": "0087_agent_commissions",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1791930000000,
+      "tag": "0088_agent_appointments",
+      "breakpoints": true
     }
   ]
 }

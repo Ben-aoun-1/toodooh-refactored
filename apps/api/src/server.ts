@@ -8,6 +8,7 @@ import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { startAgentAffiliationJob } from './lib/agent-affiliations.js';
+import { startAgentAppointmentJob } from './lib/agent-appointments.js';
 import { startAgentCommissionJob } from './lib/agent-commissions.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
 import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
@@ -112,6 +113,7 @@ const start = async (): Promise<void> => {
     // AGT-2 — agent affiliations: attach new venues, activate, remind, end.
     startAgentAffiliationJob(app.log);
     startAgentCommissionJob(app.log);
+    startAgentAppointmentJob(app.log);
     // E6 — the rattrapage tick (detect manquements on ACTIVE campaigns → re-place forward while
     // the total ≥ S_min). AFTER the lifecycle job: a campaign flipped active this hour gets its
     // first redispatch look in the same boot sequence.

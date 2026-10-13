@@ -10,6 +10,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -1085,6 +1086,78 @@ export const agentPayouts = pgTable(
 );
 
 export type AgentPayout = typeof agentPayouts.$inferSelect;
+
+// AGT-5 (agent specs v1.0 §7) — the agent's appointment calendar. Only UNAVAILABLE days are
+// stored (no row = available, the Screenhost calendar's logic).
+export const agentUnavailableDays = pgTable(
+  'agent_unavailable_days',
+  {
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.agentUserId, table.day] })],
+);
+
+// The appointment reasons, per agent type, administered in the hub.
+export const agentAppointmentObjectives = pgTable('agent_appointment_objectives', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+  label: text('label').notNull(),
+  position: integer('position').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AgentAppointmentStatus =
+  | 'en_attente'
+  | 'nouvel_horaire'
+  | 'confirme'
+  | 'annule'
+  | 'expire';
+
+// One appointment between an agent and an affiliate (a Screencaster, or a Screenhost owner for
+// one venue). A slot (agent, day, hour) held by a live request is unique; « Passé » is derived.
+export const agentAppointments = pgTable(
+  'agent_appointments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    affiliateUserId: uuid('affiliate_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'set null' }),
+    objectiveId: uuid('objective_id').references(() => agentAppointmentObjectives.id),
+    day: date('day').notNull(),
+    hour: integer('hour').notNull(),
+    message: text('message'),
+    status: text('status').$type<AgentAppointmentStatus>().notNull().default('en_attente'),
+    proposedDay: date('proposed_day'),
+    proposedHour: integer('proposed_hour'),
+    cancelledBy: text('cancelled_by').$type<'agent' | 'affilie'>(),
+    reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_appointments_agent_idx').on(table.agentUserId),
+    index('agent_appointments_affiliate_idx').on(table.affiliateUserId),
+    uniqueIndex('agent_appointments_slot_uq')
+      .on(table.agentUserId, table.day, table.hour)
+      .where(sql`${table.status} in ('en_attente', 'nouvel_horaire', 'confirme')`),
+    check(
+      'agent_appointments_status',
+      sql`${table.status} in ('en_attente', 'nouvel_horaire', 'confirme', 'annule', 'expire')`,
+    ),
+    check('agent_appointments_hour', sql`${table.hour} between 0 and 23`),
+  ],
+);
+
+export type AgentAppointment = typeof agentAppointments.$inferSelect;
 
 export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
@@ -2376,6 +2449,11 @@ export const notifications = pgTable(
     title: text('title').notNull(),
     body: text('body').notNull(),
     campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
+    // AGT-5/6 — where « Consulter » goes, and the appointment a request notice acts on.
+    link: text('link'),
+    appointmentId: uuid('appointment_id').references((): AnyPgColumn => agentAppointments.id, {
+      onDelete: 'set null',
+    }),
     readAt: timestamp('read_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
