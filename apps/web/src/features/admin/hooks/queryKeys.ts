@@ -92,6 +92,12 @@ export const adminKeys = {
   /** DEMO-1 — the « Démo » page: delay, demo venues, demo accounts (GET /api/admin/demo). */
   demo: () => [...adminKeys.all, 'demo'] as const,
 
+  /** AGT-1 — the agents page: list, one sheet, the RIB queue, the CGE versions. */
+  agentsAll: () => [...adminKeys.all, 'agents'] as const,
+  agentSheet: (id: string) => [...adminKeys.all, 'agents', 'sheet', id] as const,
+  agentRibs: (status: string) => [...adminKeys.all, 'agents', 'ribs', status] as const,
+  agentCge: () => [...adminKeys.all, 'agents', 'cge'] as const,
+
   /** End-user list for UserManagement (`adminUserService.getUsers`). */
   users: () => [...adminKeys.all, 'users'] as const,
   /** EL1 — one venue's dispatch-eligibility view (`adminScreenhostService.getEligibility`). */

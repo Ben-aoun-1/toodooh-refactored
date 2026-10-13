@@ -84,6 +84,8 @@ const TestingPage = lazy(() => import('@/features/admin/pages/TestingPage'));
 const SimulatorPage = lazy(() => import('@/features/admin/pages/SimulatorPage'));
 // DEMO-1 — the admin « Démo » page.
 const DemoManagement = lazy(() => import('@/features/admin/pages/DemoManagement'));
+// AGT-1 — the admin « Agents » page.
+const AgentsManagement = lazy(() => import('@/features/admin/pages/AgentsManagement'));
 
 // Client React Query unique pour toute l'application (config : voir D-Q).
 const queryClient = createQueryClient();
@@ -714,6 +716,14 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <DemoManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-agents"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <AgentsManagement />
                 </AdminRoute>
               }
             />

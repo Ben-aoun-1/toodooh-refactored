@@ -37,8 +37,21 @@ export interface CreateInternalAccountInput {
   // Optional: the agent roles get a SYSTEM-generated password server-side (the field is omitted for
   // them). Only the admin role sends a typed password (Kais GTM).
   password?: string;
-  contact_name: string;
+  /** The admin role's name; an agent's is derived from first_name + last_name (AGT-1). */
+  contact_name?: string;
   role: InternalAccountRole;
+  // AGT-1 — the agent sheet (agent roles only; agent specs v1.0 §2).
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  tax_number?: string;
+  street_address?: string;
+  city?: string;
+  postal_code?: string;
+  governorate_id?: string;
+  covered_zone?: string;
+  commission_pct?: number;
+  certified_at?: string;
 }
 
 export interface InternalAccount {
