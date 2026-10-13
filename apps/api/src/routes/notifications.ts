@@ -1,9 +1,10 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type Notification, notifications } from '../db/schema.js';
+import { type Notification, agentAppointments, notifications } from '../db/schema.js';
+import { noticeLink } from '../lib/agent-notifications.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 // In-app notification feed, session-user-scoped (greenfield — NOT the parked feat/remaining-gaps
@@ -13,12 +14,17 @@ import { requireAuth } from '../middleware/require-auth.js';
 const idParamSchema = z.object({ id: z.uuid() });
 
 // Wire shape is snake_case (FE contract). read_at is an ISO string or null.
-const notificationView = (row: Notification) => ({
+// AGT-6 — `link` is where « Consulter » goes; `appointment_status` is the LIVE status of the
+// appointment a request notice acts on, so a treated request shows no buttons anywhere.
+const notificationView = (row: Notification, appointmentStatus: string | null = null) => ({
   id: row.id,
   type: row.type,
   title: row.title,
   body: row.body,
   campaign_id: row.campaignId,
+  link: noticeLink(row.type, row.link),
+  appointment_id: row.appointmentId,
+  appointment_status: appointmentStatus,
   read_at: row.readAt ? row.readAt.toISOString() : null,
   created_at: row.createdAt.toISOString(),
 });
@@ -33,11 +39,23 @@ export const notificationsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const rows = await db
-      .select()
+      .select({ n: notifications, appointmentStatus: agentAppointments.status })
       .from(notifications)
+      .leftJoin(agentAppointments, eq(agentAppointments.id, notifications.appointmentId))
       .where(eq(notifications.userId, userId))
       .orderBy(desc(notifications.createdAt));
-    return reply.status(200).send(rows.map(notificationView));
+    return reply.status(200).send(rows.map((r) => notificationView(r.n, r.appointmentStatus)));
+  });
+
+  // POST /api/notifications/read-all — « Marquer tout comme lu » (AGT-6).
+  app.post('/api/notifications/read-all', { preHandler: requireAuth }, async (request, reply) => {
+    const userId = request.user?.id ?? '';
+    const updated = await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)))
+      .returning({ id: notifications.id });
+    return reply.status(200).send({ updated: updated.length });
   });
 
   // POST /api/notifications/:id/read — mark the caller's own notification read (idempotent). Owner

@@ -60,6 +60,10 @@ const OwnerFactureDetailPage = lazy(
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
 const AgentWorkspace = lazy(() => import('@/features/agent/pages/AgentWorkspace'));
+const AgentSettings = lazy(() => import('@/features/agent/pages/AgentSettings'));
+const AgentCampaigns = lazy(() => import('@/features/agent/pages/AgentCampaigns'));
+const AgentAffiliates = lazy(() => import('@/features/agent/pages/AgentAffiliates'));
+const AgentCalendar = lazy(() => import('@/features/agent/pages/AgentCalendar'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
 const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'));
@@ -84,6 +88,8 @@ const TestingPage = lazy(() => import('@/features/admin/pages/TestingPage'));
 const SimulatorPage = lazy(() => import('@/features/admin/pages/SimulatorPage'));
 // DEMO-1 — the admin « Démo » page.
 const DemoManagement = lazy(() => import('@/features/admin/pages/DemoManagement'));
+// AGT-1 — the admin « Agents » page.
+const AgentsManagement = lazy(() => import('@/features/admin/pages/AgentsManagement'));
 
 // Client React Query unique pour toute l'application (config : voir D-Q).
 const queryClient = createQueryClient();
@@ -339,6 +345,38 @@ export default function App() {
               element={
                 <AgentRoute>
                   <AgentWorkspace />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/parametres"
+              element={
+                <AgentRoute>
+                  <AgentSettings />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/campagnes"
+              element={
+                <AgentRoute>
+                  <AgentCampaigns />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/affilies"
+              element={
+                <AgentRoute>
+                  <AgentAffiliates />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/calendrier"
+              element={
+                <AgentRoute>
+                  <AgentCalendar />
                 </AgentRoute>
               }
             />
@@ -714,6 +752,14 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <DemoManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-agents"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <AgentsManagement />
                 </AdminRoute>
               }
             />

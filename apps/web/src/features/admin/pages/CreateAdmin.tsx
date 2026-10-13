@@ -16,7 +16,13 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import { AgentSheetFields } from '@/features/admin/components/agents/AgentSheetFields';
 import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
+import {
+  type AgentSheetForm,
+  EMPTY_AGENT_SHEET,
+  agentSheetPayload,
+} from '@/features/admin/lib/agent-sheet';
 import type { InternalAccount, InternalAccountRole } from '@/features/admin/types/admin';
 import { apiErrorMessage } from '@/features/auth/services/auth-errors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -94,6 +100,8 @@ export default function CreateAdmin() {
   const [created, setCreated] = useState<{ account: InternalAccount; roleLabel: string } | null>(
     null,
   );
+  // AGT-1 — the agent sheet (agent roles only).
+  const [agentSheet, setAgentSheet] = useState<AgentSheetForm>(EMPTY_AGENT_SHEET);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -144,6 +152,12 @@ export default function CreateAdmin() {
       return;
     }
 
+    const sheet = formData.role === 'admin' ? null : agentSheetPayload(agentSheet, formData.role);
+    if (sheet && !sheet.ok) {
+      toast.error(sheet.error);
+      return;
+    }
+
     setLoading(true);
     try {
       // contact_name is the single name field the apps/api endpoint stores; compose it from the
@@ -153,9 +167,17 @@ export default function CreateAdmin() {
       const isAgent = formData.role !== 'admin';
       const account = await createAdmin.mutateAsync({
         email: formData.email,
-        contact_name: `${formData.first_name} ${formData.last_name}`.trim(),
         role: formData.role,
-        ...(isAgent ? {} : { password: formData.password }),
+        ...(isAgent && sheet?.ok
+          ? {
+              first_name: formData.first_name.trim(),
+              last_name: formData.last_name.trim(),
+              ...sheet.value,
+            }
+          : {
+              contact_name: `${formData.first_name} ${formData.last_name}`.trim(),
+              password: formData.password,
+            }),
       });
 
       // Surface the created account (with its issued agent code, if any) so the superadmin can
@@ -172,6 +194,7 @@ export default function CreateAdmin() {
         last_name: '',
         role: defaultRole,
       });
+      setAgentSheet(EMPTY_AGENT_SHEET);
     } catch (error) {
       // EMAIL-AG1 (2026-09-12): a duplicate address is a 409 EMAIL_TAKEN — say so in French
       // instead of the raw api text.
@@ -408,6 +431,10 @@ export default function CreateAdmin() {
                 />
               </div>
             </div>
+
+            {formData.role !== 'admin' && (
+              <AgentSheetFields value={agentSheet} onChange={setAgentSheet} role={formData.role} />
+            )}
 
             {isAgentRole ? (
               /* Agent roles: the password is system-generated — no input. */

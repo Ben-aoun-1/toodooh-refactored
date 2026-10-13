@@ -6,14 +6,17 @@ import { type Screenhost, type User, agentReferrals, screenhosts, users } from '
 import { toProfileType } from '../lib/profile-type.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
+import { agentCgeGate } from './agent-account.js';
+
 // Read-only agent dashboard (P2). An agent (screenhost_agent | screencast_agent) sees ONLY the
 // clients it referred — the agent_referrals edge where agent_user_id = the caller. This endpoint
 // NEVER exposes documents (no field, no presign): the hard divergence from the admin user view,
 // which DOES surface document presence + a presign endpoint. Performance / commission /
 // accepted-refused metrics are NOT here either — their source is the future wedooh affluence edge
 // (a separate sync lane); the FE renders placeholders. Read-only: no write/mutation path.
+// AGT-1 — no agent data before the CGE in force is accepted (agentCgeGate).
 const agentGuard = {
-  preHandler: [requireAuth, requireRole('screenhost_agent', 'screencast_agent')],
+  preHandler: [requireAuth, requireRole('screenhost_agent', 'screencast_agent'), agentCgeGate],
 };
 
 // Visibility matrix (product ruling — implement exactly): screenhost_agent ↔ individual_owner /

@@ -3,7 +3,6 @@ import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../../db/client.js';
 import {
-  agentReferrals,
   campaignReconciliation,
   campaignScreenhostPayout,
   campaigns,
@@ -13,10 +12,9 @@ import {
   notifications,
   proofOfPlay,
   reversementLines,
-  screenhosts,
 } from '../../db/schema.js';
+import { acquireAgentCommissions, settlementAgentTerms } from '../agent-commissions.js';
 import { campaignReportReadyNotification } from '../campaign-report-notification.js';
-import { getDispatchConfig } from '../dispatch/config.js';
 import { fenetreDiffusion } from '../fenetre-diffusion.js';
 import { proofInstantSql } from '../playout/proof-instant.js';
 import { computeReversement, millimesToTnd, tndToMillimes } from '../reversement/split.js';
@@ -253,53 +251,26 @@ export const settleEventPositioning = async (
   // with source='event'. The rail is CALLED, never modified. The refunded/undelivered value NEVER
   // enters a base — the base IS the delivered value, so the E7 identity (Σ lines ≡ delivered)
   // holds for events by construction. A fully-refunded positioning writes NO lines at all.
-  const cfg = await getDispatchConfig();
-  const pcts = {
-    sh: cfg.pctSh,
-    toodooh: cfg.pctToodooh,
-    agentSh: cfg.pctAgentSh,
-    agentSc: cfg.pctAgentSc,
-  };
+  // AGT-3 — the agents' frozen rates and attribution, exactly as the campaign path reads them
+  // (lib/agent-commissions); Toodooh takes what the agents' rates leave.
   const paying = venues.filter((v) => v.deliveredTnd > 0);
-  const splits = paying.map((v) => ({
-    screenhostId: v.screenhostId,
-    deliveredTnd: v.deliveredTnd,
-    // The event unit is bloc VALUE in TND, so the base is the delivered money directly (the
-    // campaign path's proportional form reduces to the same thing when C_cible = target × CPM).
-    split: computeReversement(tndToMillimes(v.deliveredTnd), pcts),
-  }));
-
-  // Agent attribution, resolved exactly as the campaign path resolves it: the venue OWNER's
-  // referring agent takes the SH agent line, the ADVERTISER's takes the SC one.
-  const ownerRows = splits.length
-    ? await db
-        .select({ id: screenhosts.id, ownerId: screenhosts.ownerId })
-        .from(screenhosts)
-        .where(
-          inArray(
-            screenhosts.id,
-            splits.map((sp) => sp.screenhostId),
-          ),
-        )
-    : [];
-  const ownerBySh = new Map(ownerRows.map((r) => [r.id, r.ownerId]));
-  const referredIds = [
-    ...new Set(
-      [...ownerRows.map((r) => r.ownerId), row.campaign.advertiserId].filter(
-        (v): v is string => v !== null,
-      ),
-    ),
-  ];
-  const referralRows = referredIds.length
-    ? await db
-        .select({
-          agentUserId: agentReferrals.agentUserId,
-          referredUserId: agentReferrals.referredUserId,
-        })
-        .from(agentReferrals)
-        .where(inArray(agentReferrals.referredUserId, referredIds))
-    : [];
-  const agentByReferred = new Map(referralRows.map((r) => [r.referredUserId, r.agentUserId]));
+  const terms = await settlementAgentTerms(
+    positioningId,
+    paying.map((v) => v.screenhostId),
+  );
+  const splits = paying.map((v) => {
+    const term = terms.get(v.screenhostId);
+    if (!term) throw new Error(`no split terms for ${v.screenhostId}`);
+    return {
+      screenhostId: v.screenhostId,
+      deliveredTnd: v.deliveredTnd,
+      // The event unit is bloc VALUE in TND, so the base is the delivered money directly (the
+      // campaign path's proportional form reduces to the same thing when C_cible = target × CPM).
+      split: computeReversement(tndToMillimes(v.deliveredTnd), term.pcts),
+      agentShId: term.agentShId,
+      agentScId: term.agentScId,
+    };
+  });
 
   const inserted = await db
     .insert(campaignReconciliation)
@@ -339,7 +310,6 @@ export const settleEventPositioning = async (
     );
     await db.insert(reversementLines).values(
       splits.map((sp) => {
-        const ownerId = ownerBySh.get(sp.screenhostId) ?? null;
         return {
           source: 'event',
           campaignId: positioningId,
@@ -349,13 +319,15 @@ export const settleEventPositioning = async (
           toodoohAmountTnd: String(millimesToTnd(sp.split.toodoohMillimes)),
           agentShAmountTnd: String(millimesToTnd(sp.split.agentShMillimes)),
           agentScAmountTnd: String(millimesToTnd(sp.split.agentScMillimes)),
-          agentShId: ownerId === null ? null : (agentByReferred.get(ownerId) ?? null),
-          agentScId: agentByReferred.get(row.campaign.advertiserId) ?? null,
+          agentShId: sp.agentShId,
+          agentScId: sp.agentScId,
           settledAt: new Date(),
         };
       }),
     );
   }
+  // AGT-3 — the commission lines become acquired from the lines just written.
+  await acquireAgentCommissions(positioningId);
 
   await db.insert(notifications).values([
     {

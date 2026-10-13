@@ -5,7 +5,6 @@ import { db, sql } from '../src/db/client.js';
 import {
   type DispatchCreneau,
   type NewUser,
-  agentReferrals,
   agents,
   campaignDispatchAllocation,
   campaignDispatchPlan,
@@ -22,6 +21,7 @@ import {
 } from '../src/db/schema.js';
 import { reconcileCampaignById } from '../src/lib/reconcile/reconcile-service.js';
 
+import { seedLiveAffiliation } from './helpers/agent-affiliation.js';
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
 // E7 (VF EPIC 5) — settlement writes the 50/44/3/3 reversement lines and the venue payable
@@ -308,20 +308,26 @@ describe('E7 reversement settlement (real Postgres)', () => {
     expect(Number(result.reconciliation.spendTnd) - Number(lines[0]!.baseValueTnd)).toBe(5);
   });
 
-  it('resolves agent attribution from agent_referrals (owner → agent SH, advertiser → agent SC)', async () => {
+  it('resolves agent attribution from the live affiliations (venue → agent SH, advertiser → agent SC)', async () => {
     const s = await seedScenario([DEFAULT_CRENEAUX]);
     const venue = s.venues[0]!;
 
     const agentSh = await seedUser({ role: 'screenhost_agent' });
-    const agentSc = await seedUser({ role: 'screenhost_agent' });
+    const agentSc = await seedUser({ role: 'screencast_agent' });
     await db.insert(agents).values([
       { userId: agentSh, code: `AGSH${seq}` },
       { userId: agentSc, code: `AGSC${seq}` },
     ]);
-    await db.insert(agentReferrals).values([
-      { agentUserId: agentSh, referredUserId: venue.ownerId, agentCodeUsed: `AGSH${seq}` },
-      { agentUserId: agentSc, referredUserId: s.advertiser, agentCodeUsed: `AGSC${seq}` },
-    ]);
+    await seedLiveAffiliation({
+      agentUserId: agentSh,
+      referredUserId: venue.ownerId,
+      screenhostId: venue.screenhostId,
+    });
+    await seedLiveAffiliation({ agentUserId: agentSc, referredUserId: s.advertiser });
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'ACCEPTE' })
+      .where(eq(campaignDispatchAllocation.planId, s.planId));
 
     await deliverSlot(s, venue, '2024-01-01', 8);
     await deliverSlot(s, venue, '2024-01-02', 8);

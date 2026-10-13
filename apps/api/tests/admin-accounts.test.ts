@@ -4,7 +4,14 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { accounts, agents, type NewUser, users, verifications } from '../src/db/schema.js';
+import {
+  accounts,
+  agents,
+  governorates,
+  type NewUser,
+  users,
+  verifications,
+} from '../src/db/schema.js';
 import { adminAccountsRoutes } from '../src/routes/admin-accounts.js';
 import { signinRoutes } from '../src/routes/signin.js';
 
@@ -55,11 +62,23 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
+// AGT-1 — an agent is created with its full sheet (agent specs v1.0 §2); contact_name stays the
+// admin role's field (an agent's is derived from first + last name — « Agent One » here).
 const VALID = {
   email: 'agent1@example.com',
   password: 'agent-pass-1234', // 15 chars ≥ 12
   contact_name: 'Agent One',
   role: 'screenhost_agent',
+  first_name: 'Agent',
+  last_name: 'One',
+  phone: '+21612345678',
+  tax_number: '1234567ABC000',
+  street_address: '1 rue de Marseille',
+  city: 'Tunis',
+  postal_code: '1000',
+  governorate_id: '', // set in beforeEach (a seeded governorate)
+  covered_zone: 'Grand Tunis',
+  certified_at: '2026-10-01',
 };
 
 describe('POST /api/admin/accounts (real Postgres)', () => {
@@ -71,6 +90,8 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     pushAgentSpy.mockReset();
     pushAgentSpy.mockResolvedValue(undefined);
     superId = await seedUser({ role: 'superadmin', status: 'approved' });
+    const [gov] = await db.select({ id: governorates.id }).from(governorates).limit(1);
+    VALID.governorate_id = gov?.id ?? '';
     app = buildApp();
     await app.register(adminAccountsRoutes);
     await app.register(signinRoutes); // for the sign-in round-trip proof

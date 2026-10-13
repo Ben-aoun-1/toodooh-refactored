@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import { agents, users } from '../db/schema.js';
@@ -20,7 +20,10 @@ export interface ResolvedAgent {
   agentRole: AgentRole;
 }
 
-/** The agent whose issued code this is, or null. */
+/**
+ * The agent whose issued code this is, or null. AGT-1 (spec §2) — only an ACTIVE agent account
+ * is accepted: not before its CGE are accepted, never once suspended or closed.
+ */
 export const resolveAgentByCode = async (raw: string): Promise<ResolvedAgent | null> => {
   const code = normalizeAgentCode(raw);
   if (!code) return null;
@@ -28,7 +31,7 @@ export const resolveAgentByCode = async (raw: string): Promise<ResolvedAgent | n
     .select({ agentUserId: agents.userId, agentRole: users.role })
     .from(agents)
     .innerJoin(users, eq(users.id, agents.userId))
-    .where(eq(agents.code, code))
+    .where(and(eq(agents.code, code), eq(agents.accountStatus, 'actif')))
     .limit(1);
   if (!row) return null;
   if (row.agentRole !== 'screenhost_agent' && row.agentRole !== 'screencast_agent') return null;

@@ -93,11 +93,15 @@ describe('notifications (session-user-scoped, real Postgres)', () => {
     expect(body).toHaveLength(2);
     expect(body[0]?.['title']).toBe('Récente');
     expect(body[1]?.['title']).toBe('Ancienne');
+    // AGT-6 added link / appointment_id / appointment_status (the agent bell's actions).
     expect(Object.keys(body[0] ?? {}).sort()).toEqual([
+      'appointment_id',
+      'appointment_status',
       'body',
       'campaign_id',
       'created_at',
       'id',
+      'link',
       'read_at',
       'title',
       'type',

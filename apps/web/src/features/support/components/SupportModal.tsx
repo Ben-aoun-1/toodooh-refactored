@@ -19,9 +19,17 @@ import { getErrorMessage } from '@/lib/errors';
 // so; the submit is locked while the request is in flight.
 interface Props {
   onClose: () => void;
+  /** AGT-1b — the agent reasons list (spec §9); default: the screencaster / owner list. */
+  objectives?: readonly string[];
+  /** AGT-1b — the page the request is sent from (stored on the ticket). */
+  originPage?: string;
 }
 
-export default function SupportModal({ onClose }: Props) {
+export default function SupportModal({
+  onClose,
+  objectives = SUPPORT_OBJECTIVES,
+  originPage,
+}: Props) {
   const [objective, setObjective] = useState('');
   const [otherDetail, setOtherDetail] = useState('');
   const [message, setMessage] = useState('');
@@ -34,6 +42,7 @@ export default function SupportModal({ onClose }: Props) {
       objective,
       other_detail: otherDetail.trim() || undefined,
       message: message.trim() || undefined,
+      ...(originPage ? { origin_page: originPage } : {}),
     };
     const error = supportPayloadError(payload);
     if (error) {
@@ -91,7 +100,7 @@ export default function SupportModal({ onClose }: Props) {
               id="support-objective"
             >
               <option value="">Choisissez vos objectifs</option>
-              {SUPPORT_OBJECTIVES.map((obj) => (
+              {objectives.map((obj) => (
                 <option key={obj} value={obj}>
                   {obj}
                 </option>

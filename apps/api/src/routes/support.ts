@@ -1,11 +1,17 @@
+import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { emailSender } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { supportMessages } from '../db/schema.js';
+import { supportMessages, users } from '../db/schema.js';
+import {
+  agentNoticeEmailPlainText,
+  agentNoticeEmailTemplate,
+} from '../email/agent-notice-template.js';
 import { env } from '../env.js';
 import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
+import { userLabel } from '../lib/user-label.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 // SUP-1 (Mejri 11/09 point 8) — POST /api/support: the « Support » and « Prendre rendez-vous »
@@ -20,6 +26,8 @@ const bodySchema = z
     other_detail: z.string().trim().max(500).optional(),
     message: z.string().trim().max(2000).optional(),
     appointment_date: z.iso.date().optional(),
+    // AGT-1b — the page the request was sent from (the agent Support modal, spec §9).
+    origin_page: z.string().trim().max(300).optional(),
   })
   .refine((b) => b.objective.toLowerCase() !== 'autre' || (b.other_detail ?? '').length > 0, {
     message: 'other_detail is required when the objective is « Autre »',
@@ -59,6 +67,7 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
         otherDetail: b.other_detail ?? null,
         message: b.message || null,
         appointmentDate: b.appointment_date ?? null,
+        originPage: b.origin_page ?? null,
       })
       .returning();
     if (!row) {
@@ -96,6 +105,31 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
       });
       if ('error' in result)
         request.log.warn({ error: result.error }, 'support mailbox copy failed');
+    }
+
+    // AGT-8 (agent specs v1.0 §9) — an agent's ticket gets an email acknowledgement.
+    const role = request.user?.role;
+    if (role === 'screenhost_agent' || role === 'screencast_agent') {
+      const [me] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (me) {
+        const ack = await emailSender.send({
+          to: me.email,
+          subject: 'Toodooh — nous avons bien reçu votre demande',
+          html: agentNoticeEmailTemplate({
+            name: userLabel(me),
+            title: 'Nous avons bien reçu votre demande',
+            body: `Motif : ${b.objective}. L’équipe Toodooh vous répond au plus vite.`,
+            url: `${env.WEB_ORIGIN}/agent`,
+          }),
+          text: agentNoticeEmailPlainText({
+            name: userLabel(me),
+            title: 'Nous avons bien reçu votre demande',
+            body: `Motif : ${b.objective}. L’équipe Toodooh vous répond au plus vite.`,
+            url: `${env.WEB_ORIGIN}/agent`,
+          }),
+        });
+        if ('error' in ack) request.log.warn({ error: ack.error }, 'agent support ack failed');
+      }
     }
 
     return reply.status(201).send({

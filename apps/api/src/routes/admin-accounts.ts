@@ -12,10 +12,12 @@ import { accounts, agents, users } from '../db/schema.js';
 import { env } from '../env.js';
 import { generateUniqueAgentCode, type AgentCodePrefix } from '../lib/agent-code.js';
 import { parkAgentInvite, takeAgentInvite } from '../lib/agent-invite.js';
+import { agentOnboarding, currentCge, isAgentRole } from '../lib/agent-sheet.js';
 import { generateTempPassword } from '../lib/generate-password.js';
 import { pushAgentToHub } from '../lib/wedooh-sync.js';
 import { logger } from '../logger.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
+import { validatePhone } from '../validation/phone.js';
 
 // The two agent roles get an issued referral code (held in agents.code), PREFIXED by the agent
 // TYPE so the code is self-describing (Kais GTM spec): screenhost_agent → 'SH', screencast_agent
@@ -53,16 +55,73 @@ const staffGuard = { preHandler: [requireAuth, requireRole('admin', 'superadmin'
 // user_role value (slice-2 A ruling 2). Password is OPTIONAL (agents generate their own) but
 // REQUIRED for the admin role (refine); the ≥12 floor — the privileged-account floor (ruling 7),
 // above the 10-char public-signup floor — is enforced whenever a password is present.
+// AGT-1 (agent specs v1.0 §2, « Créer un Agent ») — an agent is created with its full sheet:
+// first and last name, phone, address, governorate, covered zone and certification date are
+// required; the tax number too for a Screencaster agent (optional for a Screenhost agent); the
+// commission rate defaults to the engine's when omitted. contact_name stays the admin role's
+// field; for an agent it is derived from the first and last name.
+const AGENT_REQUIRED = [
+  'first_name',
+  'last_name',
+  'phone',
+  'street_address',
+  'city',
+  'postal_code',
+  'governorate_id',
+  'covered_zone',
+  'certified_at',
+] as const;
+
 const createAccountSchema = z
   .object({
     email: z.email('A valid email is required'),
     password: z.string().min(12, 'Password must be at least 12 characters').optional(),
-    contact_name: z.string().min(1).max(100),
+    contact_name: z.string().min(1).max(100).optional(),
     role: z.enum(['admin', 'screenhost_agent', 'screencast_agent']),
+    first_name: z.string().trim().min(1).max(100).optional(),
+    last_name: z.string().trim().min(1).max(100).optional(),
+    phone: z.string().refine(validatePhone, 'Phone must be E.164 (e.g. +21612345678)').optional(),
+    tax_number: z
+      .string()
+      .regex(/^[A-Za-z0-9/]{7,20}$/, 'Invalid tax number')
+      .optional(),
+    street_address: z.string().trim().min(1).max(200).optional(),
+    city: z.string().trim().min(1).max(100).optional(),
+    postal_code: z
+      .string()
+      .regex(/^\d{4}$/, 'Postal code must be 4 digits')
+      .optional(),
+    governorate_id: z.uuid().optional(),
+    covered_zone: z.string().trim().min(1).max(200).optional(),
+    commission_pct: z.number().min(0).max(100).multipleOf(0.01).optional(),
+    certified_at: z.iso.date().optional(),
   })
   .refine((d) => d.role !== 'admin' || d.password !== undefined, {
     message: 'Password is required for the admin role',
     path: ['password'],
+  })
+  .refine((d) => d.role !== 'admin' || d.contact_name !== undefined, {
+    message: 'contact_name is required for the admin role',
+    path: ['contact_name'],
+  })
+  .superRefine((d, ctx) => {
+    if (d.role === 'admin') return;
+    for (const field of AGENT_REQUIRED) {
+      if (d[field] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `${field} is required for an agent`,
+        });
+      }
+    }
+    if (d.role === 'screencast_agent' && d.tax_number === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['tax_number'],
+        message: 'tax_number is required for a Screencaster agent',
+      });
+    }
   });
 
 // The shaped account view returned on create (snake_case wire; the identity subset, mirroring
@@ -173,7 +232,12 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
         fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
       });
     }
-    const { email, password, contact_name, role } = parsed.data;
+    const { email, password, role } = parsed.data;
+    const agentSheet = parsed.data;
+    const contact_name =
+      role === 'admin'
+        ? (parsed.data.contact_name ?? '')
+        : `${agentSheet.first_name ?? ''} ${agentSheet.last_name ?? ''}`.trim();
     const normalizedEmail = email.toLowerCase();
     const prefix = agentCodePrefix(role);
     const isAgent = prefix !== null;
@@ -241,6 +305,17 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
           contactName: contact_name,
           emailVerified: true,
           role,
+          // AGT-1 — the agent sheet's contact and address live on users.
+          ...(isAgent
+            ? {
+                contactPhone: agentSheet.phone ?? null,
+                taxNumber: agentSheet.tax_number ?? null,
+                streetAddress: agentSheet.street_address ?? null,
+                city: agentSheet.city ?? null,
+                postalCode: agentSheet.postal_code ?? null,
+                governorateId: agentSheet.governorate_id ?? null,
+              }
+            : {}),
           status: 'approved',
           validatedBy: adminId,
           validatedAt: new Date(),
@@ -276,7 +351,21 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
             .limit(1);
           return hit !== undefined;
         });
-        await tx.insert(agents).values({ userId: user.id, code: agentCode });
+        // AGT-1 — the account is 'actif' at once while no CGE is published for its role (ruling
+        // Q6); otherwise it waits for the agent's acceptance (the code is refused meanwhile).
+        const role_ = role === 'screenhost_agent' ? 'screenhost_agent' : 'screencast_agent';
+        const cgeInForce = (await currentCge(role_, tx)) !== null;
+        await tx.insert(agents).values({
+          userId: user.id,
+          code: agentCode,
+          firstName: agentSheet.first_name ?? null,
+          lastName: agentSheet.last_name ?? null,
+          coveredZone: agentSheet.covered_zone ?? null,
+          commissionPct:
+            agentSheet.commission_pct === undefined ? null : agentSheet.commission_pct.toFixed(2),
+          certifiedAt: agentSheet.certified_at ?? null,
+          accountStatus: cgeInForce ? 'en_attente' : 'actif',
+        });
       }
       return { user, agentCode };
     });
@@ -342,15 +431,25 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
         createdAt: users.createdAt,
         code: agents.code,
         exportStatus: agents.exportStatus,
+        accountStatus: agents.accountStatus,
       })
       .from(agents)
       .innerJoin(users, eq(users.id, agents.userId))
       .orderBy(desc(agents.createdAt));
+    // AGT-1 (US-ASC-1.4 / US-ASH-1.4) — the account status and the onboarding progress per agent.
+    const withOnboarding = await Promise.all(
+      rows.map(async (row) => ({
+        row,
+        onboarding: isAgentRole(row.role) ? await agentOnboarding(row.id, row.role) : null,
+      })),
+    );
     return reply.status(200).send({
-      agents: rows.map((row) => ({
+      agents: withOnboarding.map(({ row, onboarding }) => ({
         ...toAdminAccountView(row),
         code: row.code,
         export_status: row.exportStatus,
+        account_status: row.accountStatus,
+        onboarding,
       })),
     });
   });

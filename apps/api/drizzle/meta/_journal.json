@@ -596,6 +596,48 @@
       "when": 1791835835123,
       "tag": "0084_demo_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1791900000000,
+      "tag": "0085_agent_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1791910000000,
+      "tag": "0086_agent_affiliations",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1791920000000,
+      "tag": "0087_agent_commissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1791930000000,
+      "tag": "0088_agent_appointments",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1791940000000,
+      "tag": "0089_agent_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1791950000000,
+      "tag": "0090_agent_sh_followup",
+      "breakpoints": true
     }
   ]
 }

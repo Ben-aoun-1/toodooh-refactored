@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { env } from '../env.js';
 
 import { adminAccountsRoutes } from './admin-accounts.js';
+import { adminAgentsRoutes } from './admin-agents.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminDemoRoutes } from './admin-demo.js';
@@ -22,7 +23,14 @@ import { adminTestingRoutes } from './admin-testing.js';
 import { adminWalletRoutes } from './admin-wallet.js';
 import { adminRoutes } from './admin.js';
 import { advertiserPerformancesRoutes } from './advertiser-performances.js';
+import { agentAccountRoutes } from './agent-account.js';
+import { agentAppointmentRoutes } from './agent-appointments.js';
 import { agentCodeAvailabilityRoute } from './agent-code-availability.js';
+import { agentFollowupRoutes } from './agent-followup.js';
+import { agentNewsRoutes } from './agent-news.js';
+import { agentPortfolioRoutes } from './agent-portfolio.js';
+import { agentProfileRoutes } from './agent-profile.js';
+import { agentWalletRoutes } from './agent-wallet.js';
 import { agentRoutes } from './agent.js';
 import { campaignBoostRoutes } from './campaign-boost.js';
 import { campaignDispatchRoutes } from './campaign-dispatch.js';
@@ -169,6 +177,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminTeamsRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
+  // AGT-1 — agent sheet, lifecycle, RIB queue, CGE publication.
+  await app.register(adminAgentsRoutes);
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,
   // C1 affluence ingest, Edge A agent provisioning. Guarded by WEDOOH_SYNC_KEY; 503 when unset.
   await app.register(internalRoutes);
@@ -177,6 +187,14 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // endpoint, or signup capture yet (P2/P3).
   // (P2) Read-only agent dashboard: GET /api/agent/clients — an agent's referred clients only.
   await app.register(agentRoutes);
+  // AGT-1 — the agent's own account, CGE acceptance and RIB.
+  await app.register(agentAccountRoutes);
+  await app.register(agentProfileRoutes);
+  await app.register(agentWalletRoutes);
+  await app.register(agentPortfolioRoutes);
+  await app.register(agentAppointmentRoutes);
+  await app.register(agentNewsRoutes);
+  await app.register(agentFollowupRoutes);
   // Zones cutover (Z1): public GET catalog + admin-guarded scalar writes.
   await app.register(predefinedZonesRoutes);
   // CF-Z1 — the NEW zones read (wizard); distinct from the legacy predefined_zones CRUD above.

@@ -8,8 +8,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import {
+  agents,
   type NewUser,
-  agentReferrals,
   businessSectors,
   campaignBoosts,
   campaignZones,
@@ -31,6 +31,7 @@ import { settleEventPositioning } from '../src/lib/event-playout/settlement.js';
 import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { eventBoostRoutes } from '../src/routes/event-boost.js';
 
+import { seedLiveAffiliation } from './helpers/agent-affiliation.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 import { sweepZones } from './helpers/zones.js';
@@ -580,7 +581,7 @@ describe('EV6 — the event booster + event reversements (real Postgres)', () =>
       expect(payouts[0]?.['n']).toBe(0);
     });
 
-    it('agent attribution: the owner’s agent takes the SH line, the advertiser’s the SC line', async () => {
+    it('agent attribution: the venue’s affiliated agent takes the SH line, the advertiser’s the SC line', async () => {
       const venue = await seedVenue();
       const eventId = await seedEvent();
       const { campaignId, advertiserId } = await seedPositioning(eventId, venue.id, {
@@ -588,16 +589,16 @@ describe('EV6 — the event booster + event reversements (real Postgres)', () =>
       });
       const ownerAgent = await seedUser({ role: 'screenhost_agent' });
       const castAgent = await seedUser({ role: 'screencast_agent' });
-      await db.insert(agentReferrals).values({
+      await db.insert(agents).values([
+        { userId: ownerAgent, code: `EV6SH${seq}` },
+        { userId: castAgent, code: `EV6SC${seq}` },
+      ]);
+      await seedLiveAffiliation({
         agentUserId: ownerAgent,
         referredUserId: venue.ownerId,
-        agentCodeUsed: `EV6SH${seq}`,
+        screenhostId: venue.id,
       });
-      await db.insert(agentReferrals).values({
-        agentUserId: castAgent,
-        referredUserId: advertiserId,
-        agentCodeUsed: `EV6SC${seq}`,
-      });
+      await seedLiveAffiliation({ agentUserId: castAgent, referredUserId: advertiserId });
       for (const bloc of GRID.blocs) {
         await seedProof(campaignId, venue.id, new Date(bloc.start.getTime() + 5_000));
       }

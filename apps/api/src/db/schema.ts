@@ -10,6 +10,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -785,6 +786,17 @@ export type NewScreenhostPiste = typeof screenhostPistes.$inferInsert;
 // 'failed' → 'exported'.
 export const agentExportStatus = pgEnum('agent_export_status', ['pending', 'exported', 'failed']);
 
+// AGT-1 (Youssef's agent specs v1.0, operator rulings 2026-10-13) — the agent account's own
+// lifecycle, distinct from users.status: 'en_attente' until the CGE are accepted (the code is
+// refused at signup meanwhile), 'actif', then 'suspendu' / 'cloture' by the admin (both also ban
+// the users row, so the existing sign-in refusal and session revocation apply).
+export const agentAccountStatus = pgEnum('agent_account_status', [
+  'en_attente',
+  'actif',
+  'suspendu',
+  'cloture',
+]);
+
 export const agents = pgTable('agents', {
   // One row per agent user; the PK IS the FK (1:1 with users). ON DELETE CASCADE:
   // deleting the agent user removes its issued code.
@@ -794,7 +806,105 @@ export const agents = pgTable('agents', {
   code: text('code').notNull().unique(),
   exportStatus: agentExportStatus('export_status').notNull().default('pending'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // AGT-1 — the agent sheet (spec §2). Contact, address, tax number and photo live on users
+  // (contact_phone, street_address, city, postal_code, governorate_id, tax_number, image).
+  firstName: text('first_name'),
+  lastName: text('last_name'),
+  coveredZone: text('covered_zone'),
+  // Ruling Q2 A — the agent's own commission rate (%); NULL = the engine default
+  // (dispatch_config.pct_agent_sh / pct_agent_sc). Never shown to the agent as a rate.
+  commissionPct: numeric('commission_pct', { precision: 5, scale: 2 }),
+  accountStatus: agentAccountStatus('account_status').notNull().default('en_attente'),
+  certifiedAt: date('certified_at'),
+  // Onboarding step « Vérifier mes informations »: the agent saved or confirmed the admin's data.
+  infoVerifiedAt: timestamp('info_verified_at', { withTimezone: true }),
+  // AGT-1b — the profile photo (PNG/JPEG, ≥ 400×400 px), shown in the appointment modal.
+  photoKey: text('photo_key'),
 });
+
+// AGT-1b (spec §9) — every change the agent makes to its sheet, timestamped, read by the admin.
+export const agentProfileChanges = pgTable(
+  'agent_profile_changes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    field: text('field').notNull(),
+    oldValue: text('old_value'),
+    newValue: text('new_value'),
+    changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('agent_profile_changes_agent_idx').on(table.agentUserId, table.changedAt)],
+);
+
+// AGT-1 — the Conditions Générales d'Engagement, versioned per agent role. Publishing a version
+// makes the blocking acceptance modal reappear for every agent of that role (spec §2).
+export const agentCgeVersions = pgTable(
+  'agent_cge_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // text + CHECK, not the user_role enum: a fresh database migrates in ONE transaction and
+    // Postgres refuses enum values added earlier in that same transaction (55P04).
+    agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+    version: text('version').notNull(),
+    storageKey: text('storage_key').notNull(),
+    fileName: text('file_name').notNull(),
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_cge_versions_role_version_uq').on(table.agentRole, table.version),
+    check(
+      'agent_cge_versions_agent_role',
+      sql`${table.agentRole} IN ('screenhost_agent', 'screencast_agent')`,
+    ),
+  ],
+);
+
+// AGT-1 — every acceptance (date, version, IP), kept as history (US-ASC-2.5 / US-ASH-2.5).
+export const agentCgeAcceptances = pgTable(
+  'agent_cge_acceptances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cgeVersionId: uuid('cge_version_id')
+      .notNull()
+      .references(() => agentCgeVersions.id),
+    ip: text('ip'),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_cge_acceptances_agent_version_uq').on(table.agentUserId, table.cgeVersionId),
+  ],
+);
+
+// AGT-1 — the agent's RIB file, validated by the admin (spec §2 « Coordonnées bancaires »). One row
+// per deposit: the latest row is the current status; the latest 'valide' row is the RIB in use
+// (a new deposit never unseats it until validated).
+export const agentRibStatus = pgEnum('agent_rib_status', ['en_attente', 'valide', 'refuse']);
+
+export const agentRibSubmissions = pgTable(
+  'agent_rib_submissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    storageKey: text('storage_key').notNull(),
+    fileName: text('file_name').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    status: agentRibStatus('status').notNull().default('en_attente'),
+    refusalReason: text('refusal_reason'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  },
+  (table) => [index('agent_rib_submissions_agent_idx').on(table.agentUserId, table.submittedAt)],
+);
 
 export const agentReferrals = pgTable(
   'agent_referrals',
@@ -818,6 +928,324 @@ export const agentReferrals = pgTable(
   },
   // P2 reads agents' downlines by agent_user_id.
   (table) => [index('agent_referrals_agent_user_id_idx').on(table.agentUserId)],
+);
+
+// AGT-2 (agent specs v1.0 §6, rulings 2026-10-13) — the affiliation an agent earns commission on,
+// with its 24-month window. A Screencaster agent: one row per screencaster, from the validation
+// of its signup. A Screenhost agent: one row per VENUE (« un Screenhost est un établissement »),
+// 'en_attente_activation' until a first campaign completes there — its first day of diffusion
+// starts the 24 months. agent_referrals stays the signup audit trail; this table is what the
+// commission engine, the agent interfaces and the appointment modal read.
+export const agentAffiliationStatus = pgEnum('agent_affiliation_status', [
+  'en_attente_activation',
+  'en_cours',
+  'terminee',
+  'exclue',
+]);
+
+export const agentAffiliations = pgTable(
+  'agent_affiliations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id),
+    agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+    // The screencaster (SC) or the venue's owner (SH).
+    referredUserId: uuid('referred_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // SH only — the venue this affiliation is.
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'cascade' }),
+    attachedAt: timestamp('attached_at', { withTimezone: true }).notNull().defaultNow(),
+    // SC: the signup validation day. SH: the activation day (NULL until activated).
+    startDate: date('start_date'),
+    // start_date + 24 months, unless the admin amends it (avenant).
+    endDate: date('end_date'),
+    status: agentAffiliationStatus('status').notNull(),
+    // SH — a venue run by the agent itself earns nothing, unless a written convention exists.
+    exploitedByAgent: boolean('exploited_by_agent').notNull().default(false),
+    conventionRef: text('convention_ref'),
+    // 'key_account' | 'secteur_reserve' (SC), 'reaffecte', 'exclu' — why the row is 'exclue'.
+    exclusionReason: text('exclusion_reason'),
+    activationCampaignId: uuid('activation_campaign_id').references(() => campaigns.id, {
+      onDelete: 'set null',
+    }),
+    endReminderSentAt: timestamp('end_reminder_sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_affiliations_agent_idx').on(table.agentUserId),
+    // One live affiliation per venue (SH) and per screencaster (SC); an excluded row (a
+    // reassignment leaves one behind) does not count.
+    uniqueIndex('agent_affiliations_sh_live_uq')
+      .on(table.screenhostId)
+      .where(sql`${table.screenhostId} IS NOT NULL AND ${table.status} <> 'exclue'`),
+    uniqueIndex('agent_affiliations_sc_live_uq')
+      .on(table.referredUserId)
+      .where(sql`${table.screenhostId} IS NULL AND ${table.status} <> 'exclue'`),
+    check(
+      'agent_affiliations_shape',
+      sql`(${table.agentRole} = 'screenhost_agent') = (${table.screenhostId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export type AgentAffiliation = typeof agentAffiliations.$inferSelect;
+
+// AGT-3 (agent specs v1.0 §10, rulings 2026-10-13) — one commission line per (agent, campaign)
+// for a Screencaster agent, per (agent, campaign, venue) for a Screenhost agent. The rate is
+// FROZEN on the line when it is first written; the forecast follows the dispatch until the
+// settlement, which makes the line 'acquise' (or 'annulee'). A later correction is a separate
+// 'regularisation' line, never an edit of the original. 'historique' = a pre-AGT-3 settlement
+// line carried into the wallet (ruling A).
+export const agentCommissionLines = pgTable(
+  'agent_commission_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id),
+    agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, {
+      onDelete: 'cascade',
+    }),
+    affiliationId: uuid('affiliation_id').references(() => agentAffiliations.id, {
+      onDelete: 'set null',
+    }),
+    kind: text('kind')
+      .$type<'commission' | 'historique' | 'regularisation'>()
+      .notNull()
+      .default('commission'),
+    status: text('status')
+      .$type<'previsionnel' | 'acquise' | 'annulee'>()
+      .notNull()
+      .default('previsionnel'),
+    ratePct: numeric('rate_pct', { precision: 5, scale: 2 }).notNull(),
+    forecastTnd: numeric('forecast_tnd', { precision: 14, scale: 4 }).notNull().default('0'),
+    acquiredTnd: numeric('acquired_tnd', { precision: 14, scale: 4 }),
+    acquiredAt: timestamp('acquired_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_commission_lines_agent_idx').on(table.agentUserId),
+    index('agent_commission_lines_campaign_idx').on(table.campaignId),
+    uniqueIndex('agent_commission_lines_sc_uq')
+      .on(table.agentUserId, table.campaignId)
+      .where(sql`${table.screenhostId} IS NULL AND ${table.kind} <> 'regularisation'`),
+    uniqueIndex('agent_commission_lines_sh_uq')
+      .on(table.agentUserId, table.campaignId, table.screenhostId)
+      .where(sql`${table.screenhostId} IS NOT NULL AND ${table.kind} <> 'regularisation'`),
+    check(
+      'agent_commission_lines_kind',
+      sql`${table.kind} in ('commission', 'historique', 'regularisation')`,
+    ),
+    check(
+      'agent_commission_lines_status',
+      sql`${table.status} in ('previsionnel', 'acquise', 'annulee')`,
+    ),
+  ],
+);
+
+export type AgentCommissionLine = typeof agentCommissionLines.$inferSelect;
+
+// AGT-3 — the agent's monthly payout (spec §10 « Versements »): prepared in the hub for a
+// positive balance with a validated RIB; a Screencaster agent's needs his invoice (ruling Q5 A)
+// before the admin marks it 'effectue', which is what debits the wallet.
+export const agentPayouts = pgTable(
+  'agent_payouts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id),
+    month: text('month').notNull(),
+    amountTnd: numeric('amount_tnd', { precision: 14, scale: 4 }).notNull(),
+    status: text('status')
+      .$type<'en_preparation' | 'effectue'>()
+      .notNull()
+      .default('en_preparation'),
+    invoiceKey: text('invoice_key'),
+    invoiceFileName: text('invoice_file_name'),
+    invoiceUploadedAt: timestamp('invoice_uploaded_at', { withTimezone: true }),
+    preparedAt: timestamp('prepared_at', { withTimezone: true }).notNull().defaultNow(),
+    preparedBy: uuid('prepared_by').references(() => users.id),
+    transferDate: date('transfer_date'),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    paidBy: uuid('paid_by').references(() => users.id),
+  },
+  (table) => [
+    unique('agent_payouts_agent_month_uq').on(table.agentUserId, table.month),
+    check('agent_payouts_status', sql`${table.status} in ('en_preparation', 'effectue')`),
+    check('agent_payouts_month', sql`${table.month} ~ '^[0-9]{4}-[0-9]{2}$'`),
+  ],
+);
+
+export type AgentPayout = typeof agentPayouts.$inferSelect;
+
+// AGT-5 (agent specs v1.0 §7) — the agent's appointment calendar. Only UNAVAILABLE days are
+// stored (no row = available, the Screenhost calendar's logic).
+export const agentUnavailableDays = pgTable(
+  'agent_unavailable_days',
+  {
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.agentUserId, table.day] })],
+);
+
+// The appointment reasons, per agent type, administered in the hub.
+export const agentAppointmentObjectives = pgTable('agent_appointment_objectives', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+  label: text('label').notNull(),
+  position: integer('position').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AgentAppointmentStatus =
+  | 'en_attente'
+  | 'nouvel_horaire'
+  | 'confirme'
+  | 'annule'
+  | 'expire';
+
+// One appointment between an agent and an affiliate (a Screencaster, or a Screenhost owner for
+// one venue). A slot (agent, day, hour) held by a live request is unique; « Passé » is derived.
+export const agentAppointments = pgTable(
+  'agent_appointments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    affiliateUserId: uuid('affiliate_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'set null' }),
+    objectiveId: uuid('objective_id').references(() => agentAppointmentObjectives.id),
+    day: date('day').notNull(),
+    hour: integer('hour').notNull(),
+    message: text('message'),
+    status: text('status').$type<AgentAppointmentStatus>().notNull().default('en_attente'),
+    proposedDay: date('proposed_day'),
+    proposedHour: integer('proposed_hour'),
+    cancelledBy: text('cancelled_by').$type<'agent' | 'affilie'>(),
+    reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_appointments_agent_idx').on(table.agentUserId),
+    index('agent_appointments_affiliate_idx').on(table.affiliateUserId),
+    uniqueIndex('agent_appointments_slot_uq')
+      .on(table.agentUserId, table.day, table.hour)
+      .where(sql`${table.status} in ('en_attente', 'nouvel_horaire', 'confirme')`),
+    check(
+      'agent_appointments_status',
+      sql`${table.status} in ('en_attente', 'nouvel_horaire', 'confirme', 'annule', 'expire')`,
+    ),
+    check('agent_appointments_hour', sql`${table.hour} between 0 and 23`),
+  ],
+);
+
+export type AgentAppointment = typeof agentAppointments.$inferSelect;
+
+// AGT-7 (Agent Screenhost spec v1.0 §6 « Suivi de mes Screenhosts ») — one row per venue and day,
+// computed by the daily follow-up job from the engine's sources. The score and its four rates
+// are the engine's own (lib/sps-score); the 30-day trend and the 90-day curve read these rows.
+export const agentShFollowupSnapshots = pgTable(
+  'agent_sh_followup_snapshots',
+  {
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    sps: numeric('sps', { precision: 5, scale: 2 }),
+    acceptation: numeric('acceptation', { precision: 5, scale: 2 }),
+    respectEvenements: numeric('respect_evenements', { precision: 5, scale: 2 }),
+    activite: numeric('activite', { precision: 5, scale: 2 }),
+    remplissage: numeric('remplissage', { precision: 5, scale: 2 }),
+    offersReceived: integer('offers_received').notNull().default(0),
+    offersAccepted: integer('offers_accepted').notNull().default(0),
+    offersRefused: integer('offers_refused').notNull().default(0),
+    offersNoAnswer: integer('offers_no_answer').notNull().default(0),
+    missedOffline: integer('missed_offline').notNull().default(0),
+    missedEvent: integer('missed_event').notNull().default(0),
+    unavailableDays: integer('unavailable_days').notNull().default(0),
+    lastDiffusionAt: timestamp('last_diffusion_at', { withTimezone: true }),
+    signals: jsonb('signals').$type<string[]>().notNull().default([]),
+    computedAt: timestamp('computed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.screenhostId, table.day] })],
+);
+
+export type AgentShFollowupSnapshot = typeof agentShFollowupSnapshots.$inferSelect;
+
+// The hub's attention-point thresholds (one row). Initial values: the agents' training programme.
+export const agentAttentionThresholds = pgTable(
+  'agent_attention_thresholds',
+  {
+    id: integer('id').primaryKey().default(1),
+    refusPct: numeric('refus_pct', { precision: 5, scale: 2 }).notNull().default('30'),
+    sansReponseCount: integer('sans_reponse_count').notNull().default(2),
+    activitePct: numeric('activite_pct', { precision: 5, scale: 2 }).notNull().default('70'),
+    evenementCount: integer('evenement_count').notNull().default(1),
+    inactiviteDays: integer('inactivite_days').notNull().default(30),
+    baisseScorePoints: numeric('baisse_score_points', { precision: 5, scale: 2 })
+      .notNull()
+      .default('10'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (table) => [check('agent_attention_thresholds_singleton', sql`${table.id} = 1`)],
+);
+
+// Each attention point's appearance and disappearance, for the hub's venue sheet.
+export const agentAttentionEvents = pgTable(
+  'agent_attention_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    signal: text('signal').notNull(),
+    appearedAt: timestamp('appeared_at', { withTimezone: true }).notNull().defaultNow(),
+    clearedAt: timestamp('cleared_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('agent_attention_events_sh_idx').on(table.screenhostId),
+    uniqueIndex('agent_attention_events_open_uq')
+      .on(table.screenhostId, table.signal)
+      .where(sql`${table.clearedAt} IS NULL`),
+  ],
+);
+
+// AGT-6 (agent specs v1.0 §8 « Actualité Toodooh ») — news the hub publishes to agents.
+export const agentNews = pgTable(
+  'agent_news',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    audience: text('audience').$type<'all' | 'screencast_agent' | 'screenhost_agent'>().notNull(),
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'agent_news_audience',
+      sql`${table.audience} in ('all', 'screencast_agent', 'screenhost_agent')`,
+    ),
+  ],
 );
 
 export type Agent = typeof agents.$inferSelect;
@@ -2110,7 +2538,14 @@ export const notifications = pgTable(
     title: text('title').notNull(),
     body: text('body').notNull(),
     campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
+    // AGT-5/6 — where « Consulter » goes, and the appointment a request notice acts on.
+    link: text('link'),
+    appointmentId: uuid('appointment_id').references((): AnyPgColumn => agentAppointments.id, {
+      onDelete: 'set null',
+    }),
     readAt: timestamp('read_at', { withTimezone: true }),
+    // AGT-6 — when the email double of an agent notification went out (spec §8).
+    emailedAt: timestamp('emailed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('notifications_user_id_idx').on(table.userId)],
@@ -2380,6 +2815,8 @@ export const supportMessages = pgTable(
     objective: text('objective').notNull(),
     otherDetail: text('other_detail'),
     message: text('message'),
+    // AGT-1b — the page the request was sent from (agent Support modal, spec §9).
+    originPage: text('origin_page'),
     // ISO date (YYYY-MM-DD) — an appointment WISH, not a booking; NULL for a support message.
     appointmentDate: date('appointment_date'),
     status: supportStatus('status').notNull().default('new'),
