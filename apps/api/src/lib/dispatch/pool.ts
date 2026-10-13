@@ -157,6 +157,7 @@ export const assemblePool = async (
       id: screenhosts.id,
       ownerApproved: ownerApprovedSql(),
       installedScreen: venueHasInstalledScreenSql(),
+      demoOnly: screenhosts.demoOnly,
       sps: screenhosts.sps,
       businessSectorId: screenhosts.businessSectorId,
       class: screenhosts.class,

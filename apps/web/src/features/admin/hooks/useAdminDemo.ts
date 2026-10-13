@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   adminDemoService,
   type CreateDemoAccountBody,
+  type CreateDemoScreenhostBody,
 } from '@/features/admin/services/admin-demo.service';
 
 import { adminKeys } from './queryKeys';
@@ -43,3 +44,9 @@ export const useCreditDemoAccount = () =>
 
 export const useDeleteDemoAccount = () =>
   useDemoMutation((id: string) => adminDemoService.deleteAccount(id));
+
+export const useCreateDemoScreenhost = () =>
+  useDemoMutation((body: CreateDemoScreenhostBody) => adminDemoService.createScreenhost(body));
+
+export const useDeleteDemoScreenhost = () =>
+  useDemoMutation((id: string) => adminDemoService.deleteScreenhost(id));

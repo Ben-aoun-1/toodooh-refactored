@@ -391,6 +391,10 @@ export const screenhosts = pgTable(
     // to events; its numeric value is unused, and standard campaigns never read it. One home for the
     // rule: lib/event-pricing/event-switch.ts. Nullable = switch off.
     broadcastCapacity: integer('broadcast_capacity'),
+    // DEMO-2 (operator 2026-10-13, rulings A A) — a DEMO SCREENHOST: a venue created by the admin
+    // for demos only (no owner, no screen, random audience). It exists solely for demo
+    // screencasters' campaigns and maps; every other reader skips it (lib/demo.ts).
+    demoOnly: boolean('demo_only').notNull().default(false),
     // SPS — Screenhost Priority Score (qualité/fiabilité), 0–100. NEUTRAL default 50 for every row;
     // the real computation (TxActivité/TxRespect from proof-of-play) is DEFERRED to L-playout, so in
     // V1 all rows tie on SPS and L-disp falls to the ancienneté tiebreak (correct for V1).

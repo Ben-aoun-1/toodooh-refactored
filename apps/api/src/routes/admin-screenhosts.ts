@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
+import { type SQL, and, asc, count, desc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { screenhosts, screens, users } from '../db/schema.js';
+import { realVenueSql } from '../lib/demo.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { isScreenInstalled, screenIsInstalledSql } from '../lib/installed-screen.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -132,7 +133,8 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
       else 'inactive'
     end`;
 
-    const conditions = [];
+    // DEMO-2 — demo screenhosts live on the « Démo » page, not in the venue list.
+    const conditions: (SQL | undefined)[] = [realVenueSql()];
     if (owner_id) conditions.push(eq(screenhosts.ownerId, owner_id));
     if (search) {
       const pattern = `%${escapeLike(search)}%`;
@@ -145,7 +147,7 @@ export const adminScreenhostsRoutes: FastifyPluginAsync = async (app) => {
       );
     }
     if (status) conditions.push(sql`${statusExpr} = ${status}`);
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     const [[totalRow], rows] = await Promise.all([
       db

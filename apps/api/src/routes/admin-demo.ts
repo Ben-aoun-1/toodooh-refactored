@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import {
   accounts,
+  businessSectors,
   campaigns,
   demoScreenhosts,
   dispatchConfig,
@@ -14,7 +15,12 @@ import {
   users,
   walletAdjustments,
 } from '../db/schema.js';
-import { DEMO_DELAY_MAX_MINUTES, demoDelayMinutes } from '../lib/demo.js';
+import {
+  createDemoScreenhost,
+  listDemoScreenhosts,
+  removeDemoScreenhost,
+} from '../lib/demo-screenhosts.js';
+import { DEMO_DELAY_MAX_MINUTES, demoDelayMinutes, realVenueSql } from '../lib/demo.js';
 import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
 import { MAX_RECHARGE_TND, walletSpendable } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -42,6 +48,28 @@ const createSchema = z.object({
   balance_tnd: amountSchema,
 });
 const creditSchema = z.object({ amount_tnd: amountSchema });
+const hourSchema = z.number().int().min(0).max(23);
+const demoScreenhostSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    city: z.string().trim().min(1).max(200).nullable().optional(),
+    business_sector_id: z.uuid().nullable().optional(),
+    class: z.enum(['populaire', 'moyen', 'premium']).nullable().optional(),
+    opening_hour: hourSchema,
+    closing_hour: hourSchema,
+    audience_min: z.number().int().min(0).max(100_000),
+    audience_max: z.number().int().min(1).max(100_000),
+  })
+  .refine((v) => v.opening_hour !== v.closing_hour, {
+    path: ['closing_hour'],
+    message: 'opening and closing hours must differ',
+  })
+  .refine((v) => v.audience_min <= v.audience_max, {
+    path: ['audience_max'],
+    message: 'audience_max must be ≥ audience_min',
+  });
 
 /** The profile every demo account is born with (Q5 A — the admin types the rest). */
 const DEMO_PROFILE = {
@@ -129,7 +157,8 @@ const loadVenues = async () => {
     })
     .from(screenhosts)
     .leftJoin(users, eq(screenhosts.ownerId, users.id))
-    .where(eq(screenhosts.isActive, true))
+    // DEMO-2 — the picker lists REAL venues; demo screenhosts are always open to demos.
+    .where(and(eq(screenhosts.isActive, true), realVenueSql()))
     .orderBy(asc(screenhosts.name));
   return rows.map((r) => ({
     id: r.id,
@@ -156,9 +185,58 @@ export const adminDemoRoutes: FastifyPluginAsync = async (app) => {
     reply.status(200).send({
       delay_minutes: await demoDelayMinutes(),
       venues: await loadVenues(),
+      demo_screenhosts: await listDemoScreenhosts(),
+      // The venue sectors a demo screenhost may take (owner-audience, by display order).
+      sectors: await db
+        .select({ id: businessSectors.id, name: businessSectors.name })
+        .from(businessSectors)
+        .where(eq(businessSectors.audience, 'owner'))
+        .orderBy(asc(businessSectors.displayOrder), asc(businessSectors.name)),
       accounts: await loadAccounts(),
     }),
   );
+
+  // POST /api/admin/demo/screenhosts — a demo screenhost (DEMO-2): a map point with a random
+  // typical-week audience, for demo screencasters only.
+  app.post('/api/admin/demo/screenhosts', adminGuard, async (request, reply) => {
+    const parsed = demoScreenhostSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return invalid(reply, parsed.error.issues);
+    const v = parsed.data;
+    const sectorId = v.business_sector_id ?? null;
+    if (sectorId) {
+      const [sector] = await db
+        .select({ id: businessSectors.id })
+        .from(businessSectors)
+        .where(and(eq(businessSectors.id, sectorId), eq(businessSectors.audience, 'owner')));
+      if (!sector) {
+        return reply.status(400).send({ error: 'UNKNOWN_SECTOR', message: 'Unknown sector id.' });
+      }
+    }
+    const id = await createDemoScreenhost({
+      name: v.name,
+      latitude: v.latitude,
+      longitude: v.longitude,
+      city: v.city ?? null,
+      businessSectorId: sectorId,
+      class: v.class ?? null,
+      openingHour: v.opening_hour,
+      closingHour: v.closing_hour,
+      audienceMin: v.audience_min,
+      audienceMax: v.audience_max,
+    });
+    const created = (await listDemoScreenhosts()).find((s) => s.id === id);
+    return reply.status(201).send(created);
+  });
+
+  // DELETE /api/admin/demo/screenhosts/:id — deactivates it (campaigns already placed keep it).
+  app.delete('/api/admin/demo/screenhosts/:id', adminGuard, async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) return invalid(reply, params.error.issues);
+    if (!(await removeDemoScreenhost(params.data.id))) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such demo screenhost.' });
+    }
+    return reply.status(200).send({ deleted: params.data.id });
+  });
 
   // PATCH /api/admin/demo/config {delay_minutes} — minutes from a demo confirm to the TV.
   app.patch('/api/admin/demo/config', adminGuard, async (request, reply) => {

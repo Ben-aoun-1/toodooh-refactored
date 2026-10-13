@@ -31,10 +31,43 @@ export interface DemoAccount {
   campaigns: DemoCampaign[];
 }
 
+/** DEMO-2 — a demo screenhost: a map point with a random audience, for demo accounts only. */
+export interface DemoScreenhost {
+  id: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+  city: string | null;
+  sector_name: string | null;
+  class: string | null;
+  opening_hour: number | null;
+  closing_hour: number | null;
+  created_at: string;
+}
+
+export interface DemoSector {
+  id: string;
+  name: string;
+}
+
 export interface DemoPage {
   delay_minutes: number;
   venues: DemoVenue[];
+  demo_screenhosts: DemoScreenhost[];
+  sectors: DemoSector[];
   accounts: DemoAccount[];
+}
+
+export interface CreateDemoScreenhostBody {
+  name: string;
+  latitude: number;
+  longitude: number;
+  city?: string;
+  business_sector_id?: string;
+  opening_hour: number;
+  closing_hour: number;
+  audience_min: number;
+  audience_max: number;
 }
 
 export interface CreateDemoAccountBody {
@@ -58,6 +91,12 @@ export const adminDemoService = {
     return apiClient.put<{ venues: DemoVenue[] }>('/admin/demo/venues', {
       screenhost_ids: screenhostIds,
     });
+  },
+  createScreenhost(body: CreateDemoScreenhostBody): Promise<DemoScreenhost> {
+    return apiClient.post<DemoScreenhost>('/admin/demo/screenhosts', body);
+  },
+  deleteScreenhost(id: string): Promise<{ deleted: string }> {
+    return apiClient.del<{ deleted: string }>(`/admin/demo/screenhosts/${id}`);
   },
   createAccount(body: CreateDemoAccountBody): Promise<DemoAccount> {
     return apiClient.post<DemoAccount>('/admin/demo/accounts', body);

@@ -1,5 +1,5 @@
 import { fromZonedTime } from 'date-fns-tz';
-import { type SQL, eq, sql } from 'drizzle-orm';
+import { type SQL, and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -7,6 +7,7 @@ import {
   campaigns,
   demoScreenhosts,
   dispatchConfig,
+  screenhosts,
   users,
 } from '../db/schema.js';
 
@@ -49,11 +50,19 @@ export const isDemoCampaign = async (executor: Executor, campaignId: string): Pr
   return row?.isDemo ?? false;
 };
 
-/** The venues opened to demo campaigns (Q2 A). */
+/** The venues opened to demo campaigns (Q2 A): the real ones the admin ticked, plus every demo
+ *  screenhost (DEMO-2 — created for demos, always open to them). */
 export const demoVenueIds = async (executor: Executor): Promise<Set<string>> => {
   const rows = await executor.select({ id: demoScreenhosts.screenhostId }).from(demoScreenhosts);
-  return new Set(rows.map((r) => r.id));
+  const synthetic = await executor
+    .select({ id: screenhosts.id })
+    .from(screenhosts)
+    .where(and(eq(screenhosts.demoOnly, true), eq(screenhosts.isActive, true)));
+  return new Set([...rows.map((r) => r.id), ...synthetic.map((r) => r.id)]);
 };
+
+/** SQL predicate on `screenhosts`: the row is a REAL venue (not a DEMO-2 demo screenhost). */
+export const realVenueSql = (): SQL => sql`${screenhosts.demoOnly} = false`;
 
 /** The admin-set delay between a demo cart confirm and the TV (Q3 A). */
 export const demoDelayMinutes = async (executor: Executor = db): Promise<number> => {

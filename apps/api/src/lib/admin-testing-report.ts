@@ -13,6 +13,7 @@ import {
 
 import { campaignsOnVenue, hourStatuses, isElapsed } from './admin-testing-status.js';
 import { tunisDateOf } from './campaign-dates.js';
+import { realVenueSql } from './demo.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
 import { computeAmax } from './event-pricing/pricing.js';
@@ -100,6 +101,7 @@ export const listTestingScreenhosts = async () => {
       createdAt: screenhosts.createdAt,
     })
     .from(screenhosts)
+    .where(realVenueSql()) // DEMO-2 — demo screenhosts have nothing to test
     .orderBy(asc(screenhosts.name));
   return {
     screenhosts: rows.map((r) => ({
