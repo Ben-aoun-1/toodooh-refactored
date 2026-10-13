@@ -37,6 +37,7 @@ const DEFAULT_LINKS: Record<string, string> = {
   agent_rib_validated: '/agent/parametres',
   agent_rib_refused: '/agent/parametres',
   agent_news: '/agent',
+  agent_attention: '/agent/affilies',
 };
 
 /** Where « Consulter » goes: the notification's own link, else its type's page, else none. */

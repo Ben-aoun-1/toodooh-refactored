@@ -11,6 +11,7 @@ import {
   agentScAffiliates,
   variationPct,
 } from '../lib/agent-portfolio.js';
+import { shAgentAffiliates, shAgentCampaigns } from '../lib/agent-sh-portfolio.js';
 import { isAgentRole } from '../lib/agent-sheet.js';
 import { agentWallet } from '../lib/agent-wallet.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
@@ -22,8 +23,9 @@ import { agentCgeGate } from './agent-account.js';
 // only, behind the CGE gate. No CPM, no split key, no Screenhost identity ever leaves (§13).
 
 const scGuard = {
-  preHandler: [requireAuth, requireRole('screencast_agent'), agentCgeGate],
+  preHandler: [requireAuth, requireRole('screencast_agent', 'screenhost_agent'), agentCgeGate],
 };
+const isSh = (role: string | undefined) => role === 'screenhost_agent';
 
 export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/agent/dashboard — the ten blocks' data (appointments + notifications come from
@@ -40,8 +42,40 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(agents.userId, id))
       .limit(1);
     const createdAt = me?.createdAt ?? now;
-    const campaignsView = await agentCampaigns(id, now);
-    const affiliates = await agentScAffiliates(id, campaignsView);
+    // AGT-7 — the Screenhost agent's blocks read his own lists; « affiliés » counts the venues
+    // pending activation or affiliated, and a venue with an attention point carries the flag.
+    const sh = isSh(role);
+    let campaignsView: { status: string; start_date: string | null; impressions: number }[];
+    let affiliates: {
+      id: string;
+      name: string;
+      status: string;
+      attached_at: string;
+      attention: string[];
+    }[];
+    if (sh) {
+      const view = await shAgentCampaigns(id, now);
+      campaignsView = view;
+      affiliates = (await shAgentAffiliates(id, view, now)).map((a) => ({
+        id: a.screenhost_id,
+        name: a.name,
+        status: a.status,
+        attached_at: a.attached_at,
+        attention: a.attention,
+      }));
+    } else {
+      const view = await agentCampaigns(id, now);
+      campaignsView = view;
+      affiliates = (await agentScAffiliates(id, view)).map((a) => ({
+        id: a.user_id,
+        name: a.name,
+        status: a.status,
+        attached_at: a.attached_at,
+        attention: [],
+      }));
+    }
+    const counted = (status: string) =>
+      status === 'en_cours' || (sh && status === 'en_attente_activation');
 
     const yearAgo = subMonths(now, 12);
     const twoYearsAgo = subMonths(now, 24);
@@ -64,7 +98,7 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
         createdAt,
         now,
       ),
-      affiliates_active: affiliates.filter((a) => a.status === 'en_cours').length,
+      affiliates_active: affiliates.filter((a) => counted(a.status)).length,
       affiliates_variation_pct: variationPct(
         affiliatesIn(yearAgo, now),
         affiliatesIn(twoYearsAgo, yearAgo),
@@ -79,7 +113,9 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
         now,
       ),
       rank: await agentRank(id, role, now),
-      recent_affiliates: affiliates.slice(0, 8).map((a) => ({ id: a.user_id, name: a.name })),
+      recent_affiliates: affiliates
+        .slice(0, 8)
+        .map((a) => ({ id: a.id, name: a.name, attention: a.attention.length })),
       current_campaigns: campaignsView
         .filter((c) => live(c.status))
         .sort((a, b) =>
@@ -96,14 +132,21 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/agent/campaigns — « Mes campagnes affiliées » (counters are derived client-side
   // from the same list, so Total = Actives + À venir + Terminées by construction).
   app.get('/api/agent/campaigns', scGuard, async (request, reply) => {
-    return reply
-      .status(200)
-      .send({ campaigns: await agentCampaigns(request.user?.id ?? '', new Date()) });
+    const id = request.user?.id ?? '';
+    return reply.status(200).send({
+      campaigns: isSh(request.user?.role)
+        ? await shAgentCampaigns(id, new Date())
+        : await agentCampaigns(id, new Date()),
+    });
   });
 
   // GET /api/agent/affiliates — « Mes Screencasters affiliés ».
   app.get('/api/agent/affiliates', scGuard, async (request, reply) => {
     const id = request.user?.id ?? '';
+    if (isSh(request.user?.role)) {
+      const view = await shAgentCampaigns(id, new Date());
+      return reply.status(200).send({ affiliates: await shAgentAffiliates(id, view) });
+    }
     const view = await agentCampaigns(id, new Date());
     return reply.status(200).send({ affiliates: await agentScAffiliates(id, view) });
   });

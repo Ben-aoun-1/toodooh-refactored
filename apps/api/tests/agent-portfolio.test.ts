@@ -214,7 +214,7 @@ describe('AGT-4 — the Screencaster agent portfolio', () => {
     expect(dash.impressions_total).toBe(list.reduce((s, c) => s + c.impressions, 0));
     expect(dash).toMatchObject({ affiliates_active: 1, rank: 1 });
     expect(dash.current_campaigns.map((c) => c.name)).toEqual(['Ramadan']);
-    expect(dash.recent_affiliates).toEqual([{ id: sc, name: 'Pâtisserie Lina' }]);
+    expect(dash.recent_affiliates).toEqual([{ id: sc, name: 'Pâtisserie Lina', attention: 0 }]);
 
     const affs = (await app.inject({ method: 'GET', url: '/api/agent/affiliates' })).json<{
       affiliates: { revenue_tnd: number; impressions: number }[];

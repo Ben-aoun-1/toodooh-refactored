@@ -1159,6 +1159,76 @@ export const agentAppointments = pgTable(
 
 export type AgentAppointment = typeof agentAppointments.$inferSelect;
 
+// AGT-7 (Agent Screenhost spec v1.0 §6 « Suivi de mes Screenhosts ») — one row per venue and day,
+// computed by the daily follow-up job from the engine's sources. The score and its four rates
+// are the engine's own (lib/sps-score); the 30-day trend and the 90-day curve read these rows.
+export const agentShFollowupSnapshots = pgTable(
+  'agent_sh_followup_snapshots',
+  {
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    sps: numeric('sps', { precision: 5, scale: 2 }),
+    acceptation: numeric('acceptation', { precision: 5, scale: 2 }),
+    respectEvenements: numeric('respect_evenements', { precision: 5, scale: 2 }),
+    activite: numeric('activite', { precision: 5, scale: 2 }),
+    remplissage: numeric('remplissage', { precision: 5, scale: 2 }),
+    offersReceived: integer('offers_received').notNull().default(0),
+    offersAccepted: integer('offers_accepted').notNull().default(0),
+    offersRefused: integer('offers_refused').notNull().default(0),
+    offersNoAnswer: integer('offers_no_answer').notNull().default(0),
+    missedOffline: integer('missed_offline').notNull().default(0),
+    missedEvent: integer('missed_event').notNull().default(0),
+    unavailableDays: integer('unavailable_days').notNull().default(0),
+    lastDiffusionAt: timestamp('last_diffusion_at', { withTimezone: true }),
+    signals: jsonb('signals').$type<string[]>().notNull().default([]),
+    computedAt: timestamp('computed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.screenhostId, table.day] })],
+);
+
+export type AgentShFollowupSnapshot = typeof agentShFollowupSnapshots.$inferSelect;
+
+// The hub's attention-point thresholds (one row). Initial values: the agents' training programme.
+export const agentAttentionThresholds = pgTable(
+  'agent_attention_thresholds',
+  {
+    id: integer('id').primaryKey().default(1),
+    refusPct: numeric('refus_pct', { precision: 5, scale: 2 }).notNull().default('30'),
+    sansReponseCount: integer('sans_reponse_count').notNull().default(2),
+    activitePct: numeric('activite_pct', { precision: 5, scale: 2 }).notNull().default('70'),
+    evenementCount: integer('evenement_count').notNull().default(1),
+    inactiviteDays: integer('inactivite_days').notNull().default(30),
+    baisseScorePoints: numeric('baisse_score_points', { precision: 5, scale: 2 })
+      .notNull()
+      .default('10'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (table) => [check('agent_attention_thresholds_singleton', sql`${table.id} = 1`)],
+);
+
+// Each attention point's appearance and disappearance, for the hub's venue sheet.
+export const agentAttentionEvents = pgTable(
+  'agent_attention_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    signal: text('signal').notNull(),
+    appearedAt: timestamp('appeared_at', { withTimezone: true }).notNull().defaultNow(),
+    clearedAt: timestamp('cleared_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('agent_attention_events_sh_idx').on(table.screenhostId),
+    uniqueIndex('agent_attention_events_open_uq')
+      .on(table.screenhostId, table.signal)
+      .where(sql`${table.clearedAt} IS NULL`),
+  ],
+);
+
 // AGT-6 (agent specs v1.0 §8 « Actualité Toodooh ») — news the hub publishes to agents.
 export const agentNews = pgTable(
   'agent_news',
