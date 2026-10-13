@@ -12,4 +12,10 @@ export const agentKeys = {
   /** AGT-1 — the account (status, CGE, onboarding, RIB) and the editable profile. */
   account: () => [...agentKeys.all, 'account'] as const,
   profile: () => [...agentKeys.all, 'profile'] as const,
+
+  /** AGT-3 / AGT-4 — wallet + payouts, the Dashboard, campaigns and affiliates. */
+  wallet: () => [...agentKeys.all, 'wallet'] as const,
+  dashboard: () => [...agentKeys.all, 'dashboard'] as const,
+  campaigns: () => [...agentKeys.all, 'campaigns'] as const,
+  affiliates: () => [...agentKeys.all, 'affiliates'] as const,
 };
