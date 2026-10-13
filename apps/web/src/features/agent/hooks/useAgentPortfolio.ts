@@ -44,3 +44,31 @@ export const useUploadPayoutInvoice = () => {
     },
   });
 };
+
+export const useShAgentCampaigns = () =>
+  useQuery({
+    queryKey: agentKeys.shCampaigns(),
+    queryFn: () => agentPortfolioService.shCampaigns(),
+    refetchOnMount: 'always',
+  });
+
+export const useShAgentAffiliates = () =>
+  useQuery({
+    queryKey: agentKeys.shAffiliates(),
+    queryFn: () => agentPortfolioService.shAffiliates(),
+    refetchOnMount: 'always',
+  });
+
+export const useAgentFollowup = () =>
+  useQuery({
+    queryKey: agentKeys.followup(),
+    queryFn: () => agentPortfolioService.followup(),
+    refetchOnMount: 'always',
+  });
+
+export const useFollowupSheet = (screenhostId: string | null) =>
+  useQuery({
+    queryKey: agentKeys.followupSheet(screenhostId ?? ''),
+    queryFn: () => agentPortfolioService.followupSheet(screenhostId ?? ''),
+    enabled: screenhostId !== null,
+  });

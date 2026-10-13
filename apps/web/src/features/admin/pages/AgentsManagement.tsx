@@ -9,6 +9,7 @@ import { AgentPayoutsPanel } from '@/features/admin/components/agents/AgentPayou
 import { AgentRibQueue } from '@/features/admin/components/agents/AgentRibQueue';
 import { AgentSheetDrawer } from '@/features/admin/components/agents/AgentSheetDrawer';
 import { AgentsTable } from '@/features/admin/components/agents/AgentsTable';
+import { AgentThresholdsPanel } from '@/features/admin/components/agents/AgentThresholdsPanel';
 import { useAgentsList } from '@/features/admin/hooks/useAdminAgents';
 
 // AGT-1 (agent specs v1.0 §2, ruling Q1 A) — « Agents »: every Agent Screencaster and Agent
@@ -22,6 +23,7 @@ const TABS = [
   ['cge', 'CGE'],
   ['objectives', 'Rendez-vous'],
   ['news', 'Actualités'],
+  ['thresholds', 'Suivi'],
 ] as const;
 
 export default function AgentsManagement() {
@@ -66,6 +68,7 @@ export default function AgentsManagement() {
           {tab === 'cge' && <AgentCgePanel />}
           {tab === 'objectives' && <AgentObjectivesPanel />}
           {tab === 'news' && <AgentNewsPanel />}
+          {tab === 'thresholds' && <AgentThresholdsPanel />}
         </div>
       </div>
       {openId && <AgentSheetDrawer id={openId} onClose={() => setOpenId(null)} />}

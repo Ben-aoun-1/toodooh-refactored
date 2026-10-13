@@ -149,6 +149,23 @@ export interface AgentNewsRow {
   published_at: string;
 }
 
+export interface AttentionThresholds {
+  refus_pct: number;
+  sans_reponse_count: number;
+  activite_pct: number;
+  evenement_count: number;
+  inactivite_days: number;
+  baisse_score_points: number;
+}
+
+export interface AttentionEventRow {
+  id: string;
+  signal: string;
+  label: string;
+  appeared_at: string;
+  cleared_at: string | null;
+}
+
 export type AgentSheetPatch = Partial<{
   first_name: string;
   last_name: string;
@@ -218,6 +235,15 @@ export const adminAgentsService = {
     audience: AgentNewsRow['audience'];
   }): Promise<{ id: string; recipients: number }> {
     return apiClient.post('/admin/agent-news', body);
+  },
+  thresholds(): Promise<AttentionThresholds> {
+    return apiClient.get('/admin/agent-attention-thresholds');
+  },
+  saveThresholds(body: Partial<AttentionThresholds>): Promise<{ ok: true }> {
+    return apiClient.put('/admin/agent-attention-thresholds', body);
+  },
+  attentionEvents(affiliationId: string): Promise<{ events: AttentionEventRow[] }> {
+    return apiClient.get(`/admin/agent-affiliations/${affiliationId}/attention`);
   },
   ribs(status: 'en_attente' | 'valide' | 'refuse'): Promise<{ ribs: AgentRibRow[] }> {
     return apiClient.get(`/admin/agent-ribs?status=${status}`);

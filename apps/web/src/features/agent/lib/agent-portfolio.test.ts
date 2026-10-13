@@ -4,7 +4,11 @@ import type { AgentCampaign } from '../services/agent-portfolio.service';
 
 import {
   campaignCounters,
+  cardModel,
   filterCampaigns,
+  filterShCampaigns,
+  scoreLabel,
+  sortFollowup,
   frDate,
   initialsOf,
   variationLabel,
@@ -53,5 +57,53 @@ describe('AGT-4 — agent portfolio rules', () => {
     expect(variationLabel(12.5)).toEqual({ text: '+12,5 %', up: true });
     expect(variationLabel(-3)).toEqual({ text: '−3 %', up: false });
     expect(variationLabel(null)).toBeNull();
+  });
+});
+
+describe('AGT-7 — the Screenhost agent views', () => {
+  it('a Screenhost campaign card shows the advertiser and the venues touched', () => {
+    const sh = {
+      id: 's',
+      name: 'Ramadan',
+      type: 'standard' as const,
+      status: 'active' as const,
+      start_date: '2026-10-01',
+      end_date: '2026-10-30',
+      advertiser_name: 'Pâtisserie Lina',
+      venues: [
+        { id: 'v1', name: 'Café Nord', impressions: 10 },
+        { id: 'v2', name: 'Café Sud', impressions: 5 },
+      ],
+      venues_touched: 2,
+      impressions: 15,
+      revenue_tnd: 1,
+      forecast_tnd: 2,
+    };
+    expect(cardModel(sh)).toMatchObject({
+      avatar_name: 'Pâtisserie Lina',
+      subtitle: 'Pâtisserie Lina — 2 Screenhosts touchés',
+    });
+    expect(filterShCampaigns([sh], 'all', 'cafe sud', null)).toHaveLength(1);
+    expect(filterShCampaigns([sh], 'all', '', 'v3')).toHaveLength(0);
+  });
+
+  it('follow-up: attention first, then the lowest score; a dash without offers', () => {
+    const r = (name: string, sps: number | null, attention: number) => ({
+      screenhost_id: name,
+      name,
+      status: 'en_cours' as const,
+      sps,
+      trend: null,
+      refused: 0,
+      no_answer: 0,
+      missed: 0,
+      attention: Array.from({ length: attention }, (_, i) => ({ key: `k${i}`, label: 'x' })),
+      computed_at: null,
+    });
+    const rows = [r('A', 80, 0), r('B', 40, 0), r('C', 90, 1), r('D', null, 0)];
+    expect(sortFollowup(rows, 'default').map((x) => x.name)).toEqual(['C', 'B', 'A', 'D']);
+    expect(sortFollowup(rows, 'name').map((x) => x.name)).toEqual(['A', 'B', 'C', 'D']);
+    expect(scoreLabel(null)).toBe('—');
+    expect(scoreLabel(71.6)).toBe('72 / 100');
   });
 });

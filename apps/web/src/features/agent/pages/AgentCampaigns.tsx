@@ -7,14 +7,17 @@ import { AgentAvatar } from '@/features/agent/components/portfolio/AgentAvatar';
 import { AgentCampaignCard } from '@/features/agent/components/portfolio/AgentCampaignCard';
 import { AgentCampaignDrawer } from '@/features/agent/components/portfolio/AgentCampaignDrawer';
 import { CampaignStatusBadge } from '@/features/agent/components/portfolio/CampaignStatusBadge';
+import { ShCampaignsView } from '@/features/agent/components/portfolio/ShCampaignsView';
 import { ViewToggle } from '@/features/agent/components/portfolio/ViewToggle';
 import { useAgentCampaigns } from '@/features/agent/hooks/useAgentPortfolio';
 import {
   type CampaignTab,
   campaignCounters,
+  cardModel,
   filterCampaigns,
   frDate,
 } from '@/features/agent/lib/agent-portfolio';
+import { agentKindOf } from '@/features/agent/lib/agent-shell';
 import type { AgentCampaign } from '@/features/agent/services/agent-portfolio.service';
 import { useAgentViewStore, viewOf } from '@/features/agent/stores/agent-view.store';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -36,7 +39,7 @@ const EMPTY =
  * tabs, search on campaign or Screencaster, cards (default) or table remembered per agent, and
  * the detail drawer. `?affilie=<id>` narrows the list to one Screencaster (from Mes Screencasters).
  */
-export default function AgentCampaigns() {
+function ScCampaignsView() {
   const userId = useAuthStore((s) => s.user?.id);
   const views = useAgentViewStore((s) => s.views);
   const setView = useAgentViewStore((s) => s.setView);
@@ -55,7 +58,7 @@ export default function AgentCampaigns() {
     : null;
 
   return (
-    <AgentLayout page="campaigns">
+    <>
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {(
@@ -120,7 +123,7 @@ export default function AgentCampaigns() {
         ) : view === 'cards' ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((c) => (
-              <AgentCampaignCard key={c.id} campaign={c} onOpen={setOpen} />
+              <AgentCampaignCard key={c.id} campaign={cardModel(c)} onOpen={() => setOpen(c)} />
             ))}
           </div>
         ) : (
@@ -174,6 +177,16 @@ export default function AgentCampaigns() {
         )}
       </div>
       <AgentCampaignDrawer campaign={open} onClose={() => setOpen(null)} />
+    </>
+  );
+}
+
+/** AGT-4 / AGT-7 — « Mes campagnes affiliées » of the agent's type. */
+export default function AgentCampaigns() {
+  const role = useAuthStore((s) => s.role);
+  return (
+    <AgentLayout page="campaigns">
+      {agentKindOf(role) === 'screenhost' ? <ShCampaignsView /> : <ScCampaignsView />}
     </AgentLayout>
   );
 }

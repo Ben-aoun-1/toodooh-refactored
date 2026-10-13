@@ -7,9 +7,14 @@ import { AgentCampaignCard } from '@/features/agent/components/portfolio/AgentCa
 import { AgentCampaignDrawer } from '@/features/agent/components/portfolio/AgentCampaignDrawer';
 import { CopyCode } from '@/features/agent/components/portfolio/CopyCode';
 import { PayoutsDrawer } from '@/features/agent/components/portfolio/PayoutsDrawer';
+import { ShCampaignDrawer } from '@/features/agent/components/portfolio/ShCampaignDrawer';
 import { useAgentDashboard } from '@/features/agent/hooks/useAgentPortfolio';
-import { AGENT_PATHS } from '@/features/agent/lib/agent-shell';
-import type { AgentCampaign } from '@/features/agent/services/agent-portfolio.service';
+import { cardModel, isShCampaign } from '@/features/agent/lib/agent-portfolio';
+import { AGENT_PATHS, type AgentKind } from '@/features/agent/lib/agent-shell';
+import type {
+  AgentCampaign,
+  ShAgentCampaign,
+} from '@/features/agent/services/agent-portfolio.service';
 import { formatImpressions } from '@/features/campaigns/lib/campaign-impressions';
 import { formatTnd } from '@/lib/money';
 
@@ -18,22 +23,58 @@ import { KpiCard } from './KpiCard';
 
 const linkBtn = 'text-sm font-medium text-brand-primary hover:underline';
 
+const COPY: Record<
+  AgentKind,
+  {
+    affiliates: string;
+    impressions: string;
+    block7: string;
+    all: string;
+    empty7: string;
+    empty8: string;
+  }
+> = {
+  screencaster: {
+    affiliates: 'Screencasters affiliés',
+    impressions: 'Impressions totales générées par vos Screencasters affiliés',
+    block7: 'Mes Screencasters affiliés',
+    all: 'Voir tous mes Screencasters affiliés',
+    empty7:
+      'Vous n’avez pas encore de Screencaster affilié. Partagez votre code agent pour rattacher vos premiers annonceurs.',
+    empty8:
+      'Aucune campagne en cours. Les campagnes de vos Screencasters affiliés apparaîtront ici dès leur lancement.',
+  },
+  screenhost: {
+    affiliates: 'Screenhosts affiliés',
+    impressions: 'Impressions totales générées par vos Screenhosts affiliés',
+    block7: 'Mes Screenhosts affiliés',
+    all: 'Voir mes Screenhosts',
+    empty7:
+      'Vous n’avez pas encore de Screenhost affilié. Partagez votre code agent avec les lieux que vous accompagnez lors de leur inscription.',
+    empty8:
+      'Aucune campagne en cours. Les campagnes acceptées par vos Screenhosts affiliés apparaîtront ici.',
+  },
+};
+
 /**
- * AGT-4 (Agent Screencaster spec v1.0 §4) — the ten Dashboard blocks, in the Figma order, all
- * from real data with an empty state each. Blocks 9 (rendez-vous) and 10 (notifications) read
- * their own endpoints (lanes AGT-5 / AGT-6) through the slots passed in.
+ * AGT-4 / AGT-7 (agent specs v1.0 §4) — the ten Dashboard blocks of either agent type, in the
+ * Figma order, all from real data with an empty state each. A Screenhost with an attention point
+ * carries an orange dot. Blocks 9 (rendez-vous) and 10 (notifications) come in as slots.
  */
-export function ScAgentDashboard({
+export function AgentDashboard({
+  kind,
   appointments,
   notifications,
 }: {
+  kind: AgentKind;
   appointments?: React.ReactNode;
   notifications?: React.ReactNode;
 }) {
+  const copy = COPY[kind];
   const navigate = useNavigate();
   const dash = useAgentDashboard();
   const [payoutsOpen, setPayoutsOpen] = useState(false);
-  const [open, setOpen] = useState<AgentCampaign | null>(null);
+  const [open, setOpen] = useState<AgentCampaign | ShAgentCampaign | null>(null);
   const d = dash.data;
 
   return (
@@ -71,13 +112,13 @@ export function ScAgentDashboard({
           icon={<Wallet className="h-5 w-5" />}
         />
         <KpiCard
-          label="Screencasters affiliés"
+          label={copy.affiliates}
           value={String(d?.affiliates_active ?? 0)}
           variationPct={d?.affiliates_variation_pct ?? null}
           icon={<Users className="h-5 w-5" />}
         />
         <KpiCard
-          label="Impressions totales générées par vos Screencasters affiliés"
+          label={copy.impressions}
           value={formatImpressions(d?.impressions_total ?? 0)}
           variationPct={d?.impressions_variation_pct ?? null}
           icon={<Eye className="h-5 w-5" />}
@@ -91,9 +132,9 @@ export function ScAgentDashboard({
       </div>
 
       <DashboardSection
-        title="Mes Screencasters affiliés"
+        title={copy.block7}
         isEmpty={(d?.recent_affiliates.length ?? 0) === 0}
-        empty="Vous n’avez pas encore de Screencaster affilié. Partagez votre code agent pour rattacher vos premiers annonceurs."
+        empty={copy.empty7}
         emptyIcon={<Users className="h-10 w-10" />}
         action={
           <button
@@ -101,13 +142,21 @@ export function ScAgentDashboard({
             onClick={() => navigate(AGENT_PATHS.affiliates)}
             className={linkBtn}
           >
-            Voir tous mes Screencasters affiliés
+            {copy.all}
           </button>
         }
       >
         <div className="flex flex-wrap gap-3">
           {d?.recent_affiliates.map((a) => (
-            <AgentAvatar key={a.id} name={a.name} size="lg" />
+            <span key={a.id} className="relative">
+              <AgentAvatar name={a.name} size="lg" />
+              {a.attention > 0 && (
+                <span
+                  title="Point d’attention"
+                  className="absolute -right-0.5 -top-0.5 h-3.5 w-3.5 rounded-full bg-orange-500 ring-2 ring-white"
+                />
+              )}
+            </span>
           ))}
         </div>
       </DashboardSection>
@@ -115,7 +164,7 @@ export function ScAgentDashboard({
       <DashboardSection
         title="Mes campagnes affiliées en cours"
         isEmpty={(d?.current_campaigns.length ?? 0) === 0}
-        empty="Aucune campagne en cours. Les campagnes de vos Screencasters affiliés apparaîtront ici dès leur lancement."
+        empty={copy.empty8}
         emptyIcon={<Megaphone className="h-10 w-10" />}
         action={
           <button type="button" onClick={() => navigate(AGENT_PATHS.campaigns)} className={linkBtn}>
@@ -125,7 +174,7 @@ export function ScAgentDashboard({
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {d?.current_campaigns.map((c) => (
-            <AgentCampaignCard key={c.id} campaign={c} onOpen={setOpen} />
+            <AgentCampaignCard key={c.id} campaign={cardModel(c)} onOpen={() => setOpen(c)} />
           ))}
         </div>
       </DashboardSection>
@@ -157,7 +206,11 @@ export function ScAgentDashboard({
       )}
 
       <PayoutsDrawer open={payoutsOpen} onClose={() => setPayoutsOpen(false)} />
-      <AgentCampaignDrawer campaign={open} onClose={() => setOpen(null)} />
+      {open && isShCampaign(open) ? (
+        <ShCampaignDrawer campaign={open} onClose={() => setOpen(null)} />
+      ) : (
+        <AgentCampaignDrawer campaign={open} onClose={() => setOpen(null)} />
+      )}
     </div>
   );
 }

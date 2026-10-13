@@ -5,6 +5,7 @@ import {
   useAffiliationAction,
   useAgentAffiliations,
   useAgentsList,
+  useAttentionEvents,
 } from '@/features/admin/hooks/useAdminAgents';
 import {
   AFFILIATION_STATUS_FR,
@@ -76,6 +77,9 @@ export function AgentAffiliationsPanel({ agentId, role }: { agentId: string; rol
                 </div>
               </div>
               {openId === r.id && <AffiliationActions row={r} role={role} agentId={agentId} />}
+              {openId === r.id && r.kind === 'screenhost' && (
+                <AttentionHistory affiliationId={r.id} />
+              )}
             </li>
           ))}
         </ul>
@@ -214,6 +218,33 @@ function AffiliationActions({
           </button>
         </div>
       </label>
+    </div>
+  );
+}
+
+/** AGT-7 — the venue's attention points, appeared and cleared (spec §6, visible in the hub). */
+function AttentionHistory({ affiliationId }: { affiliationId: string }) {
+  const events = useAttentionEvents(affiliationId);
+  const rows = events.data?.events ?? [];
+  return (
+    <div className="mt-3 rounded-lg border p-3 text-sm">
+      <p className="font-medium">Points d’attention</p>
+      {rows.length === 0 ? (
+        <p className="text-gray-500">Aucun point d’attention.</p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {rows.map((e) => (
+            <li key={e.id} className="flex justify-between gap-2">
+              <span>{e.label}</span>
+              <span className="text-xs text-gray-500">
+                {new Date(e.appeared_at).toLocaleDateString('fr-FR')}
+                {' → '}
+                {e.cleared_at ? new Date(e.cleared_at).toLocaleDateString('fr-FR') : 'actif'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

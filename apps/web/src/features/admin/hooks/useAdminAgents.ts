@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   type AgentNewsRow,
+  type AttentionThresholds,
   type AffiliationAction,
   type AgentRoleKey,
   type AgentSheetPatch,
@@ -41,6 +42,18 @@ export const useAgentObjectives = () =>
 
 export const useAgentNews = () =>
   useQuery({ queryKey: adminKeys.agentNews(), queryFn: () => adminAgentsService.news() });
+
+export const useAttentionThresholds = () =>
+  useQuery({
+    queryKey: adminKeys.agentThresholds(),
+    queryFn: () => adminAgentsService.thresholds(),
+  });
+
+export const useAttentionEvents = (affiliationId: string) =>
+  useQuery({
+    queryKey: adminKeys.agentAttention(affiliationId),
+    queryFn: () => adminAgentsService.attentionEvents(affiliationId),
+  });
 
 export const useAgentRibs = (status: 'en_attente' | 'valide' | 'refuse') =>
   useQuery({
@@ -113,4 +126,9 @@ export const usePatchObjective = () =>
 export const usePublishNews = () =>
   useAgentsMutation((v: { title: string; body: string; audience: AgentNewsRow['audience'] }) =>
     adminAgentsService.publishNews(v),
+  );
+
+export const useSaveThresholds = () =>
+  useAgentsMutation((body: Partial<AttentionThresholds>) =>
+    adminAgentsService.saveThresholds(body),
   );

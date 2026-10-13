@@ -4,11 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import AgentLayout from '@/features/agent/components/AgentLayout';
 import { AgentAvatar } from '@/features/agent/components/portfolio/AgentAvatar';
 import { CopyCode } from '@/features/agent/components/portfolio/CopyCode';
+import { ShAffiliatesView } from '@/features/agent/components/portfolio/ShAffiliatesView';
 import { ViewToggle } from '@/features/agent/components/portfolio/ViewToggle';
 import { useAgentAccount } from '@/features/agent/hooks/useAgentAccount';
 import { useAgentAffiliates } from '@/features/agent/hooks/useAgentPortfolio';
 import { affiliationEnded, frDate } from '@/features/agent/lib/agent-portfolio';
-import { AGENT_PATHS } from '@/features/agent/lib/agent-shell';
+import { AGENT_PATHS, agentKindOf } from '@/features/agent/lib/agent-shell';
 import type { AgentAffiliate } from '@/features/agent/services/agent-portfolio.service';
 import { useAgentViewStore, viewOf } from '@/features/agent/stores/agent-view.store';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -23,7 +24,7 @@ const EMPTY =
  * cards (default) or table remembered per agent; a click opens « Mes campagnes » on that
  * Screencaster. An ended affiliation stays listed with « Affiliation terminée ».
  */
-export default function AgentAffiliates() {
+function ScAffiliatesView() {
   const navigate = useNavigate();
   const userId = useAuthStore((s) => s.user?.id);
   const views = useAgentViewStore((s) => s.views);
@@ -42,7 +43,7 @@ export default function AgentAffiliates() {
     ) : null;
 
   return (
-    <AgentLayout page="affiliates">
+    <>
       <div className="space-y-5">
         <div className="flex justify-end">
           <ViewToggle view={view} onChange={(v) => setView(userId ?? '', 'affiliates', v)} />
@@ -126,6 +127,16 @@ export default function AgentAffiliates() {
           </div>
         )}
       </div>
+    </>
+  );
+}
+
+/** AGT-4 / AGT-7 — « Mes Screencasters » / « Mes Screenhosts » of the agent's type. */
+export default function AgentAffiliates() {
+  const role = useAuthStore((s) => s.role);
+  return (
+    <AgentLayout page="affiliates">
+      {agentKindOf(role) === 'screenhost' ? <ShAffiliatesView /> : <ScAffiliatesView />}
     </AgentLayout>
   );
 }
