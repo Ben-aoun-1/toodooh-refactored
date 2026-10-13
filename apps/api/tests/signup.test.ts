@@ -461,7 +461,7 @@ describe('POST /api/signup', () => {
       .values({ email: `agent-${code.toLowerCase()}@example.com`, contactName: 'Agent', role })
       .returning({ id: users.id });
     const id = agentUser?.id ?? '';
-    await db.insert(agents).values({ userId: id, code });
+    await db.insert(agents).values({ userId: id, code, accountStatus: 'actif' });
     return id;
   };
 

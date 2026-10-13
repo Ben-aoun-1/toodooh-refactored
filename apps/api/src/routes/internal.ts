@@ -19,6 +19,7 @@ import {
 } from '../db/schema.js';
 import { env } from '../env.js';
 import { generateUniqueAgentCode } from '../lib/agent-code.js';
+import { currentCge } from '../lib/agent-sheet.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { buildEligibilityPatch, type EligibilityPatchInput } from '../lib/eligibility-patch.js';
 import { collapseHalvesSql, hourOfSlot, inEffectSql, slotsOfHour } from '../lib/half-hour-slots.js';
@@ -872,7 +873,11 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
           .limit(1);
         return hit !== undefined;
       });
-      await tx.insert(agents).values({ userId: user.id, code });
+      // AGT-1 — 'actif' at once while no Screenhost-agent CGE is in force (ruling Q6).
+      const cgeInForce = (await currentCge('screenhost_agent', tx)) !== null;
+      await tx
+        .insert(agents)
+        .values({ userId: user.id, code, accountStatus: cgeInForce ? 'en_attente' : 'actif' });
       return { userId: user.id, code };
     });
 

@@ -785,6 +785,17 @@ export type NewScreenhostPiste = typeof screenhostPistes.$inferInsert;
 // 'failed' → 'exported'.
 export const agentExportStatus = pgEnum('agent_export_status', ['pending', 'exported', 'failed']);
 
+// AGT-1 (Youssef's agent specs v1.0, operator rulings 2026-10-13) — the agent account's own
+// lifecycle, distinct from users.status: 'en_attente' until the CGE are accepted (the code is
+// refused at signup meanwhile), 'actif', then 'suspendu' / 'cloture' by the admin (both also ban
+// the users row, so the existing sign-in refusal and session revocation apply).
+export const agentAccountStatus = pgEnum('agent_account_status', [
+  'en_attente',
+  'actif',
+  'suspendu',
+  'cloture',
+]);
+
 export const agents = pgTable('agents', {
   // One row per agent user; the PK IS the FK (1:1 with users). ON DELETE CASCADE:
   // deleting the agent user removes its issued code.
@@ -794,7 +805,87 @@ export const agents = pgTable('agents', {
   code: text('code').notNull().unique(),
   exportStatus: agentExportStatus('export_status').notNull().default('pending'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // AGT-1 — the agent sheet (spec §2). Contact, address, tax number and photo live on users
+  // (contact_phone, street_address, city, postal_code, governorate_id, tax_number, image).
+  firstName: text('first_name'),
+  lastName: text('last_name'),
+  coveredZone: text('covered_zone'),
+  // Ruling Q2 A — the agent's own commission rate (%); NULL = the engine default
+  // (dispatch_config.pct_agent_sh / pct_agent_sc). Never shown to the agent as a rate.
+  commissionPct: numeric('commission_pct', { precision: 5, scale: 2 }),
+  accountStatus: agentAccountStatus('account_status').notNull().default('en_attente'),
+  certifiedAt: date('certified_at'),
+  // Onboarding step « Vérifier mes informations »: the agent saved or confirmed the admin's data.
+  infoVerifiedAt: timestamp('info_verified_at', { withTimezone: true }),
 });
+
+// AGT-1 — the Conditions Générales d'Engagement, versioned per agent role. Publishing a version
+// makes the blocking acceptance modal reappear for every agent of that role (spec §2).
+export const agentCgeVersions = pgTable(
+  'agent_cge_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // text + CHECK, not the user_role enum: a fresh database migrates in ONE transaction and
+    // Postgres refuses enum values added earlier in that same transaction (55P04).
+    agentRole: text('agent_role').$type<'screenhost_agent' | 'screencast_agent'>().notNull(),
+    version: text('version').notNull(),
+    storageKey: text('storage_key').notNull(),
+    fileName: text('file_name').notNull(),
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_cge_versions_role_version_uq').on(table.agentRole, table.version),
+    check(
+      'agent_cge_versions_agent_role',
+      sql`${table.agentRole} IN ('screenhost_agent', 'screencast_agent')`,
+    ),
+  ],
+);
+
+// AGT-1 — every acceptance (date, version, IP), kept as history (US-ASC-2.5 / US-ASH-2.5).
+export const agentCgeAcceptances = pgTable(
+  'agent_cge_acceptances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cgeVersionId: uuid('cge_version_id')
+      .notNull()
+      .references(() => agentCgeVersions.id),
+    ip: text('ip'),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('agent_cge_acceptances_agent_version_uq').on(table.agentUserId, table.cgeVersionId),
+  ],
+);
+
+// AGT-1 — the agent's RIB file, validated by the admin (spec §2 « Coordonnées bancaires »). One row
+// per deposit: the latest row is the current status; the latest 'valide' row is the RIB in use
+// (a new deposit never unseats it until validated).
+export const agentRibStatus = pgEnum('agent_rib_status', ['en_attente', 'valide', 'refuse']);
+
+export const agentRibSubmissions = pgTable(
+  'agent_rib_submissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    storageKey: text('storage_key').notNull(),
+    fileName: text('file_name').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    status: agentRibStatus('status').notNull().default('en_attente'),
+    refusalReason: text('refusal_reason'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  },
+  (table) => [index('agent_rib_submissions_agent_idx').on(table.agentUserId, table.submittedAt)],
+);
 
 export const agentReferrals = pgTable(
   'agent_referrals',

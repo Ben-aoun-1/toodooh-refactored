@@ -17,7 +17,9 @@ describe('POST /api/signup/agent-code-availability', () => {
       .insert(users)
       .values({ email: 'agent-sh@example.com', contactName: 'Agent', role: 'screenhost_agent' })
       .returning({ id: users.id });
-    await db.insert(agents).values({ userId: agentUser?.id ?? '', code: 'SH123456' });
+    await db
+      .insert(agents)
+      .values({ userId: agentUser?.id ?? '', code: 'SH123456', accountStatus: 'actif' });
     app = Fastify({ logger: false });
     await app.register(agentCodeAvailabilityRoute);
     await app.ready();
