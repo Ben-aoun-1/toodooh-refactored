@@ -16,8 +16,8 @@ import supportIcon from '@/assets/support.png';
 import supportIconActive from '@/assets/supports.png';
 import ContentErrorBoundary from '@/components/ContentErrorBoundary';
 import { ModalProvider, useModal } from '@/contexts/ModalContext';
-import AdvertiserNotificationsBell from '@/features/advertiser/components/AdvertiserNotificationsBell';
 import SidebarNavItem from '@/features/advertiser/components/SidebarNavItem';
+import { AgentNotificationsBell } from '@/features/agent/components/notifications/AgentNotificationsBell';
 import { useAgentAccount } from '@/features/agent/hooks/useAgentAccount';
 import {
   AGENT_PATHS,
@@ -50,7 +50,6 @@ export default function AgentLayout(props: AgentLayoutProps) {
 function AgentChrome({ page, children }: AgentLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
   const contactName = useAuthStore((s) => s.contactName);
   const account = useAgentAccount();
@@ -220,7 +219,7 @@ function AgentChrome({ page, children }: AgentLayoutProps) {
             <h1 className="text-lg font-semibold text-[#171717] truncate">{heading.title}</h1>
             <p className="text-sm text-[#5C5C5C]">{heading.subtitle}</p>
           </div>
-          <AdvertiserNotificationsBell userId={user?.id} />
+          <AgentNotificationsBell />
         </header>
         <main className="flex-1 min-h-0 overflow-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 text-[15px] leading-6 text-[#171717]">
           <ContentErrorBoundary>{children}</ContentErrorBoundary>

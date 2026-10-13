@@ -141,6 +141,14 @@ export interface AppointmentObjectiveRow {
   active: boolean;
 }
 
+export interface AgentNewsRow {
+  id: string;
+  title: string;
+  body: string;
+  audience: 'all' | AgentRoleKey;
+  published_at: string;
+}
+
 export type AgentSheetPatch = Partial<{
   first_name: string;
   last_name: string;
@@ -200,6 +208,16 @@ export const adminAgentsService = {
     body: Partial<{ label: string; position: number; active: boolean }>,
   ): Promise<{ ok: true }> {
     return apiClient.patch(`/admin/agent-appointment-objectives/${id}`, body);
+  },
+  news(): Promise<{ news: AgentNewsRow[] }> {
+    return apiClient.get('/admin/agent-news');
+  },
+  publishNews(body: {
+    title: string;
+    body: string;
+    audience: AgentNewsRow['audience'];
+  }): Promise<{ id: string; recipients: number }> {
+    return apiClient.post('/admin/agent-news', body);
   },
   ribs(status: 'en_attente' | 'valide' | 'refuse'): Promise<{ ribs: AgentRibRow[] }> {
     return apiClient.get(`/admin/agent-ribs?status=${status}`);

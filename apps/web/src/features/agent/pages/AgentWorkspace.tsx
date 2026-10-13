@@ -1,5 +1,6 @@
 import AgentLayout from '@/features/agent/components/AgentLayout';
 import { AgentAppointmentsBlock } from '@/features/agent/components/dashboard/AgentAppointmentsBlock';
+import { AgentNotificationsBlock } from '@/features/agent/components/dashboard/AgentNotificationsBlock';
 import { ScAgentDashboard } from '@/features/agent/components/dashboard/ScAgentDashboard';
 import { ShAgentDashboard } from '@/features/agent/components/dashboard/ShAgentDashboard';
 import { OnboardingCard } from '@/features/agent/components/OnboardingCard';
@@ -15,7 +16,10 @@ export default function AgentWorkspace() {
     <AgentLayout page="dashboard">
       <OnboardingCard />
       {agentKindOf(role) === 'screencaster' ? (
-        <ScAgentDashboard appointments={<AgentAppointmentsBlock />} />
+        <ScAgentDashboard
+          appointments={<AgentAppointmentsBlock />}
+          notifications={<AgentNotificationsBlock />}
+        />
       ) : (
         <ShAgentDashboard />
       )}

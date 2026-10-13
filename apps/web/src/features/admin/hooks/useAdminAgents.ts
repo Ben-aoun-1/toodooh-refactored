@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  type AgentNewsRow,
   type AffiliationAction,
   type AgentRoleKey,
   type AgentSheetPatch,
@@ -37,6 +38,9 @@ export const useAgentObjectives = () =>
     queryKey: adminKeys.agentObjectives(),
     queryFn: () => adminAgentsService.objectives(),
   });
+
+export const useAgentNews = () =>
+  useQuery({ queryKey: adminKeys.agentNews(), queryFn: () => adminAgentsService.news() });
 
 export const useAgentRibs = (status: 'en_attente' | 'valide' | 'refuse') =>
   useQuery({
@@ -104,4 +108,9 @@ export const useAddObjective = () =>
 export const usePatchObjective = () =>
   useAgentsMutation((v: { id: string; body: Partial<{ label: string; active: boolean }> }) =>
     adminAgentsService.patchObjective(v.id, v.body),
+  );
+
+export const usePublishNews = () =>
+  useAgentsMutation((v: { title: string; body: string; audience: AgentNewsRow['audience'] }) =>
+    adminAgentsService.publishNews(v),
   );
