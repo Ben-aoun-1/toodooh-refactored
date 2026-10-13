@@ -817,7 +817,25 @@ export const agents = pgTable('agents', {
   certifiedAt: date('certified_at'),
   // Onboarding step « Vérifier mes informations »: the agent saved or confirmed the admin's data.
   infoVerifiedAt: timestamp('info_verified_at', { withTimezone: true }),
+  // AGT-1b — the profile photo (PNG/JPEG, ≥ 400×400 px), shown in the appointment modal.
+  photoKey: text('photo_key'),
 });
+
+// AGT-1b (spec §9) — every change the agent makes to its sheet, timestamped, read by the admin.
+export const agentProfileChanges = pgTable(
+  'agent_profile_changes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    field: text('field').notNull(),
+    oldValue: text('old_value'),
+    newValue: text('new_value'),
+    changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('agent_profile_changes_agent_idx').on(table.agentUserId, table.changedAt)],
+);
 
 // AGT-1 — the Conditions Générales d'Engagement, versioned per agent role. Publishing a version
 // makes the blocking acceptance modal reappear for every agent of that role (spec §2).
@@ -2471,6 +2489,8 @@ export const supportMessages = pgTable(
     objective: text('objective').notNull(),
     otherDetail: text('other_detail'),
     message: text('message'),
+    // AGT-1b — the page the request was sent from (agent Support modal, spec §9).
+    originPage: text('origin_page'),
     // ISO date (YYYY-MM-DD) — an appointment WISH, not a booking; NULL for a support message.
     appointmentDate: date('appointment_date'),
     status: supportStatus('status').notNull().default('new'),

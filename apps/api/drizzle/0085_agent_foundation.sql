@@ -10,6 +10,19 @@ ALTER TABLE "agents" ADD COLUMN "commission_pct" numeric(5, 2);--> statement-bre
 ALTER TABLE "agents" ADD COLUMN "account_status" "agent_account_status" DEFAULT 'en_attente' NOT NULL;--> statement-breakpoint
 ALTER TABLE "agents" ADD COLUMN "certified_at" date;--> statement-breakpoint
 ALTER TABLE "agents" ADD COLUMN "info_verified_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "agents" ADD COLUMN "photo_key" text;--> statement-breakpoint
+ALTER TABLE "support_messages" ADD COLUMN "origin_page" text;--> statement-breakpoint
+CREATE TABLE "agent_profile_changes" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"agent_user_id" uuid NOT NULL,
+	"field" text NOT NULL,
+	"old_value" text,
+	"new_value" text,
+	"changed_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "agent_profile_changes" ADD CONSTRAINT "agent_profile_changes_agent_user_id_users_id_fk" FOREIGN KEY ("agent_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "agent_profile_changes_agent_idx" ON "agent_profile_changes" USING btree ("agent_user_id","changed_at");--> statement-breakpoint
 UPDATE "agents" SET "account_status" = 'actif';--> statement-breakpoint
 CREATE TABLE "agent_cge_versions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

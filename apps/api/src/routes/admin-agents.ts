@@ -11,6 +11,7 @@ import { db } from '../db/client.js';
 import {
   agentCgeAcceptances,
   agentCgeVersions,
+  agentProfileChanges,
   agentRibSubmissions,
   agents,
   notifications,
@@ -124,6 +125,20 @@ const sheetView = async (row: NonNullable<Awaited<ReturnType<typeof loadAgent>>>
     onboarding,
     rib_status: rib.state,
     rib_validated: rib.validated,
+    // AGT-1b — the agent's own sheet edits, newest first (spec §9 « horodatée »).
+    profile_changes: (
+      await db
+        .select()
+        .from(agentProfileChanges)
+        .where(eq(agentProfileChanges.agentUserId, row.user.id))
+        .orderBy(desc(agentProfileChanges.changedAt))
+        .limit(50)
+    ).map((c) => ({
+      field: c.field,
+      old_value: c.oldValue,
+      new_value: c.newValue,
+      changed_at: c.changedAt.toISOString(),
+    })),
     cge_acceptances: acceptances.map((a) => ({
       version: a.version,
       accepted_at: a.acceptedAt.toISOString(),

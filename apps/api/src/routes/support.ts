@@ -20,6 +20,8 @@ const bodySchema = z
     other_detail: z.string().trim().max(500).optional(),
     message: z.string().trim().max(2000).optional(),
     appointment_date: z.iso.date().optional(),
+    // AGT-1b — the page the request was sent from (the agent Support modal, spec §9).
+    origin_page: z.string().trim().max(300).optional(),
   })
   .refine((b) => b.objective.toLowerCase() !== 'autre' || (b.other_detail ?? '').length > 0, {
     message: 'other_detail is required when the objective is « Autre »',
@@ -59,6 +61,7 @@ export const supportRoutes: FastifyPluginAsync = async (app) => {
         otherDetail: b.other_detail ?? null,
         message: b.message || null,
         appointmentDate: b.appointment_date ?? null,
+        originPage: b.origin_page ?? null,
       })
       .returning();
     if (!row) {

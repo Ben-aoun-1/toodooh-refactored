@@ -7,6 +7,7 @@ import { db, sql } from '../src/db/client.js';
 import {
   agentCgeAcceptances,
   agentCgeVersions,
+  agentProfileChanges,
   agentRibSubmissions,
   agents,
   governorates,
@@ -19,6 +20,7 @@ import { onboardingSteps } from '../src/lib/agent-sheet.js';
 import { adminAccountsRoutes } from '../src/routes/admin-accounts.js';
 import { adminAgentsRoutes } from '../src/routes/admin-agents.js';
 import { agentAccountRoutes } from '../src/routes/agent-account.js';
+import { agentProfileRoutes } from '../src/routes/agent-profile.js';
 import { agentRoutes } from '../src/routes/agent.js';
 import { storage } from '../src/storage/s3-storage.js';
 
@@ -84,6 +86,7 @@ describe('AGT-1 — agent foundation (real Postgres)', () => {
     await app.register(adminAccountsRoutes);
     await app.register(adminAgentsRoutes);
     await app.register(agentAccountRoutes);
+    await app.register(agentProfileRoutes);
     await app.register(agentRoutes);
     await app.ready();
   });
@@ -320,6 +323,75 @@ describe('AGT-1 — agent foundation (real Postgres)', () => {
     const list = await app.inject({ method: 'GET', url: '/api/admin/agents' });
     const row = list.json<{ agents: { id: string; onboarding: { done: number } }[] }>().agents[0];
     expect(row?.onboarding.done).toBe(1); // CGE (none in force)
+  });
+
+  it('profile: edits are journaled and verify the info step; read-only fields stay put', async () => {
+    const id = (await createAgent()).json<{ account: { id: string } }>().account.id;
+    mockSession(id, 'screencast_agent');
+    const confirm = await app.inject({ method: 'PATCH', url: '/api/agent/profile', payload: {} });
+    expect(confirm.json<{ info_verified_at: string | null }>().info_verified_at).not.toBeNull();
+    expect(await db.select().from(agentProfileChanges)).toEqual([]);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/agent/profile',
+      payload: { city: 'Ariana', phone: '+21655555555', tax_number: 'HACKED' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ city: string; phone: string; tax_number: string }>();
+    expect(body.city).toBe('Ariana');
+    expect(body.tax_number).toBe('1234567ABC000'); // read-only: never changed by the agent
+    const changes = await db.select().from(agentProfileChanges);
+    expect(changes.map((c) => [c.field, c.oldValue, c.newValue]).sort()).toEqual([
+      ['city', 'Tunis', 'Ariana'],
+      ['phone', '+21612345678', '+21655555555'],
+    ]);
+    const bad = await app.inject({
+      method: 'PATCH',
+      url: '/api/agent/profile',
+      payload: { postal_code: '12' },
+    });
+    expect(bad.statusCode).toBe(400);
+    vi.restoreAllMocks();
+    mockSession(adminId, 'admin');
+    const sheetRes = await app.inject({ method: 'GET', url: `/api/admin/agents/${id}` });
+    expect(sheetRes.json<{ profile_changes: unknown[] }>().profile_changes).toHaveLength(2);
+  });
+
+  it('photo: PNG/JPEG of at least 400 × 400 px; notification toggles', async () => {
+    const id = (await createAgent()).json<{ account: { id: string } }>().account.id;
+    mockSession(id, 'screencast_agent');
+    const png = (w: number, h: number) => {
+      const b = Buffer.alloc(64);
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+      b.write('IHDR', 12, 'ascii');
+      b.writeUInt32BE(w, 16);
+      b.writeUInt32BE(h, 20);
+      return b;
+    };
+    const small = await app.inject({
+      method: 'POST',
+      url: '/api/agent/photo',
+      ...multipart('p.png', 'image/png', png(200, 200)),
+    });
+    expect(small.json<{ error: string }>().error).toBe('PHOTO_TOO_SMALL');
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/agent/photo',
+      ...multipart('p.png', 'image/png', png(400, 500)),
+    });
+    expect(ok.json<{ photo_url: string | null }>().photo_url).toBeTruthy();
+    const removed = await app.inject({ method: 'DELETE', url: '/api/agent/photo' });
+    expect(removed.json<{ photo_url: string | null }>().photo_url).toBeNull();
+
+    const prefs = await app.inject({
+      method: 'PATCH',
+      url: '/api/agent/notification-prefs',
+      payload: { news: true, reminders: false },
+    });
+    expect(prefs.statusCode).toBe(200);
+    const [u] = await db.select().from(users).where(eq(users.id, id));
+    expect([u?.notifyNewsUpdates, u?.notifyRemindersEvents]).toEqual([true, false]);
   });
 
   it('onboardingSteps — four steps, three mandatory, RIB pending shown', () => {

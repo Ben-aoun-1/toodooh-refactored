@@ -25,6 +25,7 @@ import { adminRoutes } from './admin.js';
 import { advertiserPerformancesRoutes } from './advertiser-performances.js';
 import { agentAccountRoutes } from './agent-account.js';
 import { agentCodeAvailabilityRoute } from './agent-code-availability.js';
+import { agentProfileRoutes } from './agent-profile.js';
 import { agentRoutes } from './agent.js';
 import { campaignBoostRoutes } from './campaign-boost.js';
 import { campaignDispatchRoutes } from './campaign-dispatch.js';
@@ -183,6 +184,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(agentRoutes);
   // AGT-1 — the agent's own account, CGE acceptance and RIB.
   await app.register(agentAccountRoutes);
+  await app.register(agentProfileRoutes);
   // Zones cutover (Z1): public GET catalog + admin-guarded scalar writes.
   await app.register(predefinedZonesRoutes);
   // CF-Z1 — the NEW zones read (wizard); distinct from the legacy predefined_zones CRUD above.
