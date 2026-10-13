@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { DemoCampaign } from '../services/admin-demo.service';
 
-import { demoAccountBody, onAirStatus, parseAmountTnd, parseDelayMinutes } from './demo';
+import {
+  demoAccountBody,
+  demoScreenhostBody,
+  onAirStatus,
+  parseAmountTnd,
+  parseDelayMinutes,
+} from './demo';
 
 const campaign = (over: Partial<DemoCampaign> = {}): DemoCampaign => ({
   id: 'c1',
@@ -77,5 +83,44 @@ describe('DEMO-1 — admin « Démo » page rules', () => {
     expect(onAirStatus(campaign({ status: 'pending' }), now).label).toBe(
       'En attente de validation',
     );
+  });
+});
+
+describe('DEMO-2 — the demo screenhost form', () => {
+  const form = {
+    name: ' Café Démo ',
+    latitude: '36,8065',
+    longitude: '10.1815',
+    city: '',
+    sectorId: 's1',
+    openingHour: '8',
+    closingHour: '1',
+    audienceMin: '20',
+    audienceMax: '80',
+  };
+
+  it('maps to the api body (French comma, overnight hours, city optional)', () => {
+    expect(demoScreenhostBody(form)).toEqual({
+      ok: true,
+      value: {
+        name: 'Café Démo',
+        latitude: 36.8065,
+        longitude: 10.1815,
+        business_sector_id: 's1',
+        opening_hour: 8,
+        closing_hour: 1,
+        audience_min: 20,
+        audience_max: 80,
+      },
+    });
+  });
+
+  it('refuses bad coordinates, equal hours and an inverted audience', () => {
+    expect(demoScreenhostBody({ ...form, name: ' ' }).ok).toBe(false);
+    expect(demoScreenhostBody({ ...form, latitude: '91' }).ok).toBe(false);
+    expect(demoScreenhostBody({ ...form, longitude: 'abc' }).ok).toBe(false);
+    expect(demoScreenhostBody({ ...form, closingHour: '8' }).ok).toBe(false);
+    expect(demoScreenhostBody({ ...form, openingHour: '24' }).ok).toBe(false);
+    expect(demoScreenhostBody({ ...form, audienceMin: '90' }).ok).toBe(false);
   });
 });

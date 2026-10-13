@@ -52,6 +52,8 @@ export interface PoolVenueRow {
   zoneId: string | null;
   openingHour: number | null;
   closingHour: number | null;
+  /** DEMO-2 — a demo screenhost (no owner, no screen): only demo campaigns may use it. */
+  demoOnly?: boolean;
 }
 
 /** What the campaign (and the caller) bring: targeting lines, targeted zones, excluded venues. */
@@ -70,8 +72,13 @@ export const poolExclusionReason = (
   sh: PoolVenueRow,
   ctx: PoolFilterContext,
 ): PoolExclusionReason | null => {
-  if (!sh.ownerApproved) return 'owner_not_approved';
-  if (!sh.installedScreen) return 'no_installed_screen';
+  // DEMO-2 — a demo screenhost exists only for demo campaigns, and has neither owner nor screen.
+  if (sh.demoOnly === true) {
+    if (!ctx.demoVenues) return 'not_demo_venue';
+  } else {
+    if (!sh.ownerApproved) return 'owner_not_approved';
+    if (!sh.installedScreen) return 'no_installed_screen';
+  }
   if (ctx.excluded.has(sh.id)) return 'excluded';
   if (ctx.demoVenues && !ctx.demoVenues.has(sh.id)) return 'not_demo_venue';
   if (ctx.frozenVenues && !ctx.frozenVenues.has(sh.id)) return 'not_in_frozen_week';

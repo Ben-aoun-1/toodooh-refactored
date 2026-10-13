@@ -1,4 +1,8 @@
-import type { CreateDemoAccountBody, DemoCampaign } from '../services/admin-demo.service';
+import type {
+  CreateDemoAccountBody,
+  CreateDemoScreenhostBody,
+  DemoCampaign,
+} from '../services/admin-demo.service';
 
 /**
  * DEMO-1 (operator 2026-10-12, rulings A A A A A A) — the admin « Démo » page's rules, pure:
@@ -104,4 +108,76 @@ export function onAirStatus(c: DemoCampaign, now: Date): { label: string; tone: 
   }
   if (c.on_air_pushed_at === null) return { label: 'Envoi aux écrans…', tone: 'waiting' };
   return { label: `À l’antenne depuis ${hhmm(c.on_air_pushed_at)}`, tone: 'live' };
+}
+
+export interface DemoScreenhostForm {
+  name: string;
+  latitude: string;
+  longitude: string;
+  city: string;
+  sectorId: string;
+  openingHour: string;
+  closingHour: string;
+  audienceMin: string;
+  audienceMax: string;
+}
+
+const decimal = (raw: string): number | null => {
+  const normalized = raw.trim().replace(',', '.');
+  return /^-?\d+(\.\d+)?$/.test(normalized) ? Number(normalized) : null;
+};
+
+const wholeIn = (raw: string, min: number, max: number): number | null => {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return value >= min && value <= max ? value : null;
+};
+
+/**
+ * DEMO-2 — the demo screenhost form → the api body, or the first French error. The audience is
+ * per half-hour, drawn at random in [min, max] for every open slot of the week.
+ */
+export function demoScreenhostBody(form: DemoScreenhostForm): Parsed<CreateDemoScreenhostBody> {
+  const name = form.name.trim();
+  if (!name) return { ok: false, error: 'Le nom est obligatoire.' };
+  const latitude = decimal(form.latitude);
+  const longitude = decimal(form.longitude);
+  if (latitude === null || latitude < -90 || latitude > 90) {
+    return { ok: false, error: 'Latitude invalide (ex. 36,8065).' };
+  }
+  if (longitude === null || longitude < -180 || longitude > 180) {
+    return { ok: false, error: 'Longitude invalide (ex. 10,1815).' };
+  }
+  const openingHour = wholeIn(form.openingHour, 0, 23);
+  const closingHour = wholeIn(form.closingHour, 0, 23);
+  if (openingHour === null || closingHour === null) {
+    return { ok: false, error: 'Les heures sont des entiers de 0 à 23.' };
+  }
+  if (openingHour === closingHour) {
+    return { ok: false, error: 'L’ouverture et la fermeture doivent différer.' };
+  }
+  const audienceMin = wholeIn(form.audienceMin, 0, 100_000);
+  const audienceMax = wholeIn(form.audienceMax, 1, 100_000);
+  if (audienceMin === null || audienceMax === null) {
+    return { ok: false, error: 'L’audience est un nombre entier de personnes.' };
+  }
+  if (audienceMin > audienceMax) {
+    return { ok: false, error: 'L’audience minimale dépasse la maximale.' };
+  }
+  const city = form.city.trim();
+  return {
+    ok: true,
+    value: {
+      name,
+      latitude,
+      longitude,
+      ...(city ? { city } : {}),
+      ...(form.sectorId ? { business_sector_id: form.sectorId } : {}),
+      opening_hour: openingHour,
+      closing_hour: closingHour,
+      audience_min: audienceMin,
+      audience_max: audienceMax,
+    },
+  };
 }

@@ -5,12 +5,14 @@ import AdminLayout from '@/features/admin/components/AdminLayout';
 import { CreateDemoAccountForm } from '@/features/admin/components/demo/CreateDemoAccountForm';
 import { DemoAccountRow } from '@/features/admin/components/demo/DemoAccountRow';
 import { DemoDelayCard } from '@/features/admin/components/demo/DemoDelayCard';
+import { DemoScreenhostsCard } from '@/features/admin/components/demo/DemoScreenhostsCard';
 import { DemoVenuesCard } from '@/features/admin/components/demo/DemoVenuesCard';
 import { useDemoPage } from '@/features/admin/hooks/useAdminDemo';
 
 // DEMO-1 (operator 2026-10-12, rulings A A A A A A) — « Démo »: demo screencaster accounts with a
 // pre-filled balance, whose campaigns air on REAL venues (the ones ticked here) the set number of
 // minutes after their cart is confirmed — no admin review, no owner acceptance, no owner revenue.
+// DEMO-2 (2026-10-13) — plus demo screenhosts: admin-made map points with a random audience.
 
 export default function DemoManagement() {
   const page = useDemoPage();
@@ -48,6 +50,10 @@ export default function DemoManagement() {
           <>
             <DemoDelayCard delayMinutes={page.data.delay_minutes} />
             <DemoVenuesCard venues={page.data.venues} />
+            <DemoScreenhostsCard
+              screenhosts={page.data.demo_screenhosts}
+              sectors={page.data.sectors}
+            />
             <section className="rounded-xl border bg-white p-5">
               <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-brand-primary" />

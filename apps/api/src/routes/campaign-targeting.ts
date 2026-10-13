@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, or } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
@@ -12,6 +12,7 @@ import {
 } from '../db/schema.js';
 import { ownerApprovedSql } from '../lib/approved-owner.js';
 import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
+import { demoVenueIds, isDemoCampaign } from '../lib/demo.js';
 import {
   broadcastableHours,
   screenhostMatchesTargeting,
@@ -199,17 +200,23 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         // CF-SK1 rider — the venue's sector NAME so the map popup can chip the real category
         // (CF-U4 shipped a truthful « Établissement couvert » placeholder pending this field).
         sectorName: businessSectors.name,
+        demoOnly: screenhosts.demoOnly,
       })
       .from(screenhosts)
       .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
       .where(
         and(
           eq(screenhosts.isActive, true),
-          ownerApprovedSql(),
           venueHasAffluenceSql(),
-          venueHasInstalledScreenSql(),
+          // DEMO-2 — a demo screenhost has neither owner nor screen; the demo filter below
+          // decides who sees it.
+          or(and(ownerApprovedSql(), venueHasInstalledScreenSql()), eq(screenhosts.demoOnly, true)),
         ),
       );
+    // DEMO-1 / DEMO-2 (ruled Q1 A) — a demo screencaster's map shows only the demo venues (the
+    // ticked real ones and the demo screenhosts); nobody else ever sees a demo screenhost.
+    const demoSet = (await isDemoCampaign(db, campaign.id)) ? await demoVenueIds(db) : null;
+    const visible = venues.filter((v) => (demoSet ? demoSet.has(v.id) : !v.demoOnly));
 
     const zoneRows = await db
       .select({ zoneId: campaignZones.zoneId })
@@ -219,7 +226,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
 
     // The zone clause gates every path; the matcher owns the empty-set semantics (E5.1 —
     // zero lines = whole network), so the preview provably mirrors dispatch with no local guard.
-    const matched = venues
+    const matched = visible
       .filter((v) => broadcastableHours(v.openingHour, v.closingHour).length > 0)
       .filter((v) => screenhostMatchesZones(v.zoneId, zoneIds))
       .filter((v) =>

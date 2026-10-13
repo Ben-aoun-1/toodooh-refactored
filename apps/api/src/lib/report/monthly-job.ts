@@ -6,6 +6,7 @@ import { db } from '../../db/client.js';
 import { notifications, screenhostMonthlyReports, screenhosts } from '../../db/schema.js';
 import { storage } from '../../storage/s3-storage.js';
 import { tunisDateOf } from '../campaign-dates.js';
+import { realVenueSql } from '../demo.js';
 
 import { assembleReportData } from './assemble.js';
 import { pistesForReport } from './recommendations.js';
@@ -235,10 +236,11 @@ export async function runMonthlyReportSweep(
     })
     .from(screenhosts)
     .where(
-      sql`EXISTS (SELECT 1 FROM screenhost_monthly_stats s WHERE s.screenhost_id = ${screenhosts.id})
+      // DEMO-2 — a demo screenhost's random audience must not earn it a monthly report.
+      sql`${realVenueSql()} AND (EXISTS (SELECT 1 FROM screenhost_monthly_stats s WHERE s.screenhost_id = ${screenhosts.id})
         OR EXISTS (SELECT 1 FROM screenhost_affluence a WHERE a.screenhost_id = ${screenhosts.id})
         OR EXISTS (SELECT 1 FROM campaign_screenhost_payout p WHERE p.screenhost_id = ${screenhosts.id})
-        OR EXISTS (SELECT 1 FROM proof_of_play pp WHERE pp.screenhost_id = ${screenhosts.id})`,
+        OR EXISTS (SELECT 1 FROM proof_of_play pp WHERE pp.screenhost_id = ${screenhosts.id}))`,
     );
 
   const currentMonth = months[0]?.month;

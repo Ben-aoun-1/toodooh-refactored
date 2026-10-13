@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import { proofOfPlay, screenhosts, screenhostUnavailability } from '../db/schema.js';
 
 import { plusCalendarDays } from './campaign-dates.js';
+import { realVenueSql } from './demo.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
@@ -304,7 +305,8 @@ export const runSpsRecomputeTick = async (log: FastifyBaseLogger): Promise<numbe
   const venues = await db
     .select({ id: screenhosts.id })
     .from(screenhosts)
-    .where(eq(screenhosts.isActive, true));
+    // DEMO-2 — a demo screenhost has no screen and no owner decision: no score to compute.
+    .where(and(eq(screenhosts.isActive, true), realVenueSql()));
   let updated = 0;
   for (const v of venues) {
     try {
