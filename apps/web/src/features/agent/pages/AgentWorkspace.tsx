@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 
 import AgentClientCard from '@/features/agent/components/AgentClientCard';
 import AgentLayout from '@/features/agent/components/AgentLayout';
+import { OnboardingCard } from '@/features/agent/components/OnboardingCard';
 import { useAgentClients } from '@/features/agent/hooks/useAgentClients';
 import {
   AGENT_DASHBOARD_PLACEHOLDER,
@@ -56,7 +57,6 @@ function PlaceholderSection({ title }: { title: string }) {
 }
 
 export default function AgentWorkspace() {
-  const contactName = useAuthStore((s) => s.contactName);
   const role = useAuthStore((s) => s.role);
   const agentCode = useAuthStore((s) => s.agentCode);
   const labels = agentAudienceLabels(role);
@@ -86,7 +86,8 @@ export default function AgentWorkspace() {
   const kpis = agentKpiCards(clients ? clients.length : null, labels);
 
   return (
-    <AgentLayout title={`Bonjour, ${contactName ?? 'Agent'}`} subtitle={labels.subtitle}>
+    <AgentLayout page="dashboard">
+      <OnboardingCard />
       <div className="space-y-6">
         {/* Top cards: Revenu actuel (PLACEHOLDER, dark) · CODE AGENT (PLACEHOLDER — see below, green) */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

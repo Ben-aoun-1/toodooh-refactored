@@ -60,6 +60,7 @@ const OwnerFactureDetailPage = lazy(
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
 const AgentWorkspace = lazy(() => import('@/features/agent/pages/AgentWorkspace'));
+const AgentSettings = lazy(() => import('@/features/agent/pages/AgentSettings'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
 const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'));
@@ -341,6 +342,14 @@ export default function App() {
               element={
                 <AgentRoute>
                   <AgentWorkspace />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/parametres"
+              element={
+                <AgentRoute>
+                  <AgentSettings />
                 </AgentRoute>
               }
             />

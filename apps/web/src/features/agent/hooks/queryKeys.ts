@@ -8,4 +8,8 @@ export const agentKeys = {
 
   /** The caller agent's referred-clients list (`agentClientsService.getClients`). */
   clients: () => [...agentKeys.all, 'clients'] as const,
+
+  /** AGT-1 — the account (status, CGE, onboarding, RIB) and the editable profile. */
+  account: () => [...agentKeys.all, 'account'] as const,
+  profile: () => [...agentKeys.all, 'profile'] as const,
 };

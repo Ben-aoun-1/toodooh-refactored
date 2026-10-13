@@ -1,197 +1,236 @@
-import { Calendar, LayoutDashboard, LogOut, Megaphone, Menu, Users, X } from 'lucide-react';
-import React, { useState } from 'react';
+import { ChevronLeft, ChevronRight, Menu, Users, X } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { agentAudienceLabels } from '@/features/agent/utils/agent-dashboard';
-import { agentRoleLabel } from '@/features/agent/utils/agent-roles';
+import logoImage from '@/assets/logo.png';
+import paramIcon from '@/assets/param.png';
+import paramIconActive from '@/assets/params.png';
+import agendaIcon from '@/assets/sidebar/agenda.png';
+import agendaIconActive from '@/assets/sidebar/agendas.png';
+import campagneIcon from '@/assets/sidebar/campagnes.png';
+import campagneIconActive from '@/assets/sidebar/campagness.png';
+import dashboardIcon from '@/assets/sidebar/dashboard.png';
+import dashboardIconActive from '@/assets/sidebar/dashboards.png';
+import logoCompany from '@/assets/sidebar/logo.png';
+import supportIcon from '@/assets/support.png';
+import supportIconActive from '@/assets/supports.png';
+import ContentErrorBoundary from '@/components/ContentErrorBoundary';
+import { ModalProvider, useModal } from '@/contexts/ModalContext';
+import AdvertiserNotificationsBell from '@/features/advertiser/components/AdvertiserNotificationsBell';
+import SidebarNavItem from '@/features/advertiser/components/SidebarNavItem';
+import { useAgentAccount } from '@/features/agent/hooks/useAgentAccount';
+import {
+  AGENT_PATHS,
+  type AgentPage,
+  affiliatesNavLabel,
+  agentKindOf,
+  agentPageHeading,
+  agentSupportObjectives,
+} from '@/features/agent/lib/agent-shell';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { logger } from '@/lib/logger';
-
-const log = logger.child({ module: 'AgentLayout' });
+import SupportModal from '@/features/support/components/SupportModal';
 
 interface AgentLayoutProps {
-  children: React.ReactNode;
-  title: string;
-  subtitle?: string;
+  page: AgentPage;
+  children: ReactNode;
 }
 
-// Slice-2 E / P2 — the agent workspace shell (both agent roles). TOODOOH-branded header + sidebar
-// mirroring AdminLayout's structure/tokens (brand-primary/brand-deep, font-poppins, rounded-xl),
-// trimmed to the single agent surface (Clients référés). Logout returns to /login (agents use the
-// public sign-in).
-export default function AgentLayout({ children, title, subtitle }: AgentLayoutProps) {
-  const contactName = useAuthStore((s) => s.contactName);
-  const role = useAuthStore((s) => s.role);
-  const logout = useAuthStore((s) => s.logout);
+// AGT-1b (agent specs v1.0 §3) — the agent shell, built from the Screencaster shell's own parts
+// (sidebar, SidebarNavItem, collapse, logout modal, Support modal, bell) so nothing shared is
+// redefined. Sidebar: Dashboard, Mes campagnes, Mon calendrier, Mes Screencasters|Screenhosts,
+// then Paramètres and Support; the header carries the final title / subtitle per page.
+export default function AgentLayout(props: AgentLayoutProps) {
+  return (
+    <ModalProvider>
+      <AgentChrome {...props} />
+    </ModalProvider>
+  );
+}
+
+function AgentChrome({ page, children }: AgentLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
+  const contactName = useAuthStore((s) => s.contactName);
+  const account = useAgentAccount();
+  const { openLogout } = useModal();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [supportOpen, setSupportOpen] = useState(false);
 
-  // R5 — the Figma sidebar. Dashboard is the only real route (/agent); "Mes {noun} affiliés" anchors
-  // to the live affiliated-clients section ON the dashboard; "Mes campagnes" + "Mon calendrier" are
-  // greenfield → visibly DISABLED with an "à venir" pill (no fake routes, no dead links). The noun
-  // swaps Screenhosts↔Screencasters by role.
-  const noun = agentAudienceLabels(role).noun;
-  const dashboardActive = location.pathname === '/agent';
-  const closeSidebar = () => setSidebarOpen(false);
-  const goTo = (to: string) => {
-    closeSidebar();
-    navigate(to);
-  };
+  const kind = agentKindOf(role) ?? 'screencaster';
+  const firstName = account.data?.first_name ?? contactName?.split(' ')[0] ?? null;
+  const heading = agentPageHeading(kind, page, firstName);
+  const settingsActive = location.pathname === AGENT_PATHS.settings;
+  const close = () => setMenuOpen(false);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      log.error({ error }, 'Logout error');
-    }
-  };
+  const bottomButton = (
+    label: string,
+    active: boolean,
+    icons: [string, string],
+    onClick: () => void,
+  ) => (
+    <button
+      type="button"
+      onClick={onClick}
+      title={!expanded ? label : undefined}
+      className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+        expanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
+      } ${active ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+    >
+      <img
+        src={active ? icons[1] : icons[0]}
+        alt=""
+        className="h-5 w-5 flex-shrink-0 object-contain"
+      />
+      {expanded && <span className="leading-5 truncate">{label}</span>}
+    </button>
+  );
 
   return (
-    <div className="min-h-screen bg-white font-poppins text-[#171717]">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                aria-label="Ouvrir le menu"
-              >
-                <Menu className="h-6 w-6" />
-              </button>
-              <div className="ml-4 lg:ml-0">
-                <h1 className="text-xl font-semibold text-[#171717]">{title}</h1>
-                {subtitle && <p className="text-sm font-normal text-[#5C5C5C]">{subtitle}</p>}
-              </div>
+    <div className="h-screen overflow-hidden bg-white flex flex-col lg:flex-row font-poppins">
+      <aside
+        className={`${menuOpen ? 'flex' : 'hidden'} lg:flex fixed left-0 z-30 flex-col bg-white border-r border-[#E1E4EA] isolate transition-[width] duration-200 ease-in-out overflow-hidden top-0 bottom-0 h-full lg:h-screen lg:sticky lg:top-0 w-[272px] ${
+          expanded ? 'lg:w-[272px]' : 'lg:w-[80px]'
+        } lg:flex-shrink-0`}
+      >
+        <div className="flex flex-col justify-center items-start p-3 gap-2.5 h-[88px] border-b border-[#E1E4EA] flex-none">
+          <div className="flex flex-row items-center w-full gap-2">
+            <div
+              className={`flex items-center justify-center overflow-hidden transition-all ${
+                expanded ? 'flex-1 min-w-0' : 'w-10 h-10 flex-shrink-0'
+              }`}
+            >
+              <img
+                src={expanded ? logoImage : logoCompany}
+                alt="Toodooh"
+                className={
+                  expanded ? 'h-10 w-auto max-w-[178px] object-contain' : 'w-10 h-10 object-contain'
+                }
+              />
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{contactName}</p>
-                <p className="text-xs text-gray-500">{agentRoleLabel(role)}</p>
-              </div>
-              <div className="h-8 w-8 bg-brand-primary rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">{contactName?.charAt(0)}</span>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="flex-shrink-0 p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100 transition-colors hidden lg:flex"
+              title={expanded ? 'Réduire le menu' : 'Ouvrir le menu'}
+            >
+              {expanded ? (
+                <ChevronLeft className="h-5 w-5" />
+              ) : (
+                <ChevronRight className="h-5 w-5" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={close}
+              className="lg:hidden p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100"
+              aria-label="Fermer le menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
-      </header>
 
-      <div className="flex">
-        {/* Sidebar */}
+        <nav className="flex flex-col flex-1 min-h-0 overflow-y-auto py-5 gap-2 px-3">
+          <SidebarNavItem
+            path={AGENT_PATHS.dashboard}
+            label="Dashboard"
+            activeIcon={dashboardIconActive}
+            inactiveIcon={dashboardIcon}
+            expanded={expanded}
+            onNavigate={close}
+          />
+          <SidebarNavItem
+            path={AGENT_PATHS.campaigns}
+            label="Mes campagnes"
+            activeIcon={campagneIconActive}
+            inactiveIcon={campagneIcon}
+            expanded={expanded}
+            onNavigate={close}
+          />
+          <SidebarNavItem
+            path={AGENT_PATHS.calendar}
+            label="Mon calendrier"
+            activeIcon={agendaIconActive}
+            inactiveIcon={agendaIcon}
+            expanded={expanded}
+            onNavigate={close}
+          />
+          <SidebarNavItem
+            path={AGENT_PATHS.affiliates}
+            label={affiliatesNavLabel(kind)}
+            icon={<Users className="h-5 w-5 flex-shrink-0" strokeWidth={1.7} />}
+            expanded={expanded}
+            onNavigate={close}
+          />
+        </nav>
+
         <div
-          className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`flex flex-col flex-none pt-2 pb-2 gap-2 px-3 ${expanded ? '' : 'items-center'}`}
         >
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
-              <span className="text-lg font-semibold text-brand-deep">TOODOOH</span>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                aria-label="Fermer le menu"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <nav className="mt-8 px-4 space-y-2 flex-1">
-              <button
-                type="button"
-                onClick={() => goTo('/agent')}
-                aria-current={dashboardActive ? 'page' : undefined}
-                className={`group flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                  dashboardActive
-                    ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <LayoutDashboard className="mr-3 h-5 w-5" />
-                Dashboard
-              </button>
-
-              {/* Greenfield — clearly disabled, never a fake route. */}
-              <span
-                aria-disabled="true"
-                className="group flex w-full cursor-not-allowed items-center rounded-xl px-4 py-3 text-sm font-medium text-gray-400"
-              >
-                <Megaphone className="mr-3 h-5 w-5" />
-                Mes campagnes
-                <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                  à venir
-                </span>
-              </span>
-              <span
-                aria-disabled="true"
-                className="group flex w-full cursor-not-allowed items-center rounded-xl px-4 py-3 text-sm font-medium text-gray-400"
-              >
-                <Calendar className="mr-3 h-5 w-5" />
-                Mon calendrier
-                <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                  à venir
-                </span>
-              </span>
-
-              {/* Anchors to the live affiliated-clients section on the dashboard. */}
-              <a
-                href="#affilies"
-                onClick={closeSidebar}
-                className="group flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
-              >
-                <Users className="mr-3 h-5 w-5" />
-                Mes {noun} affiliés
-              </a>
-            </nav>
-
-            <div className="p-4 border-t border-gray-200">
-              <div className="flex items-center space-x-3 p-3 rounded-lg bg-gray-50">
-                <div className="h-10 w-10 bg-brand-primary rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">{contactName?.charAt(0)}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{contactName}</p>
-                  <p className="text-xs text-gray-500 truncate">{agentRoleLabel(role)}</p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Déconnexion"
-                  aria-label="Déconnexion"
-                >
-                  <LogOut className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-          </div>
+          {bottomButton('Paramètres', settingsActive, [paramIcon, paramIconActive], () => {
+            navigate(AGENT_PATHS.settings);
+            close();
+          })}
+          {bottomButton('Support', supportOpen, [supportIcon, supportIconActive], () => {
+            setSupportOpen(true);
+            close();
+          })}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 lg:ml-0">
-          <main className="p-6 text-[15px] leading-6">
-            <div className="max-w-7xl mx-auto">{children}</div>
-          </main>
-        </div>
-      </div>
-
-      {/* Mobile overlay */}
-      {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden"
-          role="button"
-          tabIndex={0}
-          onClick={() => setSidebarOpen(false)}
-          onKeyDown={(e) => {
-            if (e.target !== e.currentTarget) return;
-            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
-              e.preventDefault();
-              setSidebarOpen(false);
-            }
-          }}
-          aria-label="Fermer le menu"
+          className={`flex flex-col flex-none border-t border-[#E1E4EA] ${expanded ? '' : 'items-center'}`}
+        >
+          <button
+            type="button"
+            onClick={openLogout}
+            title={expanded ? 'Se déconnecter' : undefined}
+            className={`w-full h-12 flex flex-row items-center gap-3 text-left ${
+              expanded ? 'px-3 py-3' : 'justify-center p-2'
+            }`}
+          >
+            <span className="h-9 w-9 flex-shrink-0 rounded-full bg-brand-primary flex items-center justify-center text-sm font-medium text-white">
+              {(firstName ?? contactName ?? 'A').charAt(0).toUpperCase()}
+            </span>
+            {expanded && (
+              <>
+                <span className="flex-1 min-w-0 text-sm font-medium text-[#5C5C5C] truncate">
+                  {firstName ?? contactName}
+                </span>
+                <ChevronRight className="h-5 w-5 flex-shrink-0 text-[#5C5C5C]" strokeWidth={1.5} />
+              </>
+            )}
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+        <header className="flex items-center gap-3 border-b border-[#E1E4EA] px-4 sm:px-6 lg:px-8 py-4">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="lg:hidden p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100"
+            aria-label="Ouvrir le menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-semibold text-[#171717] truncate">{heading.title}</h1>
+            <p className="text-sm text-[#5C5C5C]">{heading.subtitle}</p>
+          </div>
+          <AdvertiserNotificationsBell userId={user?.id} />
+        </header>
+        <main className="flex-1 min-h-0 overflow-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 text-[15px] leading-6 text-[#171717]">
+          <ContentErrorBoundary>{children}</ContentErrorBoundary>
+        </main>
+      </div>
+      {supportOpen && (
+        <SupportModal
+          onClose={() => setSupportOpen(false)}
+          objectives={agentSupportObjectives(kind)}
+          originPage={location.pathname}
         />
       )}
     </div>

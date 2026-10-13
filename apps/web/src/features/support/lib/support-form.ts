@@ -20,6 +20,8 @@ export interface SupportPayload {
   other_detail?: string;
   message?: string;
   appointment_date?: string;
+  /** AGT-1b — the page the request was sent from. */
+  origin_page?: string;
 }
 
 /** The one client-side check before the round trip; the api re-validates. null = valid. */
