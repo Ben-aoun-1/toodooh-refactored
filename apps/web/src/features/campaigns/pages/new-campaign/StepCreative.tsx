@@ -14,6 +14,7 @@ import { toast } from 'react-hot-toast';
 
 import PillButton from '@/components/PillButton';
 import { useCreativeUpload, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
+import SpotCtaFields from '@/features/campaigns/pages/new-campaign/SpotCtaFields';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import {
   PHOTO_ACCEPT,
@@ -357,6 +358,9 @@ export default function StepCreative({
             )}
           </div>
 
+          {!eventMode && draftCampaignId && selectedCreativeId && (
+            <SpotCtaFields campaignId={draftCampaignId} />
+          )}
           <div className="flex gap-3 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
             <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center">
               <Info className="w-3.5 h-3.5 text-slate-600" />

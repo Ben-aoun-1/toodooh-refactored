@@ -33,6 +33,7 @@ import { agentProfileRoutes } from './agent-profile.js';
 import { agentWalletRoutes } from './agent-wallet.js';
 import { agentRoutes } from './agent.js';
 import { campaignBoostRoutes } from './campaign-boost.js';
+import { campaignCtaRoutes } from './campaign-cta.js';
 import { campaignDispatchRoutes } from './campaign-dispatch.js';
 import { campaignImpressionsEstimateRoutes } from './campaign-impressions-estimate.js';
 import { campaignTargetingRoutes } from './campaign-targeting.js';
@@ -42,6 +43,7 @@ import { candidaturesRoutes } from './candidatures.js';
 import { cartRoutes } from './cart.js';
 import { contactRoutes } from './contact.js';
 import { creativesRoutes } from './creatives.js';
+import { ctaRedirectRoutes } from './cta-redirect.js';
 import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
 import { eventBoostRoutes } from './event-boost.js';
@@ -96,6 +98,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // C1 — advertiser campaign draft lifecycle (greenfield): create/list/get/edit/submit/delete,
   // owner-scoped to the authenticated advertiser. Targeting/video/map/pricing land in later lanes.
   await app.register(campaignsRoutes);
+  // QR-CTA1 — a spot's call to action (link + QR burned into a copy) and the admin switch.
+  await app.register(campaignCtaRoutes);
   // IMP-EST1 — « Impressions estimées »: the read-only dry-run of the real dispatch.
   await app.register(campaignImpressionsEstimateRoutes);
   await app.register(cartRoutes);
@@ -141,6 +145,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(supportRoutes);
   // NEWLANDING-1 — the public landing's two calls: live network counters + Carrières applications.
   await app.register(publicNetworkStatsRoutes);
+  // QR-CTA1 — GET /q/:code, where a spot's QR leads (counts the scan, then redirects).
+  await app.register(ctaRedirectRoutes);
   await app.register(candidaturesRoutes);
   await app.register(contactRoutes);
   await app.register(adminSupportRoutes);

@@ -15,6 +15,7 @@ import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { positioningPlaysPerMinute } from '../lib/event-pricing/spot.js';
 import { pushPlaylistToAllConnected } from '../lib/playout/push.js';
 import { walletSpendable } from '../lib/recharges.js';
+import { ctaCartBlock } from '../lib/spot-cta.js';
 import { dropTypicalWeekFreeze, freezeTypicalWeek } from '../lib/typical-week-freeze.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -61,6 +62,21 @@ const cartRuleFor = async (userId: string): Promise<CartRule> => ({
   demo: await isDemoUser(db, userId),
 });
 
+/** QR-CTA1 — the campaign's call-to-action verdict for the cart (lib/spot-cta.ts). */
+const ctaCartBlockFor = async (campaignId: string): Promise<string | null> => {
+  const [row] = await db
+    .select({
+      ctaUrl: campaigns.ctaUrl,
+      ctaStatus: campaigns.ctaStatus,
+      ctaSourceCreativeId: campaigns.ctaSourceCreativeId,
+      creativeId: campaigns.creativeId,
+    })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    .limit(1);
+  return row ? ctaCartBlock(row) : null;
+};
+
 const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | null> => {
   const c = row.campaign;
   // EV3 — a POSITIONING is an event-BOUND row (event_id set): the binding, not the type string,
@@ -82,6 +98,11 @@ const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | nu
   ) {
     return 'MISSING_CREATIVE';
   }
+  // QR-CTA1 — a call to action whose QR copy could not be made would never air: refused until the
+  // screencaster re-saves the link or changes the spot (a copy still being made is fine — the
+  // playout gate holds the campaign until it is ready).
+  const ctaBlock = await ctaCartBlockFor(c.id);
+  if (ctaBlock) return ctaBlock;
   if (c.requestedBudget === null || Number(c.requestedBudget) <= 0) return 'MISSING_BUDGET';
   // EVT-MIN1 — a positioning is sized in minutes (minimum 1, ruling 4A): no 100 TND floor.
   if (isEvent && c.eventMinutes === null) return 'MISSING_BUDGET';

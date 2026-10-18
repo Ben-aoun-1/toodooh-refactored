@@ -39,6 +39,8 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         businessSectorId: users.businessSectorId,
         businessType: users.businessType,
         companySize: users.companySize,
+        ctaEnabled: users.ctaEnabled,
+        isDemo: users.isDemo,
         streetAddress: users.streetAddress,
         city: users.city,
         postalCode: users.postalCode,
@@ -90,6 +92,8 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         business_sector_id: row.businessSectorId,
         business_type: row.businessType,
         company_size: row.companySize,
+        // QR-CTA1 — may attach a call-to-action QR to a spot (demo accounts always may).
+        cta_enabled: row.ctaEnabled || row.isDemo,
         street_address: row.streetAddress,
         city: row.city,
         postal_code: row.postalCode,

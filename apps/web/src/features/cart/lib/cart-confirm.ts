@@ -17,6 +17,9 @@ export const CART_REASON_FR: Record<string, string> = {
   MISSING_DATES: 'La période de diffusion manque.',
   INVALID_START_DATE: 'La date de début est trop proche — choisissez une date plus lointaine.',
   MISSING_CREATIVE: 'Aucun spot n’est associé à cette campagne.',
+  // QR-CTA1 — the QR copy of the spot could not be made.
+  SPOT_QR_FAILED:
+    'Le QR code n’a pas pu être ajouté au spot : changez de fichier ou retirez le lien.',
   MISSING_BUDGET: 'Le budget n’est pas renseigné.',
   BUDGET_BELOW_MINIMUM: 'Le budget est sous le minimum de 100 TND.',
   BUDGET_EXCEEDS_CMAX: 'Le budget dépasse l’inventaire disponible — ajustez-le dans l’éditeur.',

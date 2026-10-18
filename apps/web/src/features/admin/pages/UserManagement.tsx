@@ -27,6 +27,7 @@ import { useLocation } from 'react-router-dom';
 
 import AdminBankAuditSlot from '@/features/admin/components/AdminBankAuditSlot';
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import AdminUserCtaSlot from '@/features/admin/components/AdminUserCtaSlot';
 import AdminUserEligibilitySlot from '@/features/admin/components/AdminUserEligibilitySlot';
 import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
 import UserDocumentReviewGroup from '@/features/admin/components/UserDocumentReviewGroup';
@@ -790,6 +791,11 @@ export default function UserManagement() {
                             Admin uniquement : aucune route propriétaire ne l'expose. */}
                         {isOwnerProfile(selectedUser.profile_type) && (
                           <AdminBankAuditSlot userId={selectedUser.id} />
+                        )}
+
+                        {/* QR-CTA1 — le QR code « En savoir plus » sur les spots (test discret). */}
+                        {!isOwnerProfile(selectedUser.profile_type) && (
+                          <AdminUserCtaSlot userId={selectedUser.id} />
                         )}
 
                         {/* WiFi du lieu (propriétaires) — éditable, write-only (PATCH admin) */}

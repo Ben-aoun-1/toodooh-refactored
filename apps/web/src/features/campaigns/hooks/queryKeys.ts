@@ -33,6 +33,9 @@ export const campaignsKeys = {
   /** E5 — the live C_max ceiling for the Validation-step budget cursor (GET /:id/cmax). */
   cmax: (id: string) => [...campaignsKeys.all, 'cmax', id] as const,
 
+  /** QR-CTA1 — the spot's call to action (GET /:id/cta). */
+  cta: (id: string) => [...campaignsKeys.all, 'cta', id] as const,
+
   /**
    * IMP-EST1 — the dry-run « Impressions estimées » (GET /:id/impressions-estimate). Keyed on
    * everything that moves the estimate — the budget sized with (the cursor, or 'stored') and a
