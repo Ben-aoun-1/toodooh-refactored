@@ -7,6 +7,7 @@ import {
   campaigns,
   creatives,
 } from '../../db/schema.js';
+import { airedStorageKeySql, ctaAirableSql } from '../spot-cta.js';
 
 import { campaignWindowValidUntil, isWindowActive } from './playlist.js';
 
@@ -30,7 +31,8 @@ export interface ActiveAllocation {
 //     frozen plan + approved creative + active window must NOT air — the activation lane flips it),
 //   • its linked creative is validation_status = 'approved' (content gate),
 //   • the campaign window covers `now` (Africa/Tunis),
-//   • DEMO-1 — a demo campaign's airs_at has passed (NULL on every other campaign).
+//   • DEMO-1 — a demo campaign's airs_at has passed (NULL on every other campaign),
+//   • QR-CTA1 — a campaign with a call to action has its QR copy ready (and then airs THAT copy).
 // computeScreenPlaylist (what to send) and the proof-of-play ingest (what to record) BOTH call this,
 // so a screen only ever records proof for content the server authorized it to air. Pass campaignId
 // to resolve a single campaign (proof ingest); omit for the full list (playlist push).
@@ -45,6 +47,7 @@ export const activeAllocationsForScreenhost = async (
     eq(campaigns.status, 'active'),
     eq(creatives.validationStatus, 'approved'),
     or(isNull(campaigns.airsAt), lte(campaigns.airsAt, now)),
+    ctaAirableSql(),
   ];
   if (campaignId !== undefined) conditions.push(eq(campaigns.id, campaignId));
 
@@ -55,7 +58,7 @@ export const activeAllocationsForScreenhost = async (
       startDate: campaigns.startDate,
       endDate: campaigns.endDate,
       creativeId: creatives.id,
-      storageKey: creatives.storageKey,
+      storageKey: airedStorageKeySql(),
       durationSeconds: creatives.durationSeconds,
       creativeType: creatives.creativeType,
       repsPerHour: campaignDispatchAllocation.rI,

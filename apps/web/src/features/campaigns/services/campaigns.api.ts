@@ -196,4 +196,34 @@ export const campaignsApi = {
   remove(id: string): Promise<void> {
     return apiClient.del<void>(`/campaigns/${id}`);
   },
+  /** QR-CTA1 — the spot's call to action (link + QR burned into a copy of the spot). */
+  getCta(id: string): Promise<CampaignCtaView> {
+    return apiClient.get<CampaignCtaView>(`/campaigns/${id}/cta`);
+  },
+  setCta(id: string, body: CampaignCtaBody): Promise<CampaignCtaView> {
+    return apiClient.put<CampaignCtaView>(`/campaigns/${id}/cta`, body);
+  },
+  removeCta(id: string): Promise<CampaignCtaView> {
+    return apiClient.del<CampaignCtaView>(`/campaigns/${id}/cta`);
+  },
 };
+
+/** QR-CTA1 — GET/PUT/DELETE /api/campaigns/:id/cta. `status` is the QR copy's state. */
+export interface CampaignCtaView {
+  /** Whether this account may use calls to action (per-account switch; demo accounts always). */
+  enabled: boolean;
+  url: string | null;
+  label: string | null;
+  default_label: string;
+  status: 'pending' | 'ready' | 'failed' | null;
+  /** What the QR encodes (the scan-counting redirect). */
+  scan_url: string | null;
+  /** The spot with its QR, once made (short-lived signed URL). */
+  preview_url: string | null;
+  scans: number;
+}
+
+export interface CampaignCtaBody {
+  url: string;
+  label: string | null;
+}

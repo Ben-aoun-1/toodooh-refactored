@@ -22,6 +22,7 @@ import { isMediaProbeEnabled } from './lib/media-probe.js';
 import { startMonthlyBillingJob } from './lib/monthly-billing.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
+import { startCtaBurnJob } from './lib/spot-cta-job.js';
 import { startSpsRecomputeJob } from './lib/sps-score.js';
 import { isWebpConversionEnabled } from './lib/webp-to-png.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
@@ -113,6 +114,8 @@ const start = async (): Promise<void> => {
     startCampaignLifecycleJob(app.log);
     // DEMO-1 — puts demo campaigns on the TVs the minute their airs_at passes.
     startDemoAirJob(app.log);
+    // QR-CTA1 — burns the call-to-action QR into a copy of each spot that has a link.
+    startCtaBurnJob(app.log);
     // AGT-2 — agent affiliations: attach new venues, activate, remind, end.
     startAgentAffiliationJob(app.log);
     startAgentCommissionJob(app.log);

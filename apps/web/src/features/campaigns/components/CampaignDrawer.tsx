@@ -47,6 +47,8 @@ interface CampaignDrawerProps {
   prevues?: ReactNode;
   /** EV4 — the positioning's placement block (a consumer slot, like statusBadge). */
   eventPlacementSlot?: ReactNode;
+  /** QR-CTA1 (advertiser) — the spot's QR link + scan count, under the Spot preview. */
+  ctaSlot?: ReactNode;
   /** Named `variant` (not `role`) to avoid the jsx-a11y/aria-role lint on `role=`. */
   variant: 'advertiser' | 'owner';
   /**
@@ -87,6 +89,7 @@ export default function CampaignDrawer({
   statusBadge,
   footerSlot,
   eventPlacementSlot,
+  ctaSlot,
 }: CampaignDrawerProps) {
   const isAdvertiser = variant === 'advertiser';
 
@@ -281,6 +284,7 @@ export default function CampaignDrawer({
                 )}
               </div>
             )}
+            {ctaSlot}
           </Section>
         </div>
       ) : (

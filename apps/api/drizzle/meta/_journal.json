@@ -645,6 +645,13 @@
       "when": 1791960000000,
       "tag": "0091_demo_screenhosts",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1791970000000,
+      "tag": "0092_spot_qr_cta",
+      "breakpoints": true
     }
   ]
 }

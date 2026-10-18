@@ -32,6 +32,7 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       SIMULATOR_ENABLED: false,
       SIMULATOR_MAX_SANDBOXES: 5,
       LEARNED_AFFLUENCE_ENABLED: false,
+      CTA_PUBLIC_BASE_URL: 'https://too-dooh.com',
     }),
   );
   app.setNotFoundHandler(buildNotFoundHandler());

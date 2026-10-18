@@ -29,6 +29,7 @@ import campagneIcon from '@/assets/sidebar/campagnes.png';
 import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import BoostCampaignModal from '@/features/campaigns/components/BoostCampaignModal';
+import CampaignCtaScans from '@/features/campaigns/components/CampaignCtaScans';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import CampaignPrevues from '@/features/campaigns/components/CampaignPrevues';
 import { useDeleteCampaign, useReplayCampaign } from '@/features/campaigns/hooks/useCampaignApi';
@@ -1047,6 +1048,7 @@ export default function MyCampaigns() {
           const st = { label: statusUi.label, ...statusUi.drawer };
           return (
             <CampaignDrawer
+              ctaSlot={<CampaignCtaScans campaignId={String(selectedCampaign.id)} />}
               open={showDetailsModal}
               onClose={closeDetailsDrawer}
               campaign={selectedCampaign}

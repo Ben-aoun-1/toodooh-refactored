@@ -120,6 +120,8 @@ export const users = pgTable(
     // skip review and owner acceptance, air only on the demo venues (demo_screenhosts) after
     // dispatch_config.demo_delay_minutes, and never pay a screenhost (lib/demo.ts).
     isDemo: boolean('is_demo').notNull().default(false),
+    // QR-CTA1 — may attach a call-to-action QR to their spots (lib/spot-cta.ts; demo accounts always may).
+    ctaEnabled: boolean('cta_enabled').notNull().default(false),
     // ── notification preferences (Phase 1c) — columns only this commit; the
     // notify endpoint is Commit 4. Defaults from the legacy schema (inventory §2.2).
     notifyNewsUpdates: boolean('notify_news_updates').notNull().default(false),
@@ -1470,6 +1472,18 @@ export const campaigns = pgTable(
     // NULL on every non-demo campaign (the gate then reads the date window only).
     airsAt: timestamp('airs_at', { withTimezone: true }),
     airsPushedAt: timestamp('airs_pushed_at', { withTimezone: true }),
+    // QR-CTA1 (Youssef 2026-10-18) — the spot's call to action: a link + a ≤ 20-character message.
+    // The server burns a QR (→ /q/<cta_code>, which counts the scan then redirects) into a COPY of
+    // the creative (cta_storage_key), made from cta_source_creative_id. status: pending → ready |
+    // failed; a campaign with a cta_url airs only when its copy is ready for its CURRENT creative
+    // (lib/spot-cta.ts ctaAirableSql). All NULL = no call to action.
+    ctaUrl: text('cta_url'),
+    ctaLabel: text('cta_label'),
+    ctaCode: text('cta_code').unique(),
+    ctaStatus: text('cta_status'),
+    ctaStorageKey: text('cta_storage_key'),
+    ctaSourceCreativeId: uuid('cta_source_creative_id'),
+    ctaError: text('cta_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -2920,3 +2934,17 @@ export const demoScreenhosts = pgTable('demo_screenhosts', {
   addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
   addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// QR-CTA1 — one row per scan of a campaign's QR (GET /q/<code>): only the instant, nothing about the
+// person who scanned (no IP, no device).
+export const ctaScans = pgTable(
+  'cta_scans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    scannedAt: timestamp('scanned_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('cta_scans_campaign_scanned_idx').on(t.campaignId, t.scannedAt)],
+);

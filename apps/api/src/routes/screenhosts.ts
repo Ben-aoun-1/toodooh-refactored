@@ -52,6 +52,7 @@ import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
 import { renderReportHtml } from '../lib/report/template.js';
 import { venueSlug } from '../lib/slug.js';
+import { airedStorageKeySql } from '../lib/spot-cta.js';
 import { computeSps, recomputeVenueSps, spsComputable } from '../lib/sps-score.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
@@ -2326,7 +2327,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const [row] = await db
-      .select({ storageKey: creatives.storageKey })
+      .select({ storageKey: airedStorageKeySql() }) // QR-CTA1 — the owner previews what airs
       .from(campaignDispatchAllocation)
       .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
       .innerJoin(
