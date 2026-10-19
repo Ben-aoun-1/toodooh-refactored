@@ -197,6 +197,20 @@ export const adminUserService = {
     return apiClient.get<AdminBankAuditEntry[]>(`/admin/users/${id}/bank-audit`);
   },
 
+  // DEL-1 — complete account deletion (superadmin): what would go, then the deletion itself.
+  async getDeletionPreview(id: string): Promise<AccountDeletionPreview> {
+    return apiClient.get<AccountDeletionPreview>(`/admin/users/${id}/deletion`);
+  },
+  async deleteAccount(
+    id: string,
+    body: { reason: string; confirm_email: string },
+  ): Promise<{ deleted: string; counts: Record<string, number> }> {
+    return apiClient.post<{ deleted: string; counts: Record<string, number> }>(
+      `/admin/users/${id}/delete`,
+      body,
+    );
+  },
+
   // Presign ONE document by its uuid (the :id-scoped route). Deliberately NOT the legacy
   // /documents/:ref category shim, which collapses to the category's lowest position and would
   // always open the first of several documents. Throws ApiError (NOT_FOUND / STORAGE_ERROR).
@@ -207,3 +221,10 @@ export const adminUserService = {
     return url;
   },
 };
+
+/** DEL-1 — GET /api/admin/users/:id/deletion: row counts per table that a deletion removes. */
+export interface AccountDeletionPreview {
+  role: string;
+  email: string;
+  counts: Record<string, number>;
+}

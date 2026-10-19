@@ -2982,3 +2982,27 @@ export const ctaScans = pgTable(
   },
   (t) => [index('cta_scans_campaign_scanned_idx').on(t.campaignId, t.scannedAt)],
 );
+
+// DEL-1 (operator 2026-10-19, rulings A A B A) — one row per COMPLETE account deletion
+// (lib/account-deletion/). No personal data: the deleted id (no FK — the row is gone), the role,
+// row counts, where the financial archive went, and the hub hand-off (places + agent user to
+// delete there; retried by a sweep until the hub confirms).
+export const accountDeletions = pgTable('account_deletions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deletedUserId: uuid('deleted_user_id').notNull(),
+  role: text('role').notNull(),
+  deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason').notNull(),
+  archivePrefix: text('archive_prefix'),
+  counts: jsonb('counts').$type<Record<string, number>>().notNull().default({}),
+  hubLocationIds: text('hub_location_ids')
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
+  hubAgent: boolean('hub_agent').notNull().default(false),
+  hubStatus: text('hub_status').notNull().default('none'),
+  hubAttempts: integer('hub_attempts').notNull().default(0),
+  hubError: text('hub_error'),
+  hubDoneAt: timestamp('hub_done_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

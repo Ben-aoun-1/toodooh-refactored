@@ -26,6 +26,7 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminBankAuditSlot from '@/features/admin/components/AdminBankAuditSlot';
+import AdminDeleteAccountModal from '@/features/admin/components/AdminDeleteAccountModal';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminUserEligibilitySlot from '@/features/admin/components/AdminUserEligibilitySlot';
 import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
@@ -35,6 +36,7 @@ import { useUserDocuments, useUserMutations, useUsers } from '@/features/admin/h
 import { declaredScreensTotalLabel } from '@/features/admin/lib/venue-screens';
 import { adminUserService, type AdminUser } from '@/features/admin/services/admin-user.service';
 import { apiErrorMessage } from '@/features/auth/services/auth-errors';
+import { useIsSuperadmin } from '@/features/auth/stores/auth.store';
 import { ApiError } from '@/lib/api-client';
 
 export default function UserManagement() {
@@ -79,6 +81,8 @@ export default function UserManagement() {
   const [submittingReject, setSubmittingReject] = useState(false);
   // BANIR (N3 Scenario 2, fraud) — terminal + irreversible; a non-empty reason is required.
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const isSuperadmin = useIsSuperadmin();
   const [banNotes, setBanNotes] = useState('');
   const [submittingBan, setSubmittingBan] = useState(false);
   // 409 prior-state modal (G2 D-G2-4) — set to the conflicted user's id; the queue is refetched
@@ -502,11 +506,20 @@ export default function UserManagement() {
                         </button>
                       )}
 
-                      {/* Suppression — bientôt disponible (endpoint backend à venir, slice future) */}
+                      {/* DEL-1 — suppression complète (Toodooh + hub), superadmin uniquement. */}
                       <button
-                        disabled
-                        className="text-gray-300 cursor-not-allowed"
-                        title="Suppression bientôt disponible"
+                        onClick={() => setDeleteTarget(user)}
+                        disabled={!isSuperadmin}
+                        className={
+                          isSuperadmin
+                            ? 'text-red-700 hover:text-red-900'
+                            : 'text-gray-300 cursor-not-allowed'
+                        }
+                        title={
+                          isSuperadmin
+                            ? 'Supprimer définitivement'
+                            : 'Suppression réservée au superadmin'
+                        }
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1037,6 +1050,14 @@ export default function UserManagement() {
       )}
 
       {/* Modal — BANIR (N3 Scenario 2, fraud). Destructive + irreversible; reason required. */}
+      {deleteTarget && (
+        <AdminDeleteAccountModal
+          userId={deleteTarget.id}
+          name={deleteTarget.business_name || deleteTarget.contact_name || deleteTarget.email}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
+
       {banTarget && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

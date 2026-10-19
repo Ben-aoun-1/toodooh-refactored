@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { env } from '../env.js';
 
+import { adminAccountDeletionRoutes } from './admin-account-deletion.js';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminAgentsRoutes } from './admin-agents.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
@@ -101,6 +102,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(campaignsRoutes);
   // QR-CTA1 — a spot's call to action (link + QR burned into a copy) and the admin switch.
   await app.register(campaignCtaRoutes);
+  // DEL-1 — complete account deletion (superadmin), here and in the hub.
+  await app.register(adminAccountDeletionRoutes);
   // IMP-EST1 — « Impressions estimées »: the read-only dry-run of the real dispatch.
   await app.register(campaignImpressionsEstimateRoutes);
   await app.register(cartRoutes);

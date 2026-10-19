@@ -8,6 +8,7 @@ import { authPlugin } from './auth/plugin.js';
 import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
+import { startHubDeletionJob } from './lib/account-deletion/hub.js';
 import { startAgentAffiliationJob } from './lib/agent-affiliations.js';
 import { startAgentAppointmentJob } from './lib/agent-appointments.js';
 import { startAgentCommissionJob } from './lib/agent-commissions.js';
@@ -116,6 +117,8 @@ const start = async (): Promise<void> => {
     startDemoAirJob(app.log);
     // QR-CTA1 — burns the call-to-action QR into a copy of each spot that has a link.
     startCtaBurnJob(app.log);
+    // DEL-1 — sends pending account deletions to the hub until it confirms.
+    startHubDeletionJob(app.log);
     // AGT-2 — agent affiliations: attach new venues, activate, remind, end.
     startAgentAffiliationJob(app.log);
     startAgentCommissionJob(app.log);

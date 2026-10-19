@@ -659,6 +659,13 @@
       "when": 1792060000000,
       "tag": "0093_host_admin_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1794560000000,
+      "tag": "0094_account_deletions",
+      "breakpoints": true
     }
   ]
 }
