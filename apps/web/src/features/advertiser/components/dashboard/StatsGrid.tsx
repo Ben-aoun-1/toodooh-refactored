@@ -2,6 +2,7 @@ import statIcon1 from '@/assets/stats/1.png';
 import statIcon2 from '@/assets/stats/2.png';
 import statIcon3 from '@/assets/stats/3.png';
 import statIcon4 from '@/assets/stats/4.png';
+import { airtimeLabel } from '@/features/advertiser/lib/airtime-label';
 import { tndOrDash } from '@/lib/money';
 
 interface StatsGridProps {
@@ -10,13 +11,6 @@ interface StatsGridProps {
   totalDurationSeconds: number;
   totalBudget: number;
   loading: boolean;
-}
-
-function formatDuration(totalSeconds: number) {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = Math.floor(totalSeconds % 60);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export default function StatsGrid({
@@ -58,7 +52,7 @@ export default function StatsGrid({
           <img src={statIcon2} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
         </div>
         <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto font-mono">
-          {loading ? '...' : formatDuration(totalDurationSeconds)}
+          {loading ? '...' : airtimeLabel(totalDurationSeconds)}
         </p>
       </div>
       <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#fdfaed] border border-[#edcc7a]/30">

@@ -53,6 +53,7 @@ export async function fetchDashboardStats(): Promise<DashboardStatsResult> {
     status: c.status,
     // IMP-FACT1 — the tile sums the dispatched campaigns' OBJECTIVES (the card's own figure).
     views: plannedPrevues(c) ?? 0,
+    airtimeSeconds: c.planned_airtime_seconds ?? 0,
     budget: c.requested_budget,
     created_at: c.created_at,
   }));

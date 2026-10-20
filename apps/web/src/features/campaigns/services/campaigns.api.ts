@@ -51,6 +51,8 @@ export interface CampaignView {
    * null until a plan exists, and the surface then asks for the dry-run estimate.
    */
   planned_impressions?: number | null;
+  /** DUR-1 — the airtime the frozen plan buys, in seconds; null = not dispatched yet. */
+  planned_airtime_seconds?: number | null;
   /**
    * IMP-FACT1 (2026-09-23) — the BILLABLE objective ⌊budget × 1000 ÷ CPM⌋ the screencaster paid
    * for: the advertiser's « Impressions prévues », identical before and after dispatch. Optional so

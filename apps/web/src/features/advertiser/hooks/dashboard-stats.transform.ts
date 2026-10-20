@@ -56,6 +56,8 @@ const CONFIRMED_STATUSES = new Set(['pending', 'upcoming', 'active', 'completed'
 export interface DashboardStatsCampaignRow {
   status?: string | null;
   views?: number | null;
+  /** DUR-1 — the plan's airtime in seconds (GET /campaigns/mine planned_airtime_seconds). */
+  airtimeSeconds?: number | null;
   budget?: number | string | null;
   created_at?: string | null;
 }
@@ -109,7 +111,11 @@ export function computeDashboardStats(
       CONFIRMED_STATUSES.has(c.status ?? '') ? sum + (parseFloat(String(c.budget)) || 0) : sum,
     0,
   );
-  const totalDurationSeconds = totalViews * 30;
+  // DUR-1 — the plan's real airtime (Σ plays × spot length), not « impressions × 30 s ».
+  const totalDurationSeconds = currentCampaigns.reduce(
+    (sum, c) => sum + (c.airtimeSeconds || 0),
+    0,
+  );
 
   const prevYearCampaigns = prevYearCampaignsList.filter((c) =>
     DIFFUSED_STATUSES.has(c.status ?? ''),
@@ -120,7 +126,10 @@ export function computeDashboardStats(
       CONFIRMED_STATUSES.has(c.status ?? '') ? sum + (parseFloat(String(c.budget)) || 0) : sum,
     0,
   );
-  const prevYearDurationSeconds = prevYearViews * 30;
+  const prevYearDurationSeconds = prevYearCampaignsList.reduce(
+    (sum, c) => sum + (c.airtimeSeconds || 0),
+    0,
+  );
 
   const conversionRate = totalViews > 0 ? (activeCampaigns / totalViews) * 100 : 0;
 

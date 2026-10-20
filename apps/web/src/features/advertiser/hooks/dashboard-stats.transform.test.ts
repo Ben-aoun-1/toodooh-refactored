@@ -20,9 +20,15 @@ describe('computeDashboardStats', () => {
 
   it('buckets campaigns into current vs previous year', () => {
     const campaigns = [
-      { status: 'active', views: 100, budget: 500, created_at: '2026-03-01' },
-      { status: 'completed', views: 40, budget: 300, created_at: '2026-04-10' },
-      { status: 'active', views: 50, budget: 200, created_at: '2025-06-01' },
+      { status: 'active', views: 100, airtimeSeconds: 3000, budget: 500, created_at: '2026-03-01' },
+      {
+        status: 'completed',
+        views: 40,
+        airtimeSeconds: 600,
+        budget: 300,
+        created_at: '2026-04-10',
+      },
+      { status: 'active', views: 50, airtimeSeconds: 900, budget: 200, created_at: '2025-06-01' },
     ];
 
     const result = computeDashboardStats(campaigns, 1000, 1000, NOW);
@@ -31,7 +37,9 @@ describe('computeDashboardStats', () => {
     expect(result.stats.activeCampaigns).toBe(1);
     expect(result.stats.totalViews).toBe(140);
     expect(result.stats.totalBudget).toBe(800);
-    expect(result.stats.totalDurationSeconds).toBe(140 * 30);
+    // DUR-1 — the plans' airtime, no longer « impressions × 30 s ».
+    expect(result.stats.totalDurationSeconds).toBe(3600);
+    expect(result.stats.prevYearDurationSeconds).toBe(900);
     expect(result.stats.prevYearCampaigns).toBe(1);
     expect(result.stats.prevYearViews).toBe(50);
     expect(result.stats.prevYearBudget).toBe(200);

@@ -30,6 +30,7 @@ import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { positioningPlaysPerMinute, validateEventSpot } from '../lib/event-pricing/spot.js';
 import { eventChargeableImpressions, impressionsObjectif } from '../lib/impressions-objectif.js';
+import { plannedAirtimeByCampaign } from '../lib/planned-airtime.js';
 import { eventPrevuesOf, plannedPrevuesByCampaign } from '../lib/planned-impressions.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -400,6 +401,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     // the two sides of dispatch cannot disagree. null = no plan yet — the web then asks for the
     // dry-run estimate per campaign (a list endpoint never fans dry-runs out).
     const plannedByCampaign = await plannedPrevuesByCampaign(ids);
+    // DUR-1 — the airtime the frozen plan buys (lib/planned-airtime.ts); null = not dispatched.
+    const airtimeByCampaign = await plannedAirtimeByCampaign(ids);
 
     return reply.status(200).send(
       rows.map((r) => ({
@@ -411,6 +414,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         reconciled_at: r.reconciledAt ?? null,
         targeting: targetingByCampaign.get(r.id) ?? [],
         planned_impressions: plannedByCampaign.get(r.id)?.impressions ?? null,
+        planned_airtime_seconds: airtimeByCampaign.get(r.id) ?? null,
         // IMP-FACT1 — the advertiser's « Impressions prévues »: the BILLABLE objective paid for,
         // identical before and after dispatch (lib/impressions-objectif.ts). planned_impressions
         // above stays the PHYSICAL plan read (the real audience), for the surfaces that ask it.
