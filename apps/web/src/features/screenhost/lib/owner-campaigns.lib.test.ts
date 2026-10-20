@@ -14,6 +14,7 @@ import {
   fmtDateRange,
   matchesSearch,
   matchesStatusFilter,
+  ownerStatusUi,
   listedOnOwnerCampaigns,
   statusUi,
   venuesLabel,
@@ -113,7 +114,7 @@ describe('statusUi / decisionUi / allocationStatutLabel', () => {
     expect(decisionUi('EN_ATTENTE').label).toBe('À valider');
     expect(decisionUi('MIXTE').label).toBe('Décision partielle');
     expect(decisionUi('ACCEPTE').label).toBe('Acceptée');
-    expect(decisionUi('REFUSE').label).toBe('Refusée par vous');
+    expect(decisionUi('REFUSE').label).toBe('Refusée');
   });
 
   it('per-venue statut labels', () => {
@@ -143,5 +144,14 @@ describe('copy pins', () => {
     expect(EMPTY_STATE_TITLE).toBe('Aucune campagne pour le moment');
     expect(EMPTY_STATE_DETAIL).toContain('vos établissements');
     expect(LOAD_ERROR_MESSAGE).toBe('Impossible de charger les campagnes');
+  });
+});
+
+describe('REFUSE-ST1 — the card badge of a campaign the owner refused', () => {
+  it('stays « Refusée » whatever the campaign does elsewhere', () => {
+    expect(ownerStatusUi({ status: 'active', owner_decision: 'REFUSE' }).label).toBe('Refusée');
+    expect(ownerStatusUi({ status: 'upcoming', owner_decision: 'REFUSE' }).label).toBe('Refusée');
+    expect(ownerStatusUi({ status: 'active', owner_decision: 'ACCEPTE' }).label).toBe('Active');
+    expect(ownerStatusUi({ status: 'upcoming', owner_decision: 'MIXTE' }).label).toBe('À venir');
   });
 });

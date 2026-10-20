@@ -113,13 +113,23 @@ export const statusUi = (status: string): StatusUi => {
   }
 };
 
+/**
+ * REFUSE-ST1 (Myriam 2026-10-20) — the badge at the top right of an owner's campaign card: a
+ * campaign THEY refused stays « Refusée », whatever the campaign does on other venues (it may well
+ * be active there) and whatever its spot's validation says.
+ */
+export const ownerStatusUi = (
+  campaign: Pick<OwnerCampaign, 'status' | 'owner_decision'>,
+): StatusUi =>
+  campaign.owner_decision === 'REFUSE' ? statusUi('rejected') : statusUi(campaign.status);
+
 /** The owner's decision chip (their side of the story, next to the campaign status). */
 export const decisionUi = (decision: OwnerDecision): { label: string; className: string } => {
   switch (decision) {
     case 'ACCEPTE':
       return { label: 'Acceptée', className: 'bg-[#E8F8EE] text-[#1FC16B]' };
     case 'REFUSE':
-      return { label: 'Refusée par vous', className: 'bg-gray-100 text-[#5C5C5C]' };
+      return { label: 'Refusée', className: 'bg-gray-100 text-[#5C5C5C]' };
     case 'MIXTE':
       return { label: 'Décision partielle', className: 'bg-[#FFF4DB] text-[#B47A00]' };
     default:

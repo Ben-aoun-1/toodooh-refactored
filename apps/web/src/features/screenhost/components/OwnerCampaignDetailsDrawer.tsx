@@ -7,7 +7,7 @@ import {
   allocationStatutLabel,
   decisionUi,
   fmtDate,
-  statusUi,
+  ownerStatusUi,
 } from '@/features/screenhost/lib/owner-campaigns.lib';
 import {
   campaignTypeLabel,
@@ -39,7 +39,7 @@ export default function OwnerCampaignDetailsDrawer({
 
   if (!campaign) return <Drawer open={open} onClose={onClose} width={440} children={null} />;
 
-  const status = statusUi(campaign.status);
+  const status = ownerStatusUi(campaign);
   const decision = decisionUi(campaign.owner_decision);
   // The spot is per campaign; the presign route is per allocation — any of the owner's rows works.
   const spotAllocation = campaign.allocations[0];
