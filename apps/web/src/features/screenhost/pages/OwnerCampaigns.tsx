@@ -35,7 +35,7 @@ import {
   matchesSearch,
   matchesStatusFilter,
   listedOnOwnerCampaigns,
-  statusUi,
+  ownerStatusUi,
   venuesLabel,
 } from '@/features/screenhost/lib/owner-campaigns.lib';
 import { revenueLabel } from '@/features/screenhost/services/screenhost-allocations.service';
@@ -55,7 +55,7 @@ type ViewMode = 'grid' | 'list';
  * toasts.
  */
 const StatusBadge = ({ campaign }: { campaign: OwnerCampaign }) => {
-  const ui = statusUi(campaign.status);
+  const ui = ownerStatusUi(campaign);
   return (
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${ui.badge}`}

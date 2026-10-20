@@ -8,6 +8,7 @@ import {
   kickoffBadge,
   roundLine,
 } from '../../lib/event-catalogue';
+import { posterNameFontSize } from '../../lib/poster-fit';
 import type { EventItemView, TeamView } from '../../services/events.api';
 
 import StadiumBackdrop from './StadiumBackdrop';
@@ -44,10 +45,6 @@ function ColourStripe({ home, away }: { home: TeamView; away: TeamView }) {
       ))}
     </div>
   );
-}
-
-function clubFont(name: string, base: number): number {
-  return name.length > 16 ? base - 6 : name.length > 11 ? base - 3 : base;
 }
 
 interface EventPosterProps {
@@ -110,11 +107,11 @@ export default function EventPoster({ event, variant = 'card' }: EventPosterProp
             >
               <span className="flex min-w-0 items-center gap-2 text-[13px] font-semibold leading-tight text-white">
                 <TeamCrest team={m.home} size={22} />
-                <span className="truncate text-white">{m.home.name}</span>
+                <span className="line-clamp-2 break-words text-white">{m.home.name}</span>
               </span>
               <span className="text-center text-[10.5px] font-semibold text-white/50">VS</span>
               <span className="flex min-w-0 items-center justify-end gap-2 text-right text-[13px] font-semibold leading-tight text-white">
-                <span className="truncate text-white">{away.name}</span>
+                <span className="line-clamp-2 break-words text-white">{away.name}</span>
                 <TeamCrest team={away} size={22} />
               </span>
             </div>
@@ -130,7 +127,7 @@ export default function EventPoster({ event, variant = 'card' }: EventPosterProp
   const base = hero ? 40 : 25;
   return (
     <div
-      className={`relative flex flex-col justify-between overflow-hidden bg-[#03060F] text-white ${
+      className={`relative flex flex-col justify-between overflow-hidden bg-[#03060F] text-white [container-type:inline-size] ${
         hero ? 'min-h-[400px] px-6 pb-6 pt-7' : 'h-[228px] px-3.5 pb-4 pt-[18px]'
       }`}
     >
@@ -154,7 +151,11 @@ export default function EventPoster({ event, variant = 'card' }: EventPosterProp
               <span
                 className="break-words font-extrabold uppercase leading-none tracking-wide text-white"
                 style={{
-                  fontSize: clubFont(team.name, team.is_national ? base - 6 : base),
+                  fontSize: posterNameFontSize(
+                    team.name,
+                    team.is_national ? base - 6 : base,
+                    variant,
+                  ),
                   textShadow: SHADOW,
                 }}
               >
