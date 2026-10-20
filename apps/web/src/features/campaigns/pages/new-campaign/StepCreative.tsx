@@ -14,6 +14,7 @@ import { toast } from 'react-hot-toast';
 
 import PillButton from '@/components/PillButton';
 import { useCreativeUpload, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
+import SelectedSpotPreview from '@/features/campaigns/pages/new-campaign/SelectedSpotPreview';
 import SpotCtaFields from '@/features/campaigns/pages/new-campaign/SpotCtaFields';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import {
@@ -358,6 +359,7 @@ export default function StepCreative({
             )}
           </div>
 
+          {selectedCreative && <SelectedSpotPreview creative={selectedCreative} />}
           {!eventMode && draftCampaignId && selectedCreativeId && (
             <SpotCtaFields campaignId={draftCampaignId} />
           )}
