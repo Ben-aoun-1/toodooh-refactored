@@ -17,7 +17,7 @@ import {
   newOptions,
 } from '@/features/campaigns/lib/boost-rules';
 import { formatUiDate } from '@/features/campaigns/lib/campaign-summary';
-import { CAMPAIGN_BUDGET_FLOOR_TND } from '@/features/campaigns/lib/cmax-budget';
+import { CAMPAIGN_BUDGET_FLOOR_TND, isBudgetAccepted } from '@/features/campaigns/lib/cmax-budget';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import { type BoostAdditionsWire, boostApi } from '@/features/campaigns/services/boost.api';
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
@@ -80,7 +80,7 @@ export default function BoostCampaignModal({ campaign, userId, onClose }: BoostC
   });
   const cMax = preview.data?.c_max_boost_tnd;
   const sliderMax = cMax ?? CAMPAIGN_BUDGET_FLOOR_TND;
-  const zeroInventory = cMax !== undefined && cMax < CAMPAIGN_BUDGET_FLOOR_TND;
+  const zeroInventory = cMax !== undefined && !isBudgetAccepted(cMax);
 
   const applyBoost = useMutation({
     mutationFn: () => boostApi.apply(campaign.id, additions, amount ?? 0),
@@ -100,7 +100,7 @@ export default function BoostCampaignModal({ campaign, userId, onClose }: BoostC
     hasAddition &&
     !zeroInventory &&
     amount !== null &&
-    amount >= CAMPAIGN_BUDGET_FLOOR_TND &&
+    isBudgetAccepted(amount) &&
     (cMax === undefined || amount <= cMax) &&
     !applyBoost.isPending;
 

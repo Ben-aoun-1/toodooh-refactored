@@ -55,8 +55,8 @@ const patchBodySchema = z
     t_10s: tField,
     t_20s: tField,
     t_30s: tField,
-    // CF-D1 — the campaign start-date lead (working days). LEAD-1: at least 1 — a campaign never
-    // starts the day it is created; 30 caps runaway values. Integer: whole jours ouvrés.
+    // CF-D1 — the campaign start-date lead (working days). LEAD-0: 0 = a campaign may start the day
+    // it is created; 30 caps runaway values. Integer: whole jours ouvrés.
     campaign_lead_working_days: z
       .number()
       .int()

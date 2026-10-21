@@ -11,7 +11,7 @@ import {
   screenhosts,
   zones,
 } from '../../db/schema.js';
-import { MIN_CAMPAIGN_BUDGET_TND } from '../campaign-budget.js';
+import { MIN_CAMPAIGN_BUDGET_TND, isBelowCampaignMinimum } from '../campaign-budget.js';
 import { campaignCpmRates } from '../dispatch/config.js';
 import {
   type EventMinute,
@@ -304,7 +304,7 @@ export const applyEventBoost = async (
     return { status: 'BUDGET_BELOW_MINIMUM', floorTnd: MIN_CAMPAIGN_BUDGET_TND };
 
   const amountTnd = input.amountTnd;
-  if (amountTnd < MIN_CAMPAIGN_BUDGET_TND) {
+  if (isBelowCampaignMinimum(amountTnd)) {
     return { status: 'BUDGET_BELOW_MINIMUM', floorTnd: MIN_CAMPAIGN_BUDGET_TND };
   }
   const ceiling = await complementaryCeiling(loaded);

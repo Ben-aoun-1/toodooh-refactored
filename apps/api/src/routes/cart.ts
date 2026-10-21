@@ -6,7 +6,7 @@ import { db } from '../db/client.js';
 import { type Campaign, cartItems, campaigns, creatives, events } from '../db/schema.js';
 import { finalizeActivation, prepareActivation } from '../lib/activation-service.js';
 import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
-import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { isBelowCampaignMinimum } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
 import { demoAirsAt, demoDelayMinutes, isDemoUser } from '../lib/demo.js';
@@ -106,7 +106,7 @@ const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | nu
   if (c.requestedBudget === null || Number(c.requestedBudget) <= 0) return 'MISSING_BUDGET';
   // EVT-MIN1 — a positioning is sized in minutes (minimum 1, ruling 4A): no 100 TND floor.
   if (isEvent && c.eventMinutes === null) return 'MISSING_BUDGET';
-  if (!isEvent && Number(c.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) {
+  if (!isEvent && isBelowCampaignMinimum(Number(c.requestedBudget))) {
     return 'BUDGET_BELOW_MINIMUM';
   }
   if (isEvent && c.eventId !== null) {

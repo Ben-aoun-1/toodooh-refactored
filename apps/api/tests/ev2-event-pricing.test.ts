@@ -508,7 +508,8 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.cpm_evt_tnd).toBe(15);
-      expect(body.min_budget_tnd).toBe(100);
+      // FLOOR-0 (Mejri 21/10) — no 100 TND floor any more.
+      expect(body.min_budget_tnd).toBe(0);
       expect(body.venues).toEqual([
         {
           screenhost_id: shId,

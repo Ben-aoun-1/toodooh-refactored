@@ -16,7 +16,7 @@ import {
   zones,
 } from '../db/schema.js';
 
-import { MIN_CAMPAIGN_BUDGET_TND } from './campaign-budget.js';
+import { MIN_CAMPAIGN_BUDGET_TND, isBelowCampaignMinimum } from './campaign-budget.js';
 import { acceptDemoAllocations, isDemoCampaign } from './demo.js';
 import { computeR, computeRi, physicalFromFacturable } from './dispatch/eligibility.js';
 import { buildCreneaux, computeBounds } from './dispatch/plan.js';
@@ -306,7 +306,7 @@ export const runBoost = async (
 
       // ── APPLY gates ──
       const amountTnd = opts.amountTnd ?? 0;
-      if (amountTnd < MIN_CAMPAIGN_BUDGET_TND) {
+      if (isBelowCampaignMinimum(amountTnd)) {
         throw new BoostRefused({
           status: 'BUDGET_BELOW_MINIMUM',
           floorTnd: MIN_CAMPAIGN_BUDGET_TND,

@@ -15,7 +15,7 @@ import {
   zones,
 } from '../db/schema.js';
 import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
-import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { MIN_CAMPAIGN_BUDGET_TND, isBelowCampaignMinimum } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import {
   type StartDateViolation,
@@ -50,9 +50,10 @@ import { requireAuth } from '../middleware/require-auth.js';
 const startDateRejection = (violation: StartDateViolation, rule: StartRule) => ({
   error: 'INVALID_START_DATE',
   reason: violation,
-  message: rule.sameDay
-    ? 'La date de début ne peut pas être passée.'
-    : `La date de début doit être au moins ${effectiveLeadWorkingDays(rule.lead)} jour(s) ouvré(s) plus tard.`,
+  message:
+    rule.sameDay || effectiveLeadWorkingDays(rule.lead) === 0
+      ? 'La date de début ne peut pas être passée.'
+      : `La date de début doit être au moins ${effectiveLeadWorkingDays(rule.lead)} jour(s) ouvré(s) plus tard.`,
   first_available_start_date: premiereDateDisponible(new Date(), rule.lead, rule.sameDay),
 });
 
@@ -935,12 +936,11 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         message: 'Choisissez le nombre de minutes de votre positionnement.',
       });
     }
-    // CF-U3 (Mejri) — the budget floor: below 100 TND is refused BEFORE the ceiling gate (a
-    // sub-floor ask is never deliverable business, whatever the inventory says).
-    if (!isEventRow && Number(existing.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) {
+    // FLOOR-0 — the budget must be above 0 (lib/campaign-budget.ts); checked BEFORE the ceiling.
+    if (!isEventRow && isBelowCampaignMinimum(Number(existing.requestedBudget))) {
       return reply.status(400).send({
         error: 'BUDGET_BELOW_MINIMUM',
-        message: `A campaign budget must be at least ${MIN_CAMPAIGN_BUDGET_TND} TND.`,
+        message: 'Le budget de la campagne doit être supérieur à 0 TND.',
         minimum_tnd: MIN_CAMPAIGN_BUDGET_TND,
       });
     }

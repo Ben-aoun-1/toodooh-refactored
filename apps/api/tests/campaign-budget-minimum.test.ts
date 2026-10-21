@@ -1,21 +1,20 @@
-import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, campaigns, creatives, users } from '../src/db/schema.js';
-import { MIN_CAMPAIGN_BUDGET_TND } from '../src/lib/campaign-budget.js';
+import { MIN_CAMPAIGN_BUDGET_TND, isBelowCampaignMinimum } from '../src/lib/campaign-budget.js';
 import { plusCalendarDays, premiereDateDisponible } from '../src/lib/campaign-dates.js';
 import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
-// CF-U3 (Mejri) — the 100 TND budget floor at submit: 400 BUDGET_BELOW_MINIMUM carrying
-// {minimum_tnd}, refused AFTER MISSING_BUDGET (null still maps there) and BEFORE the E5
-// ceiling gate. Real Postgres; session mocked. Campaigns here carry NO creative, so the E5
-// cmax gate is skipped and the floor is isolated.
+// CF-U3 → FLOOR-0 (Mejri 21/10 point 5) — the 100 TND budget floor is GONE: any budget above
+// 0 submits, a NULL budget is still MISSING_BUDGET, and the E5 ceiling gate speaks for itself.
+// Real Postgres; session mocked. Campaigns here carry NO creative, so the E5 cmax gate is
+// skipped and the floor is isolated.
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -83,26 +82,9 @@ describe('CF-U3 — the submit budget floor (real Postgres)', () => {
 
   const submit = (id: string) => app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
 
-  it('99.99 TND → 400 BUDGET_BELOW_MINIMUM carrying the floor', async () => {
+  it('a budget under the old 100 TND floor submits (0.50 TND)', async () => {
     const me = await seedUser();
-    const id = await seedDraft(me, '99.99');
-    mockSession(me);
-    const res = await submit(id);
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({
-      error: 'BUDGET_BELOW_MINIMUM',
-      minimum_tnd: MIN_CAMPAIGN_BUDGET_TND,
-    });
-    const [row] = await db
-      .select({ status: campaigns.status })
-      .from(campaigns)
-      .where(eq(campaigns.id, id));
-    expect(row?.status).toBe('draft'); // the refusal never flips the status
-  });
-
-  it('exactly 100 TND passes the floor (boundary inclusive) and submits', async () => {
-    const me = await seedUser();
-    const id = await seedDraft(me, '100.00');
+    const id = await seedDraft(me, '0.50');
     mockSession(me);
     const res = await submit(id);
     expect(res.statusCode).toBe(200);
@@ -118,7 +100,7 @@ describe('CF-U3 — the submit budget floor (real Postgres)', () => {
     expect(res.json()).toMatchObject({ error: 'MISSING_BUDGET' });
   });
 
-  it('precedence: sub-floor beats the E5 ceiling gate (empty pool would also refuse — the floor speaks first)', async () => {
+  it('no floor speaks before the E5 ceiling gate: a small budget with an empty pool is BUDGET_EXCEEDS_CMAX', async () => {
     const me = await seedUser();
     const [creative] = await db
       .insert(creatives)
@@ -130,8 +112,7 @@ describe('CF-U3 — the submit budget floor (real Postgres)', () => {
         validationStatus: 'approved',
       })
       .returning();
-    // A creative + zero venues: the E5 gate would 400 BUDGET_EXCEEDS_CMAX (cmax 0) — but the
-    // sub-floor refusal must fire FIRST.
+    // A creative + zero venues: C_max is 0, so even 50 TND exceeds it.
     const lead = (await getDispatchConfig()).campaignLeadWorkingDays;
     const start = premiereDateDisponible(new Date(), lead);
     const [c] = await db
@@ -150,10 +131,14 @@ describe('CF-U3 — the submit budget floor (real Postgres)', () => {
     mockSession(me);
     const res = await submit(c?.id ?? '');
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: 'BUDGET_BELOW_MINIMUM' });
+    expect(res.json()).toMatchObject({ error: 'BUDGET_EXCEEDS_CMAX' });
   });
 
-  it('the floor is the named one-home constant', () => {
-    expect(MIN_CAMPAIGN_BUDGET_TND).toBe(100);
+  it('the floor is the named one-home rule: strictly above 0', () => {
+    expect(MIN_CAMPAIGN_BUDGET_TND).toBe(0);
+    expect(isBelowCampaignMinimum(0)).toBe(true);
+    expect(isBelowCampaignMinimum(-5)).toBe(true);
+    expect(isBelowCampaignMinimum(0.01)).toBe(false);
+    expect(isBelowCampaignMinimum(99)).toBe(false);
   });
 });

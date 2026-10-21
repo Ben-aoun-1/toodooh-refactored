@@ -79,15 +79,15 @@ describe('attentionOrderingValid (t_10s ≤ t_20s ≤ t_30s)', () => {
 });
 
 // ── CF-D1 — the campaign lead input mirrors the server bounds (integer in [1, 30]) ──────────────
-describe('parseCampaignLead (integer jours ouvrés in [1, 30])', () => {
+describe('parseCampaignLead (integer jours ouvrés in [0, 30])', () => {
   it('accepts the bounds — 1 and 30 — and the default 2', () => {
     expect(parseCampaignLead('1')).toBe(1);
     expect(parseCampaignLead('2')).toBe(2);
     expect(parseCampaignLead('30')).toBe(30);
   });
 
-  it('LEAD-1 — rejects 0 (a same-day start), negatives, above 30, non-integers and non-numbers', () => {
-    expect(parseCampaignLead('0')).toBeNull();
+  it('LEAD-0 — accepts 0 (a same-day start); rejects negatives, above 30, non-integers and non-numbers', () => {
+    expect(parseCampaignLead('0')).toBe(0);
     expect(parseCampaignLead('-1')).toBeNull();
     expect(parseCampaignLead('31')).toBeNull();
     expect(parseCampaignLead('2.5')).toBeNull();
@@ -127,12 +127,16 @@ describe('composeLeadPatch (per-block save — délai de lancement)', () => {
     expect(composeLeadPatch({ lead: '' }, cfg).ok).toBe(false);
   });
 
-  it('1 is the lowest legal edit, 0 is refused (LEAD-1); unchanged → empty patch', () => {
+  it('0 is the lowest legal edit (LEAD-0, same-day launch); unchanged → empty patch', () => {
     expect(composeLeadPatch({ lead: '1' }, cfg)).toEqual({
       ok: true,
       patch: { campaign_lead_working_days: 1 },
     });
-    expect(composeLeadPatch({ lead: '0' }, cfg).ok).toBe(false);
+    expect(composeLeadPatch({ lead: '0' }, cfg)).toEqual({
+      ok: true,
+      patch: { campaign_lead_working_days: 0 },
+    });
+    expect(composeLeadPatch({ lead: '-1' }, cfg).ok).toBe(false);
     expect(composeLeadPatch({ lead: '2' }, cfg)).toEqual({ ok: true, patch: {} });
   });
 });
