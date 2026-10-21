@@ -298,23 +298,13 @@ describe('QR-CTA1 — a spot’s call to action (real Postgres)', () => {
     expect(removed.json()).toMatchObject({ url: null, status: null });
   });
 
-  it('only enabled (or demo) accounts may set a link; the admin switches it on; bad input refused', async () => {
+  it('QR-ALL — every screencaster may set a link (not only demo accounts); bad input refused', async () => {
     const w = await world();
-    const admin = await seedUser({ role: 'admin' });
     const real = await seedUser();
     const id = await seedDraft(real, w.sector);
     mockSession(real);
-    expect((await putCta(id, { url: 'https://example.tn' })).statusCode).toBe(403);
-    vi.restoreAllMocks();
-    mockSession(admin, 'admin');
-    const sw = await app.inject({
-      method: 'PATCH',
-      url: `/api/admin/users/${real}/cta`,
-      payload: { enabled: true },
-    });
-    expect(sw.json()).toEqual({ id: real, cta_enabled: true });
-    vi.restoreAllMocks();
-    mockSession(real);
+    const view = await app.inject({ method: 'GET', url: `/api/campaigns/${id}/cta` });
+    expect(view.json()).toMatchObject({ enabled: true });
     expect((await putCta(id, { url: 'http://example.tn' })).statusCode).toBe(400);
     expect(
       (await putCta(id, { url: 'https://example.tn', label: 'a'.repeat(21) })).statusCode,
