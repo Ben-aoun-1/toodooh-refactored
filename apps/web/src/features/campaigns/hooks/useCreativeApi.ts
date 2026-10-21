@@ -25,6 +25,15 @@ export function useMyCreatives(userId: string | undefined) {
  * preview. Idle until an id is known. The presigned URL is short-lived, so this leans on React
  * Query's default staleness (a re-render after expiry refetches) rather than caching it forever.
  */
+/** One creative (GET /api/creatives/:id) — seeded by useCreativeUpload, so a fresh upload shows at once. */
+export function useCreative(creativeId: string | null) {
+  return useQuery({
+    queryKey: campaignsKeys.creative(creativeId ?? ''),
+    queryFn: () => creativesApi.get(creativeId as string),
+    enabled: Boolean(creativeId),
+  });
+}
+
 export function useCreativePreviewUrl(creativeId: string | null) {
   return useQuery({
     queryKey: campaignsKeys.creativeUrl(creativeId ?? ''),
