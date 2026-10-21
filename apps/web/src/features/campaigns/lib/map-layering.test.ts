@@ -90,7 +90,7 @@ describe('coverage-map layering', () => {
     expect(MAP_CONTROL_Z_CLASS).toBe('z-[900]');
   });
 
-  it('CF-U4 — the redesign pins: the app basemap (lib/map-tiles), brand markers, popup builder, count badge', () => {
+  it('CF-U4 — the redesign pins: the app basemap (lib/map-tiles), brand markers, bare dots, count badge', () => {
     const src = readFileSync(
       join(__dirname, '..', 'pages', 'new-campaign', 'ZonesCoverageMap.tsx'),
       'utf8',
@@ -98,10 +98,9 @@ describe('coverage-map layering', () => {
     // Operator 2026-10-12 (option B) — CARTO now watermarks key-less tiles: OSM via the ONE home.
     expect(src).toContain('MAP_TILE_URL');
     expect(src).not.toContain('cartocdn');
-    expect(src).toContain('buildPopupContent');
-    expect(src).toContain('bindPopup');
-    // CF-SK1 rider — the chip now shows the REAL category, with the CF-U4 wording as fallback.
-    expect(src).toContain("venue.sector_name ?? 'Établissement couvert'");
+    // MAP-DOTS (Mejri 21/10) — only the green dots: no tooltip, no popup on a pin.
+    expect(src).not.toContain('bindTooltip');
+    expect(src).not.toContain('bindPopup');
     expect(src).toContain('Tout le réseau — ');
     expect(src).toContain('couvert');
     // Every layer class comes from map-layering.ts — no locally hardcoded z-[…] leaks in.
