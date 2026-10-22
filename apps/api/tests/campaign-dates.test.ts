@@ -38,24 +38,24 @@ describe('premiereDateDisponible — the RULED counting matrix', () => {
 });
 
 describe('CF-D1 — the lead parameter (calibratable; default 2 pinned above)', () => {
-  it('LEAD-1 — lead 0 is read as 1: the floor is NEVER today (Mejri 15/09)', () => {
-    expect(effectiveLeadWorkingDays(0)).toBe(MIN_CAMPAIGN_LEAD_WORKING_DAYS);
+  it('LEAD-0 — lead 0 means TODAY: a campaign may start the day it is created (Mejri 21/10)', () => {
+    expect(MIN_CAMPAIGN_LEAD_WORKING_DAYS).toBe(0);
+    expect(effectiveLeadWorkingDays(0)).toBe(0);
     expect(effectiveLeadWorkingDays(2)).toBe(2);
-    expect(premiereDateDisponible(at('2026-07-17'), 0)).toBe('2026-07-20'); // vendredi → lundi
-    expect(premiereDateDisponible(at('2026-07-18'), 0)).toBe('2026-07-20'); // samedi → lundi
-    expect(premiereDateDisponible(at('2026-07-13'), 0)).toBe('2026-07-14'); // lundi → mardi
+    expect(premiereDateDisponible(at('2026-07-17'), 0)).toBe('2026-07-17'); // vendredi → vendredi
+    expect(premiereDateDisponible(at('2026-07-18'), 0)).toBe('2026-07-18'); // samedi → samedi
+    expect(premiereDateDisponible(at('2026-07-13'), 0)).toBe('2026-07-13');
   });
   it('lead 1 → the next jour ouvré (vendredi → lundi, samedi → lundi)', () => {
     expect(premiereDateDisponible(at('2026-07-17'), 1)).toBe('2026-07-20');
     expect(premiereDateDisponible(at('2026-07-18'), 1)).toBe('2026-07-20');
     expect(premiereDateDisponible(at('2026-07-13'), 1)).toBe('2026-07-14');
   });
-  it('startDateViolation at lead 0: today and yesterday are TOO_SOON, the next jour ouvré is legal', () => {
+  it('startDateViolation at lead 0: today and later are legal, only the past is TOO_SOON', () => {
     const saturday = at('2026-07-18');
-    expect(startDateViolation('2026-07-18', saturday, 0)).toBe('TOO_SOON');
-    expect(startDateViolation('2026-07-19', saturday, 0)).toBe('TOO_SOON');
+    expect(startDateViolation('2026-07-18', saturday, 0)).toBeNull();
+    expect(startDateViolation('2026-07-19', saturday, 0)).toBeNull();
     expect(startDateViolation('2026-07-17', saturday, 0)).toBe('TOO_SOON');
-    expect(startDateViolation('2026-07-20', saturday, 0)).toBeNull();
   });
   it('an explicit lead 2 matches the default (the ven→mar example is the SAME rule)', () => {
     expect(premiereDateDisponible(at('2026-07-17'), 2)).toBe('2026-07-21');

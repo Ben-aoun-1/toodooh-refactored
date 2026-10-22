@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 import { CART_BUDGET_STEP_TND } from '@/features/campaigns/hooks/new-campaign/cart-budget';
 import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
 import { useZones } from '@/features/campaigns/hooks/useZones';
-import { CAMPAIGN_BUDGET_FLOOR_TND } from '@/features/campaigns/lib/cmax-budget';
+import { CAMPAIGN_BUDGET_FLOOR_TND, isBudgetAccepted } from '@/features/campaigns/lib/cmax-budget';
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { eventBoostApi } from '@/features/events/services/event-boost.api';
 import { getErrorMessage } from '@/lib/errors';
@@ -43,7 +43,7 @@ export const eventBoostReasonFr = (error: unknown): string | null => {
     case 'ZONE_NOT_FOUND':
       return 'Une des zones sélectionnées n’est pas active.';
     case 'BUDGET_BELOW_MINIMUM':
-      return `Le budget complémentaire doit être d’au moins ${CAMPAIGN_BUDGET_FLOOR_TND} TND.`;
+      return 'Le budget complémentaire doit être supérieur à 0 TND.';
     case 'BUDGET_EXCEEDS_CMAX':
       return 'Le budget complémentaire dépasse l’inventaire encore disponible.';
     case 'INSUFFICIENT_BALANCE':
@@ -125,10 +125,7 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
     !apply.isPending &&
     (minutesMode
       ? minutes !== null && minutes >= EVENT_MIN_MINUTES && minutes <= maxMinutes
-      : amount !== null &&
-        amount >= CAMPAIGN_BUDGET_FLOOR_TND &&
-        ceiling !== undefined &&
-        amount <= ceiling);
+      : amount !== null && isBudgetAccepted(amount) && ceiling !== undefined && amount <= ceiling);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -276,7 +273,7 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
                   setRefusal(null);
                   setAmount(Number(e.target.value));
                 }}
-                disabled={ceiling < CAMPAIGN_BUDGET_FLOOR_TND}
+                disabled={!isBudgetAccepted(ceiling)}
                 aria-label="Budget complémentaire (TND)"
                 className="mt-2 w-full cursor-pointer accent-brand-primary disabled:opacity-40"
               />
@@ -284,10 +281,9 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
                 <span>MIN: {CAMPAIGN_BUDGET_FLOOR_TND} TND</span>
                 <span>MAX: {ceiling} TND</span>
               </div>
-              {ceiling < CAMPAIGN_BUDGET_FLOOR_TND && (
+              {!isBudgetAccepted(ceiling) && (
                 <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  L’inventaire encore disponible sur cette fenêtre est inférieur au minimum de{' '}
-                  {CAMPAIGN_BUDGET_FLOOR_TND} TND.
+                  Plus aucun inventaire n’est disponible sur cette fenêtre.
                 </p>
               )}
             </>

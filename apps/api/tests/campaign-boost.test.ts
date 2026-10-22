@@ -479,14 +479,13 @@ describe('CF-B1 — Booster (real Postgres)', () => {
       ).toEqual([]);
     });
 
-    it('the money gates: floor 100, the live boost ceiling, the solde HT', async () => {
+    it('the money gates: no floor but > 0, the live boost ceiling, the solde HT', async () => {
       const f = await fixture();
       mockSession(f.advertiser);
+      // FLOOR-0 (Mejri 21/10) — the 100 TND floor is gone; 0 is still refused.
       expect(
-        (await apply(f.campaignId, { added_category_ids: [f.sectorB], amount_tnd: 99 })).json<{
-          error: string;
-        }>().error,
-      ).toBe('BUDGET_BELOW_MINIMUM');
+        (await apply(f.campaignId, { added_category_ids: [f.sectorB], amount_tnd: 0 })).statusCode,
+      ).toBe(400);
       expect(
         (await apply(f.campaignId, { added_category_ids: [f.sectorB], amount_tnd: 99999 })).json<{
           error: string;

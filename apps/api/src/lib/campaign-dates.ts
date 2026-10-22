@@ -38,11 +38,11 @@ export const plusCalendarDays = (isoDate: string, n: number): string => {
 export const DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS = 2;
 
 /**
- * LEAD-1 (Mejri 15/09 point 1) — the lowest lead the platform honours. A campaign never starts
- * the day it is created: a stored 0 (the old field-test calibration) is read as 1, so today is
- * never selectable whatever dispatch_config says. The simulator starts its own campaigns at J+2.
+ * LEAD-0 (Mejri 21/10 point 1, operator ruling A — supersedes LEAD-1 of 15/09) — the lowest lead
+ * the platform honours is 0: when the admin sets the « Délai de lancement » to 0 jours ouvrés, a
+ * campaign may start the day it is created, for EVERY screencaster (not only demo accounts).
  */
-export const MIN_CAMPAIGN_LEAD_WORKING_DAYS = 1;
+export const MIN_CAMPAIGN_LEAD_WORKING_DAYS = 0;
 
 /** The lead actually applied for a configured one (LEAD-1 floor). */
 export const effectiveLeadWorkingDays = (configured: number): number =>

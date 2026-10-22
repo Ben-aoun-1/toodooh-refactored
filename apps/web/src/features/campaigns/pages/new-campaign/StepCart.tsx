@@ -23,7 +23,7 @@ import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hook
 import { useImpressionsEstimate } from '@/features/campaigns/hooks/useImpressionsEstimate';
 import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campaign-summary';
 import {
-  CAMPAIGN_BUDGET_FLOOR_TND,
+  isBudgetAccepted,
   CMAX_PULLBACK_NOTICE,
   cmaxZeroStateMessage,
   clampBudgetToCmax,
@@ -101,11 +101,10 @@ export default function StepCart({
   const value = requestedBudget;
   const busy = submitting || saving;
   const cMaxTnd = cmax.data?.c_max_tnd;
-  // CF-U3 — a ceiling below the 100 TND floor is as unsellable as zero: the same honest
-  // empty-state blocks the step ("told-at-selection" instead of a doomed refusal later);
+  // FLOOR-0 — a ceiling of 0 is unsellable: the honest empty-state blocks the step ("told-at-selection" instead of a doomed refusal later);
   // an unknown ceiling (loading/error) leaves the server gate as the authority.
   const zeroInventory = cMaxTnd !== undefined && isInventoryInsufficient(cMaxTnd);
-  const canAct = !busy && value != null && value >= CAMPAIGN_BUDGET_FLOOR_TND && !zeroInventory;
+  const canAct = !busy && isBudgetAccepted(value) && !zeroInventory;
 
   // Pull-back (US-1.4): a budget above a freshly-fetched ceiling is clamped down with a VISIBLE
   // notice — never silently. A zero ceiling clears the budget (the zero-state owns the step).

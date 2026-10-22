@@ -21,7 +21,6 @@ export const TBD_TEAM: TeamView = {
   logo_url: null,
 };
 
-export const CARD_IMPRESSIONS_LABEL = "Maximum d'impressions potentielles";
 export const SELECTION_IMPRESSIONS_LABEL = "Maximum d'impressions potentielles de la sélection";
 
 /** « Mardi 3 novembre 2026 » — the kickoff day in Tunis, capitalised. */

@@ -172,7 +172,7 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
               id="campaign-lead"
               type="number"
               step="1"
-              min="1"
+              min="0"
               max="30"
               value={lead}
               onChange={(e) => setLead(e.target.value)}

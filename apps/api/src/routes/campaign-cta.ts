@@ -15,14 +15,13 @@ import {
   parseCtaUrl,
 } from '../lib/spot-cta.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
-import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
+import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
 // QR-CTA1 (lib/spot-cta.ts holds the rules) — the screencaster's call to action on a campaign:
 //   GET    /api/campaigns/:id/cta   its link, message, the copy's status and the scan count;
 //   PUT    /api/campaigns/:id/cta   set the link (+ message) → a new QR copy is made in the background;
 //   DELETE /api/campaigns/:id/cta   remove it (the campaign airs the plain spot again);
-//   GET/PATCH /api/admin/users/:id/cta the per-account switch while the feature is tested quietly.
 // Editable only while the campaign is a draft (or refused), like every other campaign field, and
 // only on classic campaigns (an event positioning airs in the event's pods, untouched here).
 
@@ -31,7 +30,6 @@ const putSchema = z.object({
   url: z.string().max(4000),
   label: z.string().max(200).nullable().optional(),
 });
-const switchSchema = z.object({ enabled: z.boolean() });
 
 const invalid = (reply: FastifyReply, field: string, reason: string) =>
   reply.status(400).send({
@@ -40,14 +38,13 @@ const invalid = (reply: FastifyReply, field: string, reason: string) =>
     fields: [{ field, reason }],
   });
 
-/** May this account use calls to action? Demo accounts always may. */
+/**
+ * May this account use calls to action? QR-ALL (Mejri 21/10 point 4, operator ruling A): EVERY
+ * screencaster may — the quiet per-account test is over (users.cta_enabled is no longer read).
+ */
 export const ctaAllowedFor = async (userId: string): Promise<boolean> => {
-  const [row] = await db
-    .select({ ctaEnabled: users.ctaEnabled, isDemo: users.isDemo })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  return row ? row.ctaEnabled || row.isDemo : false;
+  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+  return row !== undefined;
 };
 
 const loadOwned = async (campaignId: string, userId: string) => {
@@ -106,7 +103,6 @@ const editable = (c: OwnedCampaign) => c.status === 'draft' || c.status === 'rej
 
 export const campaignCtaRoutes: FastifyPluginAsync = async (app) => {
   const advertiserGuard = { preHandler: [requireAuth, requireAdvertiser] };
-  const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 
   app.get('/api/campaigns/:id/cta', advertiserGuard, async (request, reply) => {
     const params = idParamSchema.safeParse(request.params);
@@ -196,33 +192,5 @@ export const campaignCtaRoutes: FastifyPluginAsync = async (app) => {
     if (campaign.ctaStorageKey) await storage.delete({ key: campaign.ctaStorageKey });
     const fresh = await loadOwned(campaign.id, userId);
     return reply.status(200).send(await ctaView(fresh ?? campaign, await ctaAllowedFor(userId)));
-  });
-
-  app.get('/api/admin/users/:id/cta', adminGuard, async (request, reply) => {
-    const params = idParamSchema.safeParse(request.params);
-    if (!params.success) return invalid(reply, 'id', 'must be a uuid');
-    const [row] = await db
-      .select({ ctaEnabled: users.ctaEnabled, isDemo: users.isDemo })
-      .from(users)
-      .where(eq(users.id, params.data.id))
-      .limit(1);
-    if (!row)
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Utilisateur introuvable.' });
-    return reply.status(200).send({ cta_enabled: row.ctaEnabled, is_demo: row.isDemo });
-  });
-
-  app.patch('/api/admin/users/:id/cta', adminGuard, async (request, reply) => {
-    const params = idParamSchema.safeParse(request.params);
-    if (!params.success) return invalid(reply, 'id', 'must be a uuid');
-    const body = switchSchema.safeParse(request.body ?? {});
-    if (!body.success) return invalid(reply, 'enabled', 'must be a boolean');
-    const rows = await db
-      .update(users)
-      .set({ ctaEnabled: body.data.enabled })
-      .where(eq(users.id, params.data.id))
-      .returning({ id: users.id, ctaEnabled: users.ctaEnabled });
-    if (rows.length === 0)
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Utilisateur introuvable.' });
-    return reply.status(200).send({ id: rows[0]?.id, cta_enabled: rows[0]?.ctaEnabled });
   });
 };

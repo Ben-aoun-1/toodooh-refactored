@@ -40,30 +40,14 @@ const MARKER_STYLE: L.CircleMarkerOptions = {
   fillOpacity: 0.95,
 };
 
-// The click popup, built via DOM nodes (never innerHTML — sector names are user data) with
-// self-contained inline styles so it needs nothing from the app stylesheet. Operator 2026-10-09:
-// no venue NAME on a screencaster's map — the popup and tooltip show the category only.
-// CF-SK1 rider — the coverage projection now carries sector_name, so the chip shows the REAL
-// category; the CF-U4 « Établissement couvert » wording stays as the fallback for a NULL sector.
-/** The category a pin speaks — never the venue's name. */
-export const venueCategory = (venue: CoverageVenue): string =>
-  venue.sector_name ?? 'Établissement couvert';
-
-const buildPopupContent = (venue: CoverageVenue): HTMLElement => {
-  const root = document.createElement('div');
-  root.style.cssText = 'padding:2px 4px;min-width:140px;';
-  const chip = document.createElement('span');
-  chip.textContent = venueCategory(venue);
-  chip.style.cssText =
-    'display:inline-block;margin-top:6px;padding:2px 10px;border-radius:9999px;background:#E3F7EC;border:1px solid #76E6AB;color:#1A3C34;font-size:11px;font-weight:600;';
-  root.append(chip);
-  return root;
-};
+// MAP-DOTS (Mejri 21/10 point 2) — the screencaster's map shows the green dots and NOTHING else:
+// no category on hover, no popup on click (it used to show the venue's category; the venue's name
+// was already gone since 2026-10-09).
 
 /**
  * MAP-2 — établissements sharing one coordinate (same building, same typed address) painted as
  * ONE dot, so the map showed fewer dots than the caption counted. Spread coincident venues on a
- * small ring (~15 m) so every covered venue has its own visible dot; tooltips keep the categories.
+ * small ring (~15 m) so every covered venue has its own visible dot.
  */
 export const spreadCoincident = (venues: CoverageVenue[]): CoverageVenue[] => {
   const seen = new Map<string, number>();
@@ -156,10 +140,7 @@ export default function ZonesCoverageMap({
     if (!map || !markers) return;
     markers.clearLayers();
     for (const venue of spreadCoincident(venues)) {
-      L.circleMarker([venue.latitude, venue.longitude], MARKER_STYLE)
-        .bindTooltip(venueCategory(venue))
-        .bindPopup(buildPopupContent(venue), { closeButton: false })
-        .addTo(markers);
+      L.circleMarker([venue.latitude, venue.longitude], MARKER_STYLE).addTo(markers);
     }
     // MAP-1 — data can arrive after a layout change: re-measure before framing the dots.
     map.invalidateSize();

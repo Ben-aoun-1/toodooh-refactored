@@ -467,44 +467,40 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect((await readCampaign(id))?.submittedAt).toBeNull();
   });
 
-  it('LEAD-1 — a stored lead 0 still refuses TODAY; the floor is the next working day', async () => {
-    // Prod carried campaign_lead_working_days = 0 (a field-test calibration) and « today » was
-    // selectable (Mejri 15/09). The admin PATCH now refuses 0, so write it straight to the
-    // singleton (migration 0026 seeds it) — exercise the legacy value, restore.
+  it('LEAD-0 — with the admin delay at 0, a campaign starts TODAY (any screencaster); the past is refused', async () => {
+    // Mejri 21/10 point 1 (supersedes LEAD-1 of 15/09): delay 0 = same-day launch allowed.
     await db.update(dispatchConfig).set({ campaignLeadWorkingDays: 0 });
     try {
       const me = await seedUser();
       mockSession(me);
       const today = tunisDateOf(new Date());
-      const floor = premiereDateDisponible(new Date(), 1);
-      expect(floor > today).toBe(true);
-      const res = await app.inject({
+      expect(premiereDateDisponible(new Date(), 0)).toBe(today);
+      const past = await app.inject({
         method: 'POST',
         url: '/api/campaigns',
         payload: {
-          name: 'Test terrain',
+          name: 'Hier',
           campaign_type: 'standard',
-          start_date: today,
+          start_date: plusDays(today, -1),
           end_date: plusDays(today, 30),
           requested_budget: 500,
         },
       });
-      expect(res.statusCode).toBe(400);
-      expect(res.json()).toMatchObject({
+      expect(past.statusCode).toBe(400);
+      expect(past.json()).toMatchObject({
         reason: 'TOO_SOON',
-        message: 'La date de début doit être au moins 1 jour(s) ouvré(s) plus tard.',
-        first_available_start_date: floor,
+        message: 'La date de début ne peut pas être passée.',
+        first_available_start_date: today,
       });
 
-      // The floor itself is accepted and submits.
       const ok = await app.inject({
         method: 'POST',
         url: '/api/campaigns',
         payload: {
-          name: 'Premier jour possible',
+          name: 'Aujourd’hui',
           campaign_type: 'standard',
-          start_date: floor,
-          end_date: plusDays(floor, 30),
+          start_date: today,
+          end_date: plusDays(today, 30),
           requested_budget: 500,
         },
       });

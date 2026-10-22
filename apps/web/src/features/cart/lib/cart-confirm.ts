@@ -21,7 +21,7 @@ export const CART_REASON_FR: Record<string, string> = {
   SPOT_QR_FAILED:
     'Le QR code n’a pas pu être ajouté au spot : changez de fichier ou retirez le lien.',
   MISSING_BUDGET: 'Le budget n’est pas renseigné.',
-  BUDGET_BELOW_MINIMUM: 'Le budget est sous le minimum de 100 TND.',
+  BUDGET_BELOW_MINIMUM: 'Le budget doit être supérieur à 0 TND.',
   BUDGET_EXCEEDS_CMAX: 'Le budget dépasse l’inventaire disponible — ajustez-le dans l’éditeur.',
   NOT_FOUND: 'Cette campagne n’existe plus.',
   // CF-HF3 — the CF-SK1 approved-skip path uppercases prepareActivation's refusal reasons; these

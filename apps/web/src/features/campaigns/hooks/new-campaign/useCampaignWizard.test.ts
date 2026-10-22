@@ -118,10 +118,12 @@ describe('validators', () => {
     expect(validateCreative(blankState({ creativeId: 'crv-1' }))).toBe(true);
   });
 
-  it('validateCart requires the 100 TND floor (CF-U3 — mirrors the submit gate)', () => {
+  it('validateCart requires a budget above 0 (FLOOR-0 — mirrors the submit gate)', () => {
     expect(validateCart(blankState({ requestedBudget: 0 }))).toBe(false);
     expect(validateCart(blankState({ requestedBudget: -5 }))).toBe(false);
-    expect(validateCart(blankState({ requestedBudget: 99 }))).toBe(false);
+    expect(validateCart(blankState({ requestedBudget: null }))).toBe(false);
+    expect(validateCart(blankState({ requestedBudget: 1 }))).toBe(true);
+    expect(validateCart(blankState({ requestedBudget: 99 }))).toBe(true);
     expect(validateCart(blankState({ requestedBudget: 100 }))).toBe(true);
     expect(validateCart(blankState({ requestedBudget: 500 }))).toBe(true);
   });

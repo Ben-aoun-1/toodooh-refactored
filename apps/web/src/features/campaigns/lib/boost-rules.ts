@@ -52,7 +52,7 @@ const BOOST_REASON_FR: Record<string, string> = {
   CATEGORY_ALREADY_TARGETED: 'Cette catégorie est déjà ciblée par la campagne.',
   CATEGORIES_WHOLE_NETWORK: 'La campagne couvre déjà toutes les catégories.',
   NO_FUTURE_WINDOW: 'La fenêtre de diffusion restante est vide.',
-  BUDGET_BELOW_MINIMUM: 'Le budget complémentaire minimum est de 100 TND.',
+  BUDGET_BELOW_MINIMUM: 'Le budget complémentaire doit être supérieur à 0 TND.',
   BUDGET_EXCEEDS_CMAX: 'Le budget complémentaire dépasse le plafond disponible.',
   INSUFFICIENT_BALANCE: 'Solde insuffisant pour ce boost.',
   TOO_THIN: 'L’inventaire ajouté est trop mince pour diffuser ce budget.',

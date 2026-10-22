@@ -1,4 +1,4 @@
-import { CAMPAIGN_BUDGET_FLOOR_TND } from '@/features/campaigns/lib/cmax-budget';
+import { isBudgetAccepted } from '@/features/campaigns/lib/cmax-budget';
 
 import type { StepDescriptor, WizardState } from './wizard-types';
 
@@ -37,9 +37,9 @@ export function validateCreative(state: WizardState): boolean {
   return Boolean(state.creativeId);
 }
 
-/** Cart gate: an indicative budget at or above the 100 TND floor (CF-U3 — mirrors the submit gate). */
+/** Cart gate: an indicative budget above 0 (FLOOR-0 — mirrors the submit gate). */
 export function validateCart(state: WizardState): boolean {
-  return state.requestedBudget != null && state.requestedBudget >= CAMPAIGN_BUDGET_FLOOR_TND;
+  return isBudgetAccepted(state.requestedBudget);
 }
 
 // CF-W1 (spec §1.2) — the 6-step order: name+type first, categories second, dates third.

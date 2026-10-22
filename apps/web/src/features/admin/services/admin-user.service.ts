@@ -197,16 +197,6 @@ export const adminUserService = {
     return apiClient.get<AdminBankAuditEntry[]>(`/admin/users/${id}/bank-audit`);
   },
 
-  // QR-CTA1 — the per-account switch for spot QR codes (demo accounts always have them).
-  async getCta(id: string): Promise<{ cta_enabled: boolean; is_demo: boolean }> {
-    return apiClient.get<{ cta_enabled: boolean; is_demo: boolean }>(`/admin/users/${id}/cta`);
-  },
-  async setCta(id: string, enabled: boolean): Promise<{ id: string; cta_enabled: boolean }> {
-    return apiClient.patch<{ id: string; cta_enabled: boolean }>(`/admin/users/${id}/cta`, {
-      enabled,
-    });
-  },
-
   // Presign ONE document by its uuid (the :id-scoped route). Deliberately NOT the legacy
   // /documents/:ref category shim, which collapses to the category's lowest position and would
   // always open the first of several documents. Throws ApiError (NOT_FOUND / STORAGE_ERROR).

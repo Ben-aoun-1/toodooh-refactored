@@ -396,7 +396,7 @@ describe('EV6 — the event booster + event reversements (real Postgres)', () =>
       expect((unknown.json() as { error: string }).error).toBe('ZONE_NOT_FOUND');
     });
 
-    it('the ceiling nets the positioning’s OWN live allocations; floor 100; solde gated', async () => {
+    it('the ceiling nets the positioning’s OWN live allocations; amount > 0; solde gated', async () => {
       const baseZone = await seedZone();
       const newZone = await seedZone();
       const held = await seedVenue({ zoneId: baseZone, sps: '90' });
@@ -426,9 +426,9 @@ describe('EV6 — the event booster + event reversements (real Postgres)', () =>
       ).c_max_evt_tnd;
       expect(Math.round(withoutOwn - withOwn)).toBe(180);
 
-      // The floor.
-      const low = await boost(campaignId, { added_zone_ids: [newZone], amount_tnd: 50 });
-      expect((low.json() as { error: string }).error).toBe('BUDGET_BELOW_MINIMUM');
+      // FLOOR-0 (Mejri 21/10) — no 100 TND floor any more; 0 is still refused.
+      const low = await boost(campaignId, { added_zone_ids: [newZone], amount_tnd: 0 });
+      expect(low.statusCode).toBe(400);
       // Over the ceiling.
       const over = await boost(campaignId, {
         added_zone_ids: [newZone],

@@ -235,7 +235,6 @@ describe('CF-C1 — the cart (real Postgres)', () => {
     ['INVALID_START_DATE', { startDate: '2024-01-01', endDate: '2024-01-02' }],
     ['MISSING_CREATIVE', { creativeId: null }],
     ['MISSING_BUDGET', { requestedBudget: null }],
-    ['BUDGET_BELOW_MINIMUM', { requestedBudget: '50.00' }],
     ['BUDGET_EXCEEDS_CMAX', { requestedBudget: '5000.00' }],
     ['NOT_DRAFT', { status: 'pending' as const }],
   ])('refuses an incomplete draft with the precise code %s', async (code, over) => {

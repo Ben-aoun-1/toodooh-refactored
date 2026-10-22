@@ -9,15 +9,19 @@ import { isErrorWithCode } from '@/lib/errors';
 const int = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
 
 /**
- * CF-U3 (Mejri) — the campaign budget FLOOR, mirroring the api's MIN_CAMPAIGN_BUDGET_TND
- * (lib/campaign-budget.ts; the two apps don't share a package — the mirror is test-pinned).
- * The slider min, the [floor, C_max] clamp and the insufficient-inventory threshold all read it.
+ * CF-U3 → FLOOR-0 (Mejri 21/10 point 5) — the campaign budget FLOOR, mirroring the api's
+ * MIN_CAMPAIGN_BUDGET_TND (lib/campaign-budget.ts; the two apps don't share a package — the
+ * mirror is test-pinned). The 100 TND minimum is gone: any budget ABOVE 0 is accepted and 0
+ * blocks « Suivant ». The slider starts at 0.
  */
-export const CAMPAIGN_BUDGET_FLOOR_TND = 100;
+export const CAMPAIGN_BUDGET_FLOOR_TND = 0;
 
-/** C_max below the floor ⇒ nothing sellable for this targeting (the zero-state treatment). */
-export const isInventoryInsufficient = (cMaxTnd: number): boolean =>
-  cMaxTnd < CAMPAIGN_BUDGET_FLOOR_TND;
+/** A budget the wizard, the cart and the boosts accept: strictly above the floor (0). */
+export const isBudgetAccepted = (value: number | null | undefined): value is number =>
+  value != null && value > CAMPAIGN_BUDGET_FLOOR_TND;
+
+/** No C_max above 0 ⇒ nothing sellable for this targeting (the zero-state treatment). */
+export const isInventoryInsufficient = (cMaxTnd: number): boolean => !isBudgetAccepted(cMaxTnd);
 
 export interface BudgetClampResult {
   next: number | null;
@@ -40,7 +44,7 @@ export const clampBudgetToCmax = (value: number | null, cMaxTnd: number): Budget
 /** « Budget maximum disponible : … » — the helper line under the slider; ceiling, floor and
  * eligible_count all said out loud. */
 export const cmaxHelperLine = (cMaxTnd: number, eligibleCount: number): string =>
-  `Budget maximum disponible : ${int.format(cMaxTnd)} TND (minimum : ${int.format(CAMPAIGN_BUDGET_FLOOR_TND)} TND) — calculé sur l'inventaire réel de votre ciblage (${int.format(eligibleCount)} établissement${eligibleCount > 1 ? 's' : ''} éligible${eligibleCount > 1 ? 's' : ''}).`;
+  `Budget maximum disponible : ${int.format(cMaxTnd)} TND — calculé sur l'inventaire réel de votre ciblage (${int.format(eligibleCount)} établissement${eligibleCount > 1 ? 's' : ''} éligible${eligibleCount > 1 ? 's' : ''}).`;
 
 export const CMAX_PULLBACK_NOTICE = 'Le budget a été ajusté à l’inventaire disponible.';
 export const CMAX_ZERO_STATE =
@@ -61,4 +65,4 @@ export const isBudgetExceedsCmax = (err: unknown): boolean =>
 export const isBudgetBelowMinimum = (err: unknown): boolean =>
   isErrorWithCode(err) && err.code === 'BUDGET_BELOW_MINIMUM';
 
-export const BUDGET_FLOOR_ERROR = `Le budget minimum d'une campagne est de ${int.format(CAMPAIGN_BUDGET_FLOOR_TND)} TND.`;
+export const BUDGET_FLOOR_ERROR = 'Le budget de la campagne doit être supérieur à 0 TND.';

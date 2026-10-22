@@ -262,6 +262,10 @@ export default function StepCreative({
             </label>
           )}
 
+          {/* SPOT-PREV1 (Mejri 21/10 point 3) — right under the upload: the spot just uploaded or
+              picked plays here before anything else. */}
+          {selectedCreativeId && <SelectedSpotPreview creativeId={selectedCreativeId} />}
+
           {/* Library picker */}
           <div>
             <p className="text-sm font-bold text-gray-900 mb-2">Vos créations</p>
@@ -359,7 +363,6 @@ export default function StepCreative({
             )}
           </div>
 
-          {selectedCreative && <SelectedSpotPreview creative={selectedCreative} />}
           {!eventMode && draftCampaignId && selectedCreativeId && (
             <SpotCtaFields campaignId={draftCampaignId} />
           )}

@@ -5,21 +5,13 @@ import { useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
-import { useEventCmax, usePositionner } from '../../hooks/useEvents';
-import {
-  CARD_IMPRESSIONS_LABEL,
-  cardBadge,
-  cardTitle,
-  dateLine,
-  kickoffLine,
-  roundLine,
-} from '../../lib/event-catalogue';
+import { usePositionner } from '../../hooks/useEvents';
+import { cardBadge, cardTitle, dateLine, kickoffLine, roundLine } from '../../lib/event-catalogue';
 import type { EventItemView } from '../../services/events.api';
 
 import EventPoster from './EventPoster';
 
 const log = logger.child({ module: 'CatalogueEventCard' });
-const impressionsFmt = new Intl.NumberFormat('fr-FR');
 
 interface CatalogueEventCardProps {
   event: EventItemView;
@@ -32,9 +24,8 @@ interface CatalogueEventCardProps {
 /**
  * EVT-CAT2 — one card of the new « Événements » page (Youssef's validated design): the poster,
  * the title (the event name as typed) + competition/round, the catégorie, the date, the diffusion
- * window, the stadium and the description (ruling 2026-10-08: every admin field shows), its badge, the maximum potential
- * impressions (the match's I_max for this screencaster), « Ajouter à ma sélection » and the direct
- * « Je me positionne ». B1 — a match « à confirmer » is shown but can be neither selected nor
+ * window, the stadium and the description (ruling 2026-10-08: every admin field shows), its badge,
+ * « Ajouter à ma sélection » and the direct « Je me positionne ». B1 — a match « à confirmer » is shown but can be neither selected nor
  * positioned.
  */
 export default function CatalogueEventCard({
@@ -45,7 +36,6 @@ export default function CatalogueEventCard({
 }: CatalogueEventCardProps) {
   const navigate = useNavigate();
   const positionner = usePositionner();
-  const { data: cmax } = useEventCmax(event.id);
   const hero = variant === 'hero';
   const positionable = event.positionable ?? event.statut !== 'termine';
   const title = cardTitle(event);
@@ -109,20 +99,8 @@ export default function CatalogueEventCard({
             {event.description}
           </p>
         )}
-        <div
-          className={`flex gap-2.5 rounded-xl border border-[#D7ECE0] bg-[#F2F9F5] ${
-            hero ? 'flex-col items-start p-[18px]' : 'items-center justify-between px-3.5 py-3'
-          }`}
-        >
-          <span className={`leading-snug text-[#4F6B60] ${hero ? 'text-[13px]' : 'text-[12.5px]'}`}>
-            {CARD_IMPRESSIONS_LABEL}
-          </span>
-          <span
-            className={`whitespace-nowrap font-mono text-[#0D2B1F] ${hero ? 'text-[28px]' : 'text-[15px]'}`}
-          >
-            {cmax ? impressionsFmt.format(cmax.i_max) : '…'}
-          </span>
-        </div>
+        {/* CARD-IMP0 (Mejri 21/10 point 7) — the « Maximum d'impressions potentielles » block is
+            gone from the match cards. */}
         <div className="mt-auto flex flex-col gap-2">
           {onToggle && (
             <button

@@ -12,7 +12,7 @@ import {
   users,
 } from '../../db/schema.js';
 import { activateCampaign } from '../../lib/activation-service.js';
-import { MIN_CAMPAIGN_BUDGET_TND } from '../../lib/campaign-budget.js';
+import { MIN_CAMPAIGN_BUDGET_TND, isBelowCampaignMinimum } from '../../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../../lib/campaign-cmax.js';
 import { plusCalendarDays } from '../../lib/campaign-dates.js';
 import { getDispatchConfig } from '../../lib/dispatch/config.js';
@@ -157,9 +157,9 @@ export const launchCampaign = async (
     MIN_CAMPAIGN_BUDGET_TND,
     Math.min(wanted, cmax.cMaxTnd, Math.floor(wallet.spendable_tnd)),
   );
-  if (cmax.cMaxTnd < MIN_CAMPAIGN_BUDGET_TND || wallet.spendable_tnd < MIN_CAMPAIGN_BUDGET_TND) {
+  if (isBelowCampaignMinimum(budget)) {
     await db.delete(campaigns).where(eq(campaigns.id, draft.id));
-    return { error: cmax.cMaxTnd < MIN_CAMPAIGN_BUDGET_TND ? 'CMAX_TOO_LOW' : 'NOT_FUNDED' };
+    return { error: isBelowCampaignMinimum(cmax.cMaxTnd) ? 'CMAX_TOO_LOW' : 'NOT_FUNDED' };
   }
 
   const [funded] = await db
