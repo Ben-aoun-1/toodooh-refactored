@@ -11,6 +11,7 @@ import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
 import { adminEngineJournalRoutes } from './admin-engine-journal.js';
 import { adminEventsRoutes } from './admin-events.js';
 import { adminFacturesRoutes } from './admin-factures.js';
+import { adminHostRoutes } from './admin-host.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
@@ -168,6 +169,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminPlatformStatsRoutes);
   // ADM-SCR1 — the admin venue listing (« Localités et écrans »), off the new-engine tables.
   await app.register(adminScreenhostsRoutes);
+  await app.register(adminHostRoutes);
   await app.register(adminTestingRoutes);
   // SIM-0 — the admin « Simulateur » registry (sandbox databases + context-routed engines).
   await app.register(adminSimulationsRoutes, {

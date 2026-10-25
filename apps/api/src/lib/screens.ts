@@ -3,6 +3,8 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { proofOfPlay, screenhosts, screens, users } from '../db/schema.js';
 
+import { writeHostAudit } from './host-audit.js';
+
 // Screen-row generation (MAP M1 commit 2). Screens are materialized when a screenhost owner
 // is APPROVED: screen_count rows per screenhost, named "Écran 1..N". The same rule backfills
 // already-approved owners in migration 0014. Idempotent per screenhost — one that already
@@ -220,10 +222,17 @@ export const updateScreenDeclaration = (
   screenhostId: string,
   edit: DeclarationEdit,
   scope: DeclarationScope,
+  // HOST-EDIT1 — the admin who saved: the change joins the venue's admin trail in the SAME tx.
+  auditBy?: string,
 ): Promise<DeclarationOutcome> =>
   db.transaction(async (tx): Promise<DeclarationOutcome> => {
     const [venue] = await tx
-      .select({ id: screenhosts.id, ownerStatus: users.status })
+      .select({
+        id: screenhosts.id,
+        ownerStatus: users.status,
+        screenCount: screenhosts.screenCount,
+        roomCount: screenhosts.roomCount,
+      })
       .from(screenhosts)
       .leftJoin(users, eq(users.id, screenhosts.ownerId))
       .where(
@@ -254,6 +263,15 @@ export const updateScreenDeclaration = (
         roomCount: screenhosts.roomCount,
       });
     if (!updated) return { kind: 'not_found' };
+    if (auditBy) {
+      await writeHostAudit(tx, {
+        screenhostId: venue.id,
+        section: 'declaration',
+        changedBy: auditBy,
+        before: { screen_count: venue.screenCount, room_count: venue.roomCount },
+        after: { screen_count: updated.screenCount, room_count: updated.roomCount },
+      });
+    }
     const [rows] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(screens)

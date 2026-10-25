@@ -32,6 +32,7 @@ const handleDeclarationPatch = async (
   request: FastifyRequest,
   reply: FastifyReply,
   scopeOf: (request: FastifyRequest) => DeclarationScope | null,
+  auditBy?: string,
 ) => {
   const params = idParamSchema.safeParse(request.params);
   if (!params.success) return invalid(reply, [{ field: 'id', reason: 'must be a uuid' }]);
@@ -52,6 +53,7 @@ const handleDeclarationPatch = async (
     params.data.id,
     { screenCount: body.data.screen_count, roomCount: body.data.room_count },
     scope,
+    auditBy,
   );
   if (outcome.kind === 'not_found') {
     return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
@@ -78,6 +80,6 @@ export const screenhostDeclarationRoutes: FastifyPluginAsync = async (app) => {
 
   // PATCH /api/admin/screenhosts/:id/declaration — an admin edits any venue.
   app.patch('/api/admin/screenhosts/:id/declaration', adminGuard, (request, reply) =>
-    handleDeclarationPatch(request, reply, (r) => (r.user ? 'admin' : null)),
+    handleDeclarationPatch(request, reply, (r) => (r.user ? 'admin' : null), request.user?.id),
   );
 };

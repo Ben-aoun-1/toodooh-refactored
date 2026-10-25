@@ -39,6 +39,9 @@ interface Props {
   pending: { iso: string; label: string; campaigns: string[] } | null;
   onConfirm: () => void;
   onCancel: () => void;
+  /** HOST-EDIT1 — the admin « Fiche Host » reuses the card under its own heading. */
+  title?: string;
+  subtitle?: string;
 }
 
 export function AvailabilityCalendarCard({
@@ -57,6 +60,8 @@ export function AvailabilityCalendarCard({
   pending,
   onConfirm,
   onCancel,
+  title = 'Disponibilités de mes écrans',
+  subtitle = 'Définissez les périodes de disponibilité de vos écrans',
 }: Props) {
   return (
     <section className="rounded-2xl bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-gray-100">
@@ -66,12 +71,8 @@ export function AvailabilityCalendarCard({
             <CalendarDays className="h-5 w-5 text-brand-deep" />
           </span>
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
-              Disponibilités de mes écrans
-            </h2>
-            <p className="text-sm text-gray-500">
-              Définissez les périodes de disponibilité de vos écrans
-            </p>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-900">{title}</h2>
+            <p className="text-sm text-gray-500">{subtitle}</p>
           </div>
         </div>
         {venues.length > 1 && (

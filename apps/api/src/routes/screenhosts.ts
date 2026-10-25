@@ -30,13 +30,13 @@ import {
 import { decideAllocation } from '../lib/allocation-decision.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
-import { runRefusalCascade } from '../lib/dispatch/cascade.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
-import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { SLOTS_PER_DAY, inEffectSql } from '../lib/half-hour-slots.js';
+import { writeHostAudit } from '../lib/host-audit.js';
+import { changedLockKeys, mergeLocks } from '../lib/host-locks.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { loadOwnerEventCampaigns } from '../lib/owner-event-campaigns.js';
@@ -54,6 +54,7 @@ import { renderReportHtml } from '../lib/report/template.js';
 import { venueSlug } from '../lib/slug.js';
 import { airedStorageKeySql } from '../lib/spot-cta.js';
 import { computeSps, recomputeVenueSps, spsComputable } from '../lib/sps-score.js';
+import { setVenueDayUnavailability } from '../lib/venue-unavailability.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -564,26 +565,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // UNIQUE no-op; un-declare an available day = delete 0 rows, still 200).
   //
   // CAL-1 (Mejri 11/09 point 6, operator ruling 2026-09-12: « it gets redispatched ») — REVERSES
-  // ruling 2 for declarations: a declared day that carries ACCEPTE/EN_ATTENTE créneaux of a live
-  // campaign now MOVES that day's share. In ONE transaction: the day row → the colliding allocations
-  // (plan locked FOR UPDATE, like E6) → each loses the day's créneaux and the day's facturable value
-  // (⌊Σ impressions × T⌋) → the value is re-placed: pre-diffusion (pending/upcoming) through the E3
-  // cascade at once (partial mode, the source venue excluded, allocation kept), mid-flight (active)
-  // into the plan's reliquat_stocke so E6's next round re-places it future-only. Any failure rolls
-  // the declaration back — a share is never left half-moved. Undeclaring moves nothing back.
+  // ruling 2 for declarations: a declared day MOVES the day's live share. The write lives in
+  // lib/venue-unavailability.ts (HOST-EDIT1), shared with the admin mirror.
   const unavailabilityPutSchema = z.object({
     day: z.iso.date(),
     unavailable: z.boolean(),
   });
-  interface RedispatchedShare {
-    campaign_id: string;
-    campaign_name: string;
-    mode: 'cascade' | 'reliquat';
-    slots_moved: number;
-    v_fact: number;
-    absorbed: number;
-    residual: number;
-  }
   app.put('/api/screenhosts/:id/unavailability', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -626,165 +613,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
     const day = parsed.data.day;
-    if (!parsed.data.unavailable) {
-      await db
-        .delete(screenhostUnavailability)
-        .where(
-          and(
-            eq(screenhostUnavailability.screenhostId, owned.id),
-            eq(screenhostUnavailability.day, day),
-          ),
-        );
-      return reply
-        .status(200)
-        .send({ screenhost_id: owned.id, day, unavailable: false, redispatched: [] });
-    }
-
-    // LOG1 — one cascade trace per re-placed campaign, flushed after the tx on both outcomes.
-    const traces: EngineTrace[] = [];
-    const redispatched = await db
-      .transaction(async (tx) => {
-        // The day row FIRST, so the cascade's pool assembly already excludes this venue/day.
-        await tx
-          .insert(screenhostUnavailability)
-          .values({ screenhostId: owned.id, day })
-          .onConflictDoNothing();
-
-        // The colliding shares: this venue's live allocations whose campaign window covers the day
-        // and whose frozen créneaux touch it. Plans locked FOR UPDATE — E6 rounds and cascades
-        // serialize on the plan row (redispatch.ts idiom).
-        const rows = await tx
-          .select({
-            allocation: campaignDispatchAllocation,
-            plan: campaignDispatchPlan,
-            campaignId: campaigns.id,
-            campaignName: campaigns.name,
-            campaignStatus: campaigns.status,
-            campaignStart: campaigns.startDate,
-            campaignEnd: campaigns.endDate,
-          })
-          .from(campaignDispatchAllocation)
-          .innerJoin(
-            campaignDispatchPlan,
-            eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
-          )
-          .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
-          .where(
-            and(
-              eq(campaignDispatchAllocation.screenhostId, owned.id),
-              inArray(campaignDispatchAllocation.statutAcceptation, ['ACCEPTE', 'EN_ATTENTE']),
-              inArray(campaigns.status, ['pending', 'upcoming', 'active']),
-              lte(campaigns.startDate, day),
-              gte(campaigns.endDate, day),
-            ),
-          )
-          .for('update', { of: campaignDispatchPlan });
-
-        const moved: RedispatchedShare[] = [];
-        for (const row of rows) {
-          const removed = row.allocation.creneaux.filter((c) => c.date === day);
-          if (removed.length === 0) continue;
-          const kept = row.allocation.creneaux.filter((c) => c.date !== day);
-          const t = Number(row.plan.tTierCoef);
-          const cpm = Number(row.plan.cpm);
-          const vFact = Math.min(
-            row.allocation.iiPotentiel,
-            Math.floor(removed.reduce((sum, c) => sum + c.impressions, 0) * t),
-          );
-          const iiPotentiel = row.allocation.iiPotentiel - vFact;
-          await tx
-            .update(campaignDispatchAllocation)
-            .set({
-              creneaux: kept,
-              iiPotentiel,
-              revenuPrevisionnel: String((iiPotentiel * cpm) / 1000),
-            })
-            .where(eq(campaignDispatchAllocation.id, row.allocation.id));
-
-          if (vFact === 0) {
-            moved.push({
-              campaign_id: row.campaignId,
-              campaign_name: row.campaignName,
-              mode: 'cascade',
-              slots_moved: removed.length,
-              v_fact: 0,
-              absorbed: 0,
-              residual: 0,
-            });
-            continue;
-          }
-          if (
-            (row.campaignStatus === 'pending' || row.campaignStatus === 'upcoming') &&
-            row.campaignStart !== null &&
-            row.campaignEnd !== null
-          ) {
-            const trace = createEngineTrace('cascade', row.campaignId);
-            traces.push(trace);
-            const outcome = await runRefusalCascade(
-              tx,
-              {
-                plan: row.plan,
-                campaign: {
-                  id: row.campaignId,
-                  name: row.campaignName,
-                  startDate: row.campaignStart,
-                  endDate: row.campaignEnd,
-                },
-                refused: {
-                  id: row.allocation.id,
-                  screenhostId: owned.id,
-                  iiPotentiel: vFact,
-                },
-                partial: true,
-              },
-              trace,
-            );
-            moved.push({
-              campaign_id: row.campaignId,
-              campaign_name: row.campaignName,
-              mode: 'cascade',
-              slots_moved: removed.length,
-              v_fact: vFact,
-              absorbed: outcome.absorbed,
-              residual: vFact - outcome.absorbed,
-            });
-          } else {
-            // Mid-flight: E6 owns re-placement (future-only, hourly). The day's value joins the
-            // stored reliquat, which the next round validates on the TOTAL and places.
-            await tx
-              .update(campaignDispatchPlan)
-              .set({ reliquatStocke: sql`${campaignDispatchPlan.reliquatStocke} + ${vFact}` })
-              .where(eq(campaignDispatchPlan.id, row.plan.id));
-            moved.push({
-              campaign_id: row.campaignId,
-              campaign_name: row.campaignName,
-              mode: 'reliquat',
-              slots_moved: removed.length,
-              v_fact: vFact,
-              absorbed: 0,
-              residual: vFact,
-            });
-          }
-        }
-        return moved;
-      })
-      .catch(async (err: unknown) => {
-        await Promise.all(traces.map((tr) => tr.finish('rolled_back', { reason: 'ERROR' })));
-        throw err;
-      });
-    await Promise.all(traces.map((tr) => tr.finish('committed', {})));
-
-    // E4 — a moved share changes this venue's engagement; recompute its SPS, failure-tolerated.
-    if (redispatched.length > 0) {
-      try {
-        await recomputeVenueSps(owned.id);
-      } catch (err) {
-        request.log.warn({ err, screenhostId: owned.id }, 'SPS on-declaration recompute failed');
-      }
-    }
+    const redispatched = await setVenueDayUnavailability(
+      owned.id,
+      day,
+      parsed.data.unavailable,
+      request.log,
+    );
     return reply
       .status(200)
-      .send({ screenhost_id: owned.id, day, unavailable: true, redispatched });
+      .send({ screenhost_id: owned.id, day, unavailable: parsed.data.unavailable, redispatched });
   });
 
   // PATCH /api/screenhosts/:id/hours — the OWNER edits their venue's single-window hours
@@ -1739,6 +1576,23 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     const result = await applyWifiPatch(existing, parsed.data);
 
+    // HOST-EDIT1 — the admin trail. The password is NEVER stored, only the fact that it moved
+    // (a new cipher: set, replaced or cleared).
+    const adminId = request.user?.id;
+    if (result.changed && adminId) {
+      await writeHostAudit(db, {
+        screenhostId: existing.id,
+        section: 'wifi',
+        changedBy: adminId,
+        before: { wifi_ssid: existing.wifiSsid, wifi_password_changed: false },
+        after: {
+          wifi_ssid: result.row.wifiSsid,
+          wifi_password_changed:
+            result.row.wifiPasswordEncrypted !== existing.wifiPasswordEncrypted,
+        },
+      });
+    }
+
     if (result.changed && existing.ownerId && existing.ownerStatus === 'approved') {
       void pushApprovedOwnerLocations(existing.ownerId, request.log).catch((err: unknown) => {
         request.log.warn({ err }, 'wedooh WiFi re-push (admin edit) failed to start');
@@ -1889,12 +1743,14 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
       });
     }
+    const adminId = request.user?.id;
 
     const [existing] = await db
       .select({
         id: screenhosts.id,
-        openingHour: screenhosts.openingHour,
-        closingHour: screenhosts.closingHour,
+        ...eligibilitySelection,
+        // HOST-EDIT1 — the fields already locked against the hub (lib/host-locks.ts).
+        adminLockedFields: screenhosts.adminLockedFields,
         // LEARN-1 T1 — who to re-push for, and whether the hub may know this venue yet.
         ownerId: screenhosts.ownerId,
         ownerStatus: users.status,
@@ -1961,11 +1817,35 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    const [updated] = await db
-      .update(screenhosts)
-      .set(buildEligibilityPatch(parsed.data))
-      .where(eq(screenhosts.id, existing.id))
-      .returning(eligibilitySelection);
+    // HOST-EDIT1 — the write, the hub lock of every field it CHANGED (ruling Q5 B) and the admin
+    // trail (ruling Q3 A) land in ONE transaction.
+    const before = eligibilityView(existing);
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(screenhosts)
+        .set(buildEligibilityPatch(parsed.data))
+        .where(eq(screenhosts.id, existing.id))
+        .returning(eligibilitySelection);
+      if (!row) return row;
+      const after = eligibilityView(row);
+      const locks = mergeLocks(existing.adminLockedFields, changedLockKeys(before, after));
+      if (locks.length !== existing.adminLockedFields.length) {
+        await tx
+          .update(screenhosts)
+          .set({ adminLockedFields: locks })
+          .where(eq(screenhosts.id, existing.id));
+      }
+      if (adminId) {
+        await writeHostAudit(tx, {
+          screenhostId: existing.id,
+          section: 'eligibility',
+          changedBy: adminId,
+          before: { ...before, sps: undefined },
+          after: { ...after, sps: undefined },
+        });
+      }
+      return row;
+    });
     // LEARN-1 T1 — an hours CHANGE re-pushes the location (the admin WiFi-edit idiom: approved owner
     // only, fire-and-forget, the sweep retries). A patch that leaves the window as it was is silent.
     const hoursChanged =

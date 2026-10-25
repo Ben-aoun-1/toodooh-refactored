@@ -23,6 +23,7 @@ import { currentCge } from '../lib/agent-sheet.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { buildEligibilityPatch, type EligibilityPatchInput } from '../lib/eligibility-patch.js';
 import { collapseHalvesSql, hourOfSlot, inEffectSql, slotsOfHour } from '../lib/half-hour-slots.js';
+import { withoutLockedFields } from '../lib/host-locks.js';
 import { mergeMonthlyAudience } from '../lib/monthly-audience.js';
 import { decryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireSyncKey } from '../middleware/require-sync-key.js';
@@ -730,11 +731,14 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
 
     const requestedIds = [...new Set(items.map((i) => i.location_id))];
     const known = await db
-      .select({ id: screenhosts.id })
+      .select({ id: screenhosts.id, locked: screenhosts.adminLockedFields })
       .from(screenhosts)
       .where(inArray(screenhosts.id, requestedIds));
     const knownIds = new Set(known.map((k) => k.id));
     const unknownLocations = requestedIds.filter((id) => !knownIds.has(id));
+    // HOST-EDIT1 (ruling Q5 B) — the fields an admin set by hand are LOCKED: dropped from the
+    // hub's patch below, so the admin's value stands until « Rendre au hub » (lib/host-locks.ts).
+    const lockedById = new Map(known.map((k) => [k.id, k.locked]));
 
     const toUpsert = items.filter((i) => knownIds.has(i.location_id));
 
@@ -774,7 +778,9 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
           if (item.broadcast_capacity !== undefined)
             patchInput.broadcast_capacity = item.broadcast_capacity;
 
-          const patch = buildEligibilityPatch(patchInput);
+          const patch = buildEligibilityPatch(
+            withoutLockedFields(patchInput, lockedById.get(item.location_id) ?? []),
+          );
           // Lane D ratios — merged ROUTE-LOCALLY, never via the shared patch (the admin PATCH has
           // no ratios surface). Absent key → untouched; explicit null → all six cleared. Drizzle
           // numeric takes a string on write (the lat/lng convention), hence toString().

@@ -8,6 +8,7 @@ import {
 import type { DeclarationPatch } from '@/features/screenhost/services/screenhost.service';
 
 import { adminKeys } from './queryKeys';
+import { invalidateHostFiche } from './useAdminHost';
 
 export interface AdminLocationFilters {
   status: 'all' | AdminLocationStatus;
@@ -56,10 +57,7 @@ export function useUpdateAdminScreenhostDeclaration() {
   return useMutation({
     mutationFn: ({ screenhostId, patch }: { screenhostId: string; patch: DeclarationPatch }) =>
       adminScreenhostService.updateDeclaration(screenhostId, patch),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminKeys.adminLocationsAll() });
-      void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
-    },
+    onSuccess: (_view, { screenhostId }) => invalidateHostFiche(queryClient, screenhostId),
   });
 }
 

@@ -422,6 +422,13 @@ export const screenhosts = pgTable(
      */
     age46To60Pct: numeric('age_46_60_pct', { precision: 5, scale: 2 }),
     age60PlusPct: numeric('age_60_plus_pct', { precision: 5, scale: 2 }),
+    // HOST-EDIT1 (ruling Q5 B, 2026-10-25) — the eligibility fields an ADMIN set by hand, which the
+    // hub's C3 ingest may no longer overwrite. Values are lib/host-locks.ts keys; empty = the hub
+    // owns every field as before. Cleared per field by the admin « Rendre au hub » action.
+    adminLockedFields: text('admin_locked_fields')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -2137,6 +2144,33 @@ export const userBankDetailsAudit = pgTable(
 );
 
 export type UserBankDetailsAudit = typeof userBankDetailsAudit.$inferSelect;
+
+// HOST-EDIT1 (ruling Q3 A, 2026-10-25) — the append-only trail of every ADMIN edit made from the
+// « Fiche Host » page: which venue, which section, the changed fields before → after, who, when.
+// Only CHANGED keys are stored (a no-op save writes no row). The WiFi password is never stored —
+// the WiFi section records `wifi_password_changed: true` instead. One home: lib/host-audit.ts.
+export const hostAdminEdits = pgTable(
+  'host_admin_edits',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // The trail belongs to the venue: a deleted venue (DEL-1) takes its history with it.
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    // venue | owner | eligibility | wifi | declaration | unavailability | lock — lib/host-audit.ts.
+    section: text('section').notNull(),
+    // The admin who saved. set null: removing an admin account keeps the trail.
+    changedBy: uuid('changed_by').references(() => users.id, { onDelete: 'set null' }),
+    before: jsonb('before').$type<Record<string, unknown>>().notNull(),
+    after: jsonb('after').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('host_admin_edits_screenhost_created_idx').on(table.screenhostId, table.createdAt),
+  ],
+);
+
+export type HostAdminEdit = typeof hostAdminEdits.$inferSelect;
 
 // CPM-3 (operator rulings 2026-09-18) — the append-only trail of every per-screencaster CPM change:
 // who, when, old → new for BOTH rates (an unchanged one is written old = new), and how many of the
