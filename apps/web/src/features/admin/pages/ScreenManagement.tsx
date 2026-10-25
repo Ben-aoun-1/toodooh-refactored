@@ -1,6 +1,15 @@
-import { ChevronDown, ChevronRight, ExternalLink, MapPin, Monitor, Search } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  MapPin,
+  Monitor,
+  Pencil,
+  Search,
+} from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminLocationsPagination from '@/features/admin/components/AdminLocationsPagination';
@@ -289,6 +298,14 @@ export default function ScreenManagement() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            {/* HOST-EDIT1 — every parameter of the venue, editable. */}
+                            <Link
+                              to={`/admin-screens/${location.id}`}
+                              className="mr-3 inline-flex items-center gap-1 text-brand-deep hover:underline p-1"
+                            >
+                              <Pencil className="w-4 h-4" />
+                              Fiche Host
+                            </Link>
                             <a
                               href={HUB_URL}
                               target="_blank"

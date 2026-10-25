@@ -138,6 +138,13 @@ export const adminKeys = {
   ) => [...adminKeys.all, 'adminLocations', status, ownerId, search, page, perPage] as const,
   /** SCR-DECL1 — the prefix of every venue-list key (a declaration edit refetches them all). */
   adminLocationsAll: () => [...adminKeys.all, 'adminLocations'] as const,
+  /** HOST-EDIT1 — one venue's « Fiche Host » (venue + owner account). */
+  hostFiche: (id: string) => [...adminKeys.all, 'hostFiche', id] as const,
+  /** HOST-EDIT1 — one venue's admin edit trail. */
+  hostHistory: (id: string) => [...adminKeys.all, 'hostHistory', id] as const,
+  /** HOST-EDIT1 — one venue's declared days (and their live shares) in [from, to]. */
+  hostUnavailability: (id: string, from: string, to: string) =>
+    [...adminKeys.all, 'hostUnavailability', id, from, to] as const,
   /** ADM-SCR1 — the owner picker (GET /api/admin/screenhosts/owners). */
   screenOwners: () => [...adminKeys.all, 'screenOwners'] as const,
 

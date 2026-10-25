@@ -6,6 +6,7 @@ import {
 } from '@/features/admin/services/admin-screenhost.service';
 
 import { adminKeys } from './queryKeys';
+import { invalidateHostFiche } from './useAdminHost';
 
 /** EL1 — one venue's eligibility view; fetched per card in the UserManagement details modal. */
 export function useScreenhostEligibility(screenhostId: string) {
@@ -31,6 +32,8 @@ export function useUpdateScreenhostEligibility() {
       adminScreenhostService.updateEligibility(screenhostId, patch),
     onSuccess: (view, { screenhostId }) => {
       queryClient.setQueryData(adminKeys.screenhostEligibility(screenhostId), view);
+      // HOST-EDIT1 — the edit locked fields against the hub and joined the trail.
+      invalidateHostFiche(queryClient, screenhostId);
     },
   });
 }

@@ -73,6 +73,7 @@ const CampaignReviewQueue = lazy(() => import('@/features/admin/pages/CampaignRe
 const CreateAdmin = lazy(() => import('@/features/admin/pages/CreateAdmin'));
 const AdminManagement = lazy(() => import('@/features/admin/pages/AdminManagement'));
 const ScreenManagement = lazy(() => import('@/features/admin/pages/ScreenManagement'));
+const HostFiche = lazy(() => import('@/features/admin/pages/HostFiche'));
 const ScreenhostFactureManagement = lazy(
   () => import('@/features/admin/pages/ScreenhostFactureManagement'),
 );
@@ -688,6 +689,14 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <ScreenManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-screens/:id"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <HostFiche />
                 </AdminRoute>
               }
             />

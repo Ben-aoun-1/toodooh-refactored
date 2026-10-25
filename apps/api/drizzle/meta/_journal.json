@@ -652,6 +652,13 @@
       "when": 1791970000000,
       "tag": "0092_spot_qr_cta",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1792060000000,
+      "tag": "0093_host_admin_edits",
+      "breakpoints": true
     }
   ]
 }

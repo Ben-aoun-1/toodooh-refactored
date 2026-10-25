@@ -19,7 +19,12 @@ const INPUT_CLASS =
  * card (one reconciliation server-side); a blank field is left unchanged, and the server's 409
  * (below the installed screens) is shown as the toast.
  */
-export default function AdminVenueDeclarationForm({ location }: { location: AdminLocation }) {
+export default function AdminVenueDeclarationForm({
+  location,
+}: {
+  // HOST-EDIT1 — only these three are read, so the « Fiche Host » can pass its own venue.
+  location: Pick<AdminLocation, 'id' | 'declared_screens_count' | 'room_count'>;
+}) {
   const update = useUpdateAdminScreenhostDeclaration();
   const [screens, setScreens] = useState(declaredCountInput(location.declared_screens_count));
   const [rooms, setRooms] = useState(declaredCountInput(location.room_count));

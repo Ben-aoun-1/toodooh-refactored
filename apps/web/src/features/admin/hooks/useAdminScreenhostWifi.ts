@@ -4,6 +4,7 @@ import { adminScreenhostService } from '@/features/admin/services/admin-screenho
 import type { WifiPatch } from '@/features/screenhost/services/screenhost.service';
 
 import { adminKeys } from './queryKeys';
+import { invalidateHostFiche } from './useAdminHost';
 
 interface AdminUpdateWifiInput {
   screenhostId: string;
@@ -20,8 +21,9 @@ export function useAdminUpdateScreenhostWifi() {
   return useMutation({
     mutationFn: ({ screenhostId, wifi }: AdminUpdateWifiInput) =>
       adminScreenhostService.updateWifi(screenhostId, wifi),
-    onSuccess: () => {
+    onSuccess: (_view, { screenhostId }) => {
       void queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+      invalidateHostFiche(queryClient, screenhostId);
     },
   });
 }
