@@ -136,10 +136,10 @@ describe('measured video rules at the upload route (probe mocked — every envir
     ['16:9', 1920, 1080],
   ])('accepts a %s H.264 video (%i×%i) — any ratio uploads (201)', async (_ratio, w, h) => {
     mockSession(await seedUser());
-    probeSpy.mockResolvedValue(measured({ width: w, height: h, durationSeconds: 8.2 }));
-    const res = await uploadVideo(app, 'duration_seconds=8');
+    probeSpy.mockResolvedValue(measured({ width: w, height: h, durationSeconds: 12.2 }));
+    const res = await uploadVideo(app, 'duration_seconds=12');
     expect(res.statusCode).toBe(201);
-    expect((res.json() as { duration_seconds: number }).duration_seconds).toBe(9); // ceil(8.2)
+    expect((res.json() as { duration_seconds: number }).duration_seconds).toBe(13); // ceil(12.2)
   });
 
   it('accepts a stream whose dimensions could not be measured — only codec + duration gate (201)', async () => {

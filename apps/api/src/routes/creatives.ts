@@ -16,6 +16,7 @@ import {
 import {
   MAX_CREATIVE_BYTES,
   MAX_VIDEO_DURATION_SECONDS,
+  MIN_VIDEO_DURATION_SECONDS,
   creativeMimeForContainer,
   creativeView,
   isValidDuration,
@@ -110,14 +111,18 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const { type, duration_seconds: durationSeconds, title } = parsedQuery.data;
+    // SPOT-MIN1 — a classic video lasts 10–30 s. An event upload keeps its own refusal
+    // (EVENT_SPOT_TOO_LONG, same 10 s floor) below, so the generic floor steps aside for it.
+    const minVideoSeconds =
+      parsedQuery.data.for_event === undefined ? MIN_VIDEO_DURATION_SECONDS : 1;
 
-    // Duration bound (server-side, on the stored value): video ≤ 30s; photo ∈ {10,20,30}.
-    if (!isValidDuration(type, durationSeconds)) {
+    // Duration bound (server-side, on the stored value): video 10–30 s; photo ∈ {10,20,30}.
+    if (!isValidDuration(type, durationSeconds, minVideoSeconds)) {
       return invalidField(
         reply,
         'duration_seconds',
         type === 'video'
-          ? 'a video creative must be 1-30 seconds'
+          ? `a video creative must be ${MIN_VIDEO_DURATION_SECONDS}-${MAX_VIDEO_DURATION_SECONDS} seconds`
           : 'a photo creative duration must be 10, 20 or 30 seconds',
       );
     }
@@ -254,10 +259,10 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       const measuredDuration = Math.max(1, Math.ceil(probed.durationSeconds));
-      if (measuredDuration > MAX_VIDEO_DURATION_SECONDS) {
+      if (measuredDuration < minVideoSeconds || measuredDuration > MAX_VIDEO_DURATION_SECONDS) {
         return reply.status(400).send({
           error: 'MEDIA_DURATION_INVALID',
-          message: `A video creative must be at most ${MAX_VIDEO_DURATION_SECONDS} seconds (measured: ${measuredDuration}s).`,
+          message: `A video creative must be ${MIN_VIDEO_DURATION_SECONDS}-${MAX_VIDEO_DURATION_SECONDS} seconds (measured: ${measuredDuration}s).`,
           measured_duration_seconds: measuredDuration,
         });
       }

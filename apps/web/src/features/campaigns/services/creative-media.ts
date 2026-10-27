@@ -36,7 +36,7 @@ const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
   // (MEDIA_DURATION_INVALID, EVENT_SPOT_TOO_LONG), so no length is named here (15 s in events).
   MEDIA_FORMAT_UNSUPPORTED:
     'Format non conforme : la vidéo doit être encodée en H.264 (MP4 ou MOV).',
-  MEDIA_DURATION_INVALID: 'Format non conforme : la vidéo ne doit pas dépasser 30 secondes.',
+  MEDIA_DURATION_INVALID: 'Format non conforme : la vidéo doit durer entre 10 et 30 secondes.',
   MEDIA_UNREADABLE: 'Fichier illisible — réessayez avec une vidéo MP4 (H.264).',
 };
 

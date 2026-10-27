@@ -43,7 +43,7 @@ const multipartBody = (file: { filename: string; contentType: string; content: B
 };
 
 const fixture = (name: string): Buffer => readFileSync(join(import.meta.dirname, 'fixtures', name));
-const VIDEO = fixture('h264-169.mp4');
+const VIDEO = fixture('h264-169-12s.mp4');
 const PHOTO = fixture('photo.jpg');
 const videoFile = () =>
   multipartBody({ filename: 'clip.mp4', contentType: 'video/mp4', content: VIDEO });

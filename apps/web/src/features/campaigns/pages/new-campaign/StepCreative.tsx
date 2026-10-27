@@ -4,7 +4,6 @@ import {
   Film,
   Image as ImageIcon,
   ImagePlus,
-  Info,
   Loader2,
   Upload,
   X,
@@ -14,6 +13,12 @@ import { toast } from 'react-hot-toast';
 
 import PillButton from '@/components/PillButton';
 import { useCreativeUpload, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
+import {
+  VIDEO_DROPZONE_HINT,
+  VIDEO_DURATION_MESSAGE,
+  isClassicVideoDurationValid,
+} from '@/features/campaigns/lib/spot-duration';
+import CreativeSpecs from '@/features/campaigns/pages/new-campaign/CreativeSpecs';
 import SelectedSpotPreview from '@/features/campaigns/pages/new-campaign/SelectedSpotPreview';
 import SpotCtaFields from '@/features/campaigns/pages/new-campaign/SpotCtaFields';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
@@ -26,11 +31,7 @@ import {
 } from '@/features/campaigns/services/creative-media';
 import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
 import EventRepeatsNote from '@/features/events/components/EventRepeatsNote';
-import {
-  EVENT_VIDEO_MIN_SECONDS,
-  eventSlotLabel,
-  eventSlotSeconds,
-} from '@/features/events/lib/event-minutes';
+import { EVENT_VIDEO_MIN_SECONDS, eventSlotSeconds } from '@/features/events/lib/event-minutes';
 import {
   EVENT_SPOT_MAX_SECONDS,
   EVENT_SPOT_TOO_LONG_MESSAGE,
@@ -41,7 +42,6 @@ import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'StepCreative' });
 
-const MAX_VIDEO_DURATION_SECONDS = 30;
 const PHOTO_DURATIONS = [10, 20, 30] as const;
 
 const STATUS_LABEL: Record<string, string> = {
@@ -111,7 +111,6 @@ export default function StepCreative({
     event.target.value = '';
     if (!file || !draftCampaignId) return;
 
-    const maxVideoSeconds = eventMode ? EVENT_SPOT_MAX_SECONDS : MAX_VIDEO_DURATION_SECONDS;
     let durationSeconds: number;
     if (uploadType === 'video') {
       const probed = await readVideoDurationSeconds(file);
@@ -121,11 +120,12 @@ export default function StepCreative({
         toast.error(await unreadableVideoMessage(file));
         return;
       }
-      // EVT-MIN1 — an event video also has a floor (10 s): too short a spot cannot fill a slot.
-      if (probed > maxVideoSeconds || (eventMode && probed < EVENT_VIDEO_MIN_SECONDS)) {
-        toast.error(
-          eventMode ? EVENT_SPOT_TOO_LONG_MESSAGE : 'La vidéo ne doit pas dépasser 30 secondes.',
-        );
+      // EVT-MIN1 (events) / SPOT-MIN1 (classic, Mariem 27/10): a video lasts 10 to 30 s.
+      const validLength = eventMode
+        ? probed >= EVENT_VIDEO_MIN_SECONDS && probed <= EVENT_SPOT_MAX_SECONDS
+        : isClassicVideoDurationValid(probed);
+      if (!validLength) {
+        toast.error(eventMode ? EVENT_SPOT_TOO_LONG_MESSAGE : VIDEO_DURATION_MESSAGE);
         return;
       }
       durationSeconds = Math.max(1, probed);
@@ -251,7 +251,7 @@ export default function StepCreative({
                   {uploadType === 'video'
                     ? eventMode
                       ? `MP4 ou MOV (H.264) · ${EVENT_VIDEO_MIN_SECONDS} à ${EVENT_SPOT_MAX_SECONDS} secondes`
-                      : `MP4 ou MOV (H.264) · ${MAX_VIDEO_DURATION_SECONDS} secondes maximum`
+                      : VIDEO_DROPZONE_HINT
                     : 'JPEG, PNG ou WebP'}
                 </p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
@@ -366,23 +366,7 @@ export default function StepCreative({
           {!eventMode && draftCampaignId && selectedCreativeId && (
             <SpotCtaFields campaignId={draftCampaignId} />
           )}
-          <div className="flex gap-3 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center">
-              <Info className="w-3.5 h-3.5 text-slate-600" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-gray-900 mb-2">Spécifications</p>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>
-                  {eventMode
-                    ? `Vidéo : ${EVENT_VIDEO_MIN_SECONDS} à ${EVENT_SPOT_MAX_SECONDS} secondes — chaque annonceur dispose d’une minute dans la page publicitaire du bloc ; votre vidéo occupe un créneau de 10, 12, 15, 20 ou 30 s (ex. ${eventSlotLabel('video', 23) ?? ''})`
-                    : 'Vidéo : 30 secondes maximum (MP4 / MOV, H.264)'}
-                </li>
-                <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG / WebP)</li>
-                <li>Votre création sera validée par notre équipe avant diffusion</li>
-              </ul>
-            </div>
-          </div>
+          <CreativeSpecs eventMode={eventMode} />
         </div>
       </div>
 
