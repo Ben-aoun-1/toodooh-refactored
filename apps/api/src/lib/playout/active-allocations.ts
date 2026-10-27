@@ -7,7 +7,7 @@ import {
   campaigns,
   creatives,
 } from '../../db/schema.js';
-import { airedStorageKeySql, ctaAirableSql } from '../spot-cta.js';
+import { airedCreativeTypeSql, airedStorageKeySql, ctaAirableSql } from '../spot-cta.js';
 
 import { campaignWindowValidUntil, isWindowActive } from './playlist.js';
 
@@ -60,7 +60,7 @@ export const activeAllocationsForScreenhost = async (
       creativeId: creatives.id,
       storageKey: airedStorageKeySql(),
       durationSeconds: creatives.durationSeconds,
-      creativeType: creatives.creativeType,
+      creativeType: airedCreativeTypeSql(), // QR-CTA2 — a photo's QR copy airs as a video
       repsPerHour: campaignDispatchAllocation.rI,
     })
     .from(campaignDispatchAllocation)

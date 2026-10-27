@@ -113,6 +113,43 @@ export async function renderPdf(html: string): Promise<Buffer> {
   }
 }
 
+/**
+ * QR-CTA2 — render one self-contained HTML document to a TRANSPARENT PNG of exactly
+ * `width`×`height` px (the spot's QR card layers). Same browser, same ceiling and crash guard as
+ * renderPdf.
+ */
+export async function renderPng(html: string, width: number, height: number): Promise<Buffer> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    const work = (async () => {
+      await page.setViewport({ width, height, deviceScaleFactor: 1 });
+      await page.setContent(html, { waitUntil: 'load', timeout: RENDER_TIMEOUT_MS });
+      await page.evaluate('document.fonts.ready.then(() => undefined)');
+      const png = await page.screenshot({
+        type: 'png',
+        omitBackground: true,
+        clip: { x: 0, y: 0, width, height },
+      });
+      return Buffer.from(png);
+    })();
+    const ceiling = new Promise<never>((_, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`png render exceeded ${RENDER_TIMEOUT_MS}ms`)),
+        RENDER_TIMEOUT_MS,
+      );
+      timer.unref();
+    });
+    return await Promise.race([work, ceiling]);
+  } catch (err) {
+    browserPromise = null;
+    await browser.close().catch(() => undefined);
+    throw err;
+  } finally {
+    await page.close().catch(() => undefined);
+  }
+}
+
 /** Test/shutdown hook — closes the singleton if it was ever launched. */
 export async function closeReportBrowser(): Promise<void> {
   if (!browserPromise) return;

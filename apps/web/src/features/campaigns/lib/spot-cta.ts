@@ -2,7 +2,7 @@ import type { CampaignCtaBody, CampaignCtaView } from '../services/campaigns.api
 
 /**
  * QR-CTA1 — the spot step's call-to-action form, pure: the link (https only) and the message
- * (≤ 20 characters, empty = « Pour en savoir plus »), checked the way the api checks them
+ * (≤ 20 characters, empty = « pour en savoir plus »), checked the way the api checks them
  * (apps/api/src/lib/spot-cta.ts), and the status line under the form.
  */
 

@@ -84,9 +84,6 @@ const EnvSchema = z.object({
   // posture: the docker image sets it; unset, a WebP photo is REFUSED as before (UPL-2) with ONE
   // boot warning — only PNG/JPEG is ever stored either way.
   FFMPEG_PATH: z.string().min(1).optional(),
-  // QR-CTA1 — the font ffmpeg draws a spot's call-to-action message with. OPTIONAL: the api image's
-  // FreeSans Bold (ttf-freefont) is the default (lib/spot-cta-burn.ts).
-  CTA_FONT_PATH: z.string().min(1).optional(),
   // QR-CTA1 — the public origin the QR codes point at (<base>/q/<code>). Defaulted to production.
   CTA_PUBLIC_BASE_URL: z.url().default('https://too-dooh.com'),
   // Claude API key for the report's AI recommendations (R2). OPTIONAL by design, mirroring the
