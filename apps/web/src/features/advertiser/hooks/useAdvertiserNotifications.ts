@@ -63,7 +63,8 @@ export const actionFor = (n: ApiNotification): AdvertiserNotificationItem['actio
   // SC-P epic 2 (US-2.1) — the clôture report: IDENTICAL behaviour to Consulter (US-4.2) —
   // « Mes performances » in Campaign mode on that campaign, scrolled to the detail block. A
   // report row without its campaign (deleted since) still opens the page, in its default scope.
-  if (n.type === 'campaign_report_ready') {
+  // STOP-1 — a campaign a superadmin stopped: same destination as its clôture report.
+  if (n.type === 'campaign_report_ready' || n.type === 'campaign_stopped') {
     return {
       label: 'Consulter',
       path: n.campaign_id

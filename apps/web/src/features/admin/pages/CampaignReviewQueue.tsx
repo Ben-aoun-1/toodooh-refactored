@@ -17,6 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
+import CampaignStopButton from '@/features/admin/components/CampaignStopButton';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import {
   useAdminCampaigns,
@@ -733,6 +734,7 @@ export default function CampaignReviewQueue() {
                     Rejeter
                   </button>
                 )}
+                <CampaignStopButton campaign={selected} onStopped={closeReview} />
                 <button
                   onClick={closeReview}
                   disabled={submitting}

@@ -50,6 +50,10 @@ export const reconcileCampaignById = async (
   // SETTLE2 — NULL = the SYSTEM actor (the activated_by-NULL idiom): the auto-trigger settles
   // with no admin in the loop. The column was always nullable; this widening is type-only.
   reconciledBy: string | null,
+  // STOP-1 (operator rulings 2026-10-27) — a superadmin stop: the refund gate drops to 0 (what
+  // did not air is ALWAYS refunded, even under S_min), and a demo venue's planned hours count as
+  // aired only up to the stop. Absent = an ordinary end-of-campaign settlement, unchanged.
+  options: { stoppedAt?: Date } = {},
 ): Promise<ReconcileResult> => {
   const [existing] = await db
     .select({ id: campaignReconciliation.id })
@@ -69,7 +73,7 @@ export const reconcileCampaignById = async (
   // plan's derived snapshot (seuil × CPM/1000 ≈ 15 TND at POC values). The snapshot column stays
   // stored for audit; only the GATE moved. BEHAVIOR CHANGE: gaps valued in [old_s_min, 20) TND now
   // settle RÉUSSIE (no refund) instead of PARTIAL.
-  const sMin = S_MIN_TND;
+  const sMin = options.stoppedAt === undefined ? S_MIN_TND : 0;
 
   const allocations = await db
     .select()
@@ -77,7 +81,10 @@ export const reconcileCampaignById = async (
     .where(eq(campaignDispatchAllocation.planId, plan.id));
 
   // Delivered SLOTS per screenhost — the shared FIX A bucketing (binary per Tunis (date,hour)).
-  const deliveredBySh = await loadDeliveredSlots(campaignId);
+  const deliveredBySh = await loadDeliveredSlots(
+    campaignId,
+    options.stoppedAt === undefined ? {} : { stoppedAt: options.stoppedAt },
+  );
 
   // E6 — the NET context: the plan's frozen T (physical → facturable), the CURRENT stored
   // reliquat (never delivered, never replaced → part of the net gap by construction), and the

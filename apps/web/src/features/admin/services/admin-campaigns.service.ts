@@ -39,6 +39,17 @@ export const adminCampaignsService = {
     return apiClient.post<AdminCampaignRow>(`/admin/campaigns/${id}/reject`, { reason });
   },
 
+  // STOP-1 — a superadmin ends an active / upcoming campaign now (settled at once).
+  async stop(
+    id: string,
+    reason: string,
+  ): Promise<{ status: string; refund_tnd: number; spend_tnd: number }> {
+    return apiClient.post<{ status: string; refund_tnd: number; spend_tnd: number }>(
+      `/admin/campaigns/${id}/stop`,
+      { reason },
+    );
+  },
+
   // E7 — the settlement's per-SH 50/44/3/3 breakdown + totals (empty lines = not settled yet).
   async getReversements(id: string): Promise<AdminCampaignReversements> {
     return apiClient.get<AdminCampaignReversements>(`/admin/campaigns/${id}/reversements`);

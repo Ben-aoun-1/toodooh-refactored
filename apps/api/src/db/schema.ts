@@ -1491,6 +1491,12 @@ export const campaigns = pgTable(
     ctaStorageKey: text('cta_storage_key'),
     ctaSourceCreativeId: uuid('cta_source_creative_id'),
     ctaError: text('cta_error'),
+    // STOP-1 — a superadmin stopped the campaign (lib/campaign-stop.ts): when, who, why, and the
+    // end date it had before (an active campaign ends the day it is stopped). All NULL = not stopped.
+    stoppedAt: timestamp('stopped_at', { withTimezone: true }),
+    stoppedBy: uuid('stopped_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    stopReason: text('stop_reason'),
+    originalEndDate: date('original_end_date'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

@@ -1,5 +1,5 @@
 import { addDays, addMonths, format, parseISO } from 'date-fns';
-import { and, asc, eq, inArray, isNull, lte, min, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lte, min, ne, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
@@ -183,6 +183,9 @@ const activationFor = async (screenhostId: string) => {
         eq(campaignDispatchAllocation.screenhostId, screenhostId),
         eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
         eq(campaigns.status, 'completed'),
+        // STOP-1 — a campaign a superadmin stopped BEFORE its first day never aired: it is no
+        // venue's first completed campaign.
+        sql`NOT coalesce(${campaigns.stoppedAt} < (${campaigns.startDate}::timestamp AT TIME ZONE 'Africa/Tunis'), false)`,
       ),
     )
     .orderBy(asc(campaigns.endDate))

@@ -21,6 +21,13 @@ import { slotKey } from './valuation.js';
 /** Créneau date+hour are Africa/Tunis (the playout window pins to Tunis). */
 export const PLAYOUT_TZ = 'Africa/Tunis';
 
+/** Order of a créneau against a Tunis (date, hour): < 0 before, 0 the same hour, > 0 after. */
+export const compareSlot = (
+  date: string,
+  hour: number,
+  ref: { date: string; hour: number },
+): number => (date === ref.date ? hour - ref.hour : date < ref.date ? -1 : 1);
+
 /** Bucket a proof's PLAY instant (PROOF-R1: coalesce(played_at, received_at)) into its créneau slot key. */
 export const proofSlotKey = (playedAt: Date): string =>
   slotKey(
@@ -28,8 +35,15 @@ export const proofSlotKey = (playedAt: Date): string =>
     Number(formatInTimeZone(playedAt, PLAYOUT_TZ, 'H')),
   );
 
-/** The campaign's delivered slots per screenhost: Map<screenhostId, Set<slotKey>>. */
-export const loadDeliveredSlots = async (campaignId: string): Promise<Map<string, Set<string>>> => {
+/**
+ * The campaign's delivered slots per screenhost: Map<screenhostId, Set<slotKey>>. `stoppedAt`
+ * (STOP-1, a superadmin stop): a demo venue's planned créneaux count as delivered only up to the
+ * hour the campaign was stopped in — the later ones never aired.
+ */
+export const loadDeliveredSlots = async (
+  campaignId: string,
+  opts: { stoppedAt?: Date } = {},
+): Promise<Map<string, Set<string>>> => {
   const proofRows = await db
     .select({ screenhostId: proofOfPlay.screenhostId, playedAt: proofInstantSql })
     .from(proofOfPlay)
@@ -43,6 +57,13 @@ export const loadDeliveredSlots = async (campaignId: string): Promise<Map<string
     }
     set.add(proofSlotKey(row.playedAt));
   }
+  const stopKey =
+    opts.stoppedAt === undefined
+      ? null
+      : {
+          date: formatInTimeZone(opts.stoppedAt, PLAYOUT_TZ, 'yyyy-MM-dd'),
+          hour: Number(formatInTimeZone(opts.stoppedAt, PLAYOUT_TZ, 'H')),
+        };
   // DEMO-2 (ruled Q2 A) — a demo screenhost has no screen and never sends a proof: its planned
   // créneaux count as delivered, so settlement, the redispatch detector and the displayed
   // impressions treat it as having aired (only demo campaigns are ever placed on one).
@@ -61,7 +82,10 @@ export const loadDeliveredSlots = async (campaignId: string): Promise<Map<string
       set = new Set<string>();
       deliveredBySh.set(row.screenhostId, set);
     }
-    for (const c of row.creneaux) set.add(slotKey(c.date, c.hour));
+    for (const c of row.creneaux) {
+      if (stopKey !== null && compareSlot(c.date, c.hour, stopKey) > 0) continue;
+      set.add(slotKey(c.date, c.hour));
+    }
   }
   return deliveredBySh;
 };

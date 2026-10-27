@@ -59,6 +59,13 @@ describe('actionFor (advertiser bell CTA routing by type)', () => {
     });
   });
 
+  it('STOP-1 — a stopped campaign opens its report in « Mes performances »', () => {
+    expect(actionFor(notif({ type: 'campaign_stopped', campaign_id: 'c7' }))).toEqual({
+      label: 'Consulter',
+      path: '/my-performance?campaign=c7',
+    });
+  });
+
   it('gives every unknown type NO CTA (rendered plainly, forward-compatible)', () => {
     for (const type of ['account_approved', 'video_approved', 'some_future_type']) {
       expect(actionFor(notif({ type }))).toBeNull();
