@@ -8,6 +8,7 @@ import {
   attentionOrderingValid,
   composeAttentionPatch,
   composeCpmPatch,
+  composeFPatch,
   composeLeadPatch,
   composeReversementPatch,
   parseAttention,
@@ -114,6 +115,26 @@ describe('composeCpmPatch (per-block save — CPM)', () => {
 
   it('nothing changed → an EMPTY patch (the page toasts « Aucune modification »)', () => {
     expect(composeCpmPatch({ standard: '15', event: '30' }, cfg)).toEqual({ ok: true, patch: {} });
+  });
+});
+
+describe('composeFPatch (F-ADMIN1 — plafond de diffusion, Mariem 27/10)', () => {
+  const cfg = { f_max_seconds: 300 };
+
+  it('refuses out-of-bounds, non-integer and empty values with the French reason', () => {
+    for (const f of ['9', '3601', '120.5', '', 'abc']) {
+      expect(composeFPatch({ f }, cfg)).toEqual({
+        ok: false,
+        error: 'Le plafond F doit être un entier entre 10 et 3600 secondes',
+      });
+    }
+  });
+
+  it('sends only a changed F; both bounds are legal', () => {
+    expect(composeFPatch({ f: '240' }, cfg)).toEqual({ ok: true, patch: { f_max_seconds: 240 } });
+    expect(composeFPatch({ f: '10' }, cfg)).toEqual({ ok: true, patch: { f_max_seconds: 10 } });
+    expect(composeFPatch({ f: '3600' }, cfg)).toEqual({ ok: true, patch: { f_max_seconds: 3600 } });
+    expect(composeFPatch({ f: '300' }, cfg)).toEqual({ ok: true, patch: {} });
   });
 });
 

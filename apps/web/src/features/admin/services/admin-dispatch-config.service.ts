@@ -39,6 +39,7 @@ export interface CpmPatch {
   t_20s?: number;
   t_30s?: number;
   campaign_lead_working_days?: number;
+  f_max_seconds?: number;
   pct_sh?: number;
   pct_toodooh?: number;
   pct_agent_sh?: number;
@@ -96,6 +97,20 @@ export function composeLeadPatch(
   }
   const patch: CpmPatch = {};
   if (lead !== config.campaign_lead_working_days) patch.campaign_lead_working_days = lead;
+  return { ok: true, patch };
+}
+
+/** F-ADMIN1 (Mariem 27/10) — the « Plafond de diffusion (F) » block. */
+export function composeFPatch(
+  raw: { f: string },
+  config: Pick<DispatchConfigView, 'f_max_seconds'>,
+): BlockPatchResult {
+  const f = parseFMaxSeconds(raw.f);
+  if (f === null) {
+    return { ok: false, error: 'Le plafond F doit être un entier entre 10 et 3600 secondes' };
+  }
+  const patch: CpmPatch = {};
+  if (f !== config.f_max_seconds) patch.f_max_seconds = f;
   return { ok: true, patch };
 }
 
@@ -172,6 +187,13 @@ export function parseCampaignLead(raw: string): number | null {
   const n = Number(raw);
   // LEAD-0 — 0 is a real value: a campaign may start the day it is created.
   return Number.isInteger(n) && n >= 0 && n <= 30 ? n : null;
+}
+
+/** F — whole seconds of diffusion per hour per campaign, in [10, 3600] (server bounds). */
+export function parseFMaxSeconds(raw: string): number | null {
+  if (raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 10 && n <= 3600 ? n : null;
 }
 
 export const adminDispatchConfigService = {

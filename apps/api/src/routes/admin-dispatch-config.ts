@@ -63,6 +63,10 @@ const patchBodySchema = z
       .min(MIN_CAMPAIGN_LEAD_WORKING_DAYS)
       .max(30)
       .optional(),
+    // F-ADMIN1 (Mariem 27/10 point 3) — F, the per-campaign diffusion ceiling (s per hour, CAP-F1).
+    // Whole seconds in [10, 3600] (the simulator's bounds; 3600 = the screen's whole hour). F stays
+    // LIVE (0075 ruling): new dispatches read it at once; frozen plans keep the F they were cut with.
+    f_max_seconds: z.number().int().min(10).max(3600).optional(),
     // E4 — each weight ∈ [0, 100]; the Σ = 100 rule is judged on the MERGED result in the handler.
     sps_weight_acceptation: z.number().min(0).max(100).optional(),
     sps_weight_respect_evenements: z.number().min(0).max(100).optional(),
@@ -178,6 +182,7 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
       t20s?: string;
       t30s?: string;
       campaignLeadWorkingDays?: number;
+      fMaxSeconds?: number;
       spsWeightAcceptation?: string;
       spsWeightRespectEvenements?: string;
       spsWeightActivite?: string;
@@ -196,6 +201,7 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
     if (parsed.data.t_30s !== undefined) patch.t30s = String(parsed.data.t_30s);
     if (parsed.data.campaign_lead_working_days !== undefined)
       patch.campaignLeadWorkingDays = parsed.data.campaign_lead_working_days;
+    if (parsed.data.f_max_seconds !== undefined) patch.fMaxSeconds = parsed.data.f_max_seconds;
     if (parsed.data.sps_weight_acceptation !== undefined)
       patch.spsWeightAcceptation = String(parsed.data.sps_weight_acceptation);
     if (parsed.data.sps_weight_respect_evenements !== undefined)
@@ -219,7 +225,7 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
         gMois: String(DISPATCH_CONFIG_DEFAULTS.gMois),
         joursActifs: DISPATCH_CONFIG_DEFAULTS.joursActifs,
         rMinEfficace: DISPATCH_CONFIG_DEFAULTS.rMinEfficace,
-        fMaxSeconds: DISPATCH_CONFIG_DEFAULTS.fMaxSeconds,
+        fMaxSeconds: patch.fMaxSeconds ?? DISPATCH_CONFIG_DEFAULTS.fMaxSeconds,
         standardCpmTnd: patch.standardCpmTnd ?? String(DISPATCH_CONFIG_DEFAULTS.standardCpmTnd),
         eventCpmTnd: patch.eventCpmTnd ?? String(DISPATCH_CONFIG_DEFAULTS.eventCpmTnd),
         t10s: patch.t10s ?? String(DISPATCH_CONFIG_DEFAULTS.t10s),
