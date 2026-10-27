@@ -68,36 +68,38 @@ export function AnalysisFilterBar({
   }, [selectorOpen]);
 
   const pillClass = (on: boolean) =>
-    `rounded-full px-[15px] py-[8px] text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
+    `rounded-full px-3 py-[5px] text-[12.5px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
       on
         ? 'border border-brand-primary bg-brand-primary font-semibold text-[#0D2B1F]'
         : 'border border-perf-line bg-white font-medium text-perf-grey hover:border-perf-green hover:text-perf-ink'
     }`;
 
   return (
-    <div className="sticky -top-6 z-20 -mx-4 mb-10 border-y border-perf-line bg-white px-4 py-4 sm:-mx-6 sm:px-6 lg:-top-8 lg:-mx-8 lg:px-8">
-      {/* US-6.5 — the context band */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px]">
-        <span className="text-perf-grey">Analyse générée pour</span>
-        <span className="font-semibold text-perf-ink">
-          {isCampaign
-            ? current
-              ? campaignScopeLabel(current)
-              : 'une campagne introuvable'
-            : periodLabel(scope)}
-        </span>
-        <span className="perf-mono rounded-full bg-perf-soft px-2.5 py-[3px] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-perf-grey">
-          {isCampaign
-            ? current
-              ? natureBadge(current.nature)
-              : '—'
-            : campaignCountLabel(campaignCount)}
-        </span>
-      </div>
+    // Mariem 27/10 point 4 — COMPACT: context + period + nature + campaign share one wrapping row
+    // (labels inline, small pills), so the pinned bar hides as little of the report as possible.
+    <div className="sticky -top-6 z-20 -mx-4 mb-6 border-y border-perf-line bg-white px-4 py-2.5 sm:-mx-6 sm:px-6 lg:-top-8 lg:-mx-8 lg:px-8">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        {/* US-6.5 — the context band */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+          <span className="text-perf-grey">Analyse générée pour</span>
+          <span className="font-semibold text-perf-ink">
+            {isCampaign
+              ? current
+                ? campaignScopeLabel(current)
+                : 'une campagne introuvable'
+              : periodLabel(scope)}
+          </span>
+          <span className="perf-mono rounded-full bg-perf-soft px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.06em] text-perf-grey">
+            {isCampaign
+              ? current
+                ? natureBadge(current.nature)
+                : '—'
+              : campaignCountLabel(campaignCount)}
+          </span>
+        </div>
 
-      <div className="mt-3.5 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start lg:gap-6">
-        <div>
-          <div className="perf-mono mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-perf-mist">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="perf-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-perf-mist">
             Période
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Période">
@@ -124,8 +126,8 @@ export function AnalysisFilterBar({
           </div>
         </div>
 
-        <div>
-          <div className="perf-mono mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-perf-mist">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="perf-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-perf-mist">
             Nature
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Nature">
@@ -146,8 +148,8 @@ export function AnalysisFilterBar({
           </div>
         </div>
 
-        <div ref={selectorRef} className="relative">
-          <div className="perf-mono mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-perf-mist">
+        <div ref={selectorRef} className="relative flex items-center gap-2">
+          <div className="perf-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-perf-mist">
             Campagne
           </div>
           <button
@@ -155,7 +157,7 @@ export function AnalysisFilterBar({
             aria-haspopup="listbox"
             aria-expanded={selectorOpen}
             onClick={() => setSelectorOpen((v) => !v)}
-            className="inline-flex min-w-[220px] items-center justify-between gap-3 rounded-full border border-perf-line bg-white px-[15px] py-[8px] text-[13px] font-medium text-perf-ink hover:border-perf-green"
+            className="inline-flex min-w-[200px] items-center justify-between gap-3 rounded-full border border-perf-line bg-white px-3 py-[5px] text-[12.5px] font-medium text-perf-ink hover:border-perf-green"
           >
             <span className="truncate">{current ? current.name : 'Toutes les campagnes'}</span>
             <ChevronDown className="h-4 w-4 shrink-0 text-perf-mist" aria-hidden />
@@ -163,7 +165,7 @@ export function AnalysisFilterBar({
           {selectorOpen ? (
             <div
               role="listbox"
-              className="absolute left-0 top-full z-30 mt-1.5 max-h-[320px] w-[320px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-perf-line bg-white p-1.5 shadow-[0_12px_32px_rgba(16,37,26,0.12)]"
+              className="absolute right-0 top-full z-30 mt-1.5 max-h-[320px] w-[320px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-perf-line bg-white p-1.5 shadow-[0_12px_32px_rgba(16,37,26,0.12)]"
             >
               {closed.length === 0 ? (
                 <div className="px-3 py-3 text-[13px] italic text-perf-mist">{SELECTOR_EMPTY}</div>
@@ -195,7 +197,7 @@ export function AnalysisFilterBar({
       </div>
 
       {customOpen ? (
-        <div className="mt-3.5 grid grid-cols-1 items-end gap-[14px] rounded-xl border border-perf-line bg-white p-[18px] sm:grid-cols-2 md:grid-cols-[1fr_1fr_auto]">
+        <div className="mt-2.5 grid grid-cols-1 items-end gap-3 rounded-xl border border-perf-line bg-white p-3 sm:grid-cols-2 md:grid-cols-[1fr_1fr_auto]">
           <div className="flex flex-col gap-[6px]">
             <label
               htmlFor="scp-date-start"
@@ -208,7 +210,7 @@ export function AnalysisFilterBar({
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="w-full rounded-lg border border-perf-line bg-white px-3 py-2.5 text-[13.5px] text-perf-ink focus:border-perf-green focus:outline-none focus:ring-2 focus:ring-perf-green/10"
+              className="w-full rounded-lg border border-perf-line bg-white px-3 py-2 text-[13px] text-perf-ink focus:border-perf-green focus:outline-none focus:ring-2 focus:ring-perf-green/10"
             />
           </div>
           <div className="flex flex-col gap-[6px]">
@@ -223,14 +225,14 @@ export function AnalysisFilterBar({
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="w-full rounded-lg border border-perf-line bg-white px-3 py-2.5 text-[13.5px] text-perf-ink focus:border-perf-green focus:outline-none focus:ring-2 focus:ring-perf-green/10"
+              className="w-full rounded-lg border border-perf-line bg-white px-3 py-2 text-[13px] text-perf-ink focus:border-perf-green focus:outline-none focus:ring-2 focus:ring-perf-green/10"
             />
           </div>
           <button
             type="button"
             onClick={() => onApplyCustom(customFrom, customTo)}
             disabled={!customFrom || !customTo}
-            className="whitespace-nowrap rounded-lg bg-brand-primary px-5 py-[11px] text-[13.5px] font-semibold text-[#0D2B1F] transition-colors hover:bg-[#65DCA0] disabled:opacity-50"
+            className="whitespace-nowrap rounded-lg bg-brand-primary px-4 py-2 text-[13px] font-semibold text-[#0D2B1F] transition-colors hover:bg-[#65DCA0] disabled:opacity-50"
           >
             Actualiser la recherche
           </button>
