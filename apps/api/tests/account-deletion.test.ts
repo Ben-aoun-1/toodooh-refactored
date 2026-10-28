@@ -436,14 +436,49 @@ describe('DEL-1 — complete account deletion (real Postgres)', () => {
     expect(log).toMatchObject({ hubAgent: true, hubStatus: 'pending' });
   });
 
-  it('only a superadmin; the email must match; staff and self are refused', async () => {
+  // DEL-2 (Mariem's sheet row 12, ruling 2026-10-28) — an ADMIN deletes only an account with no
+  // activity; with activity it is refused and deactivation is pointed at. A superadmin may force.
+  it('an admin deletes only an account without activity; a superadmin may delete any', async () => {
     const w = await world();
     const admin = await seedUser({ role: 'admin' });
     const [caster] = await db
       .select({ email: users.email })
       .from(users)
       .where(eq(users.id, w.caster));
-    expect((await remove(w.caster, caster?.email ?? '', admin, 'admin')).statusCode).toBe(403);
+    // The caster has money in (a wallet adjustment): activity.
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      session: {},
+      user: { id: admin, role: 'admin', status: 'approved' },
+    } as unknown as GetSessionResult);
+    const preview = await app.inject({ method: 'GET', url: `/api/admin/users/${w.caster}/deletion` });
+    expect(preview.json()).toMatchObject({
+      has_activity: true,
+      can_delete: false,
+      activity: { money: 1 },
+    });
+    expect((await remove(w.caster, caster?.email ?? '', admin, 'admin')).json()).toMatchObject({
+      error: 'HAS_ACTIVITY',
+    });
+    vi.restoreAllMocks();
+    stubStorage();
+    // A fresh signup with nothing done: the admin may delete it.
+    const freshEmail = `fresh-${seq}@example.com`;
+    const fresh = await seedUser({ email: freshEmail });
+    expect((await remove(fresh, freshEmail, admin, 'admin')).statusCode).toBe(200);
+    expect(await db.select().from(users).where(eq(users.id, fresh))).toHaveLength(0);
+    vi.restoreAllMocks();
+    stubStorage();
+    expect((await remove(w.caster, caster?.email ?? '', w.superadmin)).statusCode).toBe(200);
+  });
+
+  it('the email must match; staff and self are refused', async () => {
+    const w = await world();
+    const admin = await seedUser({ role: 'admin' });
+    const [caster] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, w.caster));
+    expect((await remove(w.caster, caster?.email ?? '', admin, 'agent_x')).statusCode).toBe(403);
     vi.restoreAllMocks();
     stubStorage();
     expect((await remove(w.caster, 'someone@else.tn', w.superadmin)).json()).toMatchObject({

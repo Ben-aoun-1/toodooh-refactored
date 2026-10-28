@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
+import { accountActivity, hasActivity } from '../lib/account-deletion/activity.js';
 import {
   AccountDeletionRefused,
   deleteAccountCompletely,
@@ -15,8 +16,13 @@ import { requireAuth, requireRole } from '../middleware/require-auth.js';
 //   GET    /api/admin/users/:id/deletion  what would go (row counts per table) — the confirm dialog;
 //   POST   /api/admin/users/:id/delete    {reason, confirm_email} → deleted here and in the hub.
 // The email must be retyped exactly: a deletion cannot be undone (only the financial archive stays).
+//
+// DEL-2 (Mariem's sheet row 12, ruling 2026-10-28 « both, superadmin choice ») — ADMINS may delete
+// only an account with NO activity (lib/account-deletion/activity.ts); otherwise 409
+// HAS_ACTIVITY and the admin is pointed at deactivation. A SUPERADMIN may still delete any
+// account completely. The preview carries the activity so the dialog can say which case it is.
 
-const superadminGuard = { preHandler: [requireAuth, requireRole('superadmin')] };
+const adminGuard = { preHandler: [requireAuth, requireRole('admin', 'superadmin')] };
 const idParamSchema = z.object({ id: z.uuid() });
 const bodySchema = z.object({
   reason: z.string().trim().min(3).max(500),
@@ -40,18 +46,26 @@ const refusal = (reply: FastifyReply, err: AccountDeletionRefused) => {
 };
 
 export const adminAccountDeletionRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/api/admin/users/:id/deletion', superadminGuard, async (request, reply) => {
+  app.get('/api/admin/users/:id/deletion', adminGuard, async (request, reply) => {
     const params = idParamSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: 'INVALID_INPUT', message: 'id' });
     try {
-      return reply.status(200).send(await previewAccountDeletion(params.data.id));
+      const preview = await previewAccountDeletion(params.data.id);
+      const activity = await accountActivity(params.data.id);
+      return reply.status(200).send({
+        ...preview,
+        activity,
+        has_activity: hasActivity(activity),
+        // What THIS caller may do: an admin cannot delete an account with activity.
+        can_delete: request.user?.role === 'superadmin' || !hasActivity(activity),
+      });
     } catch (err) {
       if (err instanceof AccountDeletionRefused) return refusal(reply, err);
       throw err;
     }
   });
 
-  app.post('/api/admin/users/:id/delete', superadminGuard, async (request, reply) => {
+  app.post('/api/admin/users/:id/delete', adminGuard, async (request, reply) => {
     const params = idParamSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: 'INVALID_INPUT', message: 'id' });
     const body = bodySchema.safeParse(request.body ?? {});
@@ -73,6 +87,13 @@ export const adminAccountDeletionRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({
         error: 'CONFIRM_EMAIL_MISMATCH',
         message: 'L’e-mail saisi ne correspond pas au compte.',
+      });
+    }
+    if (request.user?.role !== 'superadmin' && hasActivity(await accountActivity(params.data.id))) {
+      return reply.status(409).send({
+        error: 'HAS_ACTIVITY',
+        message:
+          'Ce compte a déjà eu une activité (campagnes, diffusions, reversements ou factures) : il ne peut pas être supprimé. Désactivez-le plutôt.',
       });
     }
     try {
