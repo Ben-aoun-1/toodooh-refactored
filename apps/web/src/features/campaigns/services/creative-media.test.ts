@@ -58,7 +58,7 @@ describe('creativeUploadErrorMessage (server hardening codes → French toasts)'
       'Format non conforme : la vidéo doit être encodée en H.264 (MP4 ou MOV).',
     );
     expect(creativeUploadErrorMessage({ code: 'MEDIA_DURATION_INVALID', message: 'x' })).toBe(
-      'Format non conforme : la vidéo ne doit pas dépasser 30 secondes.',
+      'Format non conforme : la vidéo doit durer entre 10 et 30 secondes.',
     );
     expect(creativeUploadErrorMessage({ code: 'MEDIA_UNREADABLE', message: 'x' })).toBe(
       'Fichier illisible — réessayez avec une vidéo MP4 (H.264).',
@@ -280,14 +280,22 @@ describe('StepCreative hint copy (source pins — UPL-1: no ratio promised)', ()
     'utf8',
   );
 
-  it('names the formats and the length cap, never a 16:9 ratio', () => {
+  const specs = readFileSync(
+    fileURLToPath(new URL('../pages/new-campaign/CreativeSpecs.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  it('names the formats and the length range, never a 16:9 ratio', () => {
     expect(step).not.toContain('16:9');
+    expect(specs).not.toContain('16:9');
     expect(step).toContain('`MP4 ou MOV (H.264) · ${');
-    expect(step).toContain("'Vidéo : 30 secondes maximum (MP4 / MOV, H.264)'");
+    // SPOT-MIN1 — the classic range comes from lib/spot-duration (10 à 30 s).
+    expect(step).toContain('VIDEO_DROPZONE_HINT');
+    expect(specs).toContain('VIDEO_SPEC_LABEL');
     expect(step).toContain("'JPEG, PNG ou WebP'");
     expect(step).not.toContain("'JPEG ou PNG'");
     // UPL-4 — the tips line names WebP too (the server converts it to PNG).
-    expect(step).toContain('Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG / WebP)');
+    expect(specs).toContain('Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG / WebP)');
   });
 
   it('UPL-2 — an unreadable video takes its toast from the bytes (a photo picked as « Vidéo »)', () => {

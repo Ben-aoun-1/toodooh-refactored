@@ -52,7 +52,7 @@ import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
 import { renderReportHtml } from '../lib/report/template.js';
 import { venueSlug } from '../lib/slug.js';
-import { airedStorageKeySql } from '../lib/spot-cta.js';
+import { airedCreativeTypeSql, airedStorageKeySql } from '../lib/spot-cta.js';
 import { computeSps, recomputeVenueSps, spsComputable } from '../lib/sps-score.js';
 import { setVenueDayUnavailability } from '../lib/venue-unavailability.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
@@ -2207,7 +2207,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const [row] = await db
-      .select({ storageKey: airedStorageKeySql() }) // QR-CTA1 — the owner previews what airs
+      .select({
+        storageKey: airedStorageKeySql(), // QR-CTA1 — the owner previews what airs
+        airedType: airedCreativeTypeSql(),
+        creativeKey: creatives.storageKey,
+        creativeType: creatives.creativeType,
+      })
       .from(campaignDispatchAllocation)
       .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
       .innerJoin(
@@ -2221,7 +2226,10 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       )
       .limit(1);
     if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
-    const result = await storage.getPresignedUrl({ key: row.storageKey, expiresInSeconds: 300 });
+    // QR-CTA2 — a photo's QR copy is a VIDEO, but the web and phone viewers render this url by the
+    // allocation's creative type: for that one case they get the photo itself (without the QR).
+    const key = row.airedType === row.creativeType ? row.storageKey : row.creativeKey;
+    const result = await storage.getPresignedUrl({ key, expiresInSeconds: 300 });
     if ('error' in result) {
       return reply.status(502).send({
         error: 'STORAGE_ERROR',

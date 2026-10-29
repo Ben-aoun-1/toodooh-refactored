@@ -54,7 +54,7 @@ const videoFile = () =>
   multipartBody({
     filename: 'clip.mp4',
     contentType: 'video/mp4',
-    content: fixture('h264-169.mp4'),
+    content: fixture('h264-169-12s.mp4'),
   });
 const photoFile = () =>
   multipartBody({
@@ -114,9 +114,9 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
     const body = res.json() as Record<string, unknown>;
     expect(body).toMatchObject({
       creative_type: 'video',
-      // CF-SH1 — with ffprobe (docker) the SERVER-measured duration wins (the fixture is 2s);
+      // CF-SH1 — with ffprobe (docker) the SERVER-measured duration wins (the fixture is 12 s);
       // without it (dev/CI) the client param remains the stored value, as before.
-      duration_seconds: process.env['FFPROBE_PATH'] ? 2 : 25,
+      duration_seconds: process.env['FFPROBE_PATH'] ? 12 : 25,
       validation_status: 'pending',
       title: 'Promo',
       // UPL-2 — the stored mime is the one the BYTES imply.
@@ -143,6 +143,26 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
     });
     expect(res.statusCode).toBe(400);
     expect(await db.$count(creatives)).toBe(0);
+  });
+
+  // SPOT-MIN1 (Mariem 27/10) — a classic video lasts at least 10 s; 10 itself uploads.
+  it('rejects a classic video shorter than 10 s (400), accepts 10 s', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const short = await app.inject({
+      method: 'POST',
+      url: '/api/creatives?type=video&duration_seconds=9',
+      ...videoFile(),
+    });
+    expect(short.statusCode).toBe(400);
+    expect(await db.$count(creatives)).toBe(0);
+    if (process.env['FFPROBE_PATH']) return; // the probe measures the 12 s fixture instead
+    const ten = await app.inject({
+      method: 'POST',
+      url: '/api/creatives?type=video&duration_seconds=10',
+      ...videoFile(),
+    });
+    expect(ten.statusCode).toBe(201);
   });
 
   // ── POST /api/creatives (photo) ──────────────────────────────────────────────

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { ctaBracketHtml, ctaCardHtml } from '../src/lib/spot-cta-card.js';
+import { ctaFilterGraph, ctaLayout, ctaWindow } from '../src/lib/spot-cta-layout.js';
 import {
   CTA_DEFAULT_LABEL,
   ctaCartBlock,
   ctaDrawnLabel,
-  ctaFilterGraph,
-  ctaGeometry,
   ctaScanUrl,
   isCtaCode,
   newCtaCode,
@@ -53,26 +53,50 @@ describe('QR-CTA1 — call-to-action rules', () => {
     expect(ctaScanUrl('https://too-dooh.com/', 'abcd2345')).toBe('https://too-dooh.com/q/abcd2345');
   });
 
-  it('a video card sits bottom-left of the frame, clear of the player bar', () => {
-    const g = ctaGeometry(1920, 1080, 'video');
-    expect(g.qr).toBe(260);
-    expect(g.x).toBe(32);
-    expect(g.y + g.cardHeight).toBeLessThanOrEqual(1080 - 0.09 * 1080 + 1);
-    expect(g.cardWidth).toBeGreaterThan(g.qr);
-    expect(ctaFilterGraph(g, '/f.otf', '/l.txt')).toContain('textfile=/l.txt');
+  // QR-CTA2 (Mariem 27/10 point 1) — her video's layout, at 1080 p.
+  it('the card sits bottom-left at the design sizes, clear of the player bar', () => {
+    const l = ctaLayout(1080);
+    expect(l.tile.size).toBe(184);
+    expect(l.panel).toMatchObject({ x: 72, width: 300, height: 168 });
+    expect(l.panel.y + l.panel.height).toBe(1080 - 76);
+    // The tile overlaps the card's top; the QR keeps a white margin inside the tile.
+    expect(l.tile.y + l.tile.size).toBeGreaterThan(l.panel.y);
+    expect(l.qr).toBeLessThan(l.tile.size);
+    expect(l.layer).toEqual({ x: 72, y: l.tile.y, width: 300, height: 1004 - l.tile.y });
   });
 
-  it('an image card lands inside the part the TV shows (16:9 centre crop)', () => {
-    // A square photo: the TV keeps the middle 9/16 of its height.
-    const square = ctaGeometry(1080, 1080, 'photo');
-    const visibleTop = (1080 - 1080 * (9 / 16)) / 2;
-    const visibleBottom = visibleTop + 1080 * (9 / 16);
-    expect(square.y).toBeGreaterThan(visibleTop);
-    expect(square.y + square.cardHeight).toBeLessThan(visibleBottom);
-    // A very wide photo: the TV crops its sides.
-    const wide = ctaGeometry(3000, 1000, 'photo');
-    const visibleLeft = (3000 - 1000 * (16 / 9)) / 2;
-    expect(wide.x).toBeGreaterThan(visibleLeft);
+  it('sizes follow the frame height (a 720 p spot gets 2/3)', () => {
+    const l = ctaLayout(720);
+    expect(l.tile.size).toBe(122);
+    expect(l.panel.width).toBe(200);
+  });
+
+  it('the card shows from 2 s to the end − 2 s; a very short spot shows it throughout', () => {
+    expect(ctaWindow(10)).toEqual({ start: 2, end: 8 });
+    expect(ctaWindow(30)).toEqual({ start: 2, end: 28 });
+    expect(ctaWindow(5)).toEqual({ start: 0, end: 5 });
+  });
+
+  it('the ffmpeg graph frosts the card area, fades in/out on that window, pulses four brackets', () => {
+    const graph = ctaFilterGraph(ctaLayout(1080), 12);
+    expect(graph).toContain('crop=300:168:72:836,boxblur');
+    expect(graph).toContain('fade=t=in:st=2:d=0.35:alpha=1');
+    expect(graph).toContain('fade=t=out:st=9.65:d=0.35:alpha=1');
+    expect(graph.match(/eval=frame/g)).toHaveLength(4);
+    expect(graph).toContain('hflip,vflip');
+    expect(graph.endsWith('[out]')).toBe(true);
+    // A photo's pre-scaled stream is named instead of [0:v].
+    expect(ctaFilterGraph(ctaLayout(1080), 10, 'frame').startsWith('[frame]split=2')).toBe(true);
+  });
+
+  it("the card says « Scannez le code », escapes the advertiser's words, carries POWERED BY", () => {
+    const html = ctaCardHtml(ctaLayout(1080), 'data:image/png;base64,AAAA', 'Promo <b>&</b>');
+    expect(html).toContain('Scannez le code');
+    expect(html).toContain('Promo &lt;b&gt;&amp;&lt;/b&gt;');
+    expect(html).not.toContain('<b>&</b>');
+    expect(html).toContain('POWERED BY');
+    expect(html).toContain('data:image/png;base64,AAAA');
+    expect(ctaBracketHtml(ctaLayout(1080))).toContain('#76E6AB');
   });
 
   it('the cart refuses only a failed copy of the CURRENT spot', () => {

@@ -75,10 +75,11 @@ export async function performCreateDraft(args: {
   }
   // CF-W1 — dates moved to the Période step (3): the create-early draft is legitimately
   // date-less (the API accepts nullable dates; they PATCH later via saveDraft/submit).
-  if (state.startDate && state.endDate && state.startDate >= state.endDate) {
+  // A one-day campaign (start = end) is legal (EV1 rider; Mariem 27/10 point 5).
+  if (state.startDate && state.endDate && state.startDate > state.endDate) {
     return {
       kind: 'error',
-      error: new Error('La date de début doit être antérieure à la date de fin'),
+      error: new Error('La date de début doit être antérieure ou égale à la date de fin'),
     };
   }
   try {

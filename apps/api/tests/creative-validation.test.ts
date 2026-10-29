@@ -335,7 +335,7 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       const res = await upload(app, 'type=photo&duration_seconds=10', {
         filename: 'clip.mp4',
         contentType: 'video/mp4',
-        content: fixture('h264-169.mp4'),
+        content: fixture('h264-169-12s.mp4'),
       });
       expect(res.statusCode).toBe(400);
       expect(res.json()).toMatchObject({
@@ -360,10 +360,10 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
 
     it('an MP4 the browser declared application/octet-stream → 201, stored video/mp4', async () => {
       mockSession(await seedUser());
-      const res = await upload(app, 'type=video&duration_seconds=2', {
+      const res = await upload(app, 'type=video&duration_seconds=12', {
         filename: 'CLIP.MP4',
         contentType: 'application/octet-stream',
-        content: fixture('h264-169.mp4'),
+        content: fixture('h264-169-12s.mp4'),
       });
       expect(res.statusCode).toBe(201);
       const body = res.json() as { id: string; mime_type: string };
@@ -374,10 +374,10 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
     it('MOV bytes declared video/mp4 → 201, stored video/quicktime', async () => {
       mockSession(await seedUser());
       const put = vi.spyOn(storage, 'upload');
-      const res = await upload(app, 'type=video&duration_seconds=2', {
+      const res = await upload(app, 'type=video&duration_seconds=12', {
         filename: 'clip.mp4',
         contentType: 'video/mp4',
-        content: fixture('h264-169.mov'),
+        content: fixture('h264-169-12s.mov'),
       });
       expect(res.statusCode).toBe(201);
       const body = res.json() as { id: string; mime_type: string };
@@ -488,30 +488,43 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
 
   // ── measured validation (real ffprobe — runs inside the docker image) ────────
   describe.skipIf(!process.env['FFPROBE_PATH'])('ffprobe-measured rules', () => {
-    it('accepts a valid H.264 16:9 mp4 — the SERVER-measured duration is stored (client lies 25 → 2)', async () => {
+    it('accepts a valid H.264 16:9 mp4 — the SERVER-measured duration is stored (client lies 25 → 12)', async () => {
       mockSession(await seedUser());
       const res = await upload(app, 'type=video&duration_seconds=25', {
         filename: 'clip.mp4',
         contentType: 'video/mp4',
-        content: fixture('h264-169.mp4'),
+        content: fixture('h264-169-12s.mp4'),
       });
       expect(res.statusCode).toBe(201);
-      expect((res.json() as { duration_seconds: number }).duration_seconds).toBe(2);
+      expect((res.json() as { duration_seconds: number }).duration_seconds).toBe(12);
+    });
+
+    // SPOT-MIN1 (Mariem 27/10) — a classic video under 10 s is refused on the MEASURED length.
+    it('refuses a 2 s video declared 12 → 400 MEDIA_DURATION_INVALID, nothing stored', async () => {
+      mockSession(await seedUser());
+      const res = await upload(app, 'type=video&duration_seconds=12', {
+        filename: 'clip.mp4',
+        contentType: 'video/mp4',
+        content: fixture('h264-169.mp4'),
+      });
+      expect(res.statusCode).toBe(400);
+      expect((res.json() as { error: string }).error).toBe('MEDIA_DURATION_INVALID');
+      expect(await db.$count(creatives)).toBe(0);
     });
 
     it('accepts a valid H.264 16:9 MOV (201)', async () => {
       mockSession(await seedUser());
-      const res = await upload(app, 'type=video&duration_seconds=2', {
+      const res = await upload(app, 'type=video&duration_seconds=12', {
         filename: 'clip.mov',
         contentType: 'video/quicktime',
-        content: fixture('h264-169.mov'),
+        content: fixture('h264-169-12s.mov'),
       });
       expect(res.statusCode).toBe(201);
     });
 
     it('rejects a non-H.264 codec in an mp4 container (400 MEDIA_FORMAT_UNSUPPORTED)', async () => {
       mockSession(await seedUser());
-      const res = await upload(app, 'type=video&duration_seconds=2', {
+      const res = await upload(app, 'type=video&duration_seconds=12', {
         filename: 'clip.mp4',
         contentType: 'video/mp4',
         content: fixture('mpeg4-169.mp4'),
@@ -525,10 +538,10 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
 
     it('UPL-1 — accepts a 4:3 H.264 video: there is no aspect-ratio limit (201)', async () => {
       mockSession(await seedUser());
-      const res = await upload(app, 'type=video&duration_seconds=2', {
+      const res = await upload(app, 'type=video&duration_seconds=12', {
         filename: 'clip.mp4',
         contentType: 'video/mp4',
-        content: fixture('h264-43.mp4'),
+        content: fixture('h264-43-12s.mp4'),
       });
       expect(res.statusCode).toBe(201);
       expect((res.json() as { mime_type: string }).mime_type).toBe('video/mp4');

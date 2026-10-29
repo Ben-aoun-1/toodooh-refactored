@@ -46,6 +46,7 @@ export const burnNextCta = async (
       storageKey: creatives.storageKey,
       creativeType: creatives.creativeType,
       mimeType: creatives.mimeType,
+      durationSeconds: creatives.durationSeconds,
     })
     .from(campaigns)
     .innerJoin(creatives, eq(creatives.id, campaigns.creativeId))
@@ -79,6 +80,7 @@ export const burnNextCta = async (
       mimeType: next.mimeType,
       qrUrl: ctaScanUrl(env.CTA_PUBLIC_BASE_URL, next.ctaCode),
       label: ctaDrawnLabel(next.ctaLabel),
+      durationSeconds: next.durationSeconds,
     });
   } catch (err) {
     await fail(err instanceof CtaBurnError ? err.message : 'BURN_FAILED');

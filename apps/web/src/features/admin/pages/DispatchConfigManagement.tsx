@@ -1,4 +1,4 @@
-import { CalendarClock, Coins, Eye, Loader2, Percent, Save } from 'lucide-react';
+import { CalendarClock, Coins, Eye, Gauge, Loader2, Percent, Save } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
@@ -10,6 +10,7 @@ import {
   type DispatchConfigView,
   composeAttentionPatch,
   composeCpmPatch,
+  composeFPatch,
   composeLeadPatch,
   composeReversementPatch,
 } from '@/features/admin/services/admin-dispatch-config.service';
@@ -63,6 +64,7 @@ const inputClass =
 function ConfigForm({ config }: { config: DispatchConfigView }) {
   const cpmMutation = useUpdateCpmConfig();
   const leadMutation = useUpdateCpmConfig();
+  const fMutation = useUpdateCpmConfig();
   const attentionMutation = useUpdateCpmConfig();
   const reversementMutation = useUpdateCpmConfig();
   const [standard, setStandard] = useState(String(config.standard_cpm_tnd));
@@ -73,6 +75,8 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
   const [t30, setT30] = useState(String(config.t_30s));
   // CF-D1 — the campaign start-date lead (jours ouvrés).
   const [lead, setLead] = useState(String(config.campaign_lead_working_days));
+  // F-ADMIN1 — F, the per-campaign diffusion ceiling (s per hour).
+  const [fMax, setFMax] = useState(String(config.f_max_seconds));
   // E7 — the reversement split (Σ = 100).
   const [pctSh, setPctSh] = useState(String(config.pct_sh));
   const [pctToodooh, setPctToodooh] = useState(String(config.pct_toodooh));
@@ -82,6 +86,7 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
   const handleSaveCpm = () =>
     runBlockSave(cpmMutation, composeCpmPatch({ standard, event }, config));
   const handleSaveLead = () => runBlockSave(leadMutation, composeLeadPatch({ lead }, config));
+  const handleSaveF = () => runBlockSave(fMutation, composeFPatch({ f: fMax }, config));
   const handleSaveAttention = () =>
     runBlockSave(attentionMutation, composeAttentionPatch({ t10, t20, t30 }, config));
   const handleSaveReversement = () =>
@@ -104,7 +109,6 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
     { label: 'G (jours/mois)', value: config.g_mois },
     { label: 'Jours actifs', value: config.jours_actifs },
     { label: 'R min efficace', value: config.r_min_efficace },
-    { label: 'F max (secondes)', value: config.f_max_seconds },
   ];
 
   return (
@@ -181,6 +185,36 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
           </div>
         </div>
         <SaveButton pending={leadMutation.isPending} onClick={handleSaveLead} />
+      </div>
+
+      {/* F-ADMIN1 (Mariem 27/10) — F, the diffusion ceiling; its own Enregistrer. */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Gauge className="h-5 w-5 text-brand-primary" />
+          <h3 className="text-lg font-semibold text-gray-900">Plafond de diffusion (F)</h3>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Secondes de diffusion maximum par heure et par campagne sur un écran. S'applique aux
+          prochaines diffusions ; les campagnes déjà planifiées gardent leur plafond.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="f-max">
+              F (secondes par heure)
+            </label>
+            <input
+              id="f-max"
+              type="number"
+              step="1"
+              min="10"
+              max="3600"
+              value={fMax}
+              onChange={(e) => setFMax(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <SaveButton pending={fMutation.isPending} onClick={handleSaveF} />
       </div>
 
       {/* E1 — the attention index T by spot duration; its own Enregistrer. */}

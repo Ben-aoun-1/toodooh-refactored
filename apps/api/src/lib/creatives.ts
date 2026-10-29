@@ -42,17 +42,26 @@ export const creativeMimeForContainer = (
 // under it. One cap for both kinds (judgment call — flag if video needs a higher ceiling).
 export const MAX_CREATIVE_BYTES = 50 * 1024 * 1024;
 
-// Duration rule. VIDEO: 1..30 inclusive — CF-SH1: when FFPROBE_PATH is set (the docker image), the
+// Duration rule. VIDEO: 10..30 inclusive (SPOT-MIN1, Mariem 27/10: a classic spot lasts at least
+// 10 s — the event floor already was; twin: apps/web/src/features/campaigns/lib/spot-duration.ts).
+// Checked at UPLOAD only (ruling 2026-10-27): a draft already holding a shorter video still
+// launches. CF-SH1: when FFPROBE_PATH is set (the docker image), the
 // SERVER-measured duration is authoritative and is what gets stored; the client param is advisory.
 // Without ffprobe (dev) the param remains the stored value, as before. PHOTO: exactly one of the
 // discrete diffusion slots (no probe involved).
+export const MIN_VIDEO_DURATION_SECONDS = 10;
 export const MAX_VIDEO_DURATION_SECONDS = 30;
 export const PHOTO_DURATION_SECONDS = [10, 20, 30] as const;
 
-export const isValidDuration = (kind: CreativeKind, durationSeconds: number): boolean => {
+/** `minVideoSeconds`: an EVENT upload passes 1 — its own rule (EVENT_SPOT_TOO_LONG) owns the floor. */
+export const isValidDuration = (
+  kind: CreativeKind,
+  durationSeconds: number,
+  minVideoSeconds: number = MIN_VIDEO_DURATION_SECONDS,
+): boolean => {
   if (!Number.isInteger(durationSeconds)) return false;
   return kind === 'video'
-    ? durationSeconds >= 1 && durationSeconds <= MAX_VIDEO_DURATION_SECONDS
+    ? durationSeconds >= minVideoSeconds && durationSeconds <= MAX_VIDEO_DURATION_SECONDS
     : (PHOTO_DURATION_SECONDS as readonly number[]).includes(durationSeconds);
 };
 

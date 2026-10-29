@@ -70,8 +70,9 @@ export default function SpotCtaFields({ campaignId }: { campaignId: string }) {
         <p className="text-sm font-bold text-gray-900">QR code « En savoir plus » (facultatif)</p>
       </div>
       <p className="text-sm text-gray-600">
-        Un QR code s’affiche en bas à gauche de votre spot : les clients le scannent et arrivent
-        directement sur votre page. Vous voyez combien de personnes l’ont scanné.
+        Un QR code s’affiche en bas à gauche de votre spot, de 2 secondes après son début à 2
+        secondes avant sa fin : les clients le scannent et arrivent directement sur votre page. Vous
+        voyez combien de personnes l’ont scanné.
       </p>
       <form
         className="grid grid-cols-1 gap-3 md:grid-cols-3"

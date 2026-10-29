@@ -9,10 +9,13 @@ export function validateBasics(state: WizardState): boolean {
   return Boolean(state.campaignName.trim());
 }
 
-/** Période gate: a valid date range (start strictly before end). */
+/**
+ * Période gate: a valid date range, start on or before end. A ONE-DAY campaign (start = end) is
+ * legal (EV1 rider) — the strict < here silently blocked « Suivant » (Mariem 27/10 point 5).
+ */
 export function validateDates(state: WizardState): boolean {
   if (!state.startDate || !state.endDate) return false;
-  return state.startDate < state.endDate;
+  return state.startDate <= state.endDate;
 }
 
 /**

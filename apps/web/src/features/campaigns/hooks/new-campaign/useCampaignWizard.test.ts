@@ -97,8 +97,11 @@ describe('validators', () => {
     expect(validateBasics(validBasics({ startDate: null, endDate: null }))).toBe(true);
   });
 
-  it('validateDates requires a start < end range', () => {
+  it('validateDates requires a start <= end range (a one-day campaign passes)', () => {
     expect(validateDates(validBasics({ endDate: null }))).toBe(false);
+    expect(validateDates(validBasics({ startDate: '2026-07-15', endDate: '2026-07-15' }))).toBe(
+      true,
+    );
     expect(validateDates(validBasics({ startDate: '2026-07-15', endDate: '2026-07-01' }))).toBe(
       false,
     );
@@ -190,6 +193,15 @@ describe('performCreateDraft', () => {
     });
     expect(result.kind).toBe('error');
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('a one-day range (start = end) creates the draft (Mariem 27/10 point 5)', async () => {
+    const create = vi.fn().mockResolvedValue(fakeCampaign({ id: 'cmp-1d' }));
+    const result = await performCreateDraft({
+      state: validBasics({ startDate: '2026-07-15', endDate: '2026-07-15' }),
+      deps: { create },
+    });
+    expect(result).toEqual({ kind: 'success', id: 'cmp-1d' });
   });
 
   it('CF-W1: creates a DATE-LESS draft (dates arrive at the Période step)', async () => {

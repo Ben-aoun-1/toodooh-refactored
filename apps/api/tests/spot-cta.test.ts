@@ -8,6 +8,7 @@ import {
   type NewUser,
   businessSectors,
   campaignTargeting,
+  campaignDispatchAllocation,
   campaigns,
   creatives,
   ctaScans,
@@ -26,6 +27,7 @@ import { adminDemoRoutes } from '../src/routes/admin-demo.js';
 import { campaignCtaRoutes } from '../src/routes/campaign-cta.js';
 import { cartRoutes } from '../src/routes/cart.js';
 import { ctaRedirectRoutes } from '../src/routes/cta-redirect.js';
+import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
@@ -151,6 +153,7 @@ describe('QR-CTA1 — a spot’s call to action (real Postgres)', () => {
     await app.register(cartRoutes);
     await app.register(campaignCtaRoutes);
     await app.register(ctaRedirectRoutes);
+    await app.register(screenhostsRoutes);
     await app.ready();
   });
 
@@ -267,6 +270,60 @@ describe('QR-CTA1 — a spot’s call to action (real Postgres)', () => {
       (await app.inject({ method: 'POST', url: '/api/cart/items', payload: { campaign_id: id } }))
         .statusCode,
     ).toBe(200);
+  });
+
+  // QR-CTA2 (ruling 2026-10-27) — a PHOTO spot's QR copy is a video: the burner gets the photo's
+  // diffusion length, the playlist announces the copy as a video, and the owner's preview (whose
+  // web and phone viewers render by the creative's type) gets the photo itself.
+  it('a photo spot airs its QR copy as a VIDEO; the owner preview keeps the photo', async () => {
+    const w = await world();
+    const id = await seedDraft(w.demo, w.sector);
+    const [row] = await db
+      .select({ creativeId: campaigns.creativeId })
+      .from(campaigns)
+      .where(eq(campaigns.id, id));
+    await db
+      .update(creatives)
+      .set({ creativeType: 'photo', mimeType: 'image/jpeg', durationSeconds: 20 })
+      .where(eq(creatives.id, row?.creativeId ?? ''));
+    mockSession(w.demo);
+    await putCta(id, { url: 'https://boutique.example.tn' });
+    expect((await launch(id)).statusCode).toBe(200);
+    const burn = vi.fn(okBurner);
+    expect(await runCtaBurnTick(burn)).toBe(1);
+    expect(burn).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'photo', durationSeconds: 20 }),
+    );
+
+    const later = new Date(Date.now() + 60_000);
+    const [onAir] = await activeAllocationsForScreenhost(w.venue, later);
+    expect(onAir?.storageKey).toMatch(/-qr-.*\.mp4$/);
+    expect(onAir?.creativeType).toBe('video');
+
+    const [alloc] = await db
+      .select({ id: campaignDispatchAllocation.id })
+      .from(campaignDispatchAllocation)
+      .where(eq(campaignDispatchAllocation.screenhostId, w.venue));
+    const presign = vi
+      .spyOn(storage, 'getPresignedUrl')
+      .mockImplementation(async ({ key }) => ({ url: `https://s3/${key}` }));
+    mockSession(w.owner, 'individual_owner');
+    const preview = await app.inject({
+      method: 'GET',
+      url: `/api/screenhosts/allocations/${alloc?.id ?? ''}/creative-url`,
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(presign).toHaveBeenLastCalledWith(
+      expect.objectContaining({ key: expect.stringMatching(/\/orig-\d+$/) }),
+    );
+
+    // A copy made before QR-CTA2 (an image) still airs as an image.
+    await db
+      .update(campaigns)
+      .set({ ctaStorageKey: 'creatives/x/old-qr.png' })
+      .where(eq(campaigns.id, id));
+    const [old] = await activeAllocationsForScreenhost(w.venue, later);
+    expect(old?.creativeType).toBe('photo');
   });
 
   it('changing the spot re-makes the copy; removing the link airs the plain spot', async () => {

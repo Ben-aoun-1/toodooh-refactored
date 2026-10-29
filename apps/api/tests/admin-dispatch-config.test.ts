@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, dispatchConfig, users } from '../src/db/schema.js';
+import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { adminDispatchConfigRoutes } from '../src/routes/admin-dispatch-config.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -39,7 +40,7 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 
 const restoreCpmDefaults = async (): Promise<void> => {
   // E1 — the T buckets join the per-test restore (their tests edit the same singleton).
-  // CF-D1 — so does the campaign lead.
+  // CF-D1 — so does the campaign lead. F-ADMIN1 — and F (its bounds test leaves 3600 behind).
   await db.update(dispatchConfig).set({
     standardCpmTnd: '15.000',
     eventCpmTnd: '15.000',
@@ -47,6 +48,7 @@ const restoreCpmDefaults = async (): Promise<void> => {
     t20s: '0.70',
     t30s: '0.80',
     campaignLeadWorkingDays: 2,
+    fMaxSeconds: 300,
   });
 };
 
@@ -247,6 +249,25 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
     expect((await patch({ campaign_lead_working_days: 31 })).statusCode).toBe(400);
     expect((await patch({ campaign_lead_working_days: 2.5 })).statusCode).toBe(400);
     expect((await patch({ campaign_lead_working_days: 30 })).statusCode).toBe(200);
+  });
+
+  // ── F-ADMIN1 (Mariem 27/10 point 3) — F, the per-campaign diffusion ceiling ───────
+  it('GET exposes F at its default (300); PATCH edits it and the engine reads it live', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    expect((await get()).json()).toMatchObject({ f_max_seconds: 300 });
+
+    expect((await patch({ f_max_seconds: 240 })).statusCode).toBe(200);
+    expect((await get()).json()).toMatchObject({ f_max_seconds: 240 });
+    expect((await getDispatchConfig()).fMaxSeconds).toBe(240);
+  });
+
+  it('rejects an F out of [10, 3600] or non-integer (400); both bounds are inclusive', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    expect((await patch({ f_max_seconds: 9 })).statusCode).toBe(400);
+    expect((await patch({ f_max_seconds: 3601 })).statusCode).toBe(400);
+    expect((await patch({ f_max_seconds: 120.5 })).statusCode).toBe(400);
+    expect((await patch({ f_max_seconds: 10 })).statusCode).toBe(200);
+    expect((await patch({ f_max_seconds: 3600 })).statusCode).toBe(200);
   });
 
   it('CPM regression — CPM edits are unchanged and never touch the T buckets', async () => {

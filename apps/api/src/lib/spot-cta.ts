@@ -16,12 +16,19 @@ import { campaigns, creatives } from '../db/schema.js';
 // uses: a campaign with a link airs only once its copy is ready for its CURRENT creative, and then
 // airs the copy.
 
-/** The message under the QR when the screencaster gives none. */
-export const CTA_DEFAULT_LABEL = 'Pour en savoir plus';
+/**
+ * The message under « Scannez le code » when the screencaster gives none. QR-CTA2: lowercase, it
+ * continues the headline (Mariem's design).
+ */
+export const CTA_DEFAULT_LABEL = 'pour en savoir plus';
 export const CTA_LABEL_MAX_CHARS = 20;
 export const CTA_URL_MAX_CHARS = 2000;
-/** The smallest QR side worth airing (a spot under ~400 px high cannot carry a readable one). */
-export const CTA_MIN_QR_PX = 96;
+/**
+ * The smallest QR side worth burning: 2 px per module of the ~29-module code. The TV scales every
+ * spot to the screen, so the code always covers the same share of it; below this a low-resolution
+ * spot blurs the modules together. QR-CTA2 sizes put the limit near a 400 px-high spot, as before.
+ */
+export const CTA_MIN_QR_PX = 60;
 
 export type CtaStatus = 'pending' | 'ready' | 'failed';
 
@@ -82,64 +89,6 @@ export const isCtaCode = (code: string): boolean =>
 export const ctaScanUrl = (baseUrl: string, code: string): string =>
   `${baseUrl.replace(/\/+$/, '')}/q/${code}`;
 
-/** The card burned into the spot, in the creative's own pixels. */
-export interface CtaGeometry {
-  /** QR side. */
-  qr: number;
-  /** Card size (white, QR on top, the message under it). */
-  cardWidth: number;
-  cardHeight: number;
-  /** White margin around the QR inside the card. */
-  margin: number;
-  /** Message font size. */
-  fontSize: number;
-  /** Card top-left corner in the creative. */
-  x: number;
-  y: number;
-}
-
-const even = (n: number): number => Math.max(2, Math.round(n / 2) * 2);
-
-/**
- * Where the card goes. The TV letterboxes a VIDEO (whole frame visible) but CROPS an IMAGE to the
- * 16:9 screen (centerCrop), so an image's card is placed inside the part the TV shows. The card
- * keeps clear of the screen's edges and of the full-screen player's bottom status bar (~6 % of
- * the height): 3 % from the left, 9 % from the bottom of the visible area.
- */
-export function ctaGeometry(width: number, height: number, kind: 'video' | 'photo'): CtaGeometry {
-  let visX = 0;
-  let visY = 0;
-  let visW = width;
-  let visH = height;
-  if (kind === 'photo') {
-    const screen = 16 / 9;
-    if (width / height > screen) {
-      visW = height * screen;
-      visX = (width - visW) / 2;
-    } else if (width / height < screen) {
-      visH = width / screen;
-      visY = (height - visH) / 2;
-    }
-  }
-  const qr = even(visH * 0.24);
-  const margin = even(qr * 0.08);
-  const cardWidth = even(qr * 1.45);
-  const fontSize = Math.max(10, Math.round(qr * 0.11));
-  const cardHeight = even(qr + margin * 2 + fontSize * 1.6);
-  const x = Math.round(visX + visH * 0.03);
-  const y = Math.round(visY + visH - visH * 0.09 - cardHeight);
-  return { qr, cardWidth, cardHeight, margin, fontSize, x, y };
-}
-
-/** The ffmpeg filter graph: input 0 = the spot, input 1 = the QR png (already `qr` px wide). */
-export function ctaFilterGraph(g: CtaGeometry, fontFile: string, labelFile: string): string {
-  const card =
-    `[1:v]pad=${g.cardWidth}:${g.cardHeight}:${(g.cardWidth - g.qr) / 2}:${g.margin}:white,` +
-    `drawtext=fontfile=${fontFile}:textfile=${labelFile}:expansion=none:fontcolor=0x204B43:` +
-    `fontsize=${g.fontSize}:x=(w-text_w)/2:y=${g.qr + g.margin}+(h-${g.qr + g.margin}-text_h)/2[card]`;
-  return `${card};[0:v][card]overlay=${g.x}:${g.y}[out]`;
-}
-
 /**
  * SQL predicate on `campaigns`: the campaign may air as far as its call to action goes — it has
  * none, or its copy is ready and was made from the creative it links NOW.
@@ -154,6 +103,14 @@ export const ctaAirableSql = (): SQL =>
  */
 export const airedStorageKeySql = (): SQL<string> =>
   sql<string>`CASE WHEN ${campaigns.ctaUrl} IS NOT NULL AND ${campaigns.ctaStorageKey} IS NOT NULL THEN ${campaigns.ctaStorageKey} ELSE ${creatives.storageKey} END`;
+
+/**
+ * QR-CTA2 — SQL: the KIND of what the TV airs. Since 2026-10-27 a photo's QR copy is a video
+ * (lib/spot-cta-burn.ts), so an aired `.mp4` copy is a 'video' whatever the creative is; an older
+ * photo copy (.png / .jpg) stays a 'photo'. Read next to airedStorageKeySql by every playlist.
+ */
+export const airedCreativeTypeSql = (): SQL<string> =>
+  sql<string>`CASE WHEN ${campaigns.ctaUrl} IS NOT NULL AND ${campaigns.ctaStorageKey} LIKE '%.mp4' THEN 'video' ELSE ${creatives.creativeType} END`;
 
 /** The campaign's call-to-action state for the cart gate. */
 export function ctaCartBlock(row: {
