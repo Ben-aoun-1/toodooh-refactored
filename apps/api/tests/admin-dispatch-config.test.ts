@@ -40,7 +40,7 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 
 const restoreCpmDefaults = async (): Promise<void> => {
   // E1 — the T buckets join the per-test restore (their tests edit the same singleton).
-  // CF-D1 — so does the campaign lead.
+  // CF-D1 — so does the campaign lead. F-ADMIN1 — and F (its bounds test leaves 3600 behind).
   await db.update(dispatchConfig).set({
     standardCpmTnd: '15.000',
     eventCpmTnd: '15.000',
@@ -48,6 +48,7 @@ const restoreCpmDefaults = async (): Promise<void> => {
     t20s: '0.70',
     t30s: '0.80',
     campaignLeadWorkingDays: 2,
+    fMaxSeconds: 300,
   });
 };
 
