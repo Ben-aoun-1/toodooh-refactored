@@ -1,3 +1,5 @@
+import { addDays } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +18,9 @@ import { agentPortfolioRoutes } from '../src/routes/agent-portfolio.js';
 
 import { seedLiveAffiliation } from './helpers/agent-affiliation.js';
 import { resetAuthTables } from './helpers/db-test-setup.js';
+
+const tunisDay = (offsetDays: number): string =>
+  formatInTimeZone(addDays(new Date(), offsetDays), 'Africa/Tunis', 'yyyy-MM-dd');
 
 // AGT-4 — the Screencaster agent's Dashboard / Mes campagnes / Mes Screencasters (spec §4–§6):
 // confirmed launches only, inside the affiliation window, the Screencaster's own impressions,
@@ -125,10 +130,11 @@ describe('AGT-4 — the Screencaster agent portfolio', () => {
       end: '2028-01-01',
     });
 
+    // « En cours » is read against today's clock: keep the live window around it.
     const live = await seedCampaign(sc, {
       name: 'Ramadan',
-      startDate: '2026-10-01',
-      endDate: '2026-10-30',
+      startDate: tunisDay(-20),
+      endDate: tunisDay(20),
     });
     const done = await seedCampaign(sc, {
       name: 'Été',
