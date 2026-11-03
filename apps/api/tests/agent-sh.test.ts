@@ -1,3 +1,5 @@
+import { addDays } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { and, eq, isNull } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,7 +47,10 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
-const FUTURE: DispatchCreneau[] = [{ date: '2026-11-02', hour: 10, reps: 10, impressions: 500 }];
+// « Future » is read against today's clock: the créneau and the window stay ahead of it.
+const tunisDay = (offsetDays: number): string =>
+  formatInTimeZone(addDays(new Date(), offsetDays), 'Africa/Tunis', 'yyyy-MM-dd');
+const FUTURE: DispatchCreneau[] = [{ date: tunisDay(7), hour: 10, reps: 10, impressions: 500 }];
 
 const offer = async (
   venueId: string,
@@ -60,8 +65,8 @@ const offer = async (
       name,
       campaignType: 'standard',
       status: 'upcoming',
-      startDate: '2026-11-01',
-      endDate: '2026-11-10',
+      startDate: tunisDay(1),
+      endDate: tunisDay(10),
     })
     .returning();
   const [plan] = await db
