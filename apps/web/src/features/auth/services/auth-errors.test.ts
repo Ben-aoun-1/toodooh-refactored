@@ -8,6 +8,12 @@ const err = (code: string, fields?: ApiErrorField[]) =>
   new ApiError({ status: 400, code, message: 'raw', fields });
 
 describe('apiErrorMessage', () => {
+  it('DEACT-1 — a deactivated account is told so (not the generic message)', () => {
+    expect(
+      apiErrorMessage(new ApiError({ status: 403, code: 'ACCOUNT_DEACTIVATED', message: 'x' })),
+    ).toBe('Votre compte a été désactivé. Contactez Toodooh pour le réactiver.');
+  });
+
   it('maps EMAIL_NOT_VERIFIED to a verify-first message (NOT the generic fallback)', () => {
     const msg = apiErrorMessage(err('EMAIL_NOT_VERIFIED'));
     expect(msg).toMatch(/vérifier votre adresse email/i);

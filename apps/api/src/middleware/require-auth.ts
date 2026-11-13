@@ -54,6 +54,17 @@ export const requireAuth = async (request: FastifyRequest, reply: FastifyReply):
     role ??= row?.role;
     status ??= row?.status;
   }
+  // DEACT-1 — a deactivated account is signed out everywhere: its sessions are deleted at
+  // deactivation, and any cookie that survives is refused here (the web client logs out on 401).
+  if (status === 'deactivated') {
+    await reply.status(401).send({
+      error: 'ACCOUNT_DEACTIVATED',
+      message: 'Votre compte a été désactivé.',
+      statusCode: 401,
+      requestId: request.id,
+    });
+    return;
+  }
   request.user = {
     id: sessionUser.id,
     role: role ?? 'advertiser',
@@ -83,7 +94,7 @@ export const requireRole =
 // Statuses that have LOST app access: 'rejected' (recoverable via the resubmit loop, but no app
 // surface) and 'banned' (terminal). 'pending' and 'approved' pass — a pending owner keeps its
 // in-review dashboard/screenhost access (explicit product carve-out). Composes AFTER requireAuth.
-const INACTIVE_STATUSES = new Set(['rejected', 'banned']);
+const INACTIVE_STATUSES = new Set(['rejected', 'banned', 'deactivated']);
 
 // Account-status gate (N3 — server-side enforcement). Closes the FE-only gap: requireAuth attaches
 // request.user.status (fresh — getSession is DB-backed, no cookieCache) but never gates on it, so a

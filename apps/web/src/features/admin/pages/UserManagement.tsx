@@ -16,6 +16,8 @@ import {
   FileText,
   AlertCircle,
   Trash2,
+  Power,
+  PowerOff,
   CreditCard,
   Wifi,
   Ban,
@@ -26,12 +28,15 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminBankAuditSlot from '@/features/admin/components/AdminBankAuditSlot';
+import AdminDeactivateUserModal from '@/features/admin/components/AdminDeactivateUserModal';
+import AdminDeleteAccountModal from '@/features/admin/components/AdminDeleteAccountModal';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminUserEligibilitySlot from '@/features/admin/components/AdminUserEligibilitySlot';
 import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
 import UserDocumentReviewGroup from '@/features/admin/components/UserDocumentReviewGroup';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import { useUserDocuments, useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
+import { canDeactivate, canReactivate } from '@/features/admin/lib/account-deactivation';
 import { declaredScreensTotalLabel } from '@/features/admin/lib/venue-screens';
 import { adminUserService, type AdminUser } from '@/features/admin/services/admin-user.service';
 import { apiErrorMessage } from '@/features/auth/services/auth-errors';
@@ -43,9 +48,9 @@ export default function UserManagement() {
   const { users, loading, isError: usersError } = useUsers();
   const { approveUser, rejectUser, banUser } = useUserMutations();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
-    'all',
-  );
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'pending' | 'approved' | 'rejected' | 'deactivated'
+  >('all');
   const [typeFilter, setTypeFilter] = useState<
     'all' | 'individual_owner' | 'fleet_owner' | 'advertiser' | 'agency'
   >('all');
@@ -54,7 +59,12 @@ export default function UserManagement() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const status = params.get('status');
-    if (status === 'pending' || status === 'approved' || status === 'rejected') {
+    if (
+      status === 'pending' ||
+      status === 'approved' ||
+      status === 'rejected' ||
+      status === 'deactivated'
+    ) {
       setStatusFilter(status);
     }
   }, [location.search]);
@@ -79,6 +89,9 @@ export default function UserManagement() {
   const [submittingReject, setSubmittingReject] = useState(false);
   // BANIR (N3 Scenario 2, fraud) — terminal + irreversible; a non-empty reason is required.
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  // DEACT-1 — the account being deactivated or reactivated (one window, both directions).
+  const [deactivateTarget, setDeactivateTarget] = useState<AdminUser | null>(null);
   const [banNotes, setBanNotes] = useState('');
   const [submittingBan, setSubmittingBan] = useState(false);
   // 409 prior-state modal (G2 D-G2-4) — set to the conflicted user's id; the queue is refetched
@@ -227,6 +240,7 @@ export default function UserManagement() {
       approved: { color: 'bg-green-100 text-green-800', icon: Check, text: 'Approuvé' },
       rejected: { color: 'bg-red-100 text-red-800', icon: X, text: 'Rejeté' },
       banned: { color: 'bg-red-100 text-red-900', icon: Ban, text: 'Banni' },
+      deactivated: { color: 'bg-gray-200 text-gray-700', icon: PowerOff, text: 'Désactivé' },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig];
@@ -334,6 +348,7 @@ export default function UserManagement() {
               <option value="pending">En attente</option>
               <option value="approved">Approuvés</option>
               <option value="rejected">Rejetés</option>
+              <option value="deactivated">Désactivés</option>
             </select>
           </div>
 
@@ -502,11 +517,30 @@ export default function UserManagement() {
                         </button>
                       )}
 
-                      {/* Suppression — bientôt disponible (endpoint backend à venir, slice future) */}
+                      {/* DEACT-1 — désactiver un Host / Cast validé, ou le réactiver. */}
+                      {(canDeactivate(user) || canReactivate(user)) && (
+                        <button
+                          onClick={() => setDeactivateTarget(user)}
+                          className={
+                            canReactivate(user)
+                              ? 'text-green-700 hover:text-green-900'
+                              : 'text-amber-700 hover:text-amber-900'
+                          }
+                          title={canReactivate(user) ? 'Réactiver' : 'Désactiver'}
+                        >
+                          {canReactivate(user) ? (
+                            <Power className="h-4 w-4" />
+                          ) : (
+                            <PowerOff className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+
+                      {/* DEL-1/2 — suppression : admin = comptes sans activité, superadmin = tout. */}
                       <button
-                        disabled
-                        className="text-gray-300 cursor-not-allowed"
-                        title="Suppression bientôt disponible"
+                        onClick={() => setDeleteTarget(user)}
+                        className="text-red-700 hover:text-red-900"
+                        title="Supprimer définitivement"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -1037,6 +1071,35 @@ export default function UserManagement() {
       )}
 
       {/* Modal — BANIR (N3 Scenario 2, fraud). Destructive + irreversible; reason required. */}
+      {deleteTarget && (
+        <AdminDeleteAccountModal
+          userId={deleteTarget.id}
+          name={deleteTarget.contact_name || deleteTarget.business_name || deleteTarget.email}
+          onClose={() => setDeleteTarget(null)}
+          onDeactivateInstead={
+            canDeactivate(deleteTarget)
+              ? () => {
+                  setDeactivateTarget(deleteTarget);
+                  setDeleteTarget(null);
+                }
+              : undefined
+          }
+        />
+      )}
+      {deactivateTarget && (
+        <AdminDeactivateUserModal
+          user={{
+            id: deactivateTarget.id,
+            name:
+              deactivateTarget.contact_name ||
+              deactivateTarget.business_name ||
+              deactivateTarget.email,
+            status: deactivateTarget.status,
+          }}
+          onClose={() => setDeactivateTarget(null)}
+        />
+      )}
+
       {banTarget && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

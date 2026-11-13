@@ -173,6 +173,17 @@ describe('POST /api/signin + /api/signout (real Postgres)', () => {
     expect(sess).toHaveLength(0); // the session signInEmail minted was revoked
   });
 
+  // DEACT-1 — a DEACTIVATED account (reversible) cannot sign in either: 403, no cookie.
+  it('deactivated account → 403 ACCOUNT_DEACTIVATED, session revoked, no cookie', async () => {
+    const userId = await createVerifiedUser('deactivated@example.com');
+    await db.update(users).set({ status: 'deactivated' }).where(eq(users.id, userId));
+    const res = await signin('deactivated@example.com', PASSWORD);
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('ACCOUNT_DEACTIVATED');
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(await db.select().from(sessions).where(eq(sessions.userId, userId))).toHaveLength(0);
+  });
+
   it('wrong password → generic 401', async () => {
     await createVerifiedUser('pw@example.com');
     const res = await signin('pw@example.com', 'wrong-passw0rd!!');

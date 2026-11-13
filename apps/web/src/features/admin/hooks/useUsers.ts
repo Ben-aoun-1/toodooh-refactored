@@ -12,7 +12,8 @@ import { adminKeys } from './queryKeys';
 // The backend requires a status filter (no all-users dump) and excludes admin-role users
 // server-side. To preserve the page's all-tab + the per-status stat cards, fetch all three
 // statuses in parallel and merge (G2 D-G2-2). Three calls on a low-traffic admin screen is cheap.
-const STATUSES: readonly UserStatus[] = ['pending', 'approved', 'rejected'];
+// DEACT-1 — deactivated accounts are listed too: they are reactivated from this page.
+const STATUSES: readonly UserStatus[] = ['pending', 'approved', 'rejected', 'deactivated'];
 
 export function useUsers(): { users: AdminUser[]; loading: boolean; isError: boolean } {
   const results = useQueries({

@@ -42,7 +42,15 @@ export const userRole = pgEnum('user_role', [
 
 // 'banned' (N3 Scenario 2, fraud) is TERMINAL: the account is retained as evidence but can never
 // sign in or resubmit. The validation trio carries the ban record (validationNotes = ban reason).
-export const userStatus = pgEnum('user_status', ['pending', 'approved', 'rejected', 'banned']);
+// 'deactivated' (DEACT-1, Mariem's sheet row 11) is REVERSIBLE: an admin turned the account off
+// (deactivated_at / _by / _reason); reactivation brings it back to 'approved'.
+export const userStatus = pgEnum('user_status', [
+  'pending',
+  'approved',
+  'rejected',
+  'banned',
+  'deactivated',
+]);
 
 export const users = pgTable(
   'users',
@@ -66,6 +74,12 @@ export const users = pgTable(
     // and/or 'bank' (RIB). MULTI (text[]); the reject route validates the allowed values with a zod
     // enum, mirroring the businessType "text column + zod-at-route" convention. Null unless rejected.
     rejectionTopics: text('rejection_topics').array(),
+    // DEACT-1 — the current deactivation (cleared on reactivation). The status says 'deactivated'.
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    deactivatedBy: uuid('deactivated_by').references((): AnyPgColumn => users.id, {
+      onDelete: 'set null',
+    }),
+    deactivationReason: text('deactivation_reason'),
     // business profile (subset; rest land in Phase 1c onboarding)
     businessName: text('business_name'),
     taxNumber: text('tax_number').unique(),
@@ -1491,6 +1505,12 @@ export const campaigns = pgTable(
     ctaStorageKey: text('cta_storage_key'),
     ctaSourceCreativeId: uuid('cta_source_creative_id'),
     ctaError: text('cta_error'),
+    // STOP-1 — a superadmin stopped the campaign (lib/campaign-stop.ts): when, who, why, and the
+    // end date it had before (an active campaign ends the day it is stopped). All NULL = not stopped.
+    stoppedAt: timestamp('stopped_at', { withTimezone: true }),
+    stoppedBy: uuid('stopped_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    stopReason: text('stop_reason'),
+    originalEndDate: date('original_end_date'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -2982,3 +3002,27 @@ export const ctaScans = pgTable(
   },
   (t) => [index('cta_scans_campaign_scanned_idx').on(t.campaignId, t.scannedAt)],
 );
+
+// DEL-1 (operator 2026-10-19, rulings A A B A) — one row per COMPLETE account deletion
+// (lib/account-deletion/). No personal data: the deleted id (no FK — the row is gone), the role,
+// row counts, where the financial archive went, and the hub hand-off (places + agent user to
+// delete there; retried by a sweep until the hub confirms).
+export const accountDeletions = pgTable('account_deletions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deletedUserId: uuid('deleted_user_id').notNull(),
+  role: text('role').notNull(),
+  deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason').notNull(),
+  archivePrefix: text('archive_prefix'),
+  counts: jsonb('counts').$type<Record<string, number>>().notNull().default({}),
+  hubLocationIds: text('hub_location_ids')
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
+  hubAgent: boolean('hub_agent').notNull().default(false),
+  hubStatus: text('hub_status').notNull().default('none'),
+  hubAttempts: integer('hub_attempts').notNull().default(0),
+  hubError: text('hub_error'),
+  hubDoneAt: timestamp('hub_done_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

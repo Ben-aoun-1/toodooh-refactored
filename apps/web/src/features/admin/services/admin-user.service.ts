@@ -1,7 +1,7 @@
 import type { ScreenhostWifi } from '@/features/screenhost/services/screenhost.service';
 import { apiClient } from '@/lib/api-client';
 
-export type UserStatus = 'pending' | 'approved' | 'rejected' | 'banned';
+export type UserStatus = 'pending' | 'approved' | 'rejected' | 'banned' | 'deactivated';
 export type AdminProfileType = 'individual_owner' | 'fleet_owner' | 'advertiser' | 'agency';
 
 /** One of the owner's venues in GET /api/admin/users: its WiFi view + its declared screens. */
@@ -46,6 +46,9 @@ export interface AdminUser {
   validated_by: string | null;
   validated_at: string | null;
   validation_notes: string | null;
+  /** DEACT-1 — the current deactivation (null when active). */
+  deactivated_at?: string | null;
+  deactivation_reason?: string | null;
   // Not modeled by the backend — always undefined; the UI degrades gracefully (G2 D-G2-2).
   formule?: string;
   verification_status?: string;
@@ -197,6 +200,34 @@ export const adminUserService = {
     return apiClient.get<AdminBankAuditEntry[]>(`/admin/users/${id}/bank-audit`);
   },
 
+  // DEACT-1 — reversible deactivation (admin): what it touches, deactivate, reactivate.
+  async getDeactivationPreview(id: string): Promise<DeactivationPreview> {
+    return apiClient.get<DeactivationPreview>(`/admin/users/${id}/deactivation`);
+  },
+  async deactivateUser(
+    id: string,
+    body: { reason: string; campaigns: 'finish' | 'stop' },
+  ): Promise<DeactivationResult> {
+    return apiClient.post<DeactivationResult>(`/admin/users/${id}/deactivate`, body);
+  },
+  async reactivateUser(id: string): Promise<{ status: 'approved' }> {
+    return apiClient.post<{ status: 'approved' }>(`/admin/users/${id}/reactivate`);
+  },
+
+  // DEL-1 — complete account deletion (superadmin): what would go, then the deletion itself.
+  async getDeletionPreview(id: string): Promise<AccountDeletionPreview> {
+    return apiClient.get<AccountDeletionPreview>(`/admin/users/${id}/deletion`);
+  },
+  async deleteAccount(
+    id: string,
+    body: { reason: string; confirm_email: string },
+  ): Promise<{ deleted: string; counts: Record<string, number> }> {
+    return apiClient.post<{ deleted: string; counts: Record<string, number> }>(
+      `/admin/users/${id}/delete`,
+      body,
+    );
+  },
+
   // Presign ONE document by its uuid (the :id-scoped route). Deliberately NOT the legacy
   // /documents/:ref category shim, which collapses to the category's lowest position and would
   // always open the first of several documents. Throws ApiError (NOT_FOUND / STORAGE_ERROR).
@@ -207,3 +238,31 @@ export const adminUserService = {
     return url;
   },
 };
+
+/** DEL-1 — GET /api/admin/users/:id/deletion: row counts per table that a deletion removes. */
+export interface AccountDeletionPreview {
+  role: string;
+  email: string;
+  counts: Record<string, number>;
+  /** DEL-2 — has the account ever done anything; may THIS caller delete it (admin: no activity). */
+  has_activity: boolean;
+  can_delete: boolean;
+}
+
+/** DEACT-1 — GET /api/admin/users/:id/deactivation: what deactivating would touch. */
+export interface DeactivationPreview {
+  kind: 'host' | 'cast';
+  status: string;
+  venues: number;
+  shared_campaigns: number;
+  campaigns: { id: string; name: string; status: string; is_event: boolean }[];
+}
+
+export interface DeactivationResult {
+  status: 'deactivated';
+  kind: 'host' | 'cast';
+  moved_campaigns: number;
+  rejected_campaigns: number;
+  stopped_campaigns: { campaign_id: string; refund_tnd: number }[];
+  finishing_campaigns: number;
+}

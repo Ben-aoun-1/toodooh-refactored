@@ -24,6 +24,14 @@ import { screenhosts, users } from '../db/schema.js';
 // It lives OUTSIDE lib/dispatch on purpose: the event engines are boundary-pinned (D51) against
 // importing anything under dispatch/ or campaign*, and they need the very same predicate.
 
+/**
+ * DEACT-1 — SQL boolean, TRUE unless the row's `screenhosts.owner_id` is DEACTIVATED. The airing
+ * gate (lib/playout/active-allocations.ts) reads it: a deactivated owner's TVs stop airing at once
+ * (ruling 2026-10-28), while other statuses keep their historic airing behaviour.
+ */
+export const ownerNotDeactivatedSql = (): SQL<boolean> =>
+  sql<boolean>`not exists (select 1 from ${users} where ${users.id} = ${screenhosts.ownerId} and ${users.status} = 'deactivated')`;
+
 /** SQL boolean — TRUE iff the row's `screenhosts.owner_id` is a user whose status is 'approved'. */
 export const ownerApprovedSql = (): SQL<boolean> =>
   sql<boolean>`exists (select 1 from ${users} where ${users.id} = ${screenhosts.ownerId} and ${users.status} = 'approved')`;

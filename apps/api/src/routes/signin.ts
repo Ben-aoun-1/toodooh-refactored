@@ -100,6 +100,14 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
         .status(403)
         .send({ error: 'ACCOUNT_BANNED', message: 'Votre compte a été suspendu.' });
     }
+    // DEACT-1 — a DEACTIVATED account (reversible, Mariem's sheet row 11) cannot sign in either.
+    if (row.status === 'deactivated') {
+      await db.delete(sessions).where(eq(sessions.userId, row.id));
+      return reply.status(403).send({
+        error: 'ACCOUNT_DEACTIVATED',
+        message: 'Votre compte a été désactivé. Contactez Toodooh pour le réactiver.',
+      });
+    }
 
     forwardSetCookie(reply, result.headers);
 

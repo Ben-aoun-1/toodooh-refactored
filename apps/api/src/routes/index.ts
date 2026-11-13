@@ -2,8 +2,11 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { env } from '../env.js';
 
+import { adminAccountDeactivationRoutes } from './admin-account-deactivation.js';
+import { adminAccountDeletionRoutes } from './admin-account-deletion.js';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminAgentsRoutes } from './admin-agents.js';
+import { adminCampaignStopRoutes } from './admin-campaign-stop.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminDemoRoutes } from './admin-demo.js';
@@ -101,6 +104,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(campaignsRoutes);
   // QR-CTA1 — a spot's call to action (link + QR burned into a copy) and the admin switch.
   await app.register(campaignCtaRoutes);
+  // DEL-1 — complete account deletion (superadmin), here and in the hub.
+  await app.register(adminAccountDeletionRoutes);
   // IMP-EST1 — « Impressions estimées »: the read-only dry-run of the real dispatch.
   await app.register(campaignImpressionsEstimateRoutes);
   await app.register(cartRoutes);
@@ -160,6 +165,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // approved creative + funded, then dispatch → status='active') / reject. The keystone that lets
   // the dispatch → playout → proof-of-play chain run end-to-end.
   await app.register(adminCampaignsRoutes);
+  await app.register(adminCampaignStopRoutes);
+  await app.register(adminAccountDeactivationRoutes);
   // CPM CONFIG — admin-editable dispatch CPM (standard/event TND-per-1000). The activation
   // derivation reads it to compute I_cible = ⌊budget·1000/cpm⌋; editable without a migration.
   await app.register(adminDispatchConfigRoutes);

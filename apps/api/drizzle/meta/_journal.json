@@ -659,6 +659,27 @@
       "when": 1792060000000,
       "tag": "0093_host_admin_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1794560000000,
+      "tag": "0094_account_deletions",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1794570000000,
+      "tag": "0095_campaign_stop",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1794580000000,
+      "tag": "0096_account_deactivation",
+      "breakpoints": true
     }
   ]
 }

@@ -6,7 +6,9 @@ import {
   campaignDispatchPlan,
   campaigns,
   creatives,
+  screenhosts,
 } from '../../db/schema.js';
+import { ownerNotDeactivatedSql } from '../approved-owner.js';
 import { airedCreativeTypeSql, airedStorageKeySql, ctaAirableSql } from '../spot-cta.js';
 
 import { campaignWindowValidUntil, isWindowActive } from './playlist.js';
@@ -48,6 +50,8 @@ export const activeAllocationsForScreenhost = async (
     eq(creatives.validationStatus, 'approved'),
     or(isNull(campaigns.airsAt), lte(campaigns.airsAt, now)),
     ctaAirableSql(),
+    // DEACT-1 — a deactivated owner's venues stop airing at once (ruling 2026-10-28).
+    ownerNotDeactivatedSql(),
   ];
   if (campaignId !== undefined) conditions.push(eq(campaigns.id, campaignId));
 
@@ -67,6 +71,7 @@ export const activeAllocationsForScreenhost = async (
     .innerJoin(campaignDispatchPlan, eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id))
     .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
     .innerJoin(creatives, eq(campaigns.creativeId, creatives.id))
+    .innerJoin(screenhosts, eq(screenhosts.id, campaignDispatchAllocation.screenhostId))
     .where(and(...conditions));
 
   return rows.flatMap((row) =>

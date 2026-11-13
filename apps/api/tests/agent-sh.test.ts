@@ -1,3 +1,5 @@
+import { addDays } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { and, eq, isNull } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,7 +47,10 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
-const FUTURE: DispatchCreneau[] = [{ date: '2026-11-02', hour: 10, reps: 10, impressions: 500 }];
+// « Future » is read against today's clock: the créneau and the window stay ahead of it.
+const tunisDay = (offsetDays: number): string =>
+  formatInTimeZone(addDays(new Date(), offsetDays), 'Africa/Tunis', 'yyyy-MM-dd');
+const FUTURE: DispatchCreneau[] = [{ date: tunisDay(7), hour: 10, reps: 10, impressions: 500 }];
 
 const offer = async (
   venueId: string,
@@ -60,8 +65,8 @@ const offer = async (
       name,
       campaignType: 'standard',
       status: 'upcoming',
-      startDate: '2026-11-01',
-      endDate: '2026-11-10',
+      startDate: tunisDay(1),
+      endDate: tunisDay(10),
     })
     .returning();
   const [plan] = await db
@@ -91,7 +96,8 @@ const offer = async (
     revenuPrevisionnel: '5',
     statutAcceptation: statut,
     creneaux: FUTURE,
-    createdAt: new Date('2026-10-10T10:00:00Z'),
+    // Three days old on today's clock: inside the job's 30-day window, past the 24 h answer delay.
+    createdAt: addDays(new Date(), -3),
   });
   return c?.id ?? '';
 };
@@ -212,18 +218,20 @@ describe('AGT-7 — the Screenhost agent (real Postgres)', () => {
   });
 
   it('the follow-up job raises an attention point once, notifies once, and clears it', async () => {
+    // The offers are created on today's clock, so the job runs on it too (its 30-day window).
+    const tick = new Date();
     const s = await setup();
     await offer(s.venueId, s.advertiser, 'REFUSE', 'A');
     await offer(s.venueId, s.advertiser, 'REFUSE', 'B');
     await offer(s.venueId, s.advertiser, 'ACCEPTE', 'C');
     // The first computation is a silent baseline: no notice for signals already there.
-    await runAgentShFollowupTick(new Date(NOW.getTime() - 2 * 24 * 60 * 60 * 1000));
+    await runAgentShFollowupTick(new Date(tick.getTime() - 2 * 24 * 60 * 60 * 1000));
     expect(
       await db.select().from(notifications).where(eq(notifications.userId, s.agent)),
     ).toHaveLength(0);
     await db.delete(agentAttentionEvents).where(eq(agentAttentionEvents.screenhostId, s.venueId));
-    await runAgentShFollowupTick(NOW);
-    await runAgentShFollowupTick(NOW);
+    await runAgentShFollowupTick(tick);
+    await runAgentShFollowupTick(tick);
     const open = await db
       .select()
       .from(agentAttentionEvents)
@@ -269,7 +277,7 @@ describe('AGT-7 — the Screenhost agent (real Postgres)', () => {
       .update(campaignDispatchAllocation)
       .set({ statutAcceptation: 'ACCEPTE' })
       .where(eq(campaignDispatchAllocation.screenhostId, s.venueId));
-    await runAgentShFollowupTick(NOW);
+    await runAgentShFollowupTick(tick);
     const [ev] = await db
       .select()
       .from(agentAttentionEvents)
