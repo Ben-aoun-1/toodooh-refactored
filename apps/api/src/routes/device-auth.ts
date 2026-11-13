@@ -124,6 +124,18 @@ export const deviceAuthRoutes: FastifyPluginAsync = async (app) => {
         message: 'Session expirée. Reconnectez-vous.',
       });
     }
+    // DEACT-1 — a deactivated account never gets fresh device tokens.
+    const [owner] = await db
+      .select({ status: users.status })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+    if (owner?.status === 'deactivated') {
+      return reply.status(401).send({
+        error: 'ACCOUNT_DEACTIVATED',
+        message: 'Votre compte a été désactivé.',
+      });
+    }
 
     const pair = newTokenPair(new Date());
     await db

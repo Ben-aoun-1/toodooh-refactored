@@ -34,7 +34,10 @@ import { storage } from '../storage/s3-storage.js';
 // requireAuth → 401 on no session; requireAdmin → 403 on a non-admin authenticated user.
 const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 
-const listQuerySchema = z.object({ status: z.enum(['pending', 'approved', 'rejected']) });
+// DEACT-1 — deactivated accounts are listed too (they are reactivated from that list).
+const listQuerySchema = z.object({
+  status: z.enum(['pending', 'approved', 'rejected', 'deactivated']),
+});
 const idParamSchema = z.object({ id: z.uuid() });
 // The two GET routes under /:id/documents share the `:ref` segment (find-my-way allows one
 // param name per position): a legacy type for the compat presign, a document uuid for /url.
@@ -167,6 +170,9 @@ const toAdminUserView = (
   validated_by: row.validatedBy,
   validated_at: row.validatedAt,
   validation_notes: row.validationNotes,
+  // DEACT-1 — the current deactivation (null when active).
+  deactivated_at: row.deactivatedAt,
+  deactivation_reason: row.deactivationReason,
 });
 
 // Shaped 409 for a same-state repeat (approve-an-approved / reject-a-rejected). Carries the prior

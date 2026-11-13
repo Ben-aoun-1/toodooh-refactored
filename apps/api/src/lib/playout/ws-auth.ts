@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../db/client.js';
-import { deviceSessions, screenhosts, screens } from '../../db/schema.js';
+import { deviceSessions, screenhosts, screens, users } from '../../db/schema.js';
 import { hashDeviceToken } from '../device-tokens.js';
 
 // Custom WS close codes (4000–4999 are app-defined): 4401 = bad/expired/missing token,
@@ -52,6 +52,15 @@ export const authenticateScreenWs = async (
     .limit(1);
   if (!row || row.ownerId === null || row.ownerId !== session.userId) {
     return { ok: false, closeCode: WS_CLOSE_FORBIDDEN, reason: 'screen not found or not owned' };
+  }
+  // DEACT-1 — a deactivated owner's screens no longer connect.
+  const [owner] = await db
+    .select({ status: users.status })
+    .from(users)
+    .where(eq(users.id, row.ownerId))
+    .limit(1);
+  if (owner?.status === 'deactivated') {
+    return { ok: false, closeCode: WS_CLOSE_UNAUTHORIZED, reason: 'account deactivated' };
   }
 
   return { ok: true, screenId: row.screenId, screenhostId: row.screenhostId, ownerId: row.ownerId };

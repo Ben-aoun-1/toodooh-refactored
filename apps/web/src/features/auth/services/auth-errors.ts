@@ -34,6 +34,9 @@ export function apiErrorMessage(err: unknown): string {
       return 'Email ou mot de passe incorrect.';
     case 'UNAUTHENTICATED':
       return 'Votre session a expiré. Veuillez vous reconnecter.';
+    // DEACT-1 — a deactivated account (reversible, by an admin).
+    case 'ACCOUNT_DEACTIVATED':
+      return 'Votre compte a été désactivé. Contactez Toodooh pour le réactiver.';
     case 'EMAIL_NOT_VERIFIED':
       return 'Veuillez vérifier votre adresse email avant de vous connecter. Consultez votre boîte mail (et le dossier spam).';
     case 'TAX_NUMBER_TAKEN':

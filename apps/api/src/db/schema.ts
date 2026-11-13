@@ -42,7 +42,15 @@ export const userRole = pgEnum('user_role', [
 
 // 'banned' (N3 Scenario 2, fraud) is TERMINAL: the account is retained as evidence but can never
 // sign in or resubmit. The validation trio carries the ban record (validationNotes = ban reason).
-export const userStatus = pgEnum('user_status', ['pending', 'approved', 'rejected', 'banned']);
+// 'deactivated' (DEACT-1, Mariem's sheet row 11) is REVERSIBLE: an admin turned the account off
+// (deactivated_at / _by / _reason); reactivation brings it back to 'approved'.
+export const userStatus = pgEnum('user_status', [
+  'pending',
+  'approved',
+  'rejected',
+  'banned',
+  'deactivated',
+]);
 
 export const users = pgTable(
   'users',
@@ -66,6 +74,12 @@ export const users = pgTable(
     // and/or 'bank' (RIB). MULTI (text[]); the reject route validates the allowed values with a zod
     // enum, mirroring the businessType "text column + zod-at-route" convention. Null unless rejected.
     rejectionTopics: text('rejection_topics').array(),
+    // DEACT-1 — the current deactivation (cleared on reactivation). The status says 'deactivated'.
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
+    deactivatedBy: uuid('deactivated_by').references((): AnyPgColumn => users.id, {
+      onDelete: 'set null',
+    }),
+    deactivationReason: text('deactivation_reason'),
     // business profile (subset; rest land in Phase 1c onboarding)
     businessName: text('business_name'),
     taxNumber: text('tax_number').unique(),

@@ -52,8 +52,14 @@ describe('db schema', () => {
     ]);
   });
 
-  it('user_status enum has exactly the four locked values (banned added — N3 Scenario 2)', () => {
-    expect(userStatus.enumValues).toEqual(['pending', 'approved', 'rejected', 'banned']);
+  it('user_status enum has exactly the five locked values (banned — N3; deactivated — DEACT-1)', () => {
+    expect(userStatus.enumValues).toEqual([
+      'pending',
+      'approved',
+      'rejected',
+      'banned',
+      'deactivated',
+    ]);
   });
 
   it('accounts table exposes its credential + provider + FK columns', () => {

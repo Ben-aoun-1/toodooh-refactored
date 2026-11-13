@@ -205,6 +205,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         advertiserBusinessName: users.businessName,
         advertiserContactName: users.contactName,
         advertiserEmail: users.email,
+        advertiserStatus: users.status,
       })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
@@ -213,6 +214,13 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
     if (!row)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
+    // DEACT-1 (ruling 3) — a deactivated screencaster's campaign is never activated.
+    if (row.advertiserStatus === 'deactivated') {
+      return reply.status(409).send({
+        error: 'ADVERTISER_DEACTIVATED',
+        message: 'Le compte de ce screencaster est désactivé.',
+      });
+    }
     const { campaign, contentValidationStatus, creativeDurationSeconds } = row;
     const advertiserLabel = userLabel({
       id: campaign.advertiserId,

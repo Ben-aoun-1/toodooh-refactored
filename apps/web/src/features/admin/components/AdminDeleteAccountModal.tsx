@@ -21,10 +21,13 @@ export default function AdminDeleteAccountModal({
   userId,
   name,
   onClose,
+  onDeactivateInstead,
 }: {
   userId: string;
   name: string;
   onClose: () => void;
+  /** DEL-2 — an account with activity is not deletable by an admin: deactivate it instead. */
+  onDeactivateInstead?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
@@ -58,6 +61,9 @@ export default function AdminDeleteAccountModal({
   };
 
   const summary = preview.data ? deletionSummary(preview.data.counts) : [];
+  // DEL-2 (Mariem's sheet row 12, ruling 2026-10-28) — an admin deletes only an account that never
+  // did anything; a superadmin may still delete any account completely.
+  const blocked = preview.data !== undefined && !preview.data.can_delete;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -83,7 +89,31 @@ export default function AdminDeleteAccountModal({
             {preview.isError && (
               <p className="text-sm text-red-700">{getErrorMessage(preview.error)}</p>
             )}
-            {preview.data && (
+            {blocked && (
+              <div className="space-y-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                <p>
+                  Ce compte a déjà eu une activité (campagnes, diffusions, reversements ou factures)
+                  : il ne peut pas être supprimé. Désactivez-le plutôt — son historique est conservé
+                  et il peut être réactivé.
+                </p>
+                {onDeactivateInstead && (
+                  <button
+                    type="button"
+                    onClick={onDeactivateInstead}
+                    className="rounded-md bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-700"
+                  >
+                    Désactiver le compte
+                  </button>
+                )}
+              </div>
+            )}
+            {preview.data && !blocked && preview.data.has_activity && (
+              <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                Ce compte a une activité : en tant que superadmin, vous pouvez le supprimer
+                complètement, son historique compris (archivé en interne uniquement).
+              </p>
+            )}
+            {preview.data && !blocked && (
               <div className="rounded-lg bg-red-50 p-3 text-sm text-red-900">
                 <p className="font-medium">
                   {deletionTotal(preview.data.counts)} lignes seront supprimées
@@ -92,35 +122,39 @@ export default function AdminDeleteAccountModal({
                 {summary.length > 0 && <p className="mt-1">{summary.join(' · ')}</p>}
               </div>
             )}
-            <label htmlFor="delete-reason" className="block text-sm text-gray-600">
-              Motif (obligatoire)
-              <textarea
-                id="delete-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={3}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                placeholder="Demande du client, compte en double…"
-              />
-            </label>
-            <label htmlFor="delete-email" className="block text-sm text-gray-600">
-              Pour confirmer, tapez l’e-mail du compte
-              {preview.data && <span className="font-medium"> ({preview.data.email})</span>}
-              <input
-                id="delete-email"
-                type="email"
-                value={typedEmail}
-                autoComplete="off"
-                onChange={(e) => setTypedEmail(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </label>
+            {!blocked && (
+              <>
+                <label htmlFor="delete-reason" className="block text-sm text-gray-600">
+                  Motif (obligatoire)
+                  <textarea
+                    id="delete-reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={3}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Demande du client, compte en double…"
+                  />
+                </label>
+                <label htmlFor="delete-email" className="block text-sm text-gray-600">
+                  Pour confirmer, tapez l’e-mail du compte
+                  {preview.data && <span className="font-medium"> ({preview.data.email})</span>}
+                  <input
+                    id="delete-email"
+                    type="email"
+                    value={typedEmail}
+                    autoComplete="off"
+                    onChange={(e) => setTypedEmail(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </>
+            )}
           </div>
           <div className="flex flex-col gap-2 bg-gray-50 px-6 py-3 sm:flex-row-reverse">
             <button
               type="button"
               onClick={() => void submit()}
-              disabled={remove.isPending || !preview.data}
+              disabled={remove.isPending || !preview.data || blocked}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {remove.isPending && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { env } from '../env.js';
 
+import { adminAccountDeactivationRoutes } from './admin-account-deactivation.js';
 import { adminAccountDeletionRoutes } from './admin-account-deletion.js';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminAgentsRoutes } from './admin-agents.js';
@@ -165,6 +166,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // the dispatch → playout → proof-of-play chain run end-to-end.
   await app.register(adminCampaignsRoutes);
   await app.register(adminCampaignStopRoutes);
+  await app.register(adminAccountDeactivationRoutes);
   // CPM CONFIG — admin-editable dispatch CPM (standard/event TND-per-1000). The activation
   // derivation reads it to compute I_cible = ⌊budget·1000/cpm⌋; editable without a migration.
   await app.register(adminDispatchConfigRoutes);

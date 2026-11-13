@@ -44,7 +44,8 @@ export const requireDeviceAuth = async (
     .from(users)
     .where(eq(users.id, session.userId))
     .limit(1);
-  if (!user) return send401();
+  // DEACT-1 — a deactivated account's phone / TV tokens are revoked at deactivation; refused here too.
+  if (!user || user.status === 'deactivated') return send401();
 
   await db
     .update(deviceSessions)
