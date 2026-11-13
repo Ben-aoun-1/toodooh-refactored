@@ -36,6 +36,9 @@ export function useAdminLocations(filters: AdminLocationFilters) {
         page: filters.page,
         per_page: filters.perPage,
       }),
+    // SCR-INST1 — an installation in progress (TVs connecting) shows up without a reload: the
+    // « installé » / « en ligne » counts are re-read every 30 s while the page is open.
+    refetchInterval: 30_000,
   });
   const total = query.data?.total ?? 0;
   return {

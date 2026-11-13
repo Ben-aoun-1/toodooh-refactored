@@ -27,12 +27,45 @@
 // twice in its minute). An image's display length is chosen by the screencaster: 10, 20 or 30 s.
 //
 // Positionings dispatched before this model (campaigns.event_minutes NULL) keep their EV4 rules
-// to the end (ruling A1): their allocation fills a bloc's whole antenne, i.e. all five seats.
+// to the end (ruling A1): their allocation fills a bloc's whole antenne, i.e. all its seats.
+//
+// Mariem 04/11/2026 — THE SEAT MODEL, per match. A bloc's pod is now 6 minutes: three seats of 2
+// minutes, a campaign holding at most one seat per bloc and venue (an advertiser reaches 4 or 6
+// minutes in a bloc with several campaigns — operator, 2026-11-04); the slider moves 2 minutes at
+// a time. A seat is priced A_max × R × 1 bloc: the ÷ 3 goes, the match's audience staying for its
+// whole window (« potentiellement les mêmes personnes »), R being the spot's plays in its seat. A
+// match already sold under EVT-MIN1's 1-minute seats keeps them to its end (events.seat_minutes =
+// 1, migration 0104): its seats, pods and prices never mix with the new ones. Below, one entry of
+// the « minute list » is one SEAT of the match's model.
 
-export const EVENT_SEATS_PER_BLOC = 5;
-export const EVENT_SEAT_SECONDS = 60;
-/** A_max is an hour's audience; a 20-minute bloc sees a third of it. */
-export const EVENT_BLOC_AUDIENCE_DIVISOR = 3;
+const MINUTE_SECONDS = 60;
+
+export interface EventSeatModel {
+  /** A seat's length: what one campaign holds in one bloc at one venue. */
+  seatMinutes: 1 | 2;
+  /** The seats a bloc's pod holds. */
+  seatsPerBloc: number;
+  /** A bloc's share of A_max: 3 = a third of the hour (EVT-MIN1), 1 = all of it. */
+  audienceDivisor: number;
+}
+
+/** Mariem 04/11 — 2-minute seats, 3 per bloc, the whole A_max. */
+export const EVENT_SEAT_MODEL: EventSeatModel = {
+  seatMinutes: 2,
+  seatsPerBloc: 3,
+  audienceDivisor: 1,
+};
+
+/** EVT-MIN1 — 1-minute seats, 5 per bloc, a third of A_max; kept by matches sold under it. */
+export const EVENT_SEAT_MODEL_MIN1: EventSeatModel = {
+  seatMinutes: 1,
+  seatsPerBloc: 5,
+  audienceDivisor: 3,
+};
+
+/** The match's seat model, from events.seat_minutes (NULL = the 2-minute model). */
+export const eventSeatModel = (seatMinutes: number | null): EventSeatModel =>
+  seatMinutes === 1 ? EVENT_SEAT_MODEL_MIN1 : EVENT_SEAT_MODEL;
 
 export const EVENT_VIDEO_MIN_SECONDS = 10;
 export const EVENT_VIDEO_MAX_SECONDS = 30;
@@ -42,18 +75,31 @@ export const EVENT_SLOT_CLASSES = [10, 12, 15, 20, 30] as const;
 export const EVENT_IMAGE_SECONDS = [10, 20, 30] as const;
 
 /**
- * One minute's impressions: A_max ÷ 3 × R, whole. `playsPerMinute` = R (eventSpotPlaysPerMinute);
- * 1 = the audience alone (no spot chosen yet — the catalogue card).
+ * A seat's plays: R per minute (eventSpotPlaysPerMinute) × the seat's minutes — every minute of
+ * the seat holds 60 ÷ slot plays, so this is also the pod's count. 1 = no spot chosen yet (the
+ * catalogue card): the audience alone, once.
  */
-export const eventMinuteImpressions = (amaxPph: number, playsPerMinute: number): number =>
-  Math.round((amaxPph * playsPerMinute) / EVENT_BLOC_AUDIENCE_DIVISOR);
+const seatPlays = (playsPerMinute: number, model: EventSeatModel): number =>
+  playsPerMinute <= 1 ? 1 : playsPerMinute * model.seatMinutes;
 
-/** CPM_evt × impressions(minute) ÷ 1000, rounded to the centime (requested_budget is numeric(12,2)). */
-export const eventMinutePriceTnd = (
+/**
+ * One seat's impressions, whole: A_max × R per bloc (Mariem 04/11); EVT-MIN1: A_max ÷ 3 × R per
+ * minute.
+ */
+export const eventSeatImpressions = (
+  amaxPph: number,
+  playsPerMinute: number,
+  model: EventSeatModel,
+): number => Math.round((amaxPph * seatPlays(playsPerMinute, model)) / model.audienceDivisor);
+
+/** CPM_evt × impressions(seat) ÷ 1000, rounded to the centime (requested_budget is numeric(12,2)). */
+export const eventSeatPriceTnd = (
   amaxPph: number,
   cpmEvtTnd: number,
   playsPerMinute: number,
-): number => Math.round((cpmEvtTnd * eventMinuteImpressions(amaxPph, playsPerMinute)) / 10) / 100;
+  model: EventSeatModel,
+): number =>
+  Math.round((cpmEvtTnd * eventSeatImpressions(amaxPph, playsPerMinute, model)) / 10) / 100;
 
 export type EventSpotKind = 'video' | 'photo';
 
@@ -77,9 +123,9 @@ export const eventSlotSeconds = (
     : null;
 };
 
-/** How many times a spot airs in its minute: 60 ÷ slot. */
+/** How many times a spot airs in a minute of its seat: 60 ÷ slot. */
 export const eventPlaysPerMinute = (slotSeconds: number): number =>
-  Math.floor(EVENT_SEAT_SECONDS / slotSeconds);
+  Math.floor(MINUTE_SECONDS / slotSeconds);
 
 /**
  * EVT-PRICE2 — R, the price's play count: 60 ÷ the spot's REAL length, rounded down (operator
@@ -92,7 +138,7 @@ export const eventSpotPlaysPerMinute = (
 ): number | null =>
   eventSlotSeconds(creativeType, durationSeconds) === null || durationSeconds === null
     ? null
-    : Math.floor(EVENT_SEAT_SECONDS / durationSeconds);
+    : Math.floor(MINUTE_SECONDS / durationSeconds);
 
 export interface EventMinuteVenue {
   screenhostId: string;
@@ -102,7 +148,7 @@ export interface EventMinuteVenue {
   blocs: { start: Date; end: Date }[];
 }
 
-/** One buyable minute: a seat in one bloc at one venue. */
+/** One buyable seat (the match's seat model): one bloc at one venue. */
 export interface EventMinute {
   screenhostId: string;
   ownerId: string;
@@ -113,14 +159,15 @@ export interface EventMinute {
 }
 
 /**
- * The ORDERED minute list over an SPS-ordered pool (the caller owns the venue order — EV4's
+ * The ORDERED seat list over an SPS-ordered pool (the caller owns the venue order — EV4's
  * assembleEventPool already sorts SPS desc, ancienneté asc, id asc). Each venue contributes one
- * minute per bloc with a free seat, its blocs in chronological order. Pure.
+ * seat per bloc with a free seat, its blocs in chronological order. Pure.
  */
 export const orderedEventMinutes = (
   pool: readonly EventMinuteVenue[],
   cpmEvtTnd: number,
   playsPerMinute: number,
+  model: EventSeatModel,
 ): EventMinute[] =>
   pool.flatMap((venue) =>
     [...venue.blocs]
@@ -130,16 +177,30 @@ export const orderedEventMinutes = (
         ownerId: venue.ownerId,
         blocStart: bloc.start,
         blocEnd: bloc.end,
-        impressions: eventMinuteImpressions(venue.amaxPph, playsPerMinute),
-        priceTnd: eventMinutePriceTnd(venue.amaxPph, cpmEvtTnd, playsPerMinute),
+        impressions: eventSeatImpressions(venue.amaxPph, playsPerMinute, model),
+        priceTnd: eventSeatPriceTnd(venue.amaxPph, cpmEvtTnd, playsPerMinute, model),
       })),
   );
 
 const roundCentimes = (tnd: number): number => Math.round(tnd * 100) / 100;
 
+/** The seats `minutes` buys under a model; null when the minutes are not whole seats. */
+export const eventSeatsFor = (minutes: number, model: EventSeatModel): number | null =>
+  Number.isInteger(minutes) && minutes >= 0 && minutes % model.seatMinutes === 0
+    ? minutes / model.seatMinutes
+    : null;
+
 /** The price of the first `minutes` minutes of an ordered list (what the slider shows). */
-export const eventMinutesPriceTnd = (list: readonly EventMinute[], minutes: number): number =>
-  roundCentimes(list.slice(0, Math.max(0, minutes)).reduce((sum, m) => sum + m.priceTnd, 0));
+export const eventMinutesPriceTnd = (
+  list: readonly EventMinute[],
+  minutes: number,
+  model: EventSeatModel,
+): number =>
+  roundCentimes(
+    list
+      .slice(0, Math.max(0, Math.floor(minutes / model.seatMinutes)))
+      .reduce((sum, m) => sum + m.priceTnd, 0),
+  );
 
 export interface EventMinutePlacement {
   screenhostId: string;
@@ -155,22 +216,27 @@ export type EventMinutesTake =
   | { status: 'NOT_ENOUGH'; available: number };
 
 /**
- * Take the first `minutes` minutes of the ordered list, grouped per venue (list order kept).
- * EV4's charge-cap invariant holds: if prices rose since the budget was set (A_max only ratchets
- * up), the overshoot is free delivery — Σ montants never exceeds `budgetTnd`. Fewer minutes than
- * asked is NOT_ENOUGH: a purchase is never silently shortened. Pure.
+ * Take the seats of the first `minutes` minutes of the ordered list, grouped per venue (list
+ * order kept). EV4's charge-cap invariant holds: if prices rose since the budget was set (A_max
+ * only ratchets up), the overshoot is free delivery — Σ montants never exceeds `budgetTnd`. Fewer
+ * minutes than asked — or minutes that are not whole seats — is NOT_ENOUGH (`available` in
+ * minutes): a purchase is never silently shortened. Pure.
  */
 export const takeEventMinutes = (
   list: readonly EventMinute[],
   minutes: number,
   budgetTnd: number,
+  model: EventSeatModel,
 ): EventMinutesTake => {
-  if (minutes < 1 || list.length < minutes) return { status: 'NOT_ENOUGH', available: list.length };
+  const seats = eventSeatsFor(minutes, model);
+  if (seats === null || seats < 1 || list.length < seats) {
+    return { status: 'NOT_ENOUGH', available: list.length * model.seatMinutes };
+  }
   const byVenue = new Map<string, EventMinutePlacement>();
   let budgetLeft = budgetTnd;
   let impressions = 0;
   let charged = 0;
-  for (const minute of list.slice(0, minutes)) {
+  for (const minute of list.slice(0, seats)) {
     let placement = byVenue.get(minute.screenhostId);
     if (!placement) {
       placement = {
@@ -228,16 +294,17 @@ export interface EventPod {
 
 /**
  * The pod window inside a bloc: avant blocs open with the pod, après blocs close with it; it
- * lasts one minute per seat aired. Zero seats = no pod.
+ * lasts a seat's minutes per seat aired. Zero seats = no pod.
  */
 export const eventPodWindow = (
   phase: 'avant' | 'apres',
   blocStart: Date,
   blocEnd: Date,
   seats: number,
+  model: EventSeatModel,
 ): { start: Date; end: Date } | null => {
   if (seats <= 0) return null;
-  const lengthMs = Math.min(seats, EVENT_SEATS_PER_BLOC) * EVENT_SEAT_SECONDS * 1000;
+  const lengthMs = Math.min(seats, model.seatsPerBloc) * model.seatMinutes * MINUTE_SECONDS * 1000;
   return phase === 'avant'
     ? { start: blocStart, end: new Date(blocStart.getTime() + lengthMs) }
     : { start: new Date(blocEnd.getTime() - lengthMs), end: blocEnd };
@@ -245,21 +312,23 @@ export const eventPodWindow = (
 
 /**
  * The pod timeline (ruling 5B, EVT-PLAY1 round layout): seats in the given order (the caller
- * passes first-booked first), each owning 60 ÷ slot plays; one play per seat per ROUND, rounds
- * repeat until every seat has aired its minute. Inside a round the spots play BACK TO BACK, then
- * the Toodooh screen fills what the round's slots leave over (Σ slot − spot): A 11 s + B 18 s →
- * A11 B18 T3, three times, then A11 T1 twice. The timeline lasts exactly seats × 60 s. Pure.
+ * passes first-booked first), each owning (seat minutes × 60 ÷ slot) plays; one play per seat per
+ * ROUND, rounds repeat until every seat has aired its minutes. Inside a round the spots play BACK
+ * TO BACK, then the Toodooh screen fills what the round's slots leave over (Σ slot − spot): with
+ * 1-minute seats, A 11 s + B 18 s → A11 B18 T3, three times, then A11 T1 twice. The timeline
+ * lasts exactly seats × the seat's minutes. Pure.
  */
 export const eventPodTimeline = (
   phase: 'avant' | 'apres',
   blocStart: Date,
   blocEnd: Date,
   seats: readonly PodSeat[],
+  model: EventSeatModel,
 ): EventPod | null => {
-  const aired = seats.slice(0, EVENT_SEATS_PER_BLOC);
-  const window = eventPodWindow(phase, blocStart, blocEnd, aired.length);
+  const aired = seats.slice(0, model.seatsPerBloc);
+  const window = eventPodWindow(phase, blocStart, blocEnd, aired.length, model);
   if (!window) return null;
-  const left = aired.map((s) => eventPlaysPerMinute(s.slotSeconds));
+  const left = aired.map((s) => eventPlaysPerMinute(s.slotSeconds) * model.seatMinutes);
   const slots: PodSlot[] = [];
   let cursor = window.start.getTime();
   while (left.some((n) => n > 0)) {

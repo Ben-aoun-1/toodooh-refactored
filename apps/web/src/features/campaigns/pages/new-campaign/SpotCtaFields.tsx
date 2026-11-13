@@ -2,12 +2,19 @@ import { Loader2, QrCode, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import CtaCornerPicker from '@/features/campaigns/components/CtaCornerPicker';
 import {
   useCampaignCta,
   useRemoveCampaignCta,
   useSaveCampaignCta,
 } from '@/features/campaigns/hooks/useCampaignCta';
-import { CTA_LABEL_MAX_CHARS, ctaFormBody, ctaStatusLine } from '@/features/campaigns/lib/spot-cta';
+import {
+  CTA_DEFAULT_POSITION,
+  CTA_LABEL_MAX_CHARS,
+  ctaFormBody,
+  ctaStatusLine,
+} from '@/features/campaigns/lib/spot-cta';
+import type { CtaPosition } from '@/features/campaigns/services/campaigns.api';
 import { getErrorMessage } from '@/lib/errors';
 
 const TONE_CLASS = {
@@ -18,8 +25,9 @@ const TONE_CLASS = {
 
 /**
  * QR-CTA1 (Youssef 2026-10-18) — the spot step's OPTIONAL call to action: a link and a short
- * message. The server burns a QR code with the message into a copy of the spot, bottom-left, and
- * the TVs air that copy; each scan is counted. Hidden for accounts without the feature.
+ * message. The server burns a QR code with the message into a copy of the spot and the TVs air
+ * that copy; each scan is counted. Hidden for accounts without the feature. Mariem 04/11 — in
+ * the corner the advertiser picks, on a Foot positioning as on a classic campaign.
  */
 export default function SpotCtaFields({ campaignId }: { campaignId: string }) {
   const cta = useCampaignCta(campaignId);
@@ -27,21 +35,24 @@ export default function SpotCtaFields({ campaignId }: { campaignId: string }) {
   const remove = useRemoveCampaignCta(campaignId);
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
+  const [position, setPosition] = useState<CtaPosition>(CTA_DEFAULT_POSITION);
 
   // The saved values seed the fields (and re-seed them after a save), never mid-typing refetches.
   const savedUrl = cta.data?.url ?? '';
   const savedLabel = cta.data?.label ?? '';
+  const savedPosition = cta.data?.position ?? CTA_DEFAULT_POSITION;
   useEffect(() => {
     setUrl(savedUrl);
     setLabel(savedLabel);
-  }, [savedUrl, savedLabel]);
+    setPosition(savedPosition);
+  }, [savedUrl, savedLabel, savedPosition]);
 
   if (!cta.data?.enabled) return null;
   const view = cta.data;
   const status = ctaStatusLine(view);
 
   const submit = async () => {
-    const body = ctaFormBody(url, label);
+    const body = ctaFormBody(url, label, position);
     if (!body.ok) {
       toast.error(body.error);
       return;
@@ -70,7 +81,7 @@ export default function SpotCtaFields({ campaignId }: { campaignId: string }) {
         <p className="text-sm font-bold text-gray-900">QR code « En savoir plus » (facultatif)</p>
       </div>
       <p className="text-sm text-gray-600">
-        Un QR code s’affiche en bas à gauche de votre spot, de 2 secondes après son début à 2
+        Un QR code s’affiche dans le coin de votre choix, de 2 secondes après le début du spot à 2
         secondes avant sa fin : les clients le scannent et arrivent directement sur votre page. Vous
         voyez combien de personnes l’ont scanné.
       </p>
@@ -106,6 +117,9 @@ export default function SpotCtaFields({ campaignId }: { campaignId: string }) {
             className="mt-1 w-full rounded-lg border px-3 py-2"
           />
         </label>
+        <div className="md:col-span-3">
+          <CtaCornerPicker value={position} onChange={setPosition} />
+        </div>
         <div className="flex flex-wrap items-center gap-3 md:col-span-3">
           <button
             type="submit"

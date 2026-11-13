@@ -288,16 +288,22 @@ describe('PROOF-R1 — late proofs, dedup and the ack', () => {
       return inbox.filter((m) => m.cmd === 'PROOF_ACK').map((m) => m.data);
     };
 
-    it('acks a recorded proof, then its resend as a duplicate', async () => {
+    it('acks a proof and its resend: one recorded, one duplicate', async () => {
       const chain = await seedChain();
       const { ws, inbox } = await connect(chain);
       const playId = randomUUID();
       ws.send(JSON.stringify(ended(chain, { play_id: playId })));
       ws.send(JSON.stringify(ended(chain, { play_id: playId })));
-      expect(await acksIn(inbox, 2)).toEqual([
-        { play_id: playId, event: 'VIDEO_ENDED', status: 'recorded' },
-        { play_id: playId, event: 'VIDEO_ENDED', status: 'duplicate' },
-      ]);
+      // The socket handles messages concurrently, so the two acks may arrive in either order (the
+      // player settles a proof on any ack of its play_id and event).
+      const acks = await acksIn(inbox, 2);
+      expect(acks).toHaveLength(2);
+      expect(acks).toEqual(
+        expect.arrayContaining([
+          { play_id: playId, event: 'VIDEO_ENDED', status: 'recorded' },
+          { play_id: playId, event: 'VIDEO_ENDED', status: 'duplicate' },
+        ]),
+      );
       expect(await proofsOf(chain.screenId)).toHaveLength(1);
     }, 10_000);
 

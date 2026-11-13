@@ -5,7 +5,7 @@ import { computeReversement, type ReversementPcts, tndToMillimes } from './rever
 // ADM-OBS1 slice B (operator program 2026-09-11; money-lost rule ruled 2026-09-12) — the two pure
 // derivations the admin « Tests » page adds on top of slice A:
 //  1. the status of every open hour (free / campaigns but N seconds free / full / the host declared
-//     the day unavailable / an event holds the hour — never collapsed into « free »);
+//     the hour unavailable / an event holds the hour — never collapsed into « free »);
 //  2. the per-campaign view on this venue: ran fully / disrupted / received a redispatch, and the
 //     value of the slots it did not play (missed facturable × CPM / 1000), redirected to the hosts
 //     that received the redispatch — plus the host's own share of that value.
@@ -33,7 +33,7 @@ export interface HourStatus {
   engaged_seconds: number;
   /** The EN_ATTENTE part of `engaged_seconds`. */
   pending_seconds: number;
-  /** F − engaged; null when the host declared the day unavailable or an event holds the hour. */
+  /** F − engaged; null when the host declared the hour unavailable or an event holds the hour. */
   seconds_free: number | null;
   /** Σ repetitions planned in that hour (ACCEPTE and EN_ATTENTE shares). */
   reps: number;
@@ -70,7 +70,8 @@ export const isElapsed = (
 export const hourStatuses = (
   days: readonly string[],
   hours: readonly number[],
-  unavailableDays: ReadonlySet<string>,
+  /** HOUR-UNAV1 — the declared unavailable clock cells (`YYYY-MM-DD:H`). */
+  unavailableCells: ReadonlySet<string>,
   reservedHours: ReadonlySet<string>, // 'date:hour' held in hour_reservations
   allocations: readonly AllocationForStatus[],
   /** The hour's shared limit. CAP-F1: the SCREEN hour (3600 s) — F caps each campaign, not the hour. */
@@ -106,7 +107,7 @@ export const hourStatuses = (
         reps: e?.reps ?? 0,
         campaigns: e?.campaigns.size ?? 0,
       };
-      if (unavailableDays.has(date)) {
+      if (unavailableCells.has(`${date}:${hour}`)) {
         out.push({ ...base, state: 'indisponible', seconds_free: null });
         continue;
       }

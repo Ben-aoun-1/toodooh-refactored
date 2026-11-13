@@ -15,11 +15,18 @@ import {
 import { deriveICible } from './activation-service.js';
 import { ownerApprovedSql } from './approved-owner.js';
 import {
+  type ToursFicheWire,
+  liveToursDetail,
+  toursFiche,
+} from './campaign-eligible-hosts-tours.js';
+import { eventPoolDemoVenues } from './demo.js';
+import {
   campaignCpmRates,
   campaignTTiers,
   cpmForCampaign,
   getDispatchConfig,
 } from './dispatch/config.js';
+import { usesToursEngine } from './dispatch/engine-switch.js';
 import { planFromPool } from './dispatch/plan-outcome.js';
 import { assemblePool } from './dispatch/pool.js';
 import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
@@ -72,7 +79,10 @@ export type ExclusionReason =
   | 'owner_not_approved'
   | 'no_installed_screen'
   | 'not_demo_venue'
-  | 'not_in_frozen_week';
+  | 'not_in_frozen_week'
+  // DISP-TOURS — the tours pool's own reasons (lib/dispatch/tours/assemble.ts).
+  | 'no_typical_week'
+  | 'no_usable_hour';
 
 export interface EligibleHost {
   id: string;
@@ -119,6 +129,8 @@ export interface EligibleHostsReport {
     capacity: number;
     c_max_tnd: number;
   };
+  /** DISP-TOURS — the tours engine's fiche (absent on a v1 plan and on an event positioning). */
+  tours?: ToursFicheWire;
 }
 
 export type EligibleHostsResult =
@@ -253,7 +265,12 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
   // ── an event positioning: the event module's own ceiling ─────────────────────
   if (row.eventId) {
     const [event] = await db
-      .select({ id: events.id, kickoffAt: events.kickoffAt, endsAt: events.endsAt })
+      .select({
+        id: events.id,
+        kickoffAt: events.kickoffAt,
+        endsAt: events.endsAt,
+        seatMinutes: events.seatMinutes,
+      })
       .from(events)
       .where(eq(events.id, row.eventId))
       .limit(1);
@@ -263,6 +280,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       rates.eventCpmTnd,
       new Set(),
       await campaignPlaysPerMinute(row.id),
+      await eventPoolDemoVenues(db, row.id),
     );
     const allocations = await db
       .select({
@@ -343,10 +361,98 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
 
   // Its own frozen allocations are its delivery, not competition (the C_max self-exclusion).
   const [plan] = await db
-    .select({ id: campaignDispatchPlan.id })
+    .select({
+      id: campaignDispatchPlan.id,
+      engine: campaignDispatchPlan.engine,
+      detail: campaignDispatchPlan.detail,
+    })
     .from(campaignDispatchPlan)
     .where(eq(campaignDispatchPlan.campaignId, row.id))
     .limit(1);
+
+  // DISP-TOURS — a tours plan shows what it was frozen with; a campaign not launched yet on the
+  // tours engine is calculated now (a v1 plan keeps the v1 report below).
+  if ((plan?.engine === 'tours' && plan.detail) || (!plan && (await usesToursEngine(db, row.id)))) {
+    const tStd = tForDuration(spotSeconds, campaignTTiers(row));
+    const cpmStd = cpmForCampaign(row.campaignType, rates);
+    const budgetStd = row.requestedBudget === null ? null : Number(row.requestedBudget);
+    const { detail, excluded: poolExcluded } =
+      plan?.detail != null
+        ? { detail: plan.detail, excluded: plan.detail.excluded }
+        : await liveToursDetail(
+            { id: row.id, startDate: row.startDate, endDate: row.endDate },
+            { s: spotSeconds, t: tStd, cpm: cpmStd, budgetTnd: budgetStd },
+          );
+    const tours = toursFiche(detail, plan ? 'plan' : 'live', labels);
+    const allocations = plan
+      ? await db
+          .select({
+            screenhostId: campaignDispatchAllocation.screenhostId,
+            statut: campaignDispatchAllocation.statutAcceptation,
+            impressions: campaignDispatchAllocation.iiPotentiel,
+          })
+          .from(campaignDispatchAllocation)
+          .where(eq(campaignDispatchAllocation.planId, plan.id))
+      : [];
+    const allocationByVenue = new Map(allocations.map((a) => [a.screenhostId, a]));
+    const eligible: EligibleHost[] = tours.venues.map((v) => {
+      const allocation = allocationByVenue.get(v.id);
+      const open = v.week.filter((c) => c.n > 0);
+      return {
+        id: v.id,
+        name: v.name,
+        sector: v.sector,
+        class: v.class,
+        sps: v.sps,
+        affluence:
+          open.length > 0
+            ? Math.round((open.reduce((sum, c) => sum + c.affluence, 0) / open.length) * 100) / 100
+            : 0,
+        hours: open.reduce((sum, c) => sum + c.n, 0),
+        capacity: Math.round(v.plein_impressions),
+        days_available: null,
+        allocation: allocation
+          ? { statut: allocation.statut, impressions: allocation.impressions }
+          : null,
+        share: Math.round(v.impressions),
+      };
+    });
+    const inPool = new Set(tours.venues.map((v) => v.id));
+    const reasonOf = new Map(poolExcluded.map((e) => [e.venueId, e.reason]));
+    const excludedStd: ExcludedHost[] = [...labels.values()]
+      .filter((v) => !inPool.has(v.id))
+      .map((v) => ({
+        id: v.id,
+        name: v.name,
+        reason: ((reasonOf.get(v.id) as ExclusionReason | undefined) ??
+          (!v.ownerApproved
+            ? 'owner_not_approved'
+            : v.isActive
+              ? 'targeting_mismatch'
+              : 'inactive')) as ExclusionReason,
+      }));
+    return {
+      status: 'OK',
+      report: {
+        kind: 'standard',
+        campaign: campaignView,
+        window: { start: row.startDate, end: row.endDate },
+        spot_seconds: spotSeconds,
+        spot_source: spotSource,
+        cpm_tnd: cpmStd,
+        eligible: eligible.sort(byName),
+        excluded: excludedStd.sort(byName),
+        totals: {
+          active_venues: activeVenues,
+          eligible: eligible.length,
+          excluded: excludedStd.length,
+          capacity: Math.round(tours.i_max),
+          c_max_tnd: Math.floor(tours.c_max_tnd * 100 + 1e-6) / 100,
+        },
+        tours,
+      },
+    };
+  }
   const ownAllocations = plan
     ? await db
         .select({

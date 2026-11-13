@@ -5,7 +5,12 @@ import { and, eq, inArray, isNotNull, notExists } from 'drizzle-orm';
 import { db, sql } from '../src/db/client.js';
 import { campaignReconciliation, campaigns, eventAllocations } from '../src/db/schema.js';
 import { checkEventMinutes } from '../src/lib/event-minutes-gate.js';
-import { eventMinuteImpressions, eventMinutePriceTnd } from '../src/lib/event-pricing/minutes.js';
+// EVT-PRICE2 repriced EVT-MIN1's 1-minute seats: the script keeps their model.
+import {
+  EVENT_SEAT_MODEL_MIN1,
+  eventSeatImpressions,
+  eventSeatPriceTnd,
+} from '../src/lib/event-pricing/minutes.js';
 import { campaignPlaysPerMinute } from '../src/lib/event-pricing/spot.js';
 
 // EVT-PRICE2 (operator ruling 2026-10-08, « c: modify them ») — ONE-OFF repricing, DRY-RUN BY
@@ -108,8 +113,8 @@ export const repriceAllocation = (
     const amax = b.impressions / OLD_MINUTE_REPS;
     return {
       ...b,
-      impressions: eventMinuteImpressions(amax, playsPerMinute),
-      price: eventMinutePriceTnd(amax, cpmEvtTnd, playsPerMinute),
+      impressions: eventSeatImpressions(amax, playsPerMinute, EVENT_SEAT_MODEL_MIN1),
+      price: eventSeatPriceTnd(amax, cpmEvtTnd, playsPerMinute, EVENT_SEAT_MODEL_MIN1),
     };
   });
   const priced = centimes(blocs.reduce((sum, b) => sum + b.price, 0));

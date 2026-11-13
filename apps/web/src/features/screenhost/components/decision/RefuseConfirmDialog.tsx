@@ -1,5 +1,8 @@
 import CenteredOverlay from '@/features/screenhost/components/decision/CenteredOverlay';
-import { refuseQuestion } from '@/features/screenhost/lib/decision-notifications';
+import {
+  type DecisionSubject,
+  refuseQuestion,
+} from '@/features/screenhost/lib/decision-notifications';
 
 /** Figma frame 590 — « Refuser définitivement » confirm, stacked above the details popup. */
 export default function RefuseConfirmDialog({
@@ -8,7 +11,7 @@ export default function RefuseConfirmDialog({
   onCancel,
   onConfirm,
 }: {
-  target: 'campaign' | 'event';
+  target: DecisionSubject;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;

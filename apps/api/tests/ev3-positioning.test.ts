@@ -25,7 +25,6 @@ import {
 import { computeCampaignCmax } from '../src/lib/campaign-cmax.js';
 import { plusCalendarDays, tunisDateOf } from '../src/lib/campaign-dates.js';
 import {
-  DRAFT_REMINDER_TITLE,
   EVENT_DRAFT_REMINDER_TITLE,
   eventDraftReminderBody,
   runCampaignLifecycleTick,
@@ -297,27 +296,31 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
     });
 
     it('the row rides the CLASSIC draft machinery: minutes/description PATCH + Reprendre read', async () => {
-      // A_max 100, the seeded 12 s spot plays 5 times a minute (EVT-PRICE2): 100 ÷ 3 × 5 = 166.7
-      // → 167 impressions, one minute = 15 × 167 / 1000 = 2.505 → 2.51 TND.
+      // A_max 100, the seeded 12 s spot plays 5 times a minute, 10 in a 2-minute seat (Mariem
+      // 04/11): 100 × 10 = 1 000 impressions, one seat = 15 × 1 000 / 1000 = 15 TND.
       await seedVenue();
       const advId = await seedUser();
       const { campaignId, eventId } = await seedPositioning(advId);
+      // Minutes come in whole 2-minute seats.
+      const odd = await patchCampaign(campaignId, { event_minutes: 3 });
+      expect(odd.statusCode).toBe(400);
+      expect(odd.json()).toMatchObject({ error: 'EVENT_MINUTES_STEP', seat_minutes: 2 });
       // EVT-MIN1 — a positioning is sized in minutes; the SERVER derives its budget.
-      const res = await patchCampaign(campaignId, { description: 'Mi-temps', event_minutes: 3 });
+      const res = await patchCampaign(campaignId, { description: 'Mi-temps', event_minutes: 4 });
       expect(res.statusCode).toBe(200);
       const read = await app.inject({ method: 'GET', url: `/api/campaigns/${campaignId}` });
       expect(read.statusCode).toBe(200);
       const body = read.json() as Record<string, unknown>;
       expect(body['event_id']).toBe(eventId);
-      expect(body['event_minutes']).toBe(3);
-      expect(body['requested_budget']).toBe(7.53);
+      expect(body['event_minutes']).toBe(4);
+      expect(body['requested_budget']).toBe(30);
       // The budget is never PATCHed directly on a positioning; minutes beyond the free seats 400.
       const direct = await patchCampaign(campaignId, { requested_budget: 120 });
       expect(direct.statusCode).toBe(400);
       expect((direct.json() as { error: string }).error).toBe('EVENT_BUDGET_FROM_MINUTES');
-      const over = await patchCampaign(campaignId, { event_minutes: 7 });
+      const over = await patchCampaign(campaignId, { event_minutes: 14 });
       expect(over.statusCode).toBe(400);
-      expect(over.json()).toMatchObject({ error: 'BUDGET_EXCEEDS_CMAX', max_minutes: 6 });
+      expect(over.json()).toMatchObject({ error: 'BUDGET_EXCEEDS_CMAX', max_minutes: 12 });
     });
 
     // EVT-PRICE2 (operator ruling 2026-10-08) — the price follows the SPOT until it is paid.
@@ -325,17 +328,17 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       await seedVenue(); // A_max 100
       const advId = await seedUser();
       const { campaignId } = await seedPositioning(advId); // 12 s spot (R 5), 2 minutes
-      expect((await patchCampaign(campaignId, { event_minutes: 3 })).json()).toMatchObject({
-        requested_budget: 7.53, // 3 × 2.51
+      expect((await patchCampaign(campaignId, { event_minutes: 4 })).json()).toMatchObject({
+        requested_budget: 30, // 2 seats × 15
       });
-      // An 18 s spot plays 3 times a minute: 100 ÷ 3 × 3 = 100 impressions → 1.50 a minute.
+      // An 18 s spot plays 3 times a minute, 6 a seat: 100 × 6 = 600 impressions → 9 TND a seat.
       const slower = await seedCreative(advId, { duration: 18 });
       const res = await patchCampaign(campaignId, { creative_id: slower });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ event_minutes: 3, requested_budget: 4.5 });
+      expect(res.json()).toMatchObject({ event_minutes: 4, requested_budget: 18 });
       // Unlinking the spot keeps the minutes and clears the price; sizing without a spot is refused.
       const unlinked = await patchCampaign(campaignId, { creative_id: null });
-      expect(unlinked.json()).toMatchObject({ event_minutes: 3, requested_budget: null });
+      expect(unlinked.json()).toMatchObject({ event_minutes: 4, requested_budget: null });
       const blind = await patchCampaign(campaignId, { event_minutes: 2 });
       expect(blind.statusCode).toBe(400);
       expect((blind.json() as { error: string }).error).toBe('EVENT_SPOT_REQUIRED');
@@ -411,9 +414,9 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
     });
   });
 
-  describe('the cart gates — minutes (min 1), EVENT ceiling, no J+2 floor', () => {
-    it('refuses without minutes and beyond the free minutes; accepts 1 minute (no 100 TND floor)', async () => {
-      await seedVenue(); // A_max 100 × 6 blocs → 6 minutes at 6 TND
+  describe('the cart gates — minutes (one seat minimum), EVENT ceiling, no J+2 floor', () => {
+    it('refuses without minutes and beyond the free minutes; accepts one seat (no 100 TND floor)', async () => {
+      await seedVenue(); // A_max 100 × 6 blocs → 12 minutes (six 2-minute seats)
       const advId = await seedUser();
       const { campaignId, eventId } = await seedPositioning(advId, { minutes: null });
       const unsized = await addToCart(campaignId);
@@ -422,25 +425,35 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
 
       const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
       const ceiling = await computeEventCmax(
-        { id: eventId, kickoffAt: ev?.kickoffAt ?? KICKOFF, endsAt: ev?.endsAt ?? ENDS },
+        {
+          id: eventId,
+          kickoffAt: ev?.kickoffAt ?? KICKOFF,
+          endsAt: ev?.endsAt ?? ENDS,
+          seatMinutes: null,
+        },
         (await getDispatchConfig()).eventCpmTnd,
         new Set(),
         1,
       );
-      expect(ceiling.maxMinutes).toBe(6);
+      expect(ceiling.maxMinutes).toBe(12); // six blocs × a 2-minute seat
 
       await db
         .update(campaigns)
-        .set({ eventMinutes: ceiling.maxMinutes + 1, requestedBudget: '42.00' })
+        .set({ eventMinutes: ceiling.maxMinutes + 2, requestedBudget: '42.00' })
         .where(eq(campaigns.id, campaignId));
       const over = await addToCart(campaignId);
       expect(over.statusCode).toBe(400);
       expect((over.json() as { error: string }).error).toBe('BUDGET_EXCEEDS_CMAX');
 
-      // ONE minute (6 TND) is a valid purchase — the 100 TND floor no longer applies (ruling 4A).
+      // ONE seat (2 minutes) is a valid purchase — the 100 TND floor no longer applies (ruling
+      // 4A); an odd count is not.
+      await db.update(campaigns).set({ eventMinutes: 1 }).where(eq(campaigns.id, campaignId));
+      const odd = await addToCart(campaignId);
+      expect(odd.statusCode).toBe(400);
+      expect((odd.json() as { error: string }).error).toBe('EVENT_MINUTES_STEP');
       await db
         .update(campaigns)
-        .set({ eventMinutes: 1, requestedBudget: '6.00' })
+        .set({ eventMinutes: 2, requestedBudget: '6.00' })
         .where(eq(campaigns.id, campaignId));
       expect((await addToCart(campaignId)).statusCode).toBe(200);
     });
@@ -605,7 +618,12 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       const body = res.json() as Record<string, number>;
       const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
       const expected = await computeEventCmax(
-        { id: eventId, kickoffAt: ev?.kickoffAt ?? KICKOFF, endsAt: ev?.endsAt ?? ENDS },
+        {
+          id: eventId,
+          kickoffAt: ev?.kickoffAt ?? KICKOFF,
+          endsAt: ev?.endsAt ?? ENDS,
+          seatMinutes: null,
+        },
         (await getDispatchConfig()).eventCpmTnd,
         new Set(),
         1, // EVT-PRICE2 — no spot linked yet: the audience alone (R = 1)
@@ -683,7 +701,7 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       return { campaignId: (res.json() as { id: string }).id, eventId };
     };
 
-    it('J-3: the EVENT copy fires on the kickoff day, idempotent; classic drafts keep theirs', async () => {
+    it('J-3: the EVENT copy fires on the kickoff day, idempotent; classic drafts have no J-3', async () => {
       const advId = await seedUser();
       // Kickoff on 2027-06-10 (today+3), late evening — the day matches, not the instant.
       const { campaignId } = await seedBoundDraft(
@@ -703,7 +721,7 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
         })
         .returning();
       const first = await runCampaignLifecycleTick(silentLog, NOW);
-      expect(first.reminded).toBe(2);
+      expect(first.reminded).toBe(1);
       const eventNotifs = await db
         .select()
         .from(notifications)
@@ -715,11 +733,12 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
         .from(campaigns)
         .where(eq(campaigns.id, campaignId));
       expect(eventNotifs[0]?.body).toBe(eventDraftReminderBody(ev?.name ?? ''));
+      // DISP-TOURS §3.2 — a classic draft is told 48 h and 24 h before its start date instead.
       const classicNotifs = await db
         .select()
         .from(notifications)
         .where(eq(notifications.campaignId, classicRow?.id ?? ''));
-      expect(classicNotifs[0]?.title).toBe(DRAFT_REMINDER_TITLE);
+      expect(classicNotifs).toHaveLength(0);
       // Idempotent: the stamp blocks a re-send.
       const second = await runCampaignLifecycleTick(silentLog, NOW);
       expect(second.reminded).toBe(0);
@@ -747,7 +766,8 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
         new Date('2027-06-07T09:30:00+01:00'),
       );
       await db.insert(cartItems).values({ userId: advId, campaignId: carted.campaignId });
-      // A carted CLASSIC past-start draft still survives (the CF-C1 exemption intact).
+      // A carted CLASSIC past-start draft goes too (DISP-TOURS §3.1: a campaign left in the cart
+      // is removed at its start date — the CF-C1 exemption ended).
       const [classicCarted] = await db
         .insert(campaigns)
         .values({
@@ -762,14 +782,14 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
       await db.insert(cartItems).values({ userId: advId, campaignId: classicCarted?.id ?? '' });
 
       const result = await runCampaignLifecycleTick(silentLog, NOW);
-      expect(result.deleted).toBe(2); // dead + carted positioning — nothing else
+      expect(result.deleted).toBe(3); // dead + carted positioning + the classic one
       const remaining = await db
         .select({ id: campaigns.id })
         .from(campaigns)
         .where(eq(campaigns.advertiserId, advId));
       const ids = remaining.map((r) => r.id);
       expect(ids).toContain(alive.campaignId);
-      expect(ids).toContain(classicCarted?.id ?? '');
+      expect(ids).not.toContain(classicCarted?.id ?? '');
       expect(ids).not.toContain(dead.campaignId);
       expect(ids).not.toContain(carted.campaignId);
     });

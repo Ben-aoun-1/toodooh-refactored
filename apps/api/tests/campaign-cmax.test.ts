@@ -25,6 +25,13 @@ import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // E5 (VF US-1.3/1.4) — the C_max ceiling. Real Postgres; session mocked. The pool math is pinned
 // against a HAND-COMPUTED fixture (defaults: t10s=0.6, F=300s, CPM standard=15):
 //

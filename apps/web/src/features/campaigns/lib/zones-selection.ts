@@ -24,6 +24,12 @@ export const defaultZoneSelection = (
   return [...fetchedZoneIds];
 };
 
+/** The line under the zone list (the wizard's Zones step and the Foot parcours'). */
+export const zonesHint = (selectedCount: number): string =>
+  selectedCount === 0
+    ? 'Aucune zone sélectionnée : votre campagne sera diffusée sur tout le réseau.'
+    : 'Votre campagne sera diffusée dans les zones sélectionnées.';
+
 /**
  * MAP-5 note (operator 2026-09-16) — the map is a VISUALISATION of the eligible screenhosts, not a
  * broadcast list: dispatch picks among them, so the advertiser must not read « my spot plays on

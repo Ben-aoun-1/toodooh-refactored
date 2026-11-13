@@ -1,0 +1,53 @@
+# Staging hub vhost — infra/nginx/wedooh.conf (production) for ${HUB_HOST}. The hub runs under
+# PM2 on the host, port 4000, reached through host.docker.internal (extra_hosts in the compose
+# file); the host firewall lets the docker bridges, and only them, reach 4000. The hub has its own
+# login, so no basic auth on the hub itself — only on /downloads/ (the TEST flasher carries the
+# staging sensor login, so it sits behind the staging site login).
+server {
+  listen 80;
+  server_name ${HUB_HOST};
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://${HUB_HOST}$request_uri; }
+}
+server {
+  listen 443 ssl;
+  server_name ${HUB_HOST};
+  ssl_certificate /etc/letsencrypt/live/${CERT_NAME}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_NAME}/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  client_max_body_size 20m;
+  add_header X-Robots-Tag "noindex, nofollow" always;
+
+  # Tools for testers (ToodoohFlasher-TEST.exe), kept on the box in /srv/wedooh/downloads.
+  location /downloads/ {
+    auth_basic "Toodooh staging";
+    auth_basic_user_file /etc/nginx/staging-htpasswd;
+    alias /srv/wedooh/downloads/;
+    add_header Content-Disposition "attachment" always;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    try_files $uri =404;
+  }
+
+  location /socket.io/ {
+    proxy_pass http://host.docker.internal:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+  }
+
+  location / {
+    proxy_pass http://host.docker.internal:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_cache_bypass $http_upgrade;
+  }
+}

@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 
+import { toursEngineOn } from '../dispatch/engine-switch.js';
 import { eventBlackouts } from '../event-blackout.js';
 import { pushPlaylistToAllConnected, pushPlaylistToVenue } from '../playout/push.js';
 
@@ -21,6 +22,7 @@ import { venuesAtBlocEdge } from './spots.js';
 //     when there is nothing to do).
 
 export const BLOC_PUSH_TICK_MS = 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 
 export interface BlocPushResult {
   venues: number;
@@ -48,9 +50,16 @@ export const runBlocPushTick = async (
   );
   const sinceMs = since.getTime();
   const nowMs = now.getTime();
-  const networkEdge = windows.some((w) =>
-    [w.start.getTime(), w.end.getTime()].some((edge) => edge > sinceMs && edge <= nowMs),
-  );
+  // DISP-TOURS — the top of every hour is a NETWORK edge too: a tours entry's passages change
+  // from one allocated hour to the next (R_plein, or the partial tranche's k), and its reps ride
+  // the playlist (playout/tours-airtime.ts). Africa/Tunis is a whole-hour offset of UTC, so the
+  // clock hour turns on a UTC hour boundary.
+  const hourEdge = toursEngineOn() && Math.floor(sinceMs / HOUR_MS) !== Math.floor(nowMs / HOUR_MS);
+  const networkEdge =
+    hourEdge ||
+    windows.some((w) =>
+      [w.start.getTime(), w.end.getTime()].some((edge) => edge > sinceMs && edge <= nowMs),
+    );
   if (networkEdge) {
     const pushed = await pushPlaylistToAllConnected(log);
     log.info(

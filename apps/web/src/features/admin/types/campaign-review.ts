@@ -34,6 +34,8 @@ export interface AdminCampaignRow {
   activated_by: string | null;
   rejected_at: string | null;
   reject_reason: string | null;
+  /** STOP-1 — set once a superadmin stopped it; absent on an older api. */
+  stopped_at?: string | null;
   created_at: string;
   updated_at: string;
   // List-only derived fields.

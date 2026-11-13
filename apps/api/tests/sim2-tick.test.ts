@@ -339,6 +339,7 @@ describe('SIM-2 the tick (real engines on virtual time)', () => {
       id: booked.event_id,
       kickoffAt: new Date(booked.kickoff_at),
       endsAt: new Date(booked.ends_at),
+      seatMinutes: null,
     };
     // EVT-PRICE2 — the launch's 10 s spot plays 6 times a minute.
     const atOwn = await inSandbox(() => computeEventCmax(window, 31, new Set(), 6));

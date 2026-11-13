@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 
+import { matchKey, matchOfNotification } from '@/features/screenhost/lib/match-decision';
 import type { PendingAllocation } from '@/features/screenhost/services/screenhost-allocations.service';
 import type { OwnerCampaign } from '@/features/screenhost/services/screenhost-campaigns.service';
 import type { PendingEventAllocation } from '@/features/screenhost/services/screenhost-event-allocations.service';
@@ -19,17 +20,39 @@ export interface BucketableNotification {
   id: string;
   kind: string;
   campaignId: string | null;
+  /** Mariem 05/11 — a « Soir de match » notice names its match and venue instead. */
+  eventId?: string | null;
+  screenhostId?: string | null;
 }
 
-export const isDecisionNotification = (n: Pick<BucketableNotification, 'kind' | 'campaignId'>) =>
-  n.kind === DECISION_NOTIFICATION_TYPE && n.campaignId !== null;
+/** What a decision notification waits on: its campaign, or its match at a venue. */
+const decisionKey = (
+  n: Pick<BucketableNotification, 'kind' | 'campaignId' | 'eventId' | 'screenhostId'>,
+): string | null => {
+  const match = matchOfNotification(n);
+  if (match) return matchKey(match.eventId, match.screenhostId);
+  return n.kind === DECISION_NOTIFICATION_TYPE ? n.campaignId : null;
+};
 
-/** Campaign ids the owner still has to decide — classic allocations AND event proposals. */
-export const pendingCampaignIds = (
+export const isDecisionNotification = (
+  n: Pick<BucketableNotification, 'kind' | 'campaignId' | 'eventId' | 'screenhostId'>,
+) => decisionKey(n) !== null;
+
+/**
+ * What the owner still has to decide: campaign ids (classic allocations and event shares proposed
+ * alone) and match keys (« Soir de match », Mariem 05/11). A share answered in its match popup
+ * (`grouped`) keeps no campaign notification open.
+ */
+export const pendingDecisionKeys = (
   allocations: readonly Pick<PendingAllocation, 'campaign_id'>[],
-  events: readonly Pick<PendingEventAllocation, 'campaign_id'>[],
+  events: readonly Pick<PendingEventAllocation, 'campaign_id' | 'grouped'>[],
+  matches: readonly { event_id: string; screenhost_id: string }[] = [],
 ): ReadonlySet<string> =>
-  new Set([...allocations.map((a) => a.campaign_id), ...events.map((e) => e.campaign_id)]);
+  new Set([
+    ...allocations.map((a) => a.campaign_id),
+    ...events.filter((e) => !e.grouped).map((e) => e.campaign_id),
+    ...matches.map((m) => matchKey(m.event_id, m.screenhost_id)),
+  ]);
 
 /**
  * Ruling 5A (operator, 2026-09-29): a decision notification leaves the main list ONLY once it is
@@ -43,9 +66,10 @@ export const notificationBucket = (
   pending: ReadonlySet<string>,
   pendingKnown: boolean,
 ): 'active' | 'history' => {
-  if (isDecisionNotification(n)) {
+  const key = decisionKey(n);
+  if (key !== null) {
     if (!pendingKnown) return 'active';
-    return n.campaignId !== null && pending.has(n.campaignId) ? 'active' : 'history';
+    return pending.has(key) ? 'active' : 'history';
   }
   return read ? 'history' : 'active';
 };
@@ -80,10 +104,12 @@ export const decisionTarget = (
   events: readonly PendingEventAllocation[],
   campaigns: readonly OwnerCampaign[],
 ): DecisionTarget => {
-  const proposals = events.filter((e) => e.campaign_id === campaignId);
+  // Mariem 05/11 — a grouped share is answered in its match popup, never here.
+  const proposals = events.filter((e) => e.campaign_id === campaignId && !e.grouped);
   if (proposals.length > 0) return { kind: 'event', proposals };
   const campaign = campaigns.find((c) => c.id === campaignId);
-  if (!campaign) return { kind: 'missing' };
+  // An event positioning is never decided through the campaign endpoints.
+  if (!campaign || campaign.event) return { kind: 'missing' };
   const pendingIds = campaign.allocations
     .filter((a) => a.statut_acceptation === 'EN_ATTENTE')
     .map((a) => a.id);
@@ -99,18 +125,27 @@ export const campaignDurationDays = (start: string | null, end: string | null): 
 
 export type DecisionOutcome = 'accepted' | 'refused';
 
-/** The two Figma outcome cards (frames 589 / 591); the event wording swaps the noun. */
+/** What the owner decides on: a campaign, an event share, or a whole match (Mariem 05/11). */
+export type DecisionSubject = 'campaign' | 'event' | 'match';
+
+const SUBJECT_NOUNS: Record<DecisionSubject, { the: string; this: string; feminine: boolean }> = {
+  campaign: { the: 'La campagne', this: 'Cette campagne', feminine: true },
+  event: { the: 'L’événement', this: 'Cet événement', feminine: false },
+  match: { the: 'Le match', this: 'Ce match', feminine: false },
+};
+
+/** The two Figma outcome cards (frames 589 / 591); the event and match wordings swap the noun. */
 export const outcomeCopy = (
   outcome: DecisionOutcome,
-  target: 'campaign' | 'event',
+  target: DecisionSubject,
 ): { title: string; lines: [string, string] } => {
-  const noun = target === 'event' ? 'L’événement' : 'La campagne';
-  const nounLower = target === 'event' ? 'Cet événement' : 'Cette campagne';
+  const noun = SUBJECT_NOUNS[target];
+  const e = noun.feminine ? 'e' : '';
   if (outcome === 'accepted') {
     return {
       title: 'Félicitations !',
       lines: [
-        `${noun} est désormais programmé${target === 'event' ? '' : 'e'} pour diffusion dans votre établissement.`,
+        `${noun.the} est désormais programmé${e} pour diffusion dans votre établissement.`,
         'Veillez à maintenir vos écrans actifs durant toute la période afin de garantir une diffusion optimale et un revenu maximal.',
       ],
     };
@@ -118,16 +153,14 @@ export const outcomeCopy = (
   return {
     title: 'Refus enregistré',
     lines: [
-      `${nounLower} ne sera pas diffusé${target === 'event' ? '' : 'e'} dans votre établissement.`,
+      `${noun.this} ne sera pas diffusé${e} dans votre établissement.`,
       'D’autres opportunités vous seront proposées prochainement.',
     ],
   };
 };
 
-export const refuseQuestion = (target: 'campaign' | 'event'): string =>
-  target === 'event'
-    ? 'Êtes-vous sûr de vouloir refuser cet événement ?'
-    : 'Êtes-vous sûr de vouloir refuser cette campagne ?';
+export const refuseQuestion = (target: DecisionSubject): string =>
+  `Êtes-vous sûr de vouloir refuser ${SUBJECT_NOUNS[target].this.toLowerCase()} ?`;
 
 /**
  * Operator 2026-10-12 — the decision popup shows what the owner earns by accepting: the sum of

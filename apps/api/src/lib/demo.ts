@@ -7,6 +7,7 @@ import {
   campaigns,
   demoScreenhosts,
   dispatchConfig,
+  eventAllocations,
   screenhosts,
   users,
 } from '../db/schema.js';
@@ -21,6 +22,10 @@ import {
 //          air job (lib/demo-air.ts) re-pushes the venues the minute it passes);
 //   Q4 A — go through the normal engine (they take real airtime);
 //   Q6 A — live until the admin deletes the account (routes/admin-demo.ts stops them first).
+// DEMO-3 (operator 2026-11-04, ruling 1B) — they may position on a match too: the event pool is
+// the demo venues (eventPoolDemoVenues), the allocations land ACCEPTE with no owner told, the
+// blocs move onto the demo timeline at « Lancer » (lib/demo-event.ts), the match's own moves
+// leave them alone, and the owner sees, decides and earns nothing (notDemoEventAllocationSql).
 // ONE home for the demo reads, so every engine path asks the same question the same way.
 
 type Executor = typeof db | Parameters<Parameters<(typeof db)['transaction']>[0]>[0];
@@ -99,3 +104,29 @@ export const notDemoAllocationSql = (): SQL =>
   sql`NOT EXISTS (SELECT 1 FROM ${campaigns} JOIN ${users} ON ${users.id} = ${campaigns.advertiserId}
     JOIN campaign_dispatch_plan demo_plan ON demo_plan.campaign_id = ${campaigns.id}
     WHERE demo_plan.id = ${campaignDispatchAllocation.planId} AND ${users.isDemo})`;
+
+/** SQL predicate on `campaigns`: the campaign is NOT a demo screencaster's. */
+export const notDemoCampaignSql = (): SQL =>
+  sql`NOT EXISTS (SELECT 1 FROM ${users} WHERE ${users.id} = ${campaigns.advertiserId} AND ${users.isDemo})`;
+
+/**
+ * DEMO-3 — SQL predicate on event_allocations: the allocation is NOT a demo positioning's. Like
+ * notDemoAllocationSql: the owner never saw nor decided it, so no owner reader counts it.
+ */
+export const notDemoEventAllocationSql = (): SQL =>
+  sql`NOT EXISTS (SELECT 1 FROM ${campaigns} JOIN ${users} ON ${users.id} = ${campaigns.advertiserId}
+    WHERE ${campaigns.id} = ${eventAllocations.campaignId} AND ${users.isDemo})`;
+
+/** DEMO-3 — a positioning's event pool: its demo screencaster's demo venues, or null (the real network). */
+export const eventPoolDemoVenues = async (
+  executor: Executor,
+  campaignId: string,
+): Promise<ReadonlySet<string> | null> =>
+  (await isDemoCampaign(executor, campaignId)) ? demoVenueIds(executor) : null;
+
+/** DEMO-3 — the same, for a screencaster browsing the catalogue (no positioning yet). */
+export const eventPoolDemoVenuesForUser = async (
+  executor: Executor,
+  userId: string,
+): Promise<ReadonlySet<string> | null> =>
+  (await isDemoUser(executor, userId)) ? demoVenueIds(executor) : null;

@@ -26,6 +26,7 @@ export function MonthCalendar({
   onDay,
   pastSelectable = false,
   unavailableSelectable = true,
+  partial = [],
 }: {
   month: string;
   onMonth: (m: string) => void;
@@ -36,6 +37,8 @@ export function MonthCalendar({
   onDay: (day: string, state: DayState) => void;
   pastSelectable?: boolean;
   unavailableSelectable?: boolean;
+  /** AGT-HOUR1 — days with some blocked hours (split tile). */
+  partial?: string[];
 }) {
   return (
     <div className="rounded-xl border border-[#E1E4EA] bg-white p-4">
@@ -68,7 +71,7 @@ export function MonthCalendar({
       <div className="grid grid-cols-7 gap-1">
         {monthCells(month).map((day, i) => {
           if (!day) return <span key={`pad-${i}`} />;
-          const state = dayState(day, today, unavailable);
+          const state = dayState(day, today, unavailable, partial);
           const disabled =
             (state === 'past' && !pastSelectable) ||
             (state === 'unavailable' && !unavailableSelectable);

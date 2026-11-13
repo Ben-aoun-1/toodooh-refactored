@@ -1,6 +1,6 @@
 // SPS observations — what the SPS RESTS ON: its windows, the loaders that read its four sources,
 // and the evidence counts (SpsObservations) per venue. The SCORE itself lives in sps-score.ts.
-import { and, eq, gte, inArray, lt, ne } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, ne, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -11,7 +11,7 @@ import {
 } from '../db/schema.js';
 
 import { plusCalendarDays } from './campaign-dates.js';
-import { notDemoAllocationSql } from './demo.js';
+import { notDemoAllocationSql, notDemoEventAllocationSql } from './demo.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
 import { blackoutMinutesByCell, blackoutMinutesByVenueCell } from './event-blackout.js';
 import { PLAYOUT_TZ } from './reconcile/delivered-slots.js';
@@ -74,7 +74,8 @@ export const loadDecided = async (screenhostId: string, w: CreatedWindow) => {
     .where(
       and(
         eq(campaignDispatchAllocation.screenhostId, screenhostId),
-        ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
+        // DISP-TOURS Q1 — decided only: a RESERVE allocation was never proposed to the owner.
+        inArray(campaignDispatchAllocation.statutAcceptation, ['ACCEPTE', 'REFUSE']),
         // DEMO-1 — a demo allocation was accepted on the owner's behalf, not decided by them.
         notDemoAllocationSql(),
         gte(campaignDispatchAllocation.createdAt, w.since),
@@ -88,6 +89,10 @@ export const loadDecided = async (screenhostId: string, w: CreatedWindow) => {
       and(
         eq(eventAllocations.screenhostId, screenhostId),
         ne(eventAllocations.statut, 'EN_ATTENTE'),
+        // DEMO-3 — accepted on the owner's behalf, not decided by them.
+        notDemoEventAllocationSql(),
+        // Mariem 05/11 — nor is a share accepted for them under the minimum (lib/event-host-notice).
+        sql`${eventAllocations.notice} is distinct from 'auto'`,
         gte(eventAllocations.createdAt, w.since),
         w.until === undefined ? undefined : lt(eventAllocations.createdAt, w.until),
       ),
@@ -216,7 +221,7 @@ export const spsObservationsFor = async (
       .where(
         and(
           inArray(campaignDispatchAllocation.screenhostId, ids),
-          ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
+          inArray(campaignDispatchAllocation.statutAcceptation, ['ACCEPTE', 'REFUSE']),
           notDemoAllocationSql(),
           gte(campaignDispatchAllocation.createdAt, decidedSince),
         ),
@@ -228,6 +233,7 @@ export const spsObservationsFor = async (
         and(
           inArray(eventAllocations.screenhostId, ids),
           ne(eventAllocations.statut, 'EN_ATTENTE'),
+          notDemoEventAllocationSql(),
           gte(eventAllocations.createdAt, decidedSince),
         ),
       ),

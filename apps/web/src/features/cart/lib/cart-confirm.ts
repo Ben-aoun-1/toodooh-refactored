@@ -23,6 +23,13 @@ export const CART_REASON_FR: Record<string, string> = {
   MISSING_BUDGET: 'Le budget n’est pas renseigné.',
   BUDGET_BELOW_MINIMUM: 'Le budget doit être supérieur à 0 TND.',
   BUDGET_EXCEEDS_CMAX: 'Le budget dépasse l’inventaire disponible — ajustez-le dans l’éditeur.',
+  // Mariem 04/11 — a campaign takes whole 2-minute seats of the match.
+  EVENT_MINUTES_STEP: 'Les minutes se choisissent par tranches de 2 : ajustez le curseur.',
+  // EV3 — the match was cancelled after the positioning was made.
+  EVENT_ANNULE: 'Ce match est annulé : le positionnement ne peut plus être ajouté au panier.',
+  // DISP-TOURS — no venue would receive its 30 TND minimum: nothing can be placed.
+  BUDGET_BELOW_VENUE_MINIMUM:
+    'Le budget est trop faible pour être diffusé chez un établissement — augmentez-le dans l’éditeur.',
   NOT_FOUND: 'Cette campagne n’existe plus.',
   // CF-HF3 — the CF-SK1 approved-skip path uppercases prepareActivation's refusal reasons; these
   // four were unmapped and fell back to the say-nothing generic line.
@@ -33,12 +40,32 @@ export const CART_REASON_FR: Record<string, string> = {
   // CPM-3 — an admin CPM change raced the confirm: nothing was launched, a new confirm prices at
   // the new CPM (retryable).
   CPM_CHANGED: 'Le CPM de cette campagne vient de changer — confirmez de nouveau.',
-  // DEMO-1 — a demo account shows the classic network only.
-  DEMO_EVENTS_UNAVAILABLE: 'Les événements ne sont pas disponibles sur un compte démo.',
+  // DISP-TOURS §3.4 — a place was taken since the cart was opened: nothing was launched, the line
+  // now shows the new figures.
+  QUOTE_CHANGED:
+    'Les places disponibles ont changé : les chiffres affichés sont à jour. Vérifiez-les puis relancez.',
 };
 
 export const cartReasonFr = (reason: string): string =>
   CART_REASON_FR[reason] ?? 'Cette campagne n’est plus lançable.';
+
+/**
+ * Mariem 04/11 — the add gate answers every refusal with one generic sentence and the precise
+ * code: the error the screen shows carries the code's French line instead. Anything else passes
+ * through untouched (code, status and body kept for the callers' own checks).
+ */
+export const withCartReasonMessage = (err: unknown): unknown => {
+  if (!(err instanceof ApiError) || !Object.prototype.hasOwnProperty.call(CART_REASON_FR, err.code))
+    return err;
+  return new ApiError({
+    status: err.status,
+    code: err.code,
+    message: cartReasonFr(err.code),
+    fields: err.fields,
+    requestId: err.requestId,
+    body: err.body,
+  });
+};
 
 /** Parse the 400 CART_CONFIRM_FAILED body out of an unknown error; null when it isn't one. */
 export const parseCartConfirmFailure = (err: unknown): CartConfirmFailure | null => {

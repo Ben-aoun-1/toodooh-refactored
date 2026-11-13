@@ -1,0 +1,105 @@
+# Staging stack (the testing environment) — the production stack (infra/docker-compose.prod.yml) on
+# its own VPS, with everything that could reach a real person or production cut off:
+#   • SMTP goes to Mailpit (every email lands in its inbox at /mailpit/, nothing is delivered);
+#   • the hub it syncs with is the STAGING hub on the same box (hub.<APP_HOST>, PM2 on the host);
+#   • its own secrets, its own fresh database, its own MinIO.
+# Deployed by infra/staging/deploy.sh (locally or from deploy.yml, target=staging), which rsyncs
+# flat into /srv/toodooh like production: this file lands as docker-compose.staging.yml and
+# infra/staging/nginx as nginx-staging/. Secrets live in /srv/toodooh/.env (0600, never synced).
+name: toodooh-staging
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  minio:
+    # The image dev and CI use (infra/docker-compose.yml): MinIO withdrew its public images, so a
+    # fresh box cannot pull production's quay.io tag any more.
+    image: cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
+    volumes:
+      - miniodata:/data
+    # No healthcheck: this image ships no curl/wget/shell to probe with (a curl check never passes
+    # and blocks the api forever). The api waits for it to START; if storage is not up yet the api
+    # exits and `restart: unless-stopped` brings it back once it is.
+    networks: [internal]
+
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mailpit/
+      MP_MAX_MESSAGES: 5000
+      # The api always authenticates (SMTP_USER/SMTP_PASSWORD are required): accept any login.
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    networks: [internal]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: [.env]
+    mem_limit: 2g
+    memswap_limit: 2g
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    networks: [internal]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # Rendered into the templates by the image's entrypoint (only these names are substituted,
+      # so nginx's own $host / $uri stay intact).
+      APP_HOST: ${APP_HOST}
+      HUB_HOST: ${HUB_HOST}
+      CERT_NAME: ${CERT_NAME}
+    extra_hosts:
+      # The staging hub runs under PM2 on the host (port 4000), like production's.
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - ./nginx-staging/templates:/etc/nginx/templates:ro
+      - ./nginx/proxy_common.conf:/etc/nginx/proxy_common.conf:ro
+      - ./staging-htpasswd:/etc/nginx/staging-htpasswd:ro
+      - ./www:/srv/toodooh/www:ro
+      - /srv/toodooh/apk:/srv/toodooh/apk:ro
+      - /srv/wedooh/downloads:/srv/wedooh/downloads:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    networks: [internal]
+
+volumes:
+  pgdata: {}
+  miniodata: {}
+
+networks:
+  internal: {}

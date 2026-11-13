@@ -1,20 +1,23 @@
 import { useQueries } from '@tanstack/react-query';
-import { ArrowRight, Banknote, Loader2, ShoppingCart } from 'lucide-react';
+import { Banknote, Loader2, ShoppingCart } from 'lucide-react';
 
-import PillButton from '@/components/PillButton';
 import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
-import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { campaignsApi } from '@/features/campaigns/services/campaigns.api';
 import { tndLabel } from '@/lib/money';
 
 import {
-  EVENT_MIN_MINUTES,
   distributeEventMinutes,
   eventMinutesImpressions,
   eventMinutesPrice,
   groupMinutesBounds,
   minutesLabel,
 } from '../lib/event-minutes';
+
+import ImpactTiles from './positioning/ImpactTiles';
+import MinutesClock from './positioning/MinutesClock';
+import PitchRange from './positioning/PitchRange';
+import PositioningCard from './positioning/PositioningCard';
+import PositioningFooter from './positioning/PositioningFooter';
 
 const integer = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 
@@ -39,7 +42,8 @@ interface EventGroupRecapStepProps {
  * selected matches, then one small slider per match. The big one spreads its total in proportion
  * to each match's free minutes (ruling A1, lib/event-minutes distributeEventMinutes); moving a
  * small one changes only its match, and the big one shows their sum. Each match prices its
- * minutes on its own ordered list (GET /:id/cmax), exactly as the single parcours does.
+ * minutes on its own ordered list (GET /:id/cmax), exactly as the single parcours does. Drawn
+ * like the single parcours since Mariem's 04/11 design.
  */
 export default function EventGroupRecapStep({
   lines,
@@ -57,87 +61,90 @@ export default function EventGroupRecapStep({
   });
   const loaded = cmaxes.every((q) => q.data !== undefined);
   const maxes = cmaxes.map((q) => q.data?.max_minutes ?? 0);
-  const bounds = groupMinutesBounds(maxes);
+  // Mariem 04/11 — each match's seat (2 minutes; 1 under EVT-MIN1); the big slider moves by the
+  // largest of them, so every share stays on whole seats.
+  const seats = cmaxes.map((q) => q.data?.seat_minutes ?? 1);
+  const groupSeat = Math.max(1, ...seats);
+  const bounds = groupMinutesBounds(maxes, groupSeat);
   const values = lines.map((l) => minutes[l.campaignId] ?? null);
   const chosen = values.every((v) => v !== null);
   const total = values.reduce<number>((s, v) => s + (v ?? 0), 0);
   const price = lines.reduce(
-    (s, _l, i) => s + eventMinutesPrice(cmaxes[i]?.data?.minute_prices_tnd ?? [], values[i] ?? 0),
+    (s, _l, i) =>
+      s +
+      eventMinutesPrice(cmaxes[i]?.data?.minute_prices_tnd ?? [], values[i] ?? 0, seats[i] ?? 1),
     0,
   );
   const impressions = lines.reduce(
     (s, _l, i) =>
-      s + eventMinutesImpressions(cmaxes[i]?.data?.minute_impressions ?? [], values[i] ?? 0),
+      s +
+      eventMinutesImpressions(
+        cmaxes[i]?.data?.minute_impressions ?? [],
+        values[i] ?? 0,
+        seats[i] ?? 1,
+      ),
     0,
   );
-  const full = lines.filter((_l, i) => loaded && (maxes[i] ?? 0) < EVENT_MIN_MINUTES);
+  const full = lines.filter((_l, i) => loaded && (maxes[i] ?? 0) < (seats[i] ?? 1));
   const canAct = !adding && loaded && chosen && full.length === 0 && bounds.max > 0;
+  const bigMin = Math.max(bounds.min, groupSeat);
 
   const setTotal = (next: number) => {
-    const parts = distributeEventMinutes(next, maxes);
+    const parts = distributeEventMinutes(next, maxes, groupSeat);
     setMinutes(Object.fromEntries(lines.map((l, i) => [l.campaignId, parts[i] ?? 0])));
   };
   const setOne = (campaignId: string, next: number) =>
     setMinutes({ ...minutes, [campaignId]: next });
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
-        <StepSectionHeading
-          icon={Banknote}
-          title="Récapitulatif"
-          subtitle={`Choisissez vos minutes sur les ${lines.length} matchs sélectionnés`}
+    <>
+      <PositioningCard
+        icon={Banknote}
+        title="Récapitulatif"
+        subtitle={`Choisissez vos minutes sur les ${lines.length} matchs sélectionnés`}
+      >
+        <ImpactTiles
+          amount={chosen ? tndLabel(price) : '—'}
+          impressions={chosen ? integer.format(impressions) : '—'}
         />
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-brand-primary/10 p-4">
-            <p className="text-sm text-gray-600">Montant estimé</p>
-            <p className="mt-0.5 text-lg font-bold text-brand-deep">
-              {chosen ? tndLabel(price) : '—'}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-brand-accent/10 p-4">
-            <p className="text-sm text-gray-600">Impressions prévues</p>
-            <p className="mt-0.5 text-lg font-bold text-brand-accent">
-              {chosen ? integer.format(impressions) : '—'}
-            </p>
-          </div>
-        </div>
-
         {/* THE big slider — every match at once (A1). */}
-        <div className="mt-4 rounded-2xl border border-gray-200 p-5">
-          <div className="mb-3 text-center">
-            <span className="text-3xl font-bold text-gray-900">
-              {chosen ? integer.format(total) : '—'}
-            </span>
-            <span className="ml-1 text-base font-medium text-gray-400">
-              {chosen ? (total > 1 ? 'minutes au total' : 'minute au total') : ''}
-            </span>
+        <div className="mt-4 rounded-xl border border-pitch-line px-4 py-4">
+          <div className="text-center">
+            <MinutesClock
+              minutes={chosen ? total : null}
+              unit={total > 1 ? 'minutes au total' : 'minute au total'}
+            />
           </div>
-          <input
-            id="event-group-minutes"
-            type="range"
-            min={Math.max(bounds.min, EVENT_MIN_MINUTES)}
-            max={Math.max(bounds.max, EVENT_MIN_MINUTES)}
-            step={1}
-            value={chosen ? total : Math.max(bounds.min, EVENT_MIN_MINUTES)}
-            onChange={(e) => setTotal(Number(e.target.value))}
-            disabled={!loaded || bounds.max === 0}
-            aria-label="Minutes de diffusion, tous les matchs"
-            aria-valuetext={chosen ? minutesLabel(total) : 'Aucune minute choisie'}
-            className="w-full cursor-pointer accent-brand-primary disabled:cursor-not-allowed disabled:opacity-40"
-          />
-          <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
-            <span>MIN : {minutesLabel(Math.max(bounds.min, EVENT_MIN_MINUTES))}</span>
-            <span>MAX : {loaded ? minutesLabel(bounds.max) : '…'}</span>
+          <div className="mt-3">
+            <PitchRange
+              id="event-group-minutes"
+              min={bigMin}
+              max={Math.max(bounds.max, groupSeat)}
+              step={groupSeat}
+              value={chosen ? total : bigMin}
+              onChange={setTotal}
+              disabled={!loaded || bounds.max === 0}
+              ariaLabel="Minutes de diffusion, tous les matchs"
+              ariaValueText={chosen ? minutesLabel(total) : 'Aucune minute choisie'}
+            />
           </div>
-          <p className="mt-3 text-xs text-gray-500">
+          <div className="mt-1 flex justify-between gap-2 text-xs">
+            <p className="text-pitch-ink">
+              <b className="font-semibold">MIN</b> : {minutesLabel(bigMin)}
+            </p>
+            <p className="text-pitch-ink">
+              <b className="font-semibold">MAX</b> : {loaded ? minutesLabel(bounds.max) : '…'}
+            </p>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-pitch-grey">
             Le curseur principal répartit vos minutes entre les matchs, en proportion des minutes
             encore disponibles sur chacun. Ajustez ensuite match par match.
           </p>
           {!loaded && (
-            <p className="mt-2 inline-flex items-center gap-2 text-xs text-gray-500">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Calcul des minutes disponibles…
+            <p className="mt-2 inline-flex items-center gap-2 text-xs text-pitch-grey">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              Calcul des minutes disponibles…
             </p>
           )}
         </div>
@@ -148,68 +155,53 @@ export default function EventGroupRecapStep({
             const max = maxes[i] ?? 0;
             const value = values[i];
             const data = cmaxes[i]?.data;
+            const seat = seats[i] ?? 1;
             return (
-              <li key={l.campaignId} className="rounded-xl border border-gray-200 px-4 py-3">
+              <li key={l.campaignId} className="rounded-xl border border-pitch-line px-4 py-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-900">{l.title}</p>
-                    <p className="text-xs text-gray-500">{l.subtitle}</p>
+                    <p className="truncate text-sm font-semibold text-pitch-ink">{l.title}</p>
+                    <p className="text-xs text-pitch-grey">{l.subtitle}</p>
                   </div>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-pitch-ink">
                     {value == null ? '—' : minutesLabel(value)}
                     {value != null && data && (
-                      <span className="ml-2 text-gray-400">
-                        {tndLabel(eventMinutesPrice(data.minute_prices_tnd ?? [], value))}
+                      <span className="ml-2 text-pitch-mist">
+                        {tndLabel(eventMinutesPrice(data.minute_prices_tnd ?? [], value, seat))}
                       </span>
                     )}
                   </p>
                 </div>
-                {loaded && max < EVENT_MIN_MINUTES ? (
+                {loaded && max < seat ? (
                   <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     Plus aucune minute disponible sur ce match — retirez-le de votre sélection.
                   </p>
                 ) : (
-                  <input
-                    type="range"
-                    min={EVENT_MIN_MINUTES}
-                    max={Math.max(max, EVENT_MIN_MINUTES)}
-                    step={1}
-                    value={value ?? EVENT_MIN_MINUTES}
-                    onChange={(e) => setOne(l.campaignId, Number(e.target.value))}
-                    disabled={!loaded}
-                    aria-label={`Minutes de diffusion — ${l.title}`}
-                    className="mt-2 w-full cursor-pointer accent-brand-primary disabled:opacity-40"
-                  />
+                  <div className="mt-2">
+                    <PitchRange
+                      min={seat}
+                      max={Math.max(max, seat)}
+                      step={seat}
+                      value={value ?? seat}
+                      onChange={(next) => setOne(l.campaignId, next)}
+                      disabled={!loaded}
+                      ariaLabel={`Minutes de diffusion — ${l.title}`}
+                    />
+                  </div>
                 )}
               </li>
             );
           })}
         </ul>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-2 rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
-        >
-          <ArrowRight className="h-4 w-4 rotate-180" />
-          Retour
-        </button>
-        <PillButton
-          onClick={() => void onAddToCart()}
-          disabled={!canAct}
-          trailingIcon={
-            adding ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4" />
-            )
-          }
-        >
-          Ajouter les {lines.length} matchs au panier
-        </PillButton>
-      </div>
-    </div>
+      </PositioningCard>
+      <PositioningFooter
+        onBack={onBack}
+        onNext={() => void onAddToCart()}
+        nextLabel={`Ajouter les ${lines.length} matchs au panier`}
+        nextIcon={<ShoppingCart className="h-4 w-4" aria-hidden="true" />}
+        disabled={!canAct}
+        loading={adding}
+      />
+    </>
   );
 }

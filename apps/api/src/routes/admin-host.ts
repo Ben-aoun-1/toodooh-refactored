@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, lte, ne } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, lte, ne } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
@@ -9,13 +9,19 @@ import {
   campaigns,
   governorates,
   screenhosts,
-  screenhostUnavailability,
   users,
 } from '../db/schema.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
 import { listHostAudit, writeHostAudit } from '../lib/host-audit.js';
 import { HOST_LOCK_KEYS, isHostLockKey } from '../lib/host-locks.js';
-import { setVenueDayUnavailability } from '../lib/venue-unavailability.js';
+import { addIsoDays } from '../lib/opening-hours.js';
+import {
+  cellKey,
+  describeDay,
+  loadUnavailableCells,
+  unavailabilityView,
+} from '../lib/unavailable-hours.js';
+import { setVenueUnavailability } from '../lib/venue-unavailability.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import {
@@ -42,7 +48,12 @@ import { normalizeTaxNumber } from '../validation/tax-number.js';
 
 const idParamSchema = z.object({ id: z.uuid() });
 const rangeSchema = z.object({ from: z.iso.date(), to: z.iso.date() });
-const dayPutSchema = z.object({ day: z.iso.date(), unavailable: z.boolean() });
+const dayPutSchema = z.object({
+  day: z.iso.date(),
+  unavailable: z.boolean(),
+  // HOUR-UNAV1 — some clock hours of the opening day; absent = the whole day.
+  hours: z.array(z.number().int().min(0).max(23)).min(1).max(24).optional(),
+});
 
 const invalid = (reply: FastifyReply, fields: { field: string; reason: string }[]) =>
   reply.status(400).send({ error: 'INVALID_INPUT', message: 'Validation failed', fields });
@@ -161,6 +172,16 @@ const governorateExists = async (id: string): Promise<boolean> => {
 
 const loadVenue = async (id: string): Promise<VenueRow | undefined> => (await selectVenue(id))[0];
 const loadOwner = async (id: string): Promise<OwnerRow | undefined> => (await selectOwner(id))[0];
+
+/** HOUR-UNAV1 — the venue's window, for the calendar reads and writes. */
+const venueHours = async (id: string) => {
+  const [row] = await db
+    .select({ openingHour: screenhosts.openingHour, closingHour: screenhosts.closingHour })
+    .from(screenhosts)
+    .where(eq(screenhosts.id, id))
+    .limit(1);
+  return { id, openingHour: row?.openingHour ?? null, closingHour: row?.closingHour ?? null };
+};
 
 const toVenueColumns = (data: HostVenuePatch): Partial<typeof screenhosts.$inferInsert> => {
   const patch: Partial<typeof screenhosts.$inferInsert> = {};
@@ -418,17 +439,8 @@ export const adminHostRoutes: FastifyPluginAsync = async (app) => {
     if (!query.success) return invalid(reply, issues(query.error));
     const venue = await loadVenue(params.data.id);
     if (!venue) return notFound(reply);
-    const rows = await db
-      .select({ day: screenhostUnavailability.day })
-      .from(screenhostUnavailability)
-      .where(
-        and(
-          eq(screenhostUnavailability.screenhostId, venue.id),
-          gte(screenhostUnavailability.day, query.data.from),
-          lte(screenhostUnavailability.day, query.data.to),
-        ),
-      )
-      .orderBy(asc(screenhostUnavailability.day));
+    const hoursOf = await venueHours(venue.id);
+    const view = await unavailabilityView(hoursOf, query.data.from, query.data.to);
     // The days in range that carry a live share of a campaign (the shares a declaration MOVES —
     // lib/venue-unavailability.ts selects the same statuses), so the admin is warned before
     // declaring one, like the owner calendar.
@@ -450,14 +462,20 @@ export const adminHostRoutes: FastifyPluginAsync = async (app) => {
         ),
       );
     const diffusion: Record<string, string[]> = {};
+    // HOUR-UNAV1 — the same, per clock hour (`YYYY-MM-DD:H`), for the hour picker's warning.
+    const diffusionHours: Record<string, string[]> = {};
     for (const share of shares) {
       for (const c of share.creneaux) {
         if (c.date < query.data.from || c.date > query.data.to) continue;
         const names = (diffusion[c.date] ??= []);
         if (!names.includes(share.name)) names.push(share.name);
+        const hourNames = (diffusionHours[cellKey(c.date, c.hour)] ??= []);
+        if (!hourNames.includes(share.name)) hourNames.push(share.name);
       }
     }
-    return reply.status(200).send({ days: rows.map((r) => r.day), diffusion_days: diffusion });
+    return reply
+      .status(200)
+      .send({ ...view, diffusion_days: diffusion, diffusion_hours: diffusionHours });
   });
 
   // PUT /api/admin/screenhosts/:id/unavailability {day, unavailable} — the owner write's admin twin:
@@ -473,7 +491,7 @@ export const adminHostRoutes: FastifyPluginAsync = async (app) => {
         .status(401)
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
-    const { day, unavailable } = body.data;
+    const { day, unavailable, hours } = body.data;
     if (day <= tunisDateOf(new Date())) {
       return reply.status(400).send({
         error: 'PAST_OR_TODAY',
@@ -483,23 +501,38 @@ export const adminHostRoutes: FastifyPluginAsync = async (app) => {
     }
     const venue = await loadVenue(params.data.id);
     if (!venue) return notFound(reply);
-    const [was] = await db
-      .select({ day: screenhostUnavailability.day })
-      .from(screenhostUnavailability)
-      .where(
-        and(
-          eq(screenhostUnavailability.screenhostId, venue.id),
-          eq(screenhostUnavailability.day, day),
-        ),
+    const hoursOf = await venueHours(venue.id);
+    const dayState = async (): Promise<string> =>
+      describeDay(
+        day,
+        (await loadUnavailableCells(db, [hoursOf], day, addIsoDays(day, 1))).get(venue.id) ??
+          new Set<string>(),
+        hoursOf.openingHour,
+        hoursOf.closingHour,
       );
-    const redispatched = await setVenueDayUnavailability(venue.id, day, unavailable, request.log);
+    const before = await dayState();
+    const redispatched = await setVenueUnavailability(
+      venue.id,
+      day,
+      hours ?? null,
+      unavailable,
+      request.log,
+    );
+    if (redispatched === null) {
+      return invalid(reply, [
+        { field: 'hours', reason: "none of these hours is inside the venue's opening hours" },
+      ]);
+    }
+    // The trail keeps the day's state in words (« Indisponible 14 h–16 h »), before → after.
     await writeHostAudit(db, {
       screenhostId: venue.id,
       section: 'unavailability',
       changedBy: adminId,
-      before: { [day]: was !== undefined },
-      after: { [day]: unavailable },
+      before: { [day]: before },
+      after: { [day]: await dayState() },
     });
-    return reply.status(200).send({ screenhost_id: venue.id, day, unavailable, redispatched });
+    return reply
+      .status(200)
+      .send({ screenhost_id: venue.id, day, hours: hours ?? null, unavailable, redispatched });
   });
 };

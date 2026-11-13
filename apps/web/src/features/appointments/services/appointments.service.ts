@@ -43,6 +43,13 @@ export interface Availability {
   taken: { day: string; hour: number }[];
 }
 
+/** GET /api/agent/calendar — whole unavailable days, single blocked hours, the slot grid. */
+export interface AgentCalendarView {
+  unavailable: string[];
+  unavailable_hours: { day: string; hour: number }[];
+  slot_hours: number[];
+}
+
 export const appointmentsService = {
   referent(): Promise<Referent> {
     return apiClient.get('/appointments/referent');
@@ -62,15 +69,18 @@ export const appointmentsService = {
   cancelMine(id: string) {
     return apiClient.post<{ ok: true }>(`/appointments/${id}/cancel`);
   },
-  agentCalendar(month: string): Promise<{ unavailable: string[]; slot_hours: number[] }> {
+  agentCalendar(month: string): Promise<AgentCalendarView> {
     return apiClient.get(`/agent/calendar?month=${month}`);
   },
-  setAvailability(days: string[], available: boolean) {
+  // AGT-HOUR1 — `hours` narrows the change to those slot hours (omitted = the whole days).
+  setAvailability(days: string[], available: boolean, hours?: number[]) {
     return apiClient.put<{ changed: string[]; confirmed_kept: string[] }>('/agent/availability', {
       days,
       available,
+      ...(hours === undefined ? {} : { hours }),
     });
   },
+
   agentAppointments(): Promise<{ appointments: AppointmentView[] }> {
     return apiClient.get('/agent/appointments');
   },

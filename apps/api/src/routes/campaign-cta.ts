@@ -6,6 +6,7 @@ import { db } from '../db/client.js';
 import { campaigns, ctaScans, users } from '../db/schema.js';
 import { env } from '../env.js';
 import { kickCtaBurns } from '../lib/spot-cta-job.js';
+import { CTA_POSITIONS, ctaPositionOf } from '../lib/spot-cta-layout.js';
 import {
   CTA_DEFAULT_LABEL,
   type CtaStatus,
@@ -22,13 +23,16 @@ import { storage } from '../storage/s3-storage.js';
 //   GET    /api/campaigns/:id/cta   its link, message, the copy's status and the scan count;
 //   PUT    /api/campaigns/:id/cta   set the link (+ message) → a new QR copy is made in the background;
 //   DELETE /api/campaigns/:id/cta   remove it (the campaign airs the plain spot again);
-// Editable only while the campaign is a draft (or refused), like every other campaign field, and
-// only on classic campaigns (an event positioning airs in the event's pods, untouched here).
+// Editable only while the campaign is a draft (or refused), like every other campaign field.
+// Mariem 04/11 (Foot point 1) — on an event positioning too: its pods air the QR copy
+// (lib/event-playout/spots.ts); and the card's corner is chosen here (`position`, ruling 2A).
 
 const idParamSchema = z.object({ id: z.uuid() });
 const putSchema = z.object({
   url: z.string().max(4000),
   label: z.string().max(200).nullable().optional(),
+  /** Mariem 04/11 — the card's corner (absent = keep the current one). */
+  position: z.enum(CTA_POSITIONS).optional(),
 });
 
 const invalid = (reply: FastifyReply, field: string, reason: string) =>
@@ -60,6 +64,7 @@ const loadOwned = async (campaignId: string, userId: string) => {
       ctaStatus: campaigns.ctaStatus,
       ctaStorageKey: campaigns.ctaStorageKey,
       ctaSourceCreativeId: campaigns.ctaSourceCreativeId,
+      ctaPosition: campaigns.ctaPosition,
     })
     .from(campaigns)
     .where(and(eq(campaigns.id, campaignId), eq(campaigns.advertiserId, userId)))
@@ -91,6 +96,7 @@ const ctaView = async (c: OwnedCampaign, enabled: boolean) => {
     url: c.ctaUrl,
     label: c.ctaLabel,
     default_label: CTA_DEFAULT_LABEL,
+    position: ctaPositionOf(c.ctaPosition),
     status,
     scan_url:
       c.ctaUrl !== null && c.ctaCode ? ctaScanUrl(env.CTA_PUBLIC_BASE_URL, c.ctaCode) : null,
@@ -128,12 +134,6 @@ export const campaignCtaRoutes: FastifyPluginAsync = async (app) => {
     const campaign = await loadOwned(params.data.id, userId);
     if (!campaign)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
-    if (campaign.eventId !== null) {
-      return reply.status(400).send({
-        error: 'CTA_EVENT_UNSUPPORTED',
-        message: 'Le QR code n’est pas encore proposé sur les événements.',
-      });
-    }
     if (!editable(campaign)) {
       return reply.status(409).send({
         error: 'CONFLICT',
@@ -144,9 +144,11 @@ export const campaignCtaRoutes: FastifyPluginAsync = async (app) => {
     if (!url.ok) return invalid(reply, 'url', url.error);
     const label = parseCtaLabel(body.data.label);
     if (!label.ok) return invalid(reply, 'label', label.error);
+    const position = body.data.position ?? ctaPositionOf(campaign.ctaPosition);
     const unchanged =
       campaign.ctaUrl === url.value &&
       campaign.ctaLabel === label.value &&
+      ctaPositionOf(campaign.ctaPosition) === position &&
       campaign.ctaStatus !== 'failed';
     if (!unchanged) {
       await db
@@ -154,6 +156,7 @@ export const campaignCtaRoutes: FastifyPluginAsync = async (app) => {
         .set({
           ctaUrl: url.value,
           ctaLabel: label.value,
+          ctaPosition: position,
           ctaCode: campaign.ctaCode ?? newCtaCode(),
           ctaStatus: 'pending',
           ctaError: null,

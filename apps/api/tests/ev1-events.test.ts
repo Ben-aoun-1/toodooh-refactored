@@ -339,6 +339,8 @@ describe('EV1 — events entity + catalogue + suggestions (real Postgres)', () =
       });
       expect(sameOrder.statusCode).toBe(409);
       expect(sameOrder.json().message).toContain('Ce que les screencasters suggèrent');
+      // SUGG-2 — the refusal names the twin, so the web positions on it instead.
+      expect(sameOrder.json().existing_event_id).toBe((first.json() as { id: string }).id);
 
       const reversed = await suggest({
         team_a: 'Club Africain',
@@ -362,7 +364,7 @@ describe('EV1 — events entity + catalogue + suggestions (real Postgres)', () =
       // Ratification amendment: a suggestion shadowing an official match would mint two entities
       // for one fixture — an EV3/EV4 integrity trap. Official rows carry only `name`, so the
       // match is by composition.
-      await seedOfficial({
+      const officialId = await seedOfficial({
         name: 'Tunisie – Brésil',
         kickoffAt: new Date('2027-04-01T20:00:00+01:00'),
         endsAt: new Date('2027-04-01T22:00:00+01:00'),
@@ -386,6 +388,22 @@ describe('EV1 — events entity + catalogue + suggestions (real Postgres)', () =
       });
       expect(reversed.statusCode).toBe(409);
       expect(reversed.json().message).toBe('Ce match existe déjà dans le catalogue officiel.');
+      expect(reversed.json().existing_event_id).toBe(officialId);
+
+      // SUGG-2 — official rows are typed with a plain hyphen and accents vary: still the twin.
+      const hyphenId = await seedOfficial({
+        name: 'Libye - Espérance',
+        kickoffAt: new Date('2027-04-02T20:00:00+01:00'),
+        endsAt: new Date('2027-04-02T22:00:00+01:00'),
+      });
+      const hyphen = await suggest({
+        team_a: 'esperance',
+        team_b: 'LIBYE',
+        date: '2027-04-02',
+        kickoff_time: '20:00',
+      });
+      expect(hyphen.statusCode).toBe(409);
+      expect(hyphen.json().existing_event_id).toBe(hyphenId);
 
       // A different date is a different fixture — accepted (and lands in the SHARED list).
       const otherDay = await suggest({

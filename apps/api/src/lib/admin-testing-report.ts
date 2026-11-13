@@ -7,12 +7,11 @@ import {
   campaignRedispatchRounds,
   campaigns,
   hourReservations,
-  screenhostUnavailability,
   screenhosts,
 } from '../db/schema.js';
 
 import { campaignsOnVenue, hourStatuses, isElapsed } from './admin-testing-status.js';
-import { tunisDateOf } from './campaign-dates.js';
+import { plusCalendarDays, tunisDateOf } from './campaign-dates.js';
 import { realVenueSql } from './demo.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
@@ -32,6 +31,7 @@ import {
   spsObservationsInRange,
 } from './sps-observations.js';
 import { SPS_NEUTRAL, computeSps, spsComputable } from './sps-score.js';
+import { loadUnavailableCells } from './unavailable-hours.js';
 import { SCREEN_SECONDS_PER_HOUR } from './vf-constants.js';
 
 // ADM-OBS1 — the « Tests » report, extracted VERBATIM from routes/admin-testing.ts (SIM-5,
@@ -157,16 +157,11 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
       spsObservationsInRange(id, from, to, now),
       computeAmax(id),
       getDispatchConfig(),
-      db
-        .select({ day: screenhostUnavailability.day })
-        .from(screenhostUnavailability)
-        .where(
-          and(
-            eq(screenhostUnavailability.screenhostId, id),
-            gte(screenhostUnavailability.day, readFrom),
-          ),
-        )
-        .orderBy(asc(screenhostUnavailability.day)),
+      // HOUR-UNAV1 — whole declared days and declared hours, merged into clock cells (one year
+      // ahead covers the « À venir » table, which has no upper bound).
+      loadUnavailableCells(db, [venue], readFrom, plusCalendarDays(readFrom, 366)).then(
+        (m) => m.get(id) ?? new Set<string>(),
+      ),
       db
         .select({ day: hourReservations.day, hour: hourReservations.hour })
         .from(hourReservations)
@@ -223,7 +218,7 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
       hour12: false,
     }).format(now),
   );
-  const unavailableSet = new Set(unavailable.map((u) => u.day));
+  const unavailableSet = unavailable;
   const reservedSet = new Set(reservations.map((r) => `${r.day}:${r.hour}`));
   const hours = broadcastableHours(venue.openingHour, venue.closingHour);
   const openDays = merged.days.length;
@@ -269,7 +264,10 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
       created_date: tunisDateOf(venue.createdAt),
       first_reading: firstReading,
       estimation_floor: floor,
-      unavailable_days: unavailable.map((u) => u.day).filter((d) => d >= from && d <= to),
+      // The days carrying any declared unavailability (whole day or some hours), in the période.
+      unavailable_days: [...new Set([...unavailable].map((k) => k.slice(0, 10)))]
+        .filter((d) => d >= from && d <= to)
+        .sort(),
     },
     audience: {
       // Item 8 — A_max sits with the audience KPIs: it IS an audience figure (the busiest hour).

@@ -25,15 +25,26 @@ export interface CoverageVenue {
   sectorName: string | null;
 }
 
-/** The event pool of `eventId`'s match, with what the map draws. Unknown event → nothing. */
-export const eventCoverageVenues = async (eventId: string): Promise<CoverageVenue[]> => {
+/**
+ * The event pool of `eventId`'s match, with what the map draws. Unknown event → nothing.
+ * DEMO-3 — `demoVenues`: a demo screencaster's pool (lib/demo.ts eventPoolDemoVenues).
+ */
+export const eventCoverageVenues = async (
+  eventId: string,
+  demoVenues: ReadonlySet<string> | null = null,
+): Promise<CoverageVenue[]> => {
   const [event] = await db
-    .select({ id: events.id, kickoffAt: events.kickoffAt, endsAt: events.endsAt })
+    .select({
+      id: events.id,
+      kickoffAt: events.kickoffAt,
+      endsAt: events.endsAt,
+      seatMinutes: events.seatMinutes,
+    })
     .from(events)
     .where(eq(events.id, eventId))
     .limit(1);
   if (!event) return [];
-  const pool = await eventEligibleVenues(event);
+  const pool = await eventEligibleVenues(event, new Set(), demoVenues);
   if (pool.length === 0) return [];
   return db
     .select({

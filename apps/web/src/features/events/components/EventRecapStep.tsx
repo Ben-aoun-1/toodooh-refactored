@@ -1,24 +1,27 @@
-import { ArrowRight, Banknote, Loader2, MapPin, ShoppingCart, Tags } from 'lucide-react';
+import { Banknote, Loader2, MapPin, ShoppingCart, Tags } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import PillButton from '@/components/PillButton';
 import ImpressionsEstimateText from '@/features/campaigns/components/ImpressionsEstimateText';
 import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
 import { useImpressionsEstimate } from '@/features/campaigns/hooks/useImpressionsEstimate';
-import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
 import { tndLabel } from '@/lib/money';
 
 import { formatEventDate, formatEventHours } from '../lib/event-display';
 import {
-  EVENT_MIN_MINUTES,
   clampEventMinutes,
   eventMinutesPrice,
+  eventSeatExplainer,
   minutesLabel,
 } from '../lib/event-minutes';
+import { zonesSummary } from '../lib/positioning-display';
 import type { EventItemView } from '../services/events.api';
 
-const integer = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
+import ImpactTiles from './positioning/ImpactTiles';
+import MinutesClock from './positioning/MinutesClock';
+import PitchRange from './positioning/PitchRange';
+import PositioningCard from './positioning/PositioningCard';
+import PositioningFooter from './positioning/PositioningFooter';
 
 interface EventRecapStepProps {
   campaignId: string;
@@ -35,11 +38,11 @@ interface EventRecapStepProps {
 }
 
 /**
- * EV3 — the parcours' Récapitulatif: the diffusion-window line, the zone count, the
- * categories-are-automatic reminder, and — EVT-MIN1 — the MINUTES slider bounded [1, the minutes
- * still free] (GET /:id/cmax forks to the event engine and sends the ordered minute prices: N
- * minutes cost the sum of the first N, so lowering the slider drops the last venue's latest bloc
- * first). Montants HT, no letters (HT-1), via lib/money; « Ajouter au panier » files the
+ * EV3 — the parcours' Récapitulatif (Mariem's 04/11 design): the diffusion window, the zones, the
+ * categories-are-automatic reminder, and — EVT-MIN1 — the MINUTES slider bounded [one seat, the
+ * minutes still free] (GET /:id/cmax forks to the event engine and sends the ordered seat prices:
+ * N minutes cost the first N ÷ seat of them, so lowering the slider drops the last venue's latest
+ * bloc first). Montants HT, no letters (HT-1), via lib/money; « Ajouter au panier » files the
  * positioning under Événements.
  */
 export default function EventRecapStep({
@@ -58,10 +61,12 @@ export default function EventRecapStep({
 
   const maxMinutes = cmax.data?.max_minutes;
   const prices = cmax.data?.minute_prices_tnd ?? [];
+  // Mariem 04/11 — the match's seat: the slider's minimum and step (2 minutes; 1 under EVT-MIN1).
+  const seat = cmax.data?.seat_minutes ?? 1;
   const value = eventMinutes;
-  const zeroInventory = maxMinutes !== undefined && maxMinutes < EVENT_MIN_MINUTES;
-  const canAct = !adding && value != null && value >= EVENT_MIN_MINUTES && !zeroInventory;
-  const priceTnd = value == null ? null : eventMinutesPrice(prices, value);
+  const zeroInventory = maxMinutes !== undefined && maxMinutes < seat;
+  const canAct = !adding && value != null && value >= seat && !zeroInventory;
+  const priceTnd = value == null ? null : eventMinutesPrice(prices, value, seat);
   // IMP-EST1 — « Impressions prévues » stays the SERVER's dry-run of the event dispatch, sized by
   // the minutes cursor (debounced): the first N minutes the dispatch would take now.
   const estimate = useImpressionsEstimate(campaignId, {
@@ -73,142 +78,114 @@ export default function EventRecapStep({
   // Pull-back (the E5 idiom): minutes above a freshly-fetched max clamp down VISIBLY.
   useEffect(() => {
     if (maxMinutes === undefined || value === null) return;
-    const next = clampEventMinutes(value, maxMinutes);
+    const next = clampEventMinutes(value, maxMinutes, seat);
     if (next !== value) {
       setEventMinutes(next);
       setPullbackNotice(true);
     }
-  }, [maxMinutes, value, setEventMinutes]);
+  }, [maxMinutes, seat, value, setEventMinutes]);
 
   const approvedNotice = approvedSpotNotice(spotValidationStatus ?? undefined);
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
-        <StepSectionHeading
-          icon={Banknote}
-          title="Récapitulatif"
-          subtitle="Vérifiez votre positionnement et choisissez vos minutes"
-        />
-
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <>
+      <PositioningCard
+        icon={Banknote}
+        title="Récapitulatif"
+        subtitle="Vérifiez votre positionnement et choisissez vos minutes"
+      >
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           {/* LEFT — the positioning recap */}
-          <section className="min-w-0 space-y-4 rounded-2xl border border-gray-200 p-5 sm:p-6">
+          <section className="min-w-0 rounded-xl border border-pitch-line bg-white p-5">
             {event && (
-              <div>
-                <p className="text-sm font-medium text-gray-500">Fenêtre de diffusion</p>
-                <p className="mt-1 font-medium text-gray-900">
+              <>
+                <p className="text-sm text-pitch-grey">Fenêtre de diffusion</p>
+                <p className="mt-1 text-base font-medium text-pitch-ink">
                   {formatEventDate(event.kickoff_at)} ·{' '}
                   {formatEventHours(event.fenetre.window_start, event.fenetre.window_end)}
                 </p>
-                <p className="mt-0.5 text-xs text-gray-500">
-                  1 h avant le match, pendant, 1 h après — la fenêtre suit le coup d’envoi.
+                <p className="mt-1 text-xs text-amber-700">
+                  1 h avant le match, pendant, 1 h après : la fenêtre suit le coup d’envoi.
                 </p>
-              </div>
+                <hr className="my-4 border-pitch-line" />
+              </>
             )}
-
-            <hr className="border-gray-100" />
-
-            <div>
-              <p className="flex items-center gap-1.5 text-sm font-medium text-gray-500">
-                <MapPin className="h-4 w-4" /> Zones
-              </p>
-              <p className="mt-1 font-medium text-gray-900">
-                {zoneNames.length === 0
-                  ? 'Tout le réseau'
-                  : `${zoneNames.length} zone${zoneNames.length > 1 ? 's' : ''} — ${zoneNames.join(', ')}`}
-              </p>
-            </div>
-
-            <hr className="border-gray-100" />
-
-            <div className="flex gap-2 rounded-xl bg-slate-50/80 p-3">
-              <Tags className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-              <p className="text-sm text-gray-600">
+            <p className="flex items-center gap-1.5 text-sm text-pitch-grey">
+              <MapPin className="h-4 w-4" aria-hidden="true" /> Zones
+            </p>
+            <p className="mt-1 text-base font-medium text-pitch-ink">{zonesSummary(zoneNames)}</p>
+            <div className="mt-4 flex gap-2 rounded-lg bg-pitch-wash/60 px-3 py-2.5">
+              <Tags className="mt-0.5 h-4 w-4 shrink-0 text-pitch-leaf" aria-hidden="true" />
+              <p className="text-sm text-pitch-ink">
                 Les catégories d’établissements sont sélectionnées automatiquement pour un événement
                 : tous les lieux éligibles diffusent pendant la fenêtre.
               </p>
             </div>
-
             {approvedNotice && (
-              <p className="rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <p className="mt-4 rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-700">
                 {approvedNotice}
               </p>
             )}
           </section>
 
-          {/* RIGHT — the bounded budget cursor (the StepCart idiom on the EVENT ceiling) */}
-          <section className="min-w-0 rounded-2xl border border-gray-200 p-5 sm:p-6">
-            <h3 className="text-lg font-bold text-gray-900">Ajuster votre impact</h3>
-            <p className="mt-1 text-sm text-gray-600">
+          {/* RIGHT — the bounded minutes cursor (the StepCart idiom on the EVENT ceiling) */}
+          <section className="min-w-0 rounded-xl border border-pitch-line bg-white p-5">
+            <h3 className="text-base font-semibold text-pitch-ink">Ajuster votre impact</h3>
+            <p className="mb-4 mt-1 text-sm text-pitch-grey">
               Déplacez le curseur pour ajuster vos minutes, votre montant et vos impressions prévues
             </p>
+            <ImpactTiles
+              amount={priceTnd == null ? '—' : tndLabel(priceTnd)}
+              impressions={<ImpressionsEstimateText view={estimate} />}
+            />
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-brand-primary/10 p-4">
-                <p className="text-sm text-gray-600">Montant estimé</p>
-                <p className="mt-0.5 text-lg font-bold text-brand-deep">
-                  {priceTnd == null ? '—' : tndLabel(priceTnd)}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-brand-accent/10 p-4">
-                <p className="text-sm text-gray-600">Impressions prévues</p>
-                <p className="mt-0.5 text-lg font-bold text-brand-accent">
-                  <ImpressionsEstimateText view={estimate} />
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-gray-200 p-5">
-              <div className="mb-4 text-center">
-                <span className="text-3xl font-bold text-gray-900">
-                  {value == null ? '—' : integer.format(value)}
-                </span>
-                <span className="ml-1 text-base font-medium text-gray-400">
-                  {value == null ? '' : value > 1 ? 'minutes' : 'minute'}
-                </span>
+            <div className="mt-3 rounded-xl border border-pitch-line px-4 py-4">
+              <div className="text-center">
+                <MinutesClock
+                  minutes={value}
+                  unit={value != null && value > 1 ? 'minutes' : 'minute'}
+                />
                 {value == null && (
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-2 text-sm text-pitch-grey">
                     Déplacez le curseur pour choisir vos minutes de diffusion.
                   </p>
                 )}
               </div>
-
-              <input
-                id="event-minutes"
-                type="range"
-                min={EVENT_MIN_MINUTES}
-                max={maxMinutes ?? EVENT_MIN_MINUTES}
-                step={1}
-                value={value ?? EVENT_MIN_MINUTES}
-                onChange={(e) => {
-                  setPullbackNotice(false);
-                  setEventMinutes(Number(e.target.value));
-                }}
-                disabled={maxMinutes === undefined || zeroInventory}
-                aria-label="Minutes de diffusion du positionnement"
-                aria-valuetext={value == null ? 'Aucune minute choisie' : minutesLabel(value)}
-                className="w-full cursor-pointer accent-brand-primary disabled:cursor-not-allowed disabled:opacity-40"
-              />
-              <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
-                <span>MIN : {minutesLabel(EVENT_MIN_MINUTES)}</span>
-                <span>
-                  MAX : {maxMinutes === undefined ? '…' : minutesLabel(maxMinutes)}
+              <div className="mt-3">
+                <PitchRange
+                  id="event-minutes"
+                  min={seat}
+                  max={maxMinutes ?? seat}
+                  step={seat}
+                  value={value ?? seat}
+                  onChange={(next) => {
+                    setPullbackNotice(false);
+                    setEventMinutes(next);
+                  }}
+                  disabled={maxMinutes === undefined || zeroInventory}
+                  ariaLabel="Minutes de diffusion du positionnement"
+                  ariaValueText={value == null ? 'Aucune minute choisie' : minutesLabel(value)}
+                />
+              </div>
+              <div className="mt-1 flex justify-between gap-2 text-xs text-pitch-ink">
+                <p className="text-pitch-ink">
+                  <b className="font-semibold">MIN</b> : {minutesLabel(seat)}
+                </p>
+                <p className="text-right text-pitch-ink">
+                  <b className="font-semibold">MAX</b> :{' '}
+                  {maxMinutes === undefined ? '…' : minutesLabel(maxMinutes)}
                   {venuesCount !== undefined && venuesCount > 0
                     ? ` · ${venuesCount} établissement${venuesCount > 1 ? 's' : ''}`
                     : ''}
-                </span>
+                </p>
               </div>
-              <p className="mt-3 text-xs text-gray-500">
-                Une minute = votre spot dans la page publicitaire de 5 minutes d’un bloc, chez un
-                établissement. Les 3 blocs avant le match ouvrent par la publicité, les 3 blocs
-                après la terminent. En réduisant le curseur, vous retirez d’abord les minutes du
-                dernier établissement de la liste.
+              <p className="mt-3 text-xs leading-relaxed text-pitch-grey">
+                {eventSeatExplainer(seat)}
               </p>
 
               {cmax.isLoading && (
-                <p className="mt-2 inline-flex items-center gap-2 text-xs text-gray-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <p className="mt-2 inline-flex items-center gap-2 text-xs text-pitch-grey">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                   Calcul des minutes disponibles…
                 </p>
               )}
@@ -220,8 +197,8 @@ export default function EventRecapStep({
               )}
               {pullbackNotice && (
                 <p className="mt-2 text-xs font-medium text-amber-700">
-                  Des minutes ont été vendues entre-temps : votre choix a été ramené au maximum
-                  disponible.
+                  Moins de minutes sont disponibles qu’au moment de votre choix : il a été ramené au
+                  maximum disponible.
                 </p>
               )}
               {zeroInventory && (
@@ -232,31 +209,15 @@ export default function EventRecapStep({
             </div>
           </section>
         </div>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-2 rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
-        >
-          <ArrowRight className="h-4 w-4 rotate-180" />
-          Retour
-        </button>
-        <PillButton
-          onClick={() => void onAddToCart()}
-          disabled={!canAct}
-          trailingIcon={
-            adding ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4" />
-            )
-          }
-        >
-          Ajouter au panier
-        </PillButton>
-      </div>
-    </div>
+      </PositioningCard>
+      <PositioningFooter
+        onBack={onBack}
+        onNext={() => void onAddToCart()}
+        nextLabel="Ajouter au panier"
+        nextIcon={<ShoppingCart className="h-4 w-4" aria-hidden="true" />}
+        disabled={!canAct}
+        loading={adding}
+      />
+    </>
   );
 }

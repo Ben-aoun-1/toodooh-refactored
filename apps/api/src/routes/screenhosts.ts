@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -25,15 +25,15 @@ import {
   screens,
   users,
   zones,
-  screenhostUnavailability,
 } from '../db/schema.js';
 import { decideAllocation } from '../lib/allocation-decision.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
+import { notStoppedCampaignSql } from '../lib/campaign-stopped.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
-import { decideEventAllocation } from '../lib/event-allocation-decision.js';
+import { EVENT_ACCEPT_REMINDER, decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { SLOTS_PER_DAY, inEffectSql } from '../lib/half-hour-slots.js';
 import { writeHostAudit } from '../lib/host-audit.js';
 import { changedLockKeys, mergeLocks } from '../lib/host-locks.js';
@@ -54,7 +54,8 @@ import { renderReportHtml } from '../lib/report/template.js';
 import { venueSlug } from '../lib/slug.js';
 import { airedCreativeTypeSql, airedStorageKeySql } from '../lib/spot-cta.js';
 import { computeSps, recomputeVenueSps, spsComputable } from '../lib/sps-score.js';
-import { setVenueDayUnavailability } from '../lib/venue-unavailability.js';
+import { unavailabilityView } from '../lib/unavailable-hours.js';
+import { setVenueUnavailability } from '../lib/venue-unavailability.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -538,28 +539,27 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const [owned] = await db
-      .select({ id: screenhosts.id })
+      .select({
+        id: screenhosts.id,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+      })
       .from(screenhosts)
       .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
       .limit(1);
     if (!owned) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
-    const rows = await db
-      .select({ day: screenhostUnavailability.day })
-      .from(screenhostUnavailability)
-      .where(
-        and(
-          eq(screenhostUnavailability.screenhostId, owned.id),
-          gte(screenhostUnavailability.day, parsedQuery.data.from),
-          lte(screenhostUnavailability.day, parsedQuery.data.to),
-        ),
-      )
-      .orderBy(asc(screenhostUnavailability.day));
-    return reply.status(200).send({ days: rows.map((r) => r.day) });
+    // HOUR-UNAV1 — the wholly unavailable opening days (`days`, read by every client, the mobile
+    // app included) plus every unavailable hour (`hours`) and the venue's window.
+    return reply
+      .status(200)
+      .send(await unavailabilityView(owned, parsedQuery.data.from, parsedQuery.data.to));
   });
 
-  // PUT /api/screenhosts/:id/unavailability {day, unavailable} — declare or undeclare ONE day.
+  // PUT /api/screenhosts/:id/unavailability {day, unavailable, hours?} — declare or undeclare ONE
+  // opening day, WHOLE (no `hours`, the original contract the mobile app uses) or some of its clock
+  // hours (HOUR-UNAV1: `hours` = the window's hours, an overnight venue's 0–2 h are the next date).
   // FUTURE-only (Tunis calendar): today and the past are history — frozen créneaux there are the
   // E6 detector's business, not the owner's eraser. Idempotent both directions (re-declare = the
   // UNIQUE no-op; un-declare an available day = delete 0 rows, still 200).
@@ -570,6 +570,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   const unavailabilityPutSchema = z.object({
     day: z.iso.date(),
     unavailable: z.boolean(),
+    hours: z.array(z.number().int().min(0).max(23)).min(1).max(24).optional(),
   });
   app.put('/api/screenhosts/:id/unavailability', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
@@ -613,15 +614,29 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
     const day = parsed.data.day;
-    const redispatched = await setVenueDayUnavailability(
+    const redispatched = await setVenueUnavailability(
       owned.id,
       day,
+      parsed.data.hours ?? null,
       parsed.data.unavailable,
       request.log,
     );
-    return reply
-      .status(200)
-      .send({ screenhost_id: owned.id, day, unavailable: parsed.data.unavailable, redispatched });
+    if (redispatched === null) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [
+          { field: 'hours', reason: "none of these hours is inside the venue's opening hours" },
+        ],
+      });
+    }
+    return reply.status(200).send({
+      screenhost_id: owned.id,
+      day,
+      hours: parsed.data.hours ?? null,
+      unavailable: parsed.data.unavailable,
+      redispatched,
+    });
   });
 
   // PATCH /api/screenhosts/:id/hours — the OWNER edits their venue's single-window hours
@@ -1638,14 +1653,26 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const [row] = await db
-      .select(eligibilitySelection)
+      .select({
+        ...eligibilitySelection,
+        ramadanOpeningHour: screenhosts.ramadanOpeningHour,
+        ramadanClosingHour: screenhosts.ramadanClosingHour,
+        broadcastsMatches: screenhosts.broadcastsMatches,
+      })
       .from(screenhosts)
       .where(eq(screenhosts.id, parsedParams.data.id))
       .limit(1);
     if (!row) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
-    return reply.status(200).send(eligibilityView(row));
+    // Mariem 11/11 — the signup declarations, READ-ONLY beside the editable fields (not in the
+    // PATCH, the locks or the audit: nothing in dispatch reads them yet).
+    return reply.status(200).send({
+      ...eligibilityView(row),
+      ramadan_opening_hour: row.ramadanOpeningHour,
+      ramadan_closing_hour: row.ramadanClosingHour,
+      broadcasts_matches: row.broadcastsMatches,
+    });
   });
 
   // GET /api/admin/screenhosts/:id/sps — E4: the venue's SPS breakdown, computed LIVE (each
@@ -2002,7 +2029,14 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       // DEMO-1 (ruled Q1 A) — a demo campaign is not the owner's business: it pays them nothing
       // and they never decided it, so « Mes campagnes » does not list it.
-      .where(and(eq(screenhosts.ownerId, userId), eq(users.isDemo, false)))
+      // DISP-TOURS Q1 — nor a reservation whose spot awaits validation (not proposed yet).
+      .where(
+        and(
+          eq(screenhosts.ownerId, userId),
+          eq(users.isDemo, false),
+          ne(campaignDispatchAllocation.statutAcceptation, 'RESERVE'),
+        ),
+      )
       .orderBy(desc(campaigns.createdAt), desc(campaigns.id), asc(screenhosts.name));
 
     // Group per campaign, first-seen order (= newest campaign first, per the ORDER BY).
@@ -2222,7 +2256,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
       .innerJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(
-        and(eq(campaignDispatchAllocation.id, parsed.data.id), eq(screenhosts.ownerId, userId)),
+        and(
+          eq(campaignDispatchAllocation.id, parsed.data.id),
+          eq(screenhosts.ownerId, userId),
+          // DISP-TOURS Q1 — a reservation's spot awaits validation: never shown to an owner.
+          ne(campaignDispatchAllocation.statutAcceptation, 'RESERVE'),
+        ),
       )
       .limit(1);
     if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
@@ -2330,7 +2369,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         blocs: eventAllocations.blocs,
         impressionsTotal: eventAllocations.impressionsTotal,
         montantTnd: eventAllocations.montantTnd,
+        notice: eventAllocations.notice,
         createdAt: eventAllocations.createdAt,
+        eventId: events.id,
         kickoffAt: events.kickoffAt,
         endsAt: events.endsAt,
         creativeKind: creatives.creativeType,
@@ -2341,7 +2382,17 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
       .innerJoin(events, eq(campaigns.eventId, events.id))
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
-      .where(and(eq(screenhosts.ownerId, userId), eq(eventAllocations.statut, 'EN_ATTENTE')))
+      .where(
+        and(
+          eq(screenhosts.ownerId, userId),
+          eq(eventAllocations.statut, 'EN_ATTENTE'),
+          // Mariem 05/11 — only shares the owner has been ASKED about: one still waiting for its
+          // match notice (or withheld) is not a proposal yet (lib/event-host-notice).
+          inArray(eventAllocations.notice, ['single', 'grouped']),
+          // ... and never the shares of a positioning a superadmin stopped (lib/campaign-stop).
+          notStoppedCampaignSql(),
+        ),
+      )
       .orderBy(desc(eventAllocations.createdAt));
     // Operator 2026-10-09 — the owner sees its SHARE of the montant (lib/owner-share), as TTC.
     const pcts = await loadOwnerSharePcts();
@@ -2349,6 +2400,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       rows.map((r) => ({
         id: r.id,
         campaign_id: r.campaignId,
+        // Mariem 05/11 — a grouped share is answered in its match's « Soir de match » popup
+        // (routes/screenhost-event-matches); clients that know it list it there, older ones
+        // still decide it alone.
+        event_id: r.eventId,
+        grouped: r.notice === 'grouped',
         match_name: r.matchName,
         kickoff_at: r.kickoffAt.toISOString(),
         ends_at: r.endsAt.toISOString(),
@@ -2411,9 +2467,6 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   // §11.1 — the accept reminder (returned to the UI, spoken on every accept).
-  const EVENT_ACCEPT_REMINDER =
-    'Merci de maintenir vos écrans actifs pendant la fenêtre de diffusion.';
-
   // The decision itself lives in lib/event-allocation-decision.ts (ONE home, shared with the
   // simulator's owner emulator); this wrapper owns the HTTP mapping.
   const decideEventAllocationRoute = async (

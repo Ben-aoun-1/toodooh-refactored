@@ -9,9 +9,11 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { ownerNotDeactivatedSql } from '../approved-owner.js';
+import { type BlackoutWindow } from '../event-blackout.js';
 import { airedCreativeTypeSql, airedStorageKeySql, ctaAirableSql } from '../spot-cta.js';
 
 import { campaignWindowValidUntil, isWindowActive } from './playlist.js';
+import { toursAirtime } from './tours-airtime.js';
 
 export interface ActiveAllocation {
   campaignId: string;
@@ -24,6 +26,14 @@ export interface ActiveAllocation {
   creativeType: string;
   /** FRESH-1 — the Tunis midnight after the campaign's end date (the window's close). */
   validUntil: Date;
+  /**
+   * DISP-TOURS — a tours allocation airs only inside its créneaux: false outside them (the
+   * playlist still carries the entry, blacked out until its next hour; nothing else may air or
+   * record it). Always true on a v1 allocation (one r_i, every hour of the window).
+   */
+  airableNow: boolean;
+  /** DISP-TOURS — the next 48 h outside the allocation's créneaux (absent on a v1 allocation). */
+  offWindows?: BlackoutWindow[];
 }
 
 // THE single authorization gate for what a screen may air AND what it may bill proof-of-play for.
@@ -42,6 +52,8 @@ export const activeAllocationsForScreenhost = async (
   screenhostId: string,
   now: Date,
   campaignId?: string,
+  /** DISP-TOURS — the playlist also wants a tours entry between its hours (blacked out). */
+  opts: { includeOffHours?: boolean } = {},
 ): Promise<ActiveAllocation[]> => {
   const conditions = [
     eq(campaignDispatchAllocation.screenhostId, screenhostId),
@@ -66,6 +78,8 @@ export const activeAllocationsForScreenhost = async (
       durationSeconds: creatives.durationSeconds,
       creativeType: airedCreativeTypeSql(), // QR-CTA2 — a photo's QR copy airs as a video
       repsPerHour: campaignDispatchAllocation.rI,
+      engine: campaignDispatchPlan.engine,
+      creneaux: campaignDispatchAllocation.creneaux,
     })
     .from(campaignDispatchAllocation)
     .innerJoin(campaignDispatchPlan, eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id))
@@ -74,20 +88,29 @@ export const activeAllocationsForScreenhost = async (
     .innerJoin(screenhosts, eq(screenhosts.id, campaignDispatchAllocation.screenhostId))
     .where(and(...conditions));
 
-  return rows.flatMap((row) =>
-    row.endDate !== null && isWindowActive(row.startDate, row.endDate, now)
-      ? [
-          {
-            campaignId: row.campaignId,
-            campaignName: row.campaignName,
-            creativeId: row.creativeId,
-            storageKey: row.storageKey,
-            durationSeconds: row.durationSeconds,
-            repsPerHour: row.repsPerHour,
-            creativeType: row.creativeType,
-            validUntil: campaignWindowValidUntil(row.endDate),
-          },
-        ]
-      : [],
-  );
+  return rows.flatMap((row): ActiveAllocation[] => {
+    if (row.endDate === null || !isWindowActive(row.startDate, row.endDate, now)) return [];
+    const base = {
+      campaignId: row.campaignId,
+      campaignName: row.campaignName,
+      creativeId: row.creativeId,
+      storageKey: row.storageKey,
+      durationSeconds: row.durationSeconds,
+      creativeType: row.creativeType,
+      validUntil: campaignWindowValidUntil(row.endDate),
+    };
+    if (row.engine !== 'tours')
+      return [{ ...base, repsPerHour: row.repsPerHour, airableNow: true }];
+    const airtime = toursAirtime(row.creneaux, now);
+    const airableNow = airtime.currentReps !== null;
+    if (!airableNow && !opts.includeOffHours) return [];
+    return [
+      {
+        ...base,
+        repsPerHour: airtime.currentReps ?? airtime.nextReps ?? 0,
+        airableNow,
+        offWindows: airtime.offWindows,
+      },
+    ];
+  });
 };

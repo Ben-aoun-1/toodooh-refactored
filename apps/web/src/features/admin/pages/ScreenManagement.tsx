@@ -33,7 +33,8 @@ import type {
 // Affluence is HUB-OWNED (ruling 2026-08-26): the hub's PAX readings + its manual grid are the ONE
 // merged truth, pushed into toodooh's read-only screenhost_affluence mirror. The legacy
 // AffluenceModal edited a Supabase table nothing reads any more — the action now links to the hub.
-const HUB_URL = 'https://hub.too-dooh.com';
+// VITE_HUB_URL points a staging build at the staging hub; unset or empty = production's.
+const HUB_URL = import.meta.env.VITE_HUB_URL || 'https://hub.too-dooh.com';
 
 const BADGE_CLASSES = 'inline-flex rounded-full px-2 py-1 text-xs font-semibold';
 

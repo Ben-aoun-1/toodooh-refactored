@@ -44,6 +44,8 @@ export interface ImpressionsEstimateWire {
   objectif: number | null;
   venues_count: number | null;
   days_count: number | null;
+  /** DISP-TOURS — the exact price of the simulated plan (at or under the budget); null otherwise. */
+  prix_tnd: number | null;
 }
 
 const WIRE_REFUSAL: Record<EstimateRefusal, Exclude<ImpressionsEstimateWire['status'], 'ok'>> = {
@@ -66,6 +68,7 @@ export const toEstimateWire = (e: ImpressionsEstimate): ImpressionsEstimateWire 
         objectif: e.objectif,
         venues_count: e.venuesCount,
         days_count: e.daysCount,
+        prix_tnd: e.prixTnd ?? null,
       }
     : {
         status: WIRE_REFUSAL[e.status],
@@ -74,6 +77,7 @@ export const toEstimateWire = (e: ImpressionsEstimate): ImpressionsEstimateWire 
         objectif: null,
         venues_count: null,
         days_count: null,
+        prix_tnd: null,
       };
 
 export const campaignImpressionsEstimateRoutes: FastifyPluginAsync = async (app) => {

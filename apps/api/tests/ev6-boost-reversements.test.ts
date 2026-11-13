@@ -27,6 +27,11 @@ import {
   users,
   zones,
 } from '../src/db/schema.js';
+import {
+  EVENT_MATCH_NOTICE_TYPE,
+  EVENT_NOTICE_LEAD_MS,
+  runEventGroupedNotices,
+} from '../src/lib/event-host-notice.js';
 import { settleEventPositioning } from '../src/lib/event-playout/settlement.js';
 import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { eventBoostRoutes } from '../src/routes/event-boost.js';
@@ -307,12 +312,15 @@ describe('EV6 — the event booster + event reversements (real Postgres)', () =>
       expect(untouched?.statut).toBe('ACCEPTE');
       expect(Number(untouched?.montantTnd)).toBe(180);
 
-      // The owner of the new venue was proposed to; the zone + budget + audit row landed.
+      // Mariem 05/11 — booked more than 24 h before kick-off: the new venue's owner is asked in
+      // the match's « Soir de match » notice; the zone + budget + audit row landed.
+      expect(fresh?.notice).toBeNull();
+      await runEventGroupedNotices(new Date(KICKOFF.getTime() - EVENT_NOTICE_LEAD_MS + 60_000));
       const notifs = await db
         .select()
         .from(notifications)
         .where(eq(notifications.userId, target.ownerId));
-      expect(notifs.some((n) => n.type === 'dispatch_pending_acceptance')).toBe(true);
+      expect(notifs.some((n) => n.type === EVENT_MATCH_NOTICE_TYPE)).toBe(true);
       const zonesNow = await db
         .select({ zoneId: campaignZones.zoneId })
         .from(campaignZones)

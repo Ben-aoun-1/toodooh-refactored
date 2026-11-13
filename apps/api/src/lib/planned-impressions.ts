@@ -35,6 +35,12 @@ export interface PlannedPrevues {
   impressions: number;
   /** The venues the frozen plan actually airs on — REFUSE excluded. */
   venuesCount: number;
+  /**
+   * DISP-TOURS — a tours plan's BILLABLE objective: the qualified impressions it allocated
+   * (plan.couvert), the figure the cart showed. The v1 engine has none (the objective is still
+   * derived from the budget there, lib/impressions-objectif.ts).
+   */
+  objectif?: number;
 }
 
 const EMPTY: PlannedPrevues = { impressions: 0, venuesCount: 0 };
@@ -58,7 +64,12 @@ export const planPrevuesByCampaign = async (
   const out = new Map<string, PlannedPrevues>();
   if (campaignIds.length === 0) return out;
   const plans = await db
-    .select({ id: campaignDispatchPlan.id, campaignId: campaignDispatchPlan.campaignId })
+    .select({
+      id: campaignDispatchPlan.id,
+      campaignId: campaignDispatchPlan.campaignId,
+      engine: campaignDispatchPlan.engine,
+      couvert: campaignDispatchPlan.couvert,
+    })
     .from(campaignDispatchPlan)
     .where(inArray(campaignDispatchPlan.campaignId, [...campaignIds]));
   if (plans.length === 0) return out;
@@ -83,6 +94,10 @@ export const planPrevuesByCampaign = async (
   for (const a of allocations) {
     const campaignId = campaignByPlan.get(a.planId);
     if (campaignId !== undefined) add(out, campaignId, predictedImpressionsOf(a));
+  }
+  for (const p of plans) {
+    const current = out.get(p.campaignId);
+    if (p.engine === 'tours' && current) out.set(p.campaignId, { ...current, objectif: p.couvert });
   }
   return out;
 };

@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { AvailabilityCalendarCard } from '@/features/screenhost/components/calendar/AvailabilityCalendarCard';
+import DayHoursPanel from '@/features/screenhost/components/calendar/DayHoursPanel';
 import { DeviceStatusCard } from '@/features/screenhost/components/calendar/DeviceStatusCard';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
@@ -21,6 +22,12 @@ import {
   fmtLongDate,
   groupCreneauxByDate,
 } from '@/features/screenhost/lib/diffusion-calendar';
+import {
+  cellDateOf,
+  dayStateOf,
+  unavailableHoursOf,
+  windowHours,
+} from '@/features/screenhost/lib/hour-unavailability';
 import {
   isDayToggleable,
   isoOf,
@@ -51,11 +58,8 @@ export default function OwnerCalendarDevices() {
   const calendar = useScreenhostCalendar(user?.id);
   const [venueId, setVenueId] = useState<string | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [pending, setPending] = useState<{
-    iso: string;
-    label: string;
-    campaigns: string[];
-  } | null>(null);
+  // HOUR-UNAV1 — the future day whose hours are open under the grid.
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), monthIndex: now.getMonth() };
@@ -69,61 +73,97 @@ export default function OwnerCalendarDevices() {
 
   const declared = useScreenhostUnavailability(selectedVenueId ?? undefined, from, to);
   const toggle = useToggleUnavailability(selectedVenueId ?? undefined, from, to, user?.id);
-  const declaredSet = useMemo(() => new Set(declared.data ?? []), [declared.data]);
+  const view = declared.data;
 
-  // Future days carrying an accepted diffusion on this venue → the campaigns' names.
-  const diffusionDays = useMemo(() => {
-    const byDate = groupCreneauxByDate(
-      calendar.allocations.filter((a) => a.screenhost_id === selectedVenueId),
+  // Future days carrying an accepted diffusion on this venue → the campaigns' names, and the
+  // same per clock cell (`date:hour`) for the hours panel.
+  const { diffusionDays, diffusionCells } = useMemo(() => {
+    const venueAllocations = calendar.allocations.filter(
+      (a) => a.screenhost_id === selectedVenueId,
     );
-    const out = new Map<string, string[]>();
+    const byDate = groupCreneauxByDate(venueAllocations);
+    const days = new Map<string, string[]>();
     for (const [iso, airings] of byDate) {
       const names = campaignsOnDay(airings);
-      if (iso > todayIso && names.length > 0) out.set(iso, names);
+      if (iso > todayIso && names.length > 0) days.set(iso, names);
     }
-    return out;
+    const cells = new Map<string, string[]>();
+    for (const a of venueAllocations) {
+      for (const c of a.creneaux) {
+        const key = `${c.date}:${c.hour}`;
+        const names = cells.get(key) ?? [];
+        if (!names.includes(a.campaign_name)) names.push(a.campaign_name);
+        cells.set(key, names);
+      }
+    }
+    return { diffusionDays: days, diffusionCells: cells };
   }, [calendar.allocations, selectedVenueId, todayIso]);
 
   const selectVenue = (id: string) => {
-    setPending(null);
+    setSelectedDay(null);
     setVenueId(id);
   };
 
   const shiftMonth = (delta: number) => {
-    setPending(null);
+    setSelectedDay(null);
     setMonth((m) => {
       const d = new Date(m.year, m.monthIndex + delta, 1);
       return { year: d.getFullYear(), monthIndex: d.getMonth() };
     });
   };
 
-  const write = (iso: string, unavailable: boolean) => {
-    toggle.mutate(
-      { day: iso, unavailable },
-      {
-        onSuccess: (result) => {
-          setPending(null);
-          if (unavailable) toast.success(declareResultCopy(result.redispatched));
-        },
-        onError: (error) => {
-          toast.error(getErrorMessage(error) || "Échec de l'enregistrement de la disponibilité");
-          log.error({ err: error }, 'unavailability toggle failed');
-        },
-      },
-    );
+  const window = windowHours(view?.opening_hour ?? null, view?.closing_hour ?? null);
+  const hoursOrWhole = (hours: number[]): number[] | undefined =>
+    hours.length === window.length ? undefined : hours;
+
+  /** HOUR-UNAV1 — « Enregistrer »: declare the added hours, free the removed ones. */
+  const save = async (day: string, change: { add: number[]; remove: number[] }) => {
+    try {
+      if (change.add.length > 0) {
+        const result = await toggle.mutateAsync({
+          day,
+          unavailable: true,
+          hours: hoursOrWhole(change.add),
+        });
+        toast.success(declareResultCopy(result.redispatched));
+      }
+      if (change.remove.length > 0) {
+        await toggle.mutateAsync({ day, unavailable: false, hours: hoursOrWhole(change.remove) });
+        if (change.add.length === 0) toast.success('Heures libérées.');
+      }
+      setSelectedDay(null);
+    } catch (error) {
+      toast.error(getErrorMessage(error) || "Échec de l'enregistrement de la disponibilité");
+      log.error({ err: error }, 'unavailability toggle failed');
+    }
   };
 
-  const handleToggle = (iso: string) => {
+  const handleSelectDay = (iso: string) => {
     if (!isDayToggleable(iso, todayIso) || toggle.isPending) return;
-    const declaring = !declaredSet.has(iso);
-    const campaigns = diffusionDays.get(iso) ?? [];
-    if (declaring && campaigns.length > 0) {
-      setPending({ iso, label: fmtLongDate(iso), campaigns });
-      return;
-    }
-    setPending(null);
-    write(iso, declaring);
+    setSelectedDay((d) => (d === iso ? null : iso));
   };
+
+  const panel =
+    selectedDay !== null && view ? (
+      <DayHoursPanel
+        dayLabel={fmtLongDate(selectedDay)}
+        window={window}
+        unavailableHours={unavailableHoursOf(selectedDay, view)}
+        diffusionByHour={
+          new Map(
+            window.flatMap((h) => {
+              const names = diffusionCells.get(
+                `${cellDateOf(selectedDay, h, view.opening_hour)}:${h}`,
+              );
+              return names ? [[h, names] as const] : [];
+            }),
+          )
+        }
+        busy={toggle.isPending}
+        onSave={(change) => void save(selectedDay, change)}
+        onClose={() => setSelectedDay(null)}
+      />
+    ) : undefined;
 
   const venueScreens = devices.filter((d) => d.venue_id === selectedVenueId);
   const venueSensor = sensors.data?.find((s) => s.venue_id === selectedVenueId);
@@ -161,14 +201,13 @@ export default function OwnerCalendarDevices() {
                 onShiftMonth={shiftMonth}
                 cells={cells}
                 todayIso={todayIso}
-                declared={declaredSet}
+                dayState={(iso) => dayStateOf(iso, view)}
                 diffusionDays={diffusionDays}
-                onToggle={handleToggle}
+                onSelectDay={handleSelectDay}
+                selectedDay={selectedDay}
                 busy={toggle.isPending}
                 loading={venues.isLoading || declared.isLoading}
-                pending={pending}
-                onConfirm={() => pending && write(pending.iso, true)}
-                onCancel={() => setPending(null)}
+                panel={panel}
               />
               <DeviceStatusCard
                 sensor={venueSensor}

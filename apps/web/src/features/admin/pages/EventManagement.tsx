@@ -1,14 +1,25 @@
-import { Ban, CalendarClock, Coins, Pencil, Plus, ShieldCheck, Users } from 'lucide-react';
+import {
+  Ban,
+  CalendarClock,
+  Coins,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  TimerReset,
+  Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import EventAttestationsPanel from '@/features/admin/components/EventAttestationsPanel';
 import EventFormModal from '@/features/admin/components/EventFormModal';
+import EventProlongerModal from '@/features/admin/components/EventProlongerModal';
 import EventReporterModal from '@/features/admin/components/EventReporterModal';
 import EventTarificationModal from '@/features/admin/components/EventTarificationModal';
 import TeamsManagerModal from '@/features/admin/components/TeamsManagerModal';
 import { useAdminEvents, useAnnulerEvent } from '@/features/admin/hooks/useAdminEvents';
+import { apiFootballLabel, canExtend, formatExtension } from '@/features/admin/lib/event-extension';
 import type { AdminEventView } from '@/features/admin/services/admin-events.service';
 import {
   STATUT_CHIP_CLASSES,
@@ -36,6 +47,7 @@ export default function EventManagement() {
   const [tarification, setTarification] = useState<AdminEventView | null>(null);
   // EV5 (R4) — the report modal + the per-event respect panel (the agent/admin attestation).
   const [reporting, setReporting] = useState<AdminEventView | null>(null);
+  const [extending, setExtending] = useState<AdminEventView | null>(null);
   const [inspecting, setInspecting] = useState<AdminEventView | null>(null);
   const [managingTeams, setManagingTeams] = useState(false);
 
@@ -99,6 +111,7 @@ export default function EventManagement() {
                   <th className="px-4 py-3">Date et horaire</th>
                   <th className="px-4 py-3">Statut</th>
                   <th className="px-4 py-3">Source</th>
+                  <th className="px-4 py-3">Match en direct</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -137,6 +150,15 @@ export default function EventManagement() {
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-xs text-[#5C5C5C]">
+                      {/* EVT-ET1 — the automatic API-Football link and any extension so far. */}
+                      <span>{apiFootballLabel(e.api_football)}</span>
+                      {e.extension_minutes > 0 && (
+                        <span className="ml-1 rounded-md bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800">
+                          +{formatExtension(e.extension_minutes)}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         {/* Suggested = read-only (their badge says why); official edits open
@@ -165,6 +187,17 @@ export default function EventManagement() {
                             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
                           >
                             <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {/* EVT-ET1 — prolonger: the end moves later by the minutes chosen. */}
+                        {canExtend(e, new Date()) && (
+                          <button
+                            type="button"
+                            title="Prolonger le match"
+                            onClick={() => setExtending(e)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                          >
+                            <TimerReset className="h-4 w-4" />
                           </button>
                         )}
                         {/* EV5 (R4) — reporter: the window, the blocs and the holds all move. */}
@@ -215,6 +248,9 @@ export default function EventManagement() {
 
       {reporting !== null && (
         <EventReporterModal event={reporting} onClose={() => setReporting(null)} />
+      )}
+      {extending !== null && (
+        <EventProlongerModal event={extending} onClose={() => setExtending(null)} />
       )}
 
       {inspecting !== null && (

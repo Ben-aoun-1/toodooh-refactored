@@ -71,7 +71,6 @@ const seed = async (opts: {
   endDate?: string;
   demoVenue?: boolean;
   withPlan?: boolean;
-  eventCampaign?: boolean;
 }): Promise<Scenario> => {
   const advertiser = await seedUser();
   const owner = await seedUser({ role: 'individual_owner' });
@@ -99,7 +98,7 @@ const seed = async (opts: {
     .values({
       advertiserId: advertiser,
       name: `Campagne arrêt ${seq}`,
-      campaignType: opts.eventCampaign ? 'event' : 'standard',
+      campaignType: 'standard',
       status: opts.status ?? 'active',
       startDate: opts.startDate ?? '2024-01-01',
       endDate: opts.endDate ?? '2024-01-05',
@@ -304,7 +303,8 @@ describe('STOP-1 — « Arrêter la campagne » (superadmin)', () => {
     expect((await stop(s.campaignId)).json()).toMatchObject({ refund_tnd: 30, spend_tnd: 30 });
   });
 
-  it('refusals: an admin, a pending or event campaign, no plan, no reason', async () => {
+  // A match positioning stops too since Mariem 05/11 (tests/positioning-stop.test.ts).
+  it('refusals: an admin, a pending campaign, no plan, no reason', async () => {
     const s = await seed({
       creneaux: [{ date: '2024-01-01', hour: 10, reps: 1, impressions: 10 }],
     });
@@ -315,8 +315,6 @@ describe('STOP-1 — « Arrêter la campagne » (superadmin)', () => {
     expect((await stop(s.campaignId, '')).statusCode).toBe(400);
     const pending = await seed({ status: 'pending', withPlan: false, creneaux: [] });
     expect((await stop(pending.campaignId)).json()).toMatchObject({ error: 'NOT_STOPPABLE' });
-    const event = await seed({ eventCampaign: true, creneaux: [] });
-    expect((await stop(event.campaignId)).json()).toMatchObject({ error: 'EVENT_CAMPAIGN' });
     const noPlan = await seed({ withPlan: false, creneaux: [] });
     expect((await stop(noPlan.campaignId)).json()).toMatchObject({ error: 'NO_PLAN' });
     expect(await campaignOf(noPlan.campaignId)).toMatchObject({

@@ -9,6 +9,10 @@ export interface AdminEventView extends EventItemView {
   annule: boolean;
   suggested_by: string | null;
   created_at: string;
+  /** EVT-ET1 — the API-Football fixture linked automatically (null = not linked yet). */
+  api_football: { fixture_id: number | null; status: string | null; checked_at: string | null };
+  /** EVT-ET1 — minutes the match's end was moved later (extra time, penalties, admin). */
+  extension_minutes: number;
 }
 
 export interface UpsertEventInput {
@@ -82,6 +86,14 @@ export const adminEventsService = {
   > {
     return apiClient.post(`/admin/events/${id}/annuler`);
   },
+  /** EVT-ET1 — move the END of the match later by `minutes` (5–180, steps of 5). */
+  prolonger(
+    id: string,
+    minutes: number,
+  ): Promise<AdminEventView & { positionnements_recalcules: number }> {
+    return apiClient.post(`/admin/events/${id}/prolonger`, { minutes });
+  },
+
   /** EV5 (R4) — reporter: move the match; positionings, blocs and reservations are recalculated. */
   reporter(
     id: string,

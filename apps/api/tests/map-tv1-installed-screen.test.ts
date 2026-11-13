@@ -147,9 +147,9 @@ describe('MAP-TV1 — only a venue with an installed screen is sold (real Postgr
       const cmax = await computeEventCmax(ref, 15, new Set(), 3);
       expect(cmax.venues.map((x) => x.screenhostId).sort()).toEqual(v.in);
       expect(cmax.eligibleCount).toBe(3);
-      // EVT-PRICE2 — three venues × six minutes × 100 pers/h ÷ 3 × R 3 = 1 800 → 18 × 1.50 TND
-      expect(cmax.iMax).toBe(1_800);
-      expect(cmax.cMaxEvtTnd).toBe(27);
+      // Mariem 04/11 — three venues × six 2-minute seats × 100 pers/h × R 3 × 2 = 10 800 → 18 × 9
+      expect(cmax.iMax).toBe(10_800);
+      expect(cmax.cMaxEvtTnd).toBe(162);
 
       const pool = await assembleEventPool(ref);
       expect(pool.map((x) => x.screenhostId).sort()).toEqual(v.in);

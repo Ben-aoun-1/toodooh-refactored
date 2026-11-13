@@ -46,6 +46,8 @@ const requestSchema = z.object({
 const availabilitySchema = z.object({
   days: z.array(z.iso.date()).min(1).max(62),
   available: z.boolean(),
+  // AGT-HOUR1 — only these slot hours of the days (omitted = the whole days).
+  hours: z.array(z.number().int().min(0).max(23)).min(1).max(24).optional(),
 });
 const objectiveSchema = z.object({
   agent_role: z.enum(['screenhost_agent', 'screencast_agent']),
@@ -71,6 +73,7 @@ const invalid = (reply: FastifyReply, issues: z.core.$ZodIssue[]) =>
 const SLOT_MESSAGES: Record<string, string> = {
   SLOT_TAKEN: 'Ce créneau n’est plus disponible.',
   DAY_UNAVAILABLE: 'Votre agent n’est pas disponible ce jour-là.',
+  HOUR_UNAVAILABLE: 'Votre agent n’est pas disponible à cette heure-là.',
   PAST_SLOT: 'Ce créneau est passé.',
   NOT_A_SLOT: 'Choisissez un créneau proposé.',
   NO_REFERENT: 'Aucun agent référent.',
@@ -122,7 +125,13 @@ export const agentAppointmentRoutes: FastifyPluginAsync = async (app) => {
     const ref = await referentOf(request.user?.id ?? '');
     if (!ref) return reply.status(404).send({ error: 'NO_REFERENT', message: 'No agent.' });
     const { from, to } = monthRange(q.data.month);
-    return reply.status(200).send(await agentCalendar(ref.agentUserId, from, to));
+    const cal = await agentCalendar(ref.agentUserId, from, to);
+    // AGT-HOUR1 — the hours the agent blocked are simply not offered (like a taken slot): the
+    // affiliate never learns why an hour is missing.
+    return reply.status(200).send({
+      unavailable: cal.unavailable,
+      taken: [...cal.taken, ...cal.unavailableHours],
+    });
   });
 
   // POST /api/appointments — « Prendre rendez-vous »: the request is En attente.
@@ -180,7 +189,11 @@ export const agentAppointmentRoutes: FastifyPluginAsync = async (app) => {
     if (!q.success) return invalid(reply, q.error.issues);
     const { from, to } = monthRange(q.data.month);
     const cal = await agentCalendar(request.user?.id ?? '', from, to);
-    return reply.status(200).send({ unavailable: cal.unavailable, slot_hours: SLOT_HOURS });
+    return reply.status(200).send({
+      unavailable: cal.unavailable,
+      unavailable_hours: cal.unavailableHours,
+      slot_hours: SLOT_HOURS,
+    });
   });
 
   // PUT /api/agent/availability { days, available } — immediate; past days are ignored.
@@ -189,7 +202,15 @@ export const agentAppointmentRoutes: FastifyPluginAsync = async (app) => {
     if (!body.success) return invalid(reply, body.error.issues);
     return reply
       .status(200)
-      .send(await setAvailability(request.user?.id ?? '', body.data.days, body.data.available));
+      .send(
+        await setAvailability(
+          request.user?.id ?? '',
+          body.data.days,
+          body.data.available,
+          new Date(),
+          body.data.hours,
+        ),
+      );
   });
 
   // GET /api/agent/appointments — every appointment of the agent (À venir / Passés client-side).

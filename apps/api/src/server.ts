@@ -14,13 +14,16 @@ import { startAgentAppointmentJob } from './lib/agent-appointments.js';
 import { startAgentCommissionJob } from './lib/agent-commissions.js';
 import { startAgentNoticeEmailJob } from './lib/agent-notifications.js';
 import { startAgentShFollowupJob } from './lib/agent-sh-followup.js';
+import { startApiFootballJob } from './lib/api-football/tracker.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
 import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
 import { startDemoAirJob } from './lib/demo-air.js';
+import { startEventHostNoticeJob } from './lib/event-host-notice.js';
 import { startBlocPushJob } from './lib/event-playout/bloc-pusher.js';
 import { startEventSettlementJob } from './lib/event-playout/settlement.js';
 import { isMediaProbeEnabled } from './lib/media-probe.js';
 import { startMonthlyBillingJob } from './lib/monthly-billing.js';
+import { startPushOutboxJob } from './lib/push/push-outbox.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
 import { startCtaBurnJob } from './lib/spot-cta-job.js';
@@ -143,6 +146,15 @@ const start = async (): Promise<void> => {
     // every (venue, bloc) on the dual proof and refund the undelivered chargeable value. AFTER
     // the pusher so a window that closed during downtime settles in the same boot sequence.
     startEventSettlementJob(app.log);
+    // Mariem 05/11 — the match-night notices (boot + every 5 min): 24 h before kick-off, each
+    // venue's waiting shares get ONE « Soir de match » notice, or are accepted on its behalf.
+    startEventHostNoticeJob(app.log);
+    // EVT-ET1 — the extra-time tracker: links football events to API-Football and moves the
+    // « après » ads by fixed jumps when a match goes to extra time / penalties. Off without key.
+    startApiFootballJob(app.log);
+    // MOBILE-1 — the push outbox (boot + every 15 s): new notifications reach the screenhost's
+    // phone (Expo Push) without touching the sites that insert them.
+    startPushOutboxJob(app.log);
 
     // SIM-0 — the admin Simulateur. Enabled: drop orphan sandbox databases once at boot and
     // evict idle sandbox pools every 5 min (unref'd). Disabled: ONE boot line, nothing else.

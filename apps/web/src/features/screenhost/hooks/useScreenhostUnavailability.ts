@@ -1,21 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import {
+  type UnavailabilityView,
+  applyHoursToggle,
+} from '@/features/screenhost/lib/hour-unavailability';
 import { screenhostUnavailabilityService } from '@/features/screenhost/services/screenhost-unavailability.service';
 
 import { screenhostKeys } from './queryKeys';
 
-// E2 — the calendar's read + the OPTIMISTIC toggle: the day flips in the grid immediately, and a
-// refused write (PAST_OR_TODAY, network) rolls the cache back and surfaces the error to the
-// caller's onError (the page toasts in French).
+// E2 → HOUR-UNAV1 — the calendar's read + the OPTIMISTIC toggle: the hours flip in the grid at
+// once, and a refused write (PAST_OR_TODAY, network) rolls the cache back and surfaces the error to
+// the caller's onError (the page toasts in French).
 
 const unavailabilityKey = screenhostKeys.unavailability;
-
-/** The optimistic cache step, pure: declare inserts (deduped, sorted); undeclare removes. */
-export const applyOptimisticToggle = (
-  days: readonly string[],
-  day: string,
-  unavailable: boolean,
-): string[] => (unavailable ? [...new Set([...days, day])].sort() : days.filter((d) => d !== day));
 
 export function useScreenhostUnavailability(
   screenhostId: string | undefined,
@@ -29,6 +26,13 @@ export function useScreenhostUnavailability(
   });
 }
 
+export interface HoursToggle {
+  day: string;
+  unavailable: boolean;
+  /** Some hours of the opening day; absent = the whole day. */
+  hours?: number[];
+}
+
 export function useToggleUnavailability(
   screenhostId: string | undefined,
   from: string,
@@ -38,14 +42,17 @@ export function useToggleUnavailability(
   const queryClient = useQueryClient();
   const key = unavailabilityKey(screenhostId ?? '', from, to);
   return useMutation({
-    mutationFn: ({ day, unavailable }: { day: string; unavailable: boolean }) =>
-      screenhostUnavailabilityService.toggle(screenhostId ?? '', day, unavailable),
-    onMutate: async ({ day, unavailable }) => {
+    mutationFn: ({ day, unavailable, hours }: HoursToggle) =>
+      screenhostUnavailabilityService.toggle(screenhostId ?? '', day, unavailable, hours),
+    onMutate: async ({ day, unavailable, hours }) => {
       await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<string[]>(key);
-      queryClient.setQueryData<string[]>(key, (days = []) =>
-        applyOptimisticToggle(days, day, unavailable),
-      );
+      const previous = queryClient.getQueryData<UnavailabilityView>(key);
+      if (previous) {
+        queryClient.setQueryData<UnavailabilityView>(
+          key,
+          applyHoursToggle(previous, day, hours ?? null, unavailable),
+        );
+      }
       return { previous };
     },
     onError: (_err, _vars, context) => {

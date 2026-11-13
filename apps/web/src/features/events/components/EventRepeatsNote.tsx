@@ -22,8 +22,8 @@ export default function EventRepeatsNote({
   const line = eventRepeatsLabel(creativeType, durationSeconds, minutes);
   if (line === null) return null;
   return (
-    <p className="flex items-start gap-2 rounded-xl border border-brand-primary/30 bg-brand-primary/5 px-4 py-3 text-sm font-medium text-gray-900">
-      <Repeat className="mt-0.5 h-4 w-4 shrink-0 text-brand-deep" aria-hidden="true" />
+    <p className="flex items-start gap-2 rounded-lg border border-pitch-line bg-stadium-wash px-4 py-3 text-sm font-medium text-pitch-ink">
+      <Repeat className="mt-0.5 h-4 w-4 shrink-0 text-pitch-leaf" aria-hidden="true" />
       {line}
     </p>
   );

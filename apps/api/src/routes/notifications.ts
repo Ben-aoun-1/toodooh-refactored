@@ -22,6 +22,9 @@ const notificationView = (row: Notification, appointmentStatus: string | null = 
   title: row.title,
   body: row.body,
   campaign_id: row.campaignId,
+  // Mariem 05/11 — a « Soir de match » notice names its match and venue (no single campaign).
+  event_id: row.eventId,
+  screenhost_id: row.screenhostId,
   link: noticeLink(row.type, row.link),
   appointment_id: row.appointmentId,
   appointment_status: appointmentStatus,

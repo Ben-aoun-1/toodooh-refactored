@@ -77,20 +77,23 @@ export function monthsSpanLabel(isoDates: readonly string[]): string {
 export interface FootballDoorData {
   /** « 24 affiches, novembre et décembre 2026 » — null when the catalogue is empty. */
   kicker: string | null;
-  /** Up to three fixtures: the featured ones first, then the soonest. */
+  /** The next three matches, soonest first (operator ruling A, 2026-10-26). */
   fixtures: { id: string; name: string; date: string }[];
 }
 
-/** The football door's live figures, from the official catalogue. */
+/**
+ * The football door's live figures, from the official catalogue. Its three lines are the NEXT
+ * matches (ruling A, 2026-10-26): soonest kick-off first, only those not yet started (the api's
+ * derived `statut` — a match « en cours » is no longer « à venir »); « À la une » does not jump
+ * the queue here, it has its own section on the Football page.
+ */
 export function footballDoorData(catalogue: readonly EventItemView[]): FootballDoorData {
   const official = catalogue.filter((e) => e.source === 'official');
   if (official.length === 0) return { kicker: null, fixtures: [] };
-  const byKickoff = [...official].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at));
-  const rank = (e: EventItemView): number =>
-    e.featured === 'hero' ? 0 : e.featured === 'pinned' ? 1 : 2;
-  const picked = [...byKickoff].sort((a, b) => rank(a) - rank(b)).slice(0, 3);
-  const fixtures = byKickoff
-    .filter((e) => picked.includes(e))
+  const fixtures = official
+    .filter((e) => e.statut === 'a_venir')
+    .sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))
+    .slice(0, 3)
     .map((e) => ({
       id: e.id,
       name: e.name,

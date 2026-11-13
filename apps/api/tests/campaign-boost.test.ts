@@ -30,6 +30,13 @@ import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 import { seedScreenFiller } from './helpers/screen-filler.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // CF-B1 (spec §3.3) — « Booster »: strictly additive on Active/À venir; the complementary budget
 // dispatches over the MERGED perimeter under the same rules. Real Postgres; session mocked. The
 // one test zone is swept in afterEach (FK detach first — the exact-seed-count footgun); NO

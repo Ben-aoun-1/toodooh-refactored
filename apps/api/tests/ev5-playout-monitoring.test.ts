@@ -864,6 +864,7 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
         id: '00000000-0000-4000-8000-0000000000e5',
         kickoffAt: KICKOFF,
         endsAt: ENDS,
+        seatMinutes: null,
       });
       expect(same.find((p) => p.screenhostId === venue.id)).toBeUndefined();
       // The first positioning under the minutes model holds only its breaks (19:00–19:05 …,
@@ -874,6 +875,7 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
         id: '00000000-0000-4000-8000-0000000000e6',
         kickoffAt: new Date(KICKOFF.getTime() - 10 * 60_000),
         endsAt: new Date(ENDS.getTime() - 10 * 60_000),
+        seatMinutes: null,
       });
       expect(shifted.find((p) => p.screenhostId === venue.id)?.blocs).toHaveLength(6);
       // Same window again under the minutes model: the breaks coincide → venue out.
@@ -881,6 +883,7 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
         id: '00000000-0000-4000-8000-0000000000e7',
         kickoffAt: KICKOFF,
         endsAt: ENDS,
+        seatMinutes: null,
       });
       expect(coincide.find((p) => p.screenhostId === venue.id)).toBeUndefined();
     });

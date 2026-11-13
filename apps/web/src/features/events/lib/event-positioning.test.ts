@@ -4,6 +4,8 @@ import type { EventItemView } from '../services/events.api';
 
 import {
   EVENT_SPOT_MAX_SECONDS,
+  EVENT_VIDEO_DROPZONE_HINT,
+  EVENT_VIDEO_SPEC_LINE,
   SUGGESTION_AFTER_END_DAYS,
   SUGGESTION_MAX,
   eventSpotSelectable,
@@ -26,6 +28,20 @@ describe('eventSpotSelectable — EVT-MIN1: what can air in a pod slot', () => {
     expect(eventSpotSelectable({ creative_type: 'photo', duration_seconds: 30 })).toBe(true);
     expect(eventSpotSelectable({ creative_type: 'photo', duration_seconds: 15 })).toBe(false);
     expect(EVENT_SPOT_MAX_SECONDS).toBe(30);
+  });
+});
+
+describe('the Création step copy (UPL-1: formats and length, never a ratio)', () => {
+  it('the drop zone names the formats and the 10–30 s range', () => {
+    expect(EVENT_VIDEO_DROPZONE_HINT).toBe('MP4 ou MOV (H.264) · 10 à 30 secondes');
+    expect(EVENT_VIDEO_DROPZONE_HINT).not.toContain('16:9');
+  });
+
+  it('the spec line speaks the 2-minute seat in the 6-minute pod (Mariem 04/11)', () => {
+    expect(EVENT_VIDEO_SPEC_LINE).toContain('Vidéo : 10 à 30 secondes');
+    expect(EVENT_VIDEO_SPEC_LINE).toContain('2 minutes dans la page publicitaire de 6 minutes');
+    expect(EVENT_VIDEO_SPEC_LINE).toContain('Créneau de 30 s — 23 s de spot + 7 s d’écran Toodooh');
+    expect(EVENT_VIDEO_SPEC_LINE).not.toContain('16:9');
   });
 });
 

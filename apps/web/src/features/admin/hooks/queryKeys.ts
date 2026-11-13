@@ -78,6 +78,7 @@ export const adminKeys = {
     [...adminKeys.all, 'campaignEngineJournal', id, phase] as const,
   /** Prefix for invalidating every campaign-review-list variant. */
   campaignsAll: () => [...adminKeys.all, 'campaigns'] as const,
+  campaignCta: (id: string) => [...adminKeys.all, 'campaign-cta', id] as const,
 
   monitoringCampaigns: () => [...adminKeys.all, 'monitoringCampaigns'] as const,
   monitoringStats: () => [...adminKeys.all, 'monitoringStats'] as const,

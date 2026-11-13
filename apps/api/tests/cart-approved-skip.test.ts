@@ -29,6 +29,13 @@ import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 import { seedScreenFiller } from './helpers/screen-filler.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // CF-SK1 (spec §2.1, ruling #9) — the approved-spot SKIP: « la campagne saute En attente et passe
 // à À venir (ou Active) dès la confirmation du panier ». Real Postgres; session mocked. One venue
 // (all-dow affluence 100, 8–18h) → C_max 540 for a 2-day window at S=10.

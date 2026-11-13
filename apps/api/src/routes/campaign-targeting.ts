@@ -12,16 +12,17 @@ import {
 } from '../db/schema.js';
 import { ownerApprovedSql } from '../lib/approved-owner.js';
 import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
-import { demoVenueIds, isDemoCampaign } from '../lib/demo.js';
+import { demoVenueIds, eventPoolDemoVenues, isDemoCampaign } from '../lib/demo.js';
 import {
   broadcastableHours,
   screenhostMatchesTargeting,
   screenhostMatchesZones,
 } from '../lib/dispatch/eligibility.js';
-import { loadUnavailableDays } from '../lib/dispatch/pool.js';
 import { availableWindowDays, buildWindowDays } from '../lib/dispatch/window.js';
 import { type CoverageVenue, eventCoverageVenues } from '../lib/event-pricing/coverage.js';
 import { venueHasInstalledScreenSql } from '../lib/installed-screen.js';
+import { addIsoDays } from '../lib/opening-hours.js';
+import { loadUnavailableCells } from '../lib/unavailable-hours.js';
 import { venueHasAffluenceSql } from '../lib/venue-has-affluence.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -147,7 +148,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   //     (lib/approved-owner.ts, the one predicate).
   //   • AVAILABLE IN THE WINDOW — at least ONE day of [start_date, end_date] (inclusive, Tunis
   //     calendar dates) that the owner has not declared unavailable. One free day is enough. The
-  //     days are the pool's own (buildWindowDays → loadUnavailableDays → availableWindowDays), so
+  //     days are the pool's own (buildWindowDays → loadUnavailableCells → availableWindowDays), so
   //     the map and dispatch agree on it. A campaign without both dates yet (an early draft) skips
   //     this gate: there is no window to test, and hiding the whole network would say « nothing
   //     reachable » when the truth is « not asked yet ».
@@ -175,7 +176,13 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     }
     if (campaign.eventId !== null) {
-      return reply.status(200).send(coverageBody(await eventCoverageVenues(campaign.eventId)));
+      return reply
+        .status(200)
+        .send(
+          coverageBody(
+            await eventCoverageVenues(campaign.eventId, await eventPoolDemoVenues(db, campaign.id)),
+          ),
+        );
     }
 
     const lines = await db
@@ -238,14 +245,16 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
     let eligible = matched;
     if (startDate !== null && endDate !== null) {
       const windowDays = buildWindowDays(startDate, endDate);
-      const unavailable = await loadUnavailableDays(
+      const unavailable = await loadUnavailableCells(
         db,
-        matched.map((v) => v.id),
+        matched,
         startDate,
-        endDate,
+        addIsoDays(endDate, 1),
       );
       eligible = matched.filter(
-        (v) => availableWindowDays(windowDays, unavailable.get(v.id)).length > 0,
+        (v) =>
+          availableWindowDays(windowDays, unavailable.get(v.id), v.openingHour, v.closingHour)
+            .length > 0,
       );
       // CAP-F1 (operator ruling 2026-09-24) — « the map needs to check remaining capacity »: with a
       // window, the map is exactly « Hosts éligibles » — the real pool, read-only

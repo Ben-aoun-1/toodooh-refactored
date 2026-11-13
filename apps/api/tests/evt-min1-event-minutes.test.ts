@@ -6,10 +6,11 @@ import { campaigns, creatives, eventAllocations, hourReservations } from '../src
 import { runEventDispatch } from '../src/lib/event-dispatch/dispatch.js';
 import { activeEventSpots, venuesAtBlocEdge } from '../src/lib/event-playout/spots.js';
 import {
+  EVENT_SEAT_MODEL_MIN1 as MIN1,
   EVENT_SLOT_CLASSES,
   type EventMinute,
-  eventMinutePriceTnd,
   eventMinutesPriceTnd,
+  eventSeatPriceTnd,
   eventPlaysPerMinute,
   eventPodTimeline,
   eventPodWindow,
@@ -89,10 +90,10 @@ describe('EVT-MIN1 — the pure rules', () => {
 
   it('a minute = CPM × (A_max ÷ 3 × R) ÷ 1000, whole impressions, to the centime', () => {
     // The operator's example: A_max 120, an 11 s spot (R 5) → 40 × 5 = 200 impressions, 3 TND.
-    expect(eventMinutePriceTnd(120, 15, 5)).toBe(3);
-    expect(eventMinutePriceTnd(120, 15, 3)).toBe(1.8); // 18 s
-    expect(eventMinutePriceTnd(120, 15, 1)).toBe(0.6); // no spot: the audience alone
-    expect(eventMinutePriceTnd(37, 15, 4)).toBe(0.74); // 37 × 4 ÷ 3 = 49.3 → 49 impressions
+    expect(eventSeatPriceTnd(120, 15, 5, MIN1)).toBe(3);
+    expect(eventSeatPriceTnd(120, 15, 3, MIN1)).toBe(1.8); // 18 s
+    expect(eventSeatPriceTnd(120, 15, 1, MIN1)).toBe(0.6); // no spot: the audience alone
+    expect(eventSeatPriceTnd(37, 15, 4, MIN1)).toBe(0.74); // 37 × 4 ÷ 3 = 49.3 → 49 impressions
   });
 
   it('the ordered list: venues in pool order, blocs chronological; the slider drops the tail first', () => {
@@ -103,13 +104,14 @@ describe('EVT-MIN1 — the pure rules', () => {
       ],
       CPM,
       6,
+      MIN1,
     );
     expect(list.map((m) => `${m.screenhostId}@${m.blocStart.toISOString().slice(11, 16)}`)).toEqual(
       ['best@18:00', 'best@21:00', 'last@18:00', 'last@21:20'],
     );
     // 3 minutes = everything but the LAST venue's LATEST bloc (a 10 s spot: R 6).
-    expect(eventMinutesPriceTnd(list, 3)).toBe(3 + 3 + 1.5);
-    expect(eventMinutesPriceTnd(list, 4)).toBe(9);
+    expect(eventMinutesPriceTnd(list, 3, MIN1)).toBe(3 + 3 + 1.5);
+    expect(eventMinutesPriceTnd(list, 4, MIN1)).toBe(9);
   });
 
   it('take: grouped per venue, all or nothing, charge capped at the budget', () => {
@@ -120,8 +122,9 @@ describe('EVT-MIN1 — the pure rules', () => {
       ],
       CPM,
       6,
+      MIN1,
     );
-    const take = takeEventMinutes(list, 3, 7.5);
+    const take = takeEventMinutes(list, 3, 7.5, MIN1);
     expect(take.status).toBe('OK');
     if (take.status !== 'OK') return;
     expect(take.placements.map((p) => [p.screenhostId, p.blocs.length, p.montantTnd])).toEqual([
@@ -130,32 +133,38 @@ describe('EVT-MIN1 — the pure rules', () => {
     ]);
     expect(take.impressions).toBe(2 * 200 + 100);
     // A_max rose since the budget was set: the overshoot is free delivery, never a charge.
-    const capped = takeEventMinutes(list, 3, 7);
+    const capped = takeEventMinutes(list, 3, 7, MIN1);
     expect(capped.status === 'OK' && capped.chargedTnd).toBe(7);
-    expect(takeEventMinutes(list, 4, 100)).toEqual({ status: 'NOT_ENOUGH', available: 3 });
-    expect(takeEventMinutes(list, 0, 100).status).toBe('NOT_ENOUGH');
+    expect(takeEventMinutes(list, 4, 100, MIN1)).toEqual({ status: 'NOT_ENOUGH', available: 3 });
+    expect(takeEventMinutes(list, 0, 100, MIN1).status).toBe('NOT_ENOUGH');
   });
 
   it('the pod window: avant opens the bloc, après closes it, one minute per seat', () => {
     const start = at('2027-06-10T18:00:00Z');
     const end = at('2027-06-10T18:20:00Z');
-    expect(eventPodWindow('avant', start, end, 2)).toEqual({
+    expect(eventPodWindow('avant', start, end, 2, MIN1)).toEqual({
       start,
       end: at('2027-06-10T18:02:00Z'),
     });
-    expect(eventPodWindow('apres', start, end, 3)).toEqual({
+    expect(eventPodWindow('apres', start, end, 3, MIN1)).toEqual({
       start: at('2027-06-10T18:17:00Z'),
       end,
     });
-    expect(eventPodWindow('avant', start, end, 0)).toBeNull();
-    expect(eventPodWindow('avant', start, end, 9)?.end).toEqual(at('2027-06-10T18:05:00Z'));
+    expect(eventPodWindow('avant', start, end, 0, MIN1)).toBeNull();
+    expect(eventPodWindow('avant', start, end, 9, MIN1)?.end).toEqual(at('2027-06-10T18:05:00Z'));
   });
 
   it('the pod timeline rotates the seats, back to back, exactly seats × 60 s', () => {
-    const pod = eventPodTimeline('avant', at('2027-06-10T18:00:00Z'), at('2027-06-10T18:20:00Z'), [
-      { campaignId: 'A', slotSeconds: 30, spotSeconds: 30 },
-      { campaignId: 'B', slotSeconds: 10, spotSeconds: 10 },
-    ]);
+    const pod = eventPodTimeline(
+      'avant',
+      at('2027-06-10T18:00:00Z'),
+      at('2027-06-10T18:20:00Z'),
+      [
+        { campaignId: 'A', slotSeconds: 30, spotSeconds: 30 },
+        { campaignId: 'B', slotSeconds: 10, spotSeconds: 10 },
+      ],
+      MIN1,
+    );
     expect(
       pod?.slots.map(
         (s) => `${s.campaignId}+${(s.at.getTime() - Date.parse('2027-06-10T18:00:00Z')) / 1000}`,
@@ -170,10 +179,16 @@ describe('EVT-MIN1 — the pure rules', () => {
   it('EVT-PLAY1 — a round plays its spots back to back, then ONE Toodooh gap: A11 B18 T3', () => {
     // The operator's example: A 11 s (12 s slot, 5 plays), B 18 s (20 s slot, 3 plays).
     const start = at('2027-06-10T18:00:00Z');
-    const pod = eventPodTimeline('avant', start, at('2027-06-10T18:20:00Z'), [
-      { campaignId: 'A', slotSeconds: 12, spotSeconds: 11 },
-      { campaignId: 'B', slotSeconds: 20, spotSeconds: 18 },
-    ]);
+    const pod = eventPodTimeline(
+      'avant',
+      start,
+      at('2027-06-10T18:20:00Z'),
+      [
+        { campaignId: 'A', slotSeconds: 12, spotSeconds: 11 },
+        { campaignId: 'B', slotSeconds: 20, spotSeconds: 18 },
+      ],
+      MIN1,
+    );
     const rel = (d: Date) => (d.getTime() - start.getTime()) / 1000;
     expect(pod?.slots.map((s) => [s.campaignId, rel(s.at), s.spotSeconds, s.seconds])).toEqual([
       ['A', 0, 11, 11],
@@ -195,10 +210,16 @@ describe('EVT-MIN1 — the pure rules', () => {
 
   it('EVT-PLAY1 — images and exact-class videos leave no gap; a spot never outgrows its slot', () => {
     const start = at('2027-06-10T18:00:00Z');
-    const pod = eventPodTimeline('avant', start, at('2027-06-10T18:20:00Z'), [
-      { campaignId: 'I', slotSeconds: 20, spotSeconds: 20 },
-      { campaignId: 'X', slotSeconds: 15, spotSeconds: 99 },
-    ]);
+    const pod = eventPodTimeline(
+      'avant',
+      start,
+      at('2027-06-10T18:20:00Z'),
+      [
+        { campaignId: 'I', slotSeconds: 20, spotSeconds: 20 },
+        { campaignId: 'X', slotSeconds: 15, spotSeconds: 99 },
+      ],
+      MIN1,
+    );
     const rel = (d: Date) => (d.getTime() - start.getTime()) / 1000;
     expect(pod?.slots.map((s) => [s.campaignId, rel(s.at), s.seconds])).toEqual([
       ['I', 0, 20],
@@ -230,10 +251,12 @@ describe('EVT-MIN1 — seats, dispatch and airing (real Postgres)', () => {
         source: 'official',
         kickoffAt: MATCH_KICKOFF,
         endsAt: MATCH_ENDS,
+        // EVT-MIN1's model: a match sold under 1-minute seats keeps them (migration 0104).
+        seatMinutes: 1,
       })
       .returning({ id: events.id });
     if (!event) throw new Error('no event');
-    return { id: event.id, kickoffAt: MATCH_KICKOFF, endsAt: MATCH_ENDS };
+    return { id: event.id, kickoffAt: MATCH_KICKOFF, endsAt: MATCH_ENDS, seatMinutes: 1 };
   };
 
   const seedMinutesPositioning = async (

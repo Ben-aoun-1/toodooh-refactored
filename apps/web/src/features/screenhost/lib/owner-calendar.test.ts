@@ -13,10 +13,13 @@ describe('CAL-2 — the Figma owner calendar rules', () => {
   const cells = monthGrid(2026, 8); // September 2026, Monday-first
   const today = '2026-09-16';
   const declared = new Set(['2026-09-20', '2026-09-10']);
+  const partial = new Set(['2026-09-21']);
   const stateOf = (iso: string) => {
     const cell = cells.find((c) => c.iso === iso);
     if (!cell) throw new Error(`no cell ${iso}`);
-    return tileStateOf(cell, today, declared);
+    return tileStateOf(cell, today, (d) =>
+      declared.has(d) ? 'unavailable' : partial.has(d) ? 'partial' : 'available',
+    );
   };
 
   it('leaves the neighbouring months blank, greys the past, marks today', () => {
@@ -30,11 +33,13 @@ describe('CAL-2 — the Figma owner calendar rules', () => {
   it('colours future days by the owner declaration', () => {
     expect(stateOf('2026-09-17')).toBe('available');
     expect(stateOf('2026-09-20')).toBe('unavailable');
+    expect(stateOf('2026-09-21')).toBe('partial'); // HOUR-UNAV1 — some hours declared
   });
 
   it('only future tiles toggle (the api refuses today and the past)', () => {
     expect(isTileToggleable('available')).toBe(true);
     expect(isTileToggleable('unavailable')).toBe(true);
+    expect(isTileToggleable('partial')).toBe(true);
     expect(isTileToggleable('today')).toBe(false);
     expect(isTileToggleable('past')).toBe(false);
     expect(isTileToggleable('blank')).toBe(false);

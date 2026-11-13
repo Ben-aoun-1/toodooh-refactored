@@ -1,5 +1,5 @@
 import { subDays } from 'date-fns';
-import { and, desc, eq, gte, inArray, isNull, lte, max, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lte, max } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
@@ -12,17 +12,19 @@ import {
   campaignDispatchPlan,
   campaigns,
   eventAllocations,
+  events,
   notifications,
   proofOfPlay,
-  screenhostUnavailability,
   screenhosts,
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
+import { shareAskedAt } from './event-host-notice.js';
 import { parseBlocs } from './event-playout/spots.js';
 import { proofInstantSql } from './playout/proof-instant.js';
 import { proofSlotKey } from './reconcile/delivered-slots.js';
 import { computeSps, spsComputable } from './sps-score.js';
+import { loadUnavailableCells } from './unavailable-hours.js';
 
 // AGT-7 (Agent Screenhost spec v1.0 §6 « Suivi de mes Screenhosts »), one home. Once a day, for
 // every venue pending activation or affiliated, the engine's sources are read into one snapshot:
@@ -119,13 +121,17 @@ export const venueMetrics = async (screenhostId: string, now: Date): Promise<Ven
     .innerJoin(campaigns, eq(campaigns.id, campaignDispatchPlan.campaignId))
     .where(eq(campaignDispatchAllocation.screenhostId, screenhostId));
   const eventOffers = await db
-    .select({ a: eventAllocations, name: campaigns.name })
+    .select({ a: eventAllocations, name: campaigns.name, kickoffAt: events.kickoffAt })
     .from(eventAllocations)
     .innerJoin(campaigns, eq(campaigns.id, eventAllocations.campaignId))
+    .innerJoin(events, eq(events.id, campaigns.eventId))
     .where(eq(eventAllocations.screenhostId, screenhostId));
   const offers = { received: 0, accepted: 0, refused: 0, no_answer: 0 };
   const unaccepted: UnacceptedOffer[] = [];
-  for (const { a } of campaignOffers.filter((o) => o.a.createdAt >= since)) {
+  // DISP-TOURS Q1 — a RESERVE allocation waits for its spot's validation: not an offer yet.
+  for (const { a } of campaignOffers.filter(
+    (o) => o.a.createdAt >= since && o.a.statutAcceptation !== 'RESERVE',
+  )) {
     offers.received += 1;
     if (a.statutAcceptation === 'ACCEPTE') offers.accepted += 1;
     else if (a.statutAcceptation === 'REFUSE') {
@@ -136,19 +142,23 @@ export const venueMetrics = async (screenhostId: string, now: Date): Promise<Ven
       unaccepted.push({ at: a.createdAt.toISOString(), type: 'standard', outcome: 'sans_reponse' });
     }
   }
-  for (const { a } of eventOffers.filter((o) => o.a.createdAt >= since)) {
+  // Mariem 05/11 — an event offer is a share its owner was ASKED about, counted from that moment
+  // (lib/event-host-notice): one still waiting for its match notice, withheld, or accepted on the
+  // owner's behalf is no offer.
+  for (const { a, kickoffAt } of eventOffers) {
+    const askedAt = shareAskedAt(a, kickoffAt);
+    if (askedAt === null || askedAt < since) continue;
     offers.received += 1;
-    const answeredLate =
-      a.decidedAt !== null && a.decidedAt.getTime() - a.createdAt.getTime() > DAY_MS;
+    const answeredLate = a.decidedAt !== null && a.decidedAt.getTime() - askedAt.getTime() > DAY_MS;
     if (a.statut === 'ACCEPTE') offers.accepted += 1;
     if (a.statut === 'REFUSE') {
       offers.refused += 1;
-      unaccepted.push({ at: a.createdAt.toISOString(), type: 'evenement', outcome: 'refusee' });
-    } else if ((a.statut === 'EN_ATTENTE' && late(a.createdAt)) || answeredLate) {
+      unaccepted.push({ at: askedAt.toISOString(), type: 'evenement', outcome: 'refusee' });
+    } else if ((a.statut === 'EN_ATTENTE' && late(askedAt)) || answeredLate) {
       offers.no_answer += 1;
       if (a.statut === 'EN_ATTENTE') {
         unaccepted.push({
-          at: a.createdAt.toISOString(),
+          at: askedAt.toISOString(),
           type: 'evenement',
           outcome: 'sans_reponse',
         });
@@ -195,16 +205,29 @@ export const venueMetrics = async (screenhostId: string, now: Date): Promise<Ven
     }
   }
 
-  const [off] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(screenhostUnavailability)
-    .where(
-      and(
-        eq(screenhostUnavailability.screenhostId, screenhostId),
-        gte(screenhostUnavailability.day, tunisDateOf(subDays(now, 29))),
-        lte(screenhostUnavailability.day, tunisDateOf(now)),
-      ),
-    );
+  // HOUR-UNAV1 — a day counts when it carries ANY declared unavailability (the whole day, or
+  // some of its hours): the merged cells of lib/unavailable-hours.ts, one count per date.
+  const [venueHours] = await db
+    .select({ openingHour: screenhosts.openingHour, closingHour: screenhosts.closingHour })
+    .from(screenhosts)
+    .where(eq(screenhosts.id, screenhostId))
+    .limit(1);
+  const offCells =
+    (
+      await loadUnavailableCells(
+        db,
+        [
+          {
+            id: screenhostId,
+            openingHour: venueHours?.openingHour ?? null,
+            closingHour: venueHours?.closingHour ?? null,
+          },
+        ],
+        tunisDateOf(subDays(now, 29)),
+        tunisDateOf(now),
+      )
+    ).get(screenhostId) ?? new Set<string>();
+  const off = { n: new Set([...offCells].map((k) => k.slice(0, 10))).size };
   const [last] = await db
     .select({ at: max(proofInstantSql) })
     .from(proofOfPlay)
@@ -217,7 +240,7 @@ export const venueMetrics = async (screenhostId: string, now: Date): Promise<Ven
     rates: computable ? live.variables : null,
     offers,
     missed: missed.sort((x, y) => y.at.localeCompare(x.at)),
-    unavailableDays: off?.n ?? 0,
+    unavailableDays: off.n,
     lastDiffusionAt: last?.at ? new Date(last.at) : null,
     unaccepted: unaccepted.sort((x, y) => y.at.localeCompare(x.at)),
   };

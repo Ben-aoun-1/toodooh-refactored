@@ -45,6 +45,8 @@ export interface CampaignView {
   delivered_impressions?: number | null;
   spend_tnd?: number | null;
   reconciled_at?: string | null;
+  /** DISP-TOURS §3.1 (GET /mine) — in the cart: shown in the cart only, never in Mes campagnes. */
+  in_cart?: boolean;
   /**
    * CF-HF3 + IMP-UNIT1 — the frozen plan's PHYSICAL impressions (the real audience: Σ créneau
    * impressions over the non-REFUSE allocations, Σ impressions_total for an event positioning);
@@ -114,6 +116,8 @@ export interface CampaignCmaxRead {
    * price/impressions in the ORDERED list — the price of N minutes is the sum of the first N.
    */
   max_minutes?: number;
+  /** Mariem 04/11 — the match's seat length (2; 1 under EVT-MIN1): one price per SEAT above. */
+  seat_minutes?: number;
   minute_prices_tnd?: number[];
   minute_impressions?: number[];
 }
@@ -142,6 +146,11 @@ export interface ImpressionsEstimateRead {
   impressions: number | null;
   /** IMP-FACT1 — the BILLABLE objective, shown as « Impressions prévues ». Absent on an older api. */
   objectif?: number | null;
+  /**
+   * DISP-TOURS (R9) — the exact price of the passages placed for this budget (at or just under
+   * it). null on the v1 engine, an event positioning, or an older api.
+   */
+  prix_tnd?: number | null;
   venues_count: number | null;
   days_count: number | null;
 }
@@ -217,6 +226,8 @@ export interface CampaignCtaView {
   url: string | null;
   label: string | null;
   default_label: string;
+  /** Mariem 04/11 — the corner the QR card sits in (lib/spot-cta.ts CTA_POSITIONS). */
+  position: CtaPosition;
   status: 'pending' | 'ready' | 'failed' | null;
   /** What the QR encodes (the scan-counting redirect). */
   scan_url: string | null;
@@ -228,4 +239,11 @@ export interface CampaignCtaView {
 export interface CampaignCtaBody {
   url: string;
   label: string | null;
+  position?: CtaPosition;
 }
+
+/**
+ * Mariem 04/11 (Foot point 1) — the QR card's corner. TWIN of apps/api/src/lib/spot-cta-layout.ts
+ * CTA_POSITIONS (pinned in lib/spot-cta.test.ts).
+ */
+export type CtaPosition = 'bottom_left' | 'bottom_right' | 'top_left' | 'top_right';

@@ -194,8 +194,11 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
   });
 
   describe('blocAvailability — D1, per bloc on its own Tunis date', () => {
-    const noCtx = { unavailableDates: new Set<string>(), foreignPods: [] };
-    const eventRef = { id: 'e', kickoffAt: KICKOFF, endsAt: ENDS };
+    const noCtx = { unavailableCells: new Set<string>(), foreignPods: [] };
+    // HOUR-UNAV1 — the context carries clock cells; a whole declared day is its 24 hours here.
+    const wholeDate = (date: string): Set<string> =>
+      new Set(Array.from({ length: 24 }, (_, h) => `${date}:${h}`));
+    const eventRef = { id: 'e', kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null };
 
     it('a fully-open venue offers all six blocs', () => {
       expect(blocAvailability(eventRef, { id: 'v', openingHour: 8, closingHour: 23 }, noCtx)).toBe(
@@ -210,6 +213,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         id: 'e',
         kickoffAt: new Date('2027-06-10T20:30:00+01:00'),
         endsAt: new Date('2027-06-10T22:00:00+01:00'),
+        seatMinutes: null,
       };
       expect(blocAvailability(ref, { id: 'v', openingHour: 20, closingHour: 23 }, noCtx)).toBe(4);
     });
@@ -219,6 +223,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         id: 'e',
         kickoffAt: new Date('2027-06-10T23:40:00+01:00'),
         endsAt: new Date('2027-06-11T00:40:00+01:00'),
+        seatMinutes: null,
       };
       const venue = { id: 'v', openingHour: 0, closingHour: 8 };
       // Pre blocs (22:40–23:40, hours 22/23) are outside [0, 8) — only the three post blocs
@@ -232,10 +237,10 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         { date: '2027-06-10', hour: 23 },
         { date: '2027-06-11', hour: 0 },
       ]);
-      // Declaring the NEXT date unavailable kills the post blocs → zero.
+      // Declaring the NEXT date's hours unavailable kills the post blocs → zero.
       expect(
         blocAvailability(ref, venue, {
-          unavailableDates: new Set(['2027-06-11']),
+          unavailableCells: wholeDate('2027-06-11'),
           foreignPods: [],
         }),
       ).toBe(0);
@@ -246,9 +251,27 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         blocAvailability(
           eventRef,
           { id: 'v', openingHour: 8, closingHour: 23 },
-          { unavailableDates: new Set([MATCH_DATE]), foreignPods: [] },
+          { unavailableCells: wholeDate(MATCH_DATE), foreignPods: [] },
         ),
       ).toBe(0);
+    });
+
+    it('HOUR-UNAV1 — declaring only 22 h removes exactly the blocs touching 22 h', () => {
+      // Kick-off 20:00, end 22:00: pre blocs 19:00–20:00, post blocs 22:00–23:00 (all in hour 22).
+      const venue = { id: 'v', openingHour: 8, closingHour: 23 };
+      expect(blocAvailability(eventRef, venue, noCtx)).toBe(6);
+      expect(
+        blocAvailability(eventRef, venue, {
+          unavailableCells: new Set([`${MATCH_DATE}:22`]),
+          foreignPods: [],
+        }),
+      ).toBe(3);
+      expect(
+        blocAvailability(eventRef, venue, {
+          unavailableCells: new Set([`${MATCH_DATE}:21`]),
+          foreignPods: [],
+        }),
+      ).toBe(6); // no bloc runs during the match itself
     });
 
     // EVT-PRICE2 (operator ruling 2026-10-08) — another match blocks a bloc only when the two AD
@@ -256,7 +279,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
     const at = (hhmm: string): number => new Date(`${MATCH_DATE}T${hhmm}:00+01:00`).getTime();
     const venue = { id: 'v', openingHour: 8, closingHour: 23 };
     const withPods = (foreignPods: { start: number; end: number }[]) => ({
-      unavailableDates: new Set<string>(),
+      unavailableCells: new Set<string>(),
       foreignPods,
     });
 
@@ -270,9 +293,10 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       expect(
         blocAvailability(eventRef, venue, withPods([{ start: at('22:05'), end: at('22:10') }])),
       ).toBe(6);
-      // Breaks that merely touch do not overlap: [22:10, 22:15) then ours [22:15, 22:20).
+      // Breaks that merely touch do not overlap: [22:09, 22:14) then ours — Mariem 04/11, 6
+      // minutes — [22:14, 22:20).
       expect(
-        blocAvailability(eventRef, venue, withPods([{ start: at('22:10'), end: at('22:15') }])),
+        blocAvailability(eventRef, venue, withPods([{ start: at('22:09'), end: at('22:14') }])),
       ).toBe(6);
     });
 
@@ -300,7 +324,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       const eventId = await seedEvent();
 
       const result = await computeEventCmax(
-        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
         15,
         new Set(),
         5,
@@ -308,19 +332,21 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       expect(result.eligibleCount).toBe(2);
       const a = result.venues.find((v) => v.screenhostId === venueA);
       const b = result.venues.find((v) => v.screenhostId === venueB);
-      // facturable = brut: A_max ÷ 3 × R per minute × minutes — no T anywhere.
+      // facturable = brut: Mariem 04/11 — A_max × R per 2-minute seat (R 5 a minute, 10 a seat)
+      // × seats — no T anywhere.
       expect(REPS_PER_BLOC).toBe(20); // the pre-EVT-MIN1 whole-bloc constant survives for A1
-      expect(a?.impressions).toBe(200 * 6); // 120 ÷ 3 × 5 = 200 a minute
+      expect(a?.impressions).toBe(1200 * 6); // 120 × 10 = 1 200 a seat
       expect(b?.amaxPph).toBe(AMAX_FALLBACK_PPH);
-      expect(b?.impressions).toBe(83 * 6); // 50 ÷ 3 × 5 = 83.3 → 83
-      expect(result.iMax).toBe(1_698);
-      expect(result.maxMinutes).toBe(12);
-      // Ordered SPS desc then ancienneté: A's six minutes at 3.00, then B's six at 1.25.
+      expect(b?.impressions).toBe(500 * 6); // 50 × 10
+      expect(result.iMax).toBe(10_200);
+      expect(result.maxMinutes).toBe(24); // 12 seats of 2 minutes
+      expect(result.seatMinutes).toBe(2);
+      // Ordered SPS desc then ancienneté: A's six seats at 18.00, then B's six at 7.50.
       expect(result.minutes.map((m) => m.priceTnd)).toEqual([
-        ...Array<number>(6).fill(3),
-        ...Array<number>(6).fill(1.25),
+        ...Array<number>(6).fill(18),
+        ...Array<number>(6).fill(7.5),
       ]);
-      expect(result.cMaxEvtTnd).toBe(25.5); // 6 × 3.00 + 6 × 1.25
+      expect(result.cMaxEvtTnd).toBe(153); // 6 × 18.00 + 6 × 7.50
     });
 
     it('an event-INELIGIBLE sector excludes its venues (restored after)', async () => {
@@ -336,7 +362,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
           .set({ eventEligible: false })
           .where(eq(businessSectors.id, sectorB));
         const result = await computeEventCmax(
-          { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+          { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
           15,
           new Set(),
           1,
@@ -362,7 +388,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         .insert(hourReservations)
         .values({ screenhostId: shId, day: MATCH_DATE, hour: 22, eventId });
       let result = await computeEventCmax(
-        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
         15,
         new Set(),
         1,
@@ -373,7 +399,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         .insert(hourReservations)
         .values({ screenhostId: shId, day: MATCH_DATE, hour: 19, eventId: otherId });
       result = await computeEventCmax(
-        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
         15,
         new Set(),
         1,
@@ -387,7 +413,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       await db.insert(screenhostUnavailability).values({ screenhostId: shId, day: MATCH_DATE });
       const eventId = await seedEvent();
       const result = await computeEventCmax(
-        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS },
+        { id: eventId, kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
         15,
         new Set(),
         1,
@@ -428,12 +454,14 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      // EVT-PRICE2 — the catalogue leaves R out: the AUDIENCE, 120 ÷ 3 = 40 a minute.
-      expect(body.c_max_evt_tnd).toBe(3.6); // 6 minutes × 15 × 40 / 1000
-      expect(body.i_max).toBe(240);
+      // EVT-PRICE2 — the catalogue leaves R out: the AUDIENCE — Mariem 04/11: all of A_max, 120 a
+      // bloc.
+      expect(body.c_max_evt_tnd).toBe(10.8); // 6 seats × 15 × 120 / 1000
+      expect(body.i_max).toBe(720);
       expect(body.eligible_count).toBe(1);
-      expect(body.max_minutes).toBe(6);
-      expect(body.min_minutes).toBe(1);
+      expect(body.max_minutes).toBe(12);
+      expect(body.seat_minutes).toBe(2);
+      expect(body.min_minutes).toBe(2);
 
       const missing = await app.inject({
         method: 'GET',
@@ -481,7 +509,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
 
       const res = await app.inject({ method: 'GET', url: `/api/events/${eventId}/cmax` });
       expect(res.statusCode).toBe(200);
-      expect(res.json().c_max_evt_tnd).toBe(7.2); // 6 × 30 × 40 / 1000, not 3.6
+      expect(res.json().c_max_evt_tnd).toBe(21.6); // 6 × 30 × 120 / 1000, not 10.8
     });
 
     it('GET /api/admin/events/:id/tarification — per-venue detail, admin-gated', async () => {
@@ -516,7 +544,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
           name: expect.stringContaining('EV2 Venue'),
           amax_pph: 120,
           blocs_disponibles: 6,
-          impressions: 240, // the audience: 6 minutes × 120 ÷ 3
+          impressions: 720, // the audience: 6 seats × 120 (Mariem 04/11: all of A_max)
         },
       ]);
       await app.close();

@@ -21,7 +21,10 @@ export type ExclusionReason =
   | 'owner_not_approved'
   | 'no_installed_screen'
   | 'not_demo_venue'
-  | 'not_in_frozen_week';
+  | 'not_in_frozen_week'
+  // DISP-TOURS — the tours pool's own reasons.
+  | 'no_typical_week'
+  | 'no_usable_hour';
 
 export interface EligibleHost {
   id: string;
@@ -64,6 +67,57 @@ export interface EligibleHostsReport {
     capacity: number;
     c_max_tnd: number;
   };
+  /** DISP-TOURS — the tours engine's fiche (absent on a v1 plan and on an event positioning). */
+  tours?: ToursFiche;
+}
+
+/** DISP-TOURS — the wire of lib/campaign-eligible-hosts-tours.ts (api). */
+export type ToursVenueStatut = 'retenu' | 'plein' | 'non_retenu' | 'retire_budget' | 'exclu_plein';
+
+export interface ToursFicheVenue {
+  id: string;
+  name: string;
+  sector: string | null;
+  class: string | null;
+  sps: number;
+  ordre: number;
+  plein_impressions: number;
+  plein_montant_tnd: number;
+  impressions: number;
+  montant_tnd: number;
+  statut: ToursVenueStatut;
+  tours: { tour: number; passages: number }[];
+  week: {
+    day_of_week: number;
+    hour: number;
+    affluence: number;
+    n: number;
+    tour: number | null;
+    passages: number | null;
+  }[];
+}
+
+export interface ToursFiche {
+  source: 'plan' | 'live';
+  computed_at: string;
+  params: {
+    f_max_seconds: number;
+    s: number;
+    r_plein: number;
+    t: number;
+    cpm: number;
+    pct_sh: number;
+    seuil_sh_tnd: number;
+    cap_heure: number;
+  };
+  budget_tnd: number;
+  i_cible: number;
+  i_max: number;
+  c_max_tnd: number;
+  i_alloue: number;
+  prix_tnd: number;
+  venues: ToursFicheVenue[];
+  journal: { phase: string; result: Record<string, number | string | boolean>; ms: number }[];
 }
 
 export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
@@ -90,6 +144,9 @@ export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
   not_in_frozen_week: 'Arrivé après la mise au panier (semaine type gelée)',
   // DEMO-1 (operator ruling Q2 A, 2026-10-12) — a demo campaign airs only on the demo venues.
   not_demo_venue: 'Hors des établissements de démo',
+  // DISP-TOURS — no measured affluence yet / every hour unavailable, closed, full or held.
+  no_typical_week: 'Pas encore de semaine type (aucune affluence mesurée)',
+  no_usable_hour: 'Aucune heure libre sur la période (indisponible, fermé ou complet)',
 };
 
 export const exclusionLabel = (reason: string): string =>
@@ -99,6 +156,8 @@ export const ALLOCATION_STATUT_LABEL: Record<string, string> = {
   EN_ATTENTE: 'Proposé — en attente',
   ACCEPTE: 'Proposé — accepté',
   REFUSE: 'Proposé — refusé',
+  // DISP-TOURS Q1 — places held at « Lancer »; proposed to the owner once the spot is validated.
+  RESERVE: 'Réservé — spot en validation',
 };
 
 /** Exclusions grouped by reason, most frequent first — the panel's one-line summary. */

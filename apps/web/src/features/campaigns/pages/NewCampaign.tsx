@@ -42,7 +42,11 @@ import {
   isBudgetBelowMinimum,
   isBudgetExceedsCmax,
 } from '@/features/campaigns/lib/cmax-budget';
-import { quitDeletesDraft, shouldArmExitGuard } from '@/features/campaigns/lib/exit-intercept';
+import {
+  editsADraft,
+  quitDeletesDraft,
+  shouldArmExitGuard,
+} from '@/features/campaigns/lib/exit-intercept';
 import { setNavigationGuard } from '@/features/campaigns/lib/navigation-guard';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 import { defaultZoneSelection } from '@/features/campaigns/lib/zones-selection';
@@ -75,6 +79,8 @@ interface EditNavRecord {
   creative_id?: string | null;
   requested_budget?: number | null;
   zones?: { zone_id: string; name: string }[];
+  /** DISP-TOURS §3.1 — a draft or a refused campaign (decides what Quitter does). */
+  status?: string;
 }
 
 /**
@@ -401,9 +407,12 @@ export default function NewCampaign() {
     }
   }, [state, wiz, updateCampaign, navigate]);
 
-  // §1.9 — the popup's three actions. RULED: Quitter on a FRESH wizard deletes the create-early
-  // draft (no campaign left, not even a brouillon); on a RESUMED draft it only discards the
-  // unsaved edits. Annuler closes and stays. Enregistrer = the save button, then leave.
+  // §1.9 — the popup's three actions. DISP-TOURS §3.1: Quitter on a draft — made now or resumed —
+  // deletes it for good (« Supprimer définitivement »); on a refused campaign being corrected it
+  // only discards the unsaved edits. Annuler closes and stays. Enregistrer = the save button,
+  // then leave.
+  const editingStatus = campaignToEdit?.status ?? null;
+  const quitDeletes = quitDeletesDraft({ hasDraft: Boolean(state.draftCampaignId), editingStatus });
   const requestExit = useCallback(
     (to: string) => {
       if (armedRef.current) setExitPrompt({ to });
@@ -416,15 +425,12 @@ export default function NewCampaign() {
     const destination = exitPrompt?.to ?? '/my-campaigns';
     setExitBusy(true);
     try {
-      if (
-        quitDeletesDraft({ hasDraft: Boolean(state.draftCampaignId), explicitlySaved }) &&
-        state.draftCampaignId
-      ) {
+      if (quitDeletes && state.draftCampaignId) {
         try {
           await deleteCampaign.mutateAsync(state.draftCampaignId);
         } catch (error) {
           // Leaving still wins — an orphaned draft is recoverable, a stuck user is not.
-          log.error({ err: error }, 'fresh-draft delete on quit failed');
+          log.error({ err: error }, 'draft delete on quit failed');
         }
         clearResumeStep(state.draftCampaignId);
       }
@@ -434,14 +440,7 @@ export default function NewCampaign() {
     armedRef.current = false;
     setExitPrompt(null);
     navigate(destination);
-  }, [
-    exitPrompt,
-    state.draftCampaignId,
-    explicitlySaved,
-    deleteCampaign,
-    clearResumeStep,
-    navigate,
-  ]);
+  }, [exitPrompt, state.draftCampaignId, quitDeletes, deleteCampaign, clearResumeStep, navigate]);
 
   const handleExitSave = useCallback(async () => {
     setExitBusy(true);
@@ -686,6 +685,7 @@ export default function NewCampaign() {
       <WizardExitDialog
         open={exitPrompt !== null}
         busy={exitBusy || wiz.savingDraft}
+        variant={editsADraft(editingStatus) ? 'draft' : 'edits'}
         onQuit={() => void handleExitQuit()}
         onCancel={() => setExitPrompt(null)}
         onSave={() => void handleExitSave()}

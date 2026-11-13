@@ -4,7 +4,7 @@ import { Suspense, lazy } from 'react';
 import PillButton from '@/components/PillButton';
 import { useCampaignCoverage } from '@/features/campaigns/hooks/useCampaignApi';
 import { useZones } from '@/features/campaigns/hooks/useZones';
-import { COVERAGE_MAP_NOTE, toggleZone } from '@/features/campaigns/lib/zones-selection';
+import { COVERAGE_MAP_NOTE, toggleZone, zonesHint } from '@/features/campaigns/lib/zones-selection';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 
 // CF-U1 (Mejri item 3) — the leaflet map is a lazy chunk: the wizard stays light until this step.
@@ -117,11 +117,7 @@ export default function StepZones({
                       );
                     })}
                   </ul>
-                  <p className="text-sm text-gray-500">
-                    {zoneIds.length === 0
-                      ? 'Aucune zone sélectionnée : votre campagne sera diffusée sur tout le réseau.'
-                      : 'Votre campagne sera diffusée dans les zones sélectionnées.'}
-                  </p>
+                  <p className="text-sm text-gray-500">{zonesHint(zoneIds.length)}</p>
                   <p className="text-xs text-gray-400">
                     D’autres zones seront bientôt disponibles.
                   </p>

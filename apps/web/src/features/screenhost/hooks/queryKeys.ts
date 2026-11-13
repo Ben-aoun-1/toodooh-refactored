@@ -47,6 +47,9 @@ export const screenhostKeys = {
   pendingAllocations: (userId: string) =>
     [...screenhostKeys.all, 'pendingAllocations', userId] as const,
 
+  /** Mariem 05/11 — the matches awaiting a « Soir de match » answer (GET /event-matches). */
+  eventMatches: (userId: string) => [...screenhostKeys.all, 'eventMatches', userId] as const,
+
   /** CF-O1 — an allocation's short-TTL presigned spot url (GET /allocations/:id/creative-url). */
   allocationCreativeUrl: (allocationId: string) =>
     [...screenhostKeys.all, 'allocationCreativeUrl', allocationId] as const,

@@ -5,6 +5,7 @@ import {
   WHOLE_NETWORK_CHIP,
   campaignMatchesCategory,
   categoryFilterOptions,
+  listedInMesCampagnes,
   statusFilterFromSearch,
 } from './campaign-filters';
 import { CAMPAIGN_STATUS_UI } from './campaign-status';
@@ -72,5 +73,16 @@ describe('statusFilterFromSearch (item 7 — the ?status= deep link)', () => {
     expect(statusFilterFromSearch('?status=')).toBeNull();
     expect(statusFilterFromSearch('')).toBeNull();
     expect(statusFilterFromSearch('?other=1')).toBeNull();
+  });
+});
+
+describe('listedInMesCampagnes (DISP-TOURS §3.1 — the cart is not Mes campagnes)', () => {
+  it('drops the campaigns sitting in the cart, keeps the drafts and the rest', () => {
+    const rows = [
+      { id: 'draft', status: 'draft', in_cart: false },
+      { id: 'carted', status: 'draft', in_cart: true },
+      { id: 'active', status: 'active', in_cart: false },
+    ];
+    expect(listedInMesCampagnes(rows).map((r) => r.id)).toEqual(['draft', 'active']);
   });
 });

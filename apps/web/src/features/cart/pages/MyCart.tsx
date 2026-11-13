@@ -9,9 +9,11 @@ import { useDeleteCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
 import { formatUiDate } from '@/features/campaigns/lib/campaign-summary';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
+import { CartLineAmount } from '@/features/cart/components/CartLineAmount';
 import RemoveCartItemDialog from '@/features/cart/components/RemoveCartItemDialog';
 import { useCartMutations, useCartRead } from '@/features/cart/hooks/useCart';
 import { cartReasonFr, parseCartConfirmFailure } from '@/features/cart/lib/cart-confirm';
+import { shownQuotes } from '@/features/cart/lib/cart-quote';
 import { confirmSuccessMessage } from '@/features/cart/lib/confirm-outcome';
 import EventSuggestionsBlock from '@/features/events/components/EventSuggestionsBlock';
 import { formatEventHours } from '@/features/events/lib/event-display';
@@ -32,7 +34,8 @@ const log = logger.child({ module: 'MyCart' });
 export default function MyCart() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const cart = useCartRead();
+  // DISP-TOURS (R12) — « tout est recalculé à chaque ouverture de l'interface du panier ».
+  const cart = useCartRead(true, { refetchOnMount: 'always' });
   const { campaigns } = useMyCampaigns(user?.id);
   const { removeFromCart, confirmCart } = useCartMutations(user?.id);
   const deleteCampaign = useDeleteCampaign(user?.id);
@@ -88,7 +91,7 @@ export default function MyCart() {
     setItemReasons(new Map());
     setSolde(null);
     try {
-      const result = await confirmCart.mutateAsync();
+      const result = await confirmCart.mutateAsync(shownQuotes(items));
       // CF-SK1 — the outcome can SPLIT: approved spots launched, new spots queued for review.
       // Land unfiltered so both groups are visible; the toast carries the split.
       toast.success(
@@ -107,7 +110,9 @@ export default function MyCart() {
         toast.error(
           failure.solde
             ? 'Solde insuffisant pour lancer le panier.'
-            : 'Certaines campagnes ne sont plus lançables — voir le détail.',
+            : [...failure.itemReasons.values()].includes('QUOTE_CHANGED')
+              ? 'Les chiffres de votre panier ont changé depuis son ouverture : vérifiez-les puis relancez.'
+              : 'Certaines campagnes ne sont plus lançables — voir le détail.',
           { duration: 6000 },
         );
       } else {
@@ -182,9 +187,7 @@ export default function MyCart() {
                         ))}
                       </div>
                     </div>
-                    <p className="text-base font-bold text-gray-900 tabular-nums">
-                      {tndOrDash(item.requested_budget)}
-                    </p>
+                    <CartLineAmount item={item} />
                   </div>
                   {reason && (
                     <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

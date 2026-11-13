@@ -7,7 +7,7 @@ import {
   type HostUnavailability,
   type HostVenuePatch,
 } from '@/features/admin/services/admin-host.service';
-import { applyOptimisticToggle } from '@/features/screenhost/hooks/useScreenhostUnavailability';
+import { applyHoursToggle } from '@/features/screenhost/lib/hour-unavailability';
 
 import { adminKeys } from './queryKeys';
 
@@ -73,15 +73,22 @@ export function useToggleHostDay(screenhostId: string, from: string, to: string)
   const queryClient = useQueryClient();
   const key = adminKeys.hostUnavailability(screenhostId, from, to);
   return useMutation({
-    mutationFn: ({ day, unavailable }: { day: string; unavailable: boolean }) =>
-      adminHostService.toggleDay(screenhostId, day, unavailable),
-    onMutate: async ({ day, unavailable }) => {
+    mutationFn: ({
+      day,
+      unavailable,
+      hours,
+    }: {
+      day: string;
+      unavailable: boolean;
+      hours?: number[];
+    }) => adminHostService.toggleDay(screenhostId, day, unavailable, hours),
+    onMutate: async ({ day, unavailable, hours }) => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<HostUnavailability>(key);
       if (previous) {
         queryClient.setQueryData<HostUnavailability>(key, {
           ...previous,
-          days: applyOptimisticToggle(previous.days, day, unavailable),
+          ...applyHoursToggle(previous, day, hours ?? null, unavailable),
         });
       }
       return { previous };

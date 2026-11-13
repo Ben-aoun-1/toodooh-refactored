@@ -15,7 +15,7 @@ import {
   RotateCcw,
   Trash2,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import DatePicker, { registerLocale } from 'react-datepicker';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -45,6 +45,7 @@ import {
   STATUS_FILTER_OPTIONS,
   campaignMatchesCategory,
   categoryFilterOptions,
+  listedInMesCampagnes,
   statusFilterFromSearch,
 } from '@/features/campaigns/lib/campaign-filters';
 import {
@@ -111,7 +112,9 @@ export default function MyCampaigns() {
   // already invalidate. The page reads straight from the query: with the
   // optimistic `setCampaigns` patches dropped (mutations now
   // invalidate-and-refetch), no local mirror is needed.
-  const { campaigns, loading, isError } = useMyCampaigns(user?.id);
+  const { campaigns: everyCampaign, loading, isError } = useMyCampaigns(user?.id);
+  // DISP-TOURS §3.1 — a campaign in the cart shows in the cart only (counters included).
+  const campaigns = useMemo(() => listedInMesCampagnes(everyCampaign), [everyCampaign]);
   // EV6 — the POSITIONING booster's target (its own modal: zones-only, frozen axes).
   const [boostPositioningTarget, setBoostPositioningTarget] = useState<CampaignView | null>(null);
   // CF-B1 — the Booster modal's target (the untrimmed wire row).

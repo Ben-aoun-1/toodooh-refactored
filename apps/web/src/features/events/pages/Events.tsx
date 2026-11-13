@@ -1,4 +1,4 @@
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import CatalogueEventCard from '../components/catalogue/CatalogueEventCard';
 import SelectionPanel from '../components/catalogue/SelectionPanel';
 import EventsCrumb from '../components/home/EventsCrumb';
-import SuggestMatchForm from '../components/SuggestMatchForm';
+import SuggestMatchModal from '../components/SuggestMatchModal';
 import {
   useEventsCatalogue,
   usePositionner,
@@ -25,6 +25,11 @@ import {
   searchEvents,
 } from '../lib/event-catalogue';
 import { groupPositioningPath } from '../lib/event-group';
+import {
+  SUGGEST_CTA,
+  SUGGEST_EMPTY_SEARCH_BEFORE,
+  SUGGEST_EMPTY_SEARCH_LINK,
+} from '../lib/suggest-match';
 
 const log = logger.child({ module: 'Events' });
 
@@ -41,6 +46,8 @@ const log = logger.child({ module: 'Events' });
 export default function Events() {
   const navigate = useNavigate();
   const [showSuggestions, setShowSuggestions] = useState(false);
+  // SUGG-2 — the « Suggérer un match » window (the search toolbar's button, an empty search's link).
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const { data: catalogue, isLoading } = useEventsCatalogue();
@@ -98,19 +105,29 @@ export default function Events() {
 
       <EventsCrumb />
 
-      <div className="relative max-w-xl">
-        <Search
-          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4F6B60]"
-          aria-hidden="true"
-        />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={SEARCH_PLACEHOLDER}
-          aria-label="Rechercher un événement"
-          className="min-h-[46px] w-full rounded-xl border border-[#E1EAE5] bg-white pl-10 pr-3.5 text-sm text-[#0D2B1F] placeholder:text-[#8AA197] focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/40"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4F6B60]"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={SEARCH_PLACEHOLDER}
+            aria-label="Rechercher un événement"
+            className="min-h-[46px] w-full rounded-xl border border-[#E1EAE5] bg-white pl-10 pr-3.5 text-sm text-[#0D2B1F] placeholder:text-[#8AA197] focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/40"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setSuggestOpen(true)}
+          className="flex min-h-[46px] shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-accent/40 bg-brand-accent/10 px-5 text-sm font-semibold text-brand-accent hover:bg-brand-accent/15"
+        >
+          <Plus className="h-4 w-4" />
+          {SUGGEST_CTA}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -120,7 +137,17 @@ export default function Events() {
           ) : (catalogue ?? []).length === 0 ? (
             <p className="text-sm text-[#5C5C5C]">Aucun événement au catalogue pour le moment.</p>
           ) : !layout.hero && layout.pinned.length === 0 && layout.months.length === 0 ? (
-            <p className="text-sm text-[#5C5C5C]">{SEARCH_EMPTY}</p>
+            <p className="text-sm text-[#5C5C5C]">
+              {SUGGEST_EMPTY_SEARCH_BEFORE}
+              <button
+                type="button"
+                onClick={() => setSuggestOpen(true)}
+                className="font-semibold text-brand-accent hover:underline"
+              >
+                {SUGGEST_EMPTY_SEARCH_LINK}
+              </button>
+              .
+            </p>
           ) : (
             <>
               {(layout.hero || layout.pinned.length > 0) && (
@@ -173,8 +200,8 @@ export default function Events() {
         />
       </div>
 
-      {/* The screencasters' suggestions + « Suggérer un match » (« Mes Événements » lives on the
-          Événements home since 2026-10-12, Q3 A). */}
+      {/* The screencasters' suggestions (« Mes Événements » lives on the Événements home since
+          2026-10-12, Q3 A). « Suggérer un match » moved to the search toolbar (SUGG-2). */}
       <div>
         <button
           type="button"
@@ -207,7 +234,6 @@ export default function Events() {
               ))}
             </div>
           )}
-          <SuggestMatchForm />
         </section>
       )}
 
@@ -220,6 +246,7 @@ export default function Events() {
           Voir ma sélection ({selected.length})
         </a>
       )}
+      {suggestOpen && <SuggestMatchModal onClose={() => setSuggestOpen(false)} />}
     </div>
   );
 }

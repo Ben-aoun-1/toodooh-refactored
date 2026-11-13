@@ -8,6 +8,7 @@ import { storage } from '../storage/s3-storage.js';
 
 import { pushPlaylistToCampaignVenues } from './playout/push.js';
 import { CtaBurnError, type CtaBurner, burnCtaIntoSpot } from './spot-cta-burn.js';
+import { ctaPositionOf } from './spot-cta-layout.js';
 import { ctaDrawnLabel, ctaScanUrl } from './spot-cta.js';
 
 // QR-CTA1 — makes the QR copies. A campaign needs one when it has a link and a creative, and its
@@ -41,6 +42,7 @@ export const burnNextCta = async (
       ctaUrl: campaigns.ctaUrl,
       ctaLabel: campaigns.ctaLabel,
       ctaCode: campaigns.ctaCode,
+      ctaPosition: campaigns.ctaPosition,
       oldKey: campaigns.ctaStorageKey,
       creativeId: creatives.id,
       storageKey: creatives.storageKey,
@@ -81,6 +83,7 @@ export const burnNextCta = async (
       qrUrl: ctaScanUrl(env.CTA_PUBLIC_BASE_URL, next.ctaCode),
       label: ctaDrawnLabel(next.ctaLabel),
       durationSeconds: next.durationSeconds,
+      position: ctaPositionOf(next.ctaPosition),
     });
   } catch (err) {
     await fail(err instanceof CtaBurnError ? err.message : 'BURN_FAILED');

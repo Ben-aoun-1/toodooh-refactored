@@ -25,6 +25,13 @@ import { cartRoutes } from '../src/routes/cart.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // CF-C1 (spec §1.10–1.14) — the panier. Real Postgres; session mocked. A "launchable" fixture
 // mirrors the E5 hand-computation: one venue (all-dow affluence 100, 8–18h) → C_max 540 for a
 // 2-day window at S=10 — budgets ≤ 540 pass the ceiling, the floor is 100. NO

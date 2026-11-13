@@ -38,7 +38,8 @@ describe('monthGrid — Monday-first, full weeks, neighbour padding', () => {
 describe('the consequence copy — the ruled wording, verbatim', () => {
   it('CAL-1: states the exclusion AND that an accepted diffusion on that day is redistributed', () => {
     expect(UNAVAILABILITY_CONSEQUENCE_COPY).toBe(
-      "Les jours indisponibles sont exclus des prochaines campagnes. Si une campagne acceptée y diffuse, sa part sur ce jour est automatiquement redistribuée à d'autres établissements.",
+      // HOUR-UNAV1 (operator 2026-10-27) — by the hour, and matches move too (ruling 8.2).
+      "Les heures indisponibles sont exclues des prochaines campagnes. Si une campagne acceptée ou un match y diffuse, sa part sur ces heures est automatiquement redistribuée à d'autres établissements.",
     );
   });
 });

@@ -24,6 +24,7 @@ import { assemblePool } from './dispatch/pool.js';
 import { isFuture, tunisNowSlot } from './dispatch/redispatch.js';
 import { type EligibleScreenhost, selection } from './dispatch/selection.js';
 import { seuilImpressions } from './dispatch/thresholds.js';
+import { placerToursIncrement } from './dispatch/tours/placer.js';
 import { NOOP_TRACE, type EngineTrace } from './engine-journal/trace.js';
 import { walletSpendable } from './recharges.js';
 
@@ -285,6 +286,98 @@ export const runBoost = async (
         addedCategories: categoryIds.length,
         addedZones: zoneIds.length,
       });
+
+      // DISP-TOURS — a tours plan boosts with the tours placement (ruling pending, Mariem Q6):
+      // the complement goes to the free hours of the venues already in the campaign first, then
+      // to new venues reaching 30 DT, on the remaining créneaux of the merged perimeter. The
+      // ceiling is everything placeable that way; the amount engaged is the exact placed price.
+      if (plan.engine === 'tours') {
+        const window = {
+          id: campaign.id,
+          name: campaign.name,
+          startDate: campaign.startDate ?? effectiveStart,
+          endDate: newEndDate,
+        };
+        const ceiling = await placerToursIncrement(
+          tx,
+          {
+            plan,
+            campaign: window,
+            volumeFact: Number.POSITIVE_INFINITY,
+            excludeVenueIds: refuserIds,
+            now,
+            dryRun: true,
+          },
+          trace,
+        );
+        const cMaxToursTnd = Math.floor(((ceiling.placedFact * cpm) / 1000) * 100 + 1e-6) / 100;
+        if (opts.previewOnly) {
+          throw new PreviewRollback({
+            status: 'PREVIEW',
+            cMaxBoostTnd: cMaxToursTnd,
+            eligibleCount: ceiling.placedTo.length,
+          });
+        }
+        const amount = opts.amountTnd ?? 0;
+        if (isBelowCampaignMinimum(amount)) {
+          throw new BoostRefused({
+            status: 'BUDGET_BELOW_MINIMUM',
+            floorTnd: MIN_CAMPAIGN_BUDGET_TND,
+          });
+        }
+        if (amount > cMaxToursTnd) {
+          throw new BoostRefused({ status: 'BUDGET_EXCEEDS_CMAX', cMaxBoostTnd: cMaxToursTnd });
+        }
+        const spendable = (await walletSpendable(advertiserId)).spendable_tnd;
+        if (spendable < amount) {
+          throw new BoostRefused({
+            status: 'INSUFFICIENT_BALANCE',
+            requiredTnd: amount,
+            availableTnd: spendable,
+          });
+        }
+        const placed = await placerToursIncrement(
+          tx,
+          {
+            plan,
+            campaign: window,
+            volumeFact: (amount * 1000) / cpm,
+            excludeVenueIds: refuserIds,
+            now,
+          },
+          trace,
+        );
+        const placedFactTours = Math.floor(placed.placedFact);
+        if (placedFactTours <= 0) throw new BoostRefused({ status: 'NO_ELIGIBLE' });
+        const priceTnd = Math.round(((placed.placedFact * cpm) / 1000) * 100) / 100;
+        await tx
+          .update(campaigns)
+          .set({
+            requestedBudget: String(round4(Number(campaign.requestedBudget ?? 0) + priceTnd)),
+          })
+          .where(eq(campaigns.id, campaign.id));
+        const [boostRow] = await tx
+          .insert(campaignBoosts)
+          .values({
+            campaignId: campaign.id,
+            amountTnd: String(priceTnd),
+            previousEndDate,
+            newEndDate,
+            addedZoneIds: zoneIds,
+            addedCategoryIds: categoryIds,
+            placedFact: placedFactTours,
+            appliedBy: opts.appliedBy ?? null,
+          })
+          .returning({ id: campaignBoosts.id });
+        return {
+          status: 'APPLIED',
+          boostId: boostRow?.id ?? '',
+          placedFact: placedFactTours,
+          vFact: Math.floor((amount * 1000) / cpm),
+          newEndDate,
+          reliquatAddedFact: 0,
+        } satisfies BoostApplied;
+      }
 
       const { pool } = await assemblePool(
         tx,

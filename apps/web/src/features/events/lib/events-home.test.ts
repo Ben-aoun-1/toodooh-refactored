@@ -64,20 +64,21 @@ describe('the football door (live from the catalogue)', () => {
     );
   });
 
-  it('lists the featured fixtures first (max 3), in date order, with a short date', () => {
+  it('lists the next three matches, soonest first, whatever is featured (ruling A, 2026-10-26)', () => {
     expect(footballDoorData(catalogue).fixtures).toEqual([
+      { id: 'Bayern - BVB', name: 'Bayern - BVB', date: 'à confirmer' },
+      { id: 'Milan - Inter', name: 'Milan - Inter', date: '1 nov.' },
       { id: 'Libye - Tunisie', name: 'Libye - Tunisie', date: '15 nov.' },
-      { id: 'CA - EST', name: 'CA - EST', date: '22 nov.' },
-      { id: 'UCL 9 déc.', name: 'UCL 9 déc.', date: '9 déc.' },
     ]);
   });
 
-  it('fills with the soonest when fewer than 3 are featured; an unconfirmed date says so', () => {
+  it('never lists a match that has started or ended', () => {
     const fixtures = footballDoorData([
-      ev('Milan - Inter', '2026-11-01T19:00:00Z'),
-      ev('Bayern - BVB', '2026-10-31T19:00:00Z', { date_tbc: true }),
+      ev('Live', '2026-10-26T19:00:00Z', { statut: 'en_cours' }),
+      ev('Played', '2026-10-25T19:00:00Z', { statut: 'termine' }),
+      ev('Next', '2026-11-01T19:00:00Z'),
     ]).fixtures;
-    expect(fixtures.map((f) => f.date)).toEqual(['à confirmer', '1 nov.']);
+    expect(fixtures.map((f) => f.name)).toEqual(['Next']);
   });
 
   it('an empty catalogue has no kicker and no fixture', () => {
@@ -120,7 +121,7 @@ describe('the Ramadan offer (coming soon, operator 2026-10-12)', () => {
     expect(read('pages', 'EventsHome.tsx')).toContain('<MesEvenementsStrip />');
     const football = read('pages', 'Events.tsx');
     expect(football).not.toContain('MesEvenementsStrip');
-    expect(football).toContain('<SuggestMatchForm />');
+    expect(football).toContain('<SuggestMatchModal'); // SUGG-2 — the window, from the toolbar
     expect(football).toContain('<EventsCrumb />');
   });
 });

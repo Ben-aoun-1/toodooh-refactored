@@ -1,5 +1,7 @@
 import { eachDayOfInterval, format, getISODay, parseISO } from 'date-fns';
 
+import { isWholeDayUnavailable } from '../unavailable-hours.js';
+
 import { type WindowDay } from './plan.js';
 
 // Expand a campaign fenêtre [startDate, endDate] (inclusive, ISO date strings) into the per-day list
@@ -15,13 +17,20 @@ export const buildWindowDays = (startDate: string, endDate: string): WindowDay[]
 };
 
 /**
- * E2 (VF jours_dispo_i) — a venue's window days MINUS the days its owner declared unavailable.
- * THE day filter: the pool sizes a venue with it, and the coverage map (MAP-4) shows a venue only
- * when it leaves at least one day, so the two can never disagree about « available in the window ».
- * No declaration = the window itself (the same array — the pool relies on nothing more).
+ * E2 (VF jours_dispo_i) → HOUR-UNAV1 — a venue's window days that still have at least ONE hour the
+ * owner did not declare unavailable. THE day filter: the pool sizes a venue with it, and the
+ * coverage map (MAP-4) shows a venue only when it leaves at least one day, so the two can never
+ * disagree about « available in the window ». A day with SOME unavailable hours stays — those
+ * hours drop out cell by cell in the pool. No declaration = the window itself (the same array).
  */
 export const availableWindowDays = (
   windowDays: WindowDay[],
-  declaredUnavailable: ReadonlySet<string> | undefined,
+  unavailableCells: ReadonlySet<string> | undefined,
+  openingHour: number | null,
+  closingHour: number | null,
 ): WindowDay[] =>
-  declaredUnavailable ? windowDays.filter((d) => !declaredUnavailable.has(d.date)) : windowDays;
+  unavailableCells
+    ? windowDays.filter(
+        (d) => !isWholeDayUnavailable(d.date, unavailableCells, openingHour, closingHour),
+      )
+    : windowDays;

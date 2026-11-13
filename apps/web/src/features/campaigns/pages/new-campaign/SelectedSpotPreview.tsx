@@ -7,13 +7,20 @@ import CreativePreviewTile from '@/features/campaigns/pages/new-campaign/Creativ
  * reads the creative by id (the upload seeds that cache), so a fresh upload shows at once, before
  * the library list has refreshed. The same tile as the Validation step (CreativePreviewTile).
  */
-export default function SelectedSpotPreview({ creativeId }: { creativeId: string }) {
+export default function SelectedSpotPreview({
+  creativeId,
+  frameClassName = 'max-w-xl',
+}: {
+  creativeId: string;
+  /** The tile's frame — the Foot parcours draws a TV around it. */
+  frameClassName?: string;
+}) {
   const creative = useCreative(creativeId);
   const url = useCreativePreviewUrl(creativeId);
   return (
     <div>
       <p className="text-sm font-bold text-gray-900 mb-2">Aperçu de votre spot</p>
-      <div className="max-w-xl">
+      <div className={frameClassName}>
         <CreativePreviewTile
           creativeType={creative.data?.creative_type}
           title={creative.data?.title ?? null}

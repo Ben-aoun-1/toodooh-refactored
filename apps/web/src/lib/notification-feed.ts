@@ -23,6 +23,9 @@ export interface NotificationFeedItem<K extends string = string> {
   actionPath: string;
   /** NOTIF-D1 — the campaign a notification is about (server `campaign_id`), when it has one. */
   campaignId?: string | null;
+  /** Mariem 05/11 — the match and venue a « Soir de match » notice opens. */
+  eventId?: string | null;
+  screenhostId?: string | null;
   /**
    * A second line the bell renders under the title, when the body carries information the title
    * cannot (REV3: a refused facture's MOTIF — « refusée » with no reason is a dead end the owner

@@ -4,7 +4,7 @@ import type { CtaLayout } from './spot-cta-layout.js';
 
 // QR-CTA2 (Mariem 27/10 point 1) — the three transparent layers chromium draws for the burn
 // (lib/spot-cta-burn.ts composes them over the spot with ffmpeg): the card (QR tile + frosted
-// card's tint, words, mint line, « POWERED BY » + the real light logo), the card's shape (where
+// card's tint, the advertiser's words, mint line, « POWERED BY » + the real light logo), the card's shape (where
 // ffmpeg blurs the video, the « frosted » part), and ONE corner bracket (mirrored into four).
 // Every size comes from ctaLayout, in the spot's own pixels.
 
@@ -21,20 +21,27 @@ ${css}</style></head><body>${body}</body></html>`;
 
 const px = (n: number): string => `${Math.round(n * 100) / 100}px`;
 
+/**
+ * Mariem 11/11 — the card no longer says « Scannez le code »: the advertiser's words ARE the
+ * headline, in its bold. Their size in 1080 p units: the headline's 23, shrunk only when a long
+ * message (≤ 20 characters) would not fit on one line of the 300-wide card (~0.6 em per glyph).
+ */
+export const ctaLabelFontUnits = (label: string): number =>
+  Math.min(23, 270 / (Math.max(1, [...label].length) * 0.6));
+
 /** The card layer: `layout.layer` sized, the tile at its top, the card below it. */
 export function ctaCardHtml(layout: CtaLayout, qrDataUri: string, label: string): string {
   const { unit: u, panel, tile, layer } = layout;
   const tileLeft = tile.x - layer.x;
   const panelTop = panel.y - layer.y;
-  const textTop = tile.y + tile.size - panel.y + 26 * u;
+  const textTop = tile.y + tile.size - panel.y + 34 * u;
   const logo = logoDataUri('onDark');
   const css = `
 .card{position:absolute;left:0;top:${px(panelTop)};width:${px(panel.width)};height:${px(panel.height)};
   border-radius:${px(panel.radius)};background:rgba(16,30,24,0.34);border:${px(Math.max(1, u))} solid rgba(255,255,255,0.16);
   font-family:'Geist',system-ui,'FreeSans',sans-serif;color:#fff;text-align:center;padding-top:${px(textTop)}}
-.title{font-weight:700;font-size:${px(23 * u)};line-height:1.15;letter-spacing:-0.01em}
-.label{margin-top:${px(4 * u)};font-weight:400;font-size:${px(15.5 * u)};color:rgba(255,255,255,0.88);white-space:nowrap}
-.line{margin:${px(10 * u)} auto 0;width:${px(30 * u)};height:${px(Math.max(2, 3 * u))};border-radius:${px(2 * u)};background:${BRAND_MINT}}
+.label{font-weight:700;font-size:${px(ctaLabelFontUnits(label) * u)};line-height:1.15;letter-spacing:-0.01em;white-space:nowrap}
+.line{margin:${px(12 * u)} auto 0;width:${px(30 * u)};height:${px(Math.max(2, 3 * u))};border-radius:${px(2 * u)};background:${BRAND_MINT}}
 .powered{margin-top:${px(9 * u)};display:flex;align-items:center;justify-content:center;gap:${px(7 * u)};
   font-size:${px(9 * u)};font-weight:500;letter-spacing:0.28em;color:rgba(255,255,255,0.6)}
 .powered img{height:${px(11 * u)};width:auto;opacity:0.9}
@@ -44,7 +51,7 @@ export function ctaCardHtml(layout: CtaLayout, qrDataUri: string, label: string)
   box-shadow:0 ${px(6 * u)} ${px(18 * u)} rgba(0,0,0,0.28)}
 .tile img{width:${px(layout.qr)};height:${px(layout.qr)};image-rendering:pixelated}`;
   const brand = logo ? `<img src="${logo}" alt="toodooh">` : '<b>toodooh</b>';
-  const body = `<div class="card"><div class="title">Scannez le code</div><div class="label">${esc(label)}</div><div class="line"></div><div class="powered"><span>POWERED BY</span>${brand}</div></div><div class="tile"><img src="${qrDataUri}" alt=""></div>`;
+  const body = `<div class="card"><div class="label">${esc(label)}</div><div class="line"></div><div class="powered"><span>POWERED BY</span>${brand}</div></div><div class="tile"><img src="${qrDataUri}" alt=""></div>`;
   return page(layer.width, layer.height, css, body);
 }
 

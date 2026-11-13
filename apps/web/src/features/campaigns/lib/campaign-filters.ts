@@ -55,3 +55,11 @@ export function statusFilterFromSearch(search: string): CampaignStatusId | null 
   if (raw !== null && raw in CAMPAIGN_STATUS_UI) return raw as CampaignStatusId;
   return null;
 }
+
+/**
+ * DISP-TOURS §3.1 (Mariem 03/11) — a campaign in the cart is not a draft: it shows « uniquement
+ * dans la page du panier, jamais dans Mes campagnes ». The list (and its counters) drop it.
+ */
+export function listedInMesCampagnes<T extends { in_cart: boolean }>(rows: readonly T[]): T[] {
+  return rows.filter((row) => !row.in_cart);
+}

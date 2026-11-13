@@ -17,10 +17,10 @@ import { campaigns, creatives } from '../db/schema.js';
 // airs the copy.
 
 /**
- * The message under « Scannez le code » when the screencaster gives none. QR-CTA2: lowercase, it
- * continues the headline (Mariem's design).
+ * The card's words when the screencaster gives none. Mariem 11/11: « Scannez le code » is gone,
+ * so the message stands alone and starts with a capital.
  */
-export const CTA_DEFAULT_LABEL = 'pour en savoir plus';
+export const CTA_DEFAULT_LABEL = 'Pour en savoir plus';
 export const CTA_LABEL_MAX_CHARS = 20;
 export const CTA_URL_MAX_CHARS = 2000;
 /**
@@ -31,6 +31,14 @@ export const CTA_URL_MAX_CHARS = 2000;
 export const CTA_MIN_QR_PX = 60;
 
 export type CtaStatus = 'pending' | 'ready' | 'failed';
+
+/**
+ * May the card still move? Only while the campaign has never been on air: a TV keeps the file it
+ * downloaded under the campaign's id and never fetches a new one (the streamer's cache), so a
+ * copy re-burned after the first airing would never reach the screens that already have it.
+ */
+export const ctaPositionEditable = (status: string): boolean =>
+  status === 'draft' || status === 'pending' || status === 'rejected' || status === 'upcoming';
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 

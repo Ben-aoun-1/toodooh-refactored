@@ -13,6 +13,13 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 import { eventSector, seedCampaign, seedMatrix } from './helpers/installed-screen-matrix.js';
 import { seedScreenFiller } from './helpers/screen-filler.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // CAP-F1 (operator ruling 2026-09-24) — « the map needs to check remaining capacity ». The
 // advertiser's coverage map is the set dispatch can actually place on RIGHT NOW: the venues of
 // « Hosts éligibles » (lib/campaign-eligible-hosts.ts — the real pool, read-only), not a parallel

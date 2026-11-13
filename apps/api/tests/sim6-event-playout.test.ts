@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { db, mainDb } from '../src/db/client.js';
 import { applyMigrations } from '../src/db/migrate-runner.js';
@@ -27,6 +27,14 @@ import { runTick } from '../src/simulator/tick/run.js';
 import { simulationState } from '../src/simulator/tick/state.js';
 import { generateWorld } from '../src/simulator/world/spec.js';
 import { writeWorld } from '../src/simulator/world/write.js';
+
+// DISP-TOURS — the feature under test is engine-agnostic; its fixtures air at the instant they
+// pick, which the v1 engine's every-hour allocation guarantees (a tours one airs its peak hours
+// only): pinned to v1 (lib/dispatch/engine-switch.ts).
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
 
 // SIM-6 phase 1 — a simulated MATCH is lived end to end: booked by the REAL event pricing and
 // dispatch, accepted, aired by the screens inside its blocs (the new event playout actor, through

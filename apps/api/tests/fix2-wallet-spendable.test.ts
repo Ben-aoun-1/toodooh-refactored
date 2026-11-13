@@ -198,21 +198,36 @@ describe('FIX2 — reservation semantics + the served ledger (real Postgres)', (
     await app.inject({ method: 'POST', url: '/api/cart/items', payload: { campaign_id: a } });
     const confirmA = await app.inject({ method: 'POST', url: '/api/cart/confirm' });
     expect(confirmA.statusCode).toBe(200); // 400 ≤ spendable 550
+    // DISP-TOURS (R13 · Q1) — A is frozen at « Lancer », its spot still under review: it engages
+    // its EXACT price, at or just under its 400 budget.
+    const [rowA] = await db.select().from(campaigns).where(eq(campaigns.id, a));
+    const engagedA = Number(rowA?.requestedBudget);
+    expect(engagedA).toBeGreaterThan(0);
+    expect(engagedA).toBeLessThanOrEqual(400);
+    const spendable = Math.round((550 - engagedA) * 100) / 100;
 
     const b = await seedLaunchable(advertiser, sector);
     await app.inject({ method: 'POST', url: '/api/cart/items', payload: { campaign_id: b } });
     const confirmB = await app.inject({ method: 'POST', url: '/api/cart/confirm' });
     expect(confirmB.statusCode).toBe(400);
-    expect(confirmB.json()).toMatchObject({
-      error: 'CART_CONFIRM_FAILED',
-      solde: { balance: 550, spendable: 150, required: 400 },
-    });
+    const refused = confirmB.json() as {
+      error: string;
+      solde: { balance: number; spendable: number; required: number };
+    };
+    expect(refused.error).toBe('CART_CONFIRM_FAILED');
+    expect(refused.solde.balance).toBe(550);
+    expect(refused.solde.spendable).toBeCloseTo(spendable, 2);
+    // demandé: B's own exact price, more than what is left.
+    expect(refused.solde.required).toBeGreaterThan(refused.solde.spendable);
+    expect(refused.solde.required).toBeLessThanOrEqual(400);
 
     // B stays a draft in the intact cart; A stays engaged.
     const [rowB] = await db.select().from(campaigns).where(eq(campaigns.id, b));
     expect(rowB?.status).toBe('draft');
     const wallet = await walletSpendable(advertiser);
-    expect(wallet).toMatchObject({ balance_tnd: 550, engaged_tnd: 400, spendable_tnd: 150 });
+    expect(wallet.balance_tnd).toBe(550);
+    expect(wallet.engaged_tnd).toBeCloseTo(engagedA, 2);
+    expect(wallet.spendable_tnd).toBeCloseTo(spendable, 2);
   });
 
   // ── the engaged-set predicate ──────────────────────────────────────────────

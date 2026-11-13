@@ -1,12 +1,25 @@
 // QR-CTA2 (Mariem 27/10 point 1) — WHERE and WHEN the call-to-action card sits in the spot, pure
 // (pinned in tests/spot-cta-rules.test.ts). The design is Mariem's QR_Danette_anime_5s_v5.mp4:
 // bottom-left, a white rounded QR tile framed by four mint corner brackets that pulse, over a dark
-// frosted card (« Scannez le code », the advertiser's words, a mint line, « POWERED BY toodooh »).
+// frosted card (the advertiser's words — « Scannez le code » dropped 11/11 —, a mint line, « POWERED BY toodooh »).
 // It appears 2 s after the spot starts and leaves 2 s before it ends.
 //
 // Sizes are the video's pixels at 1080 p, scaled by the frame height (a 720 p spot gets 2/3 of
 // each). The card is always burned into a VIDEO frame: a photo spot is first turned into a 16:9
 // video (lib/spot-cta-burn.ts), so the whole frame is what the TV shows.
+
+/**
+ * Mariem 04/11 (Foot point 1, ruling 2A) — the card's corner: the advertiser picks it, the admin
+ * may move it at the spot's validation (the logo's place varies). NULL in the db = bottom-left,
+ * the card's historical place.
+ */
+export const CTA_POSITIONS = ['bottom_left', 'bottom_right', 'top_left', 'top_right'] as const;
+export type CtaPosition = (typeof CTA_POSITIONS)[number];
+export const CTA_DEFAULT_POSITION: CtaPosition = 'bottom_left';
+export const isCtaPosition = (value: unknown): value is CtaPosition =>
+  typeof value === 'string' && (CTA_POSITIONS as readonly string[]).includes(value);
+export const ctaPositionOf = (stored: string | null): CtaPosition =>
+  isCtaPosition(stored) ? stored : CTA_DEFAULT_POSITION;
 
 /** Seconds after the start / before the end of the spot during which the card stays hidden. */
 export const CTA_SHOW_AFTER_SECONDS = 2;
@@ -35,15 +48,28 @@ export interface CtaLayout {
 
 const even = (n: number): number => Math.max(2, Math.round(n / 2) * 2);
 
-/** Sized by the frame HEIGHT only: even a vertical 720×1280 spot keeps the card well inside. */
-export function ctaLayout(height: number): CtaLayout {
+/**
+ * Sized by the frame HEIGHT only: even a vertical 720×1280 spot keeps the card well inside.
+ * Mariem 04/11 — placed in the chosen corner (bottom-left by default) with the same margins: 72
+ * from the side, 76 from the bottom edge — or, at the top, between the edge and the QR tile (the
+ * tile overlaps the card's top, so a top card hangs from its tile). `width` defaults to 16:9.
+ */
+export function ctaLayout(
+  height: number,
+  width: number = Math.round((height * 16) / 9),
+  position: CtaPosition = CTA_DEFAULT_POSITION,
+): CtaLayout {
   const u = height / 1080;
   const panelWidth = even(300 * u);
   const panelHeight = even(168 * u);
-  const panelX = even(72 * u);
-  const panelY = even(height - 76 * u - panelHeight);
   const tileSize = even(184 * u);
   const overlap = even(26 * u);
+  const side = 72 * u;
+  const edge = 76 * u;
+  const panelX = position.endsWith('_right') ? even(width - side - panelWidth) : even(side);
+  const panelY = position.startsWith('top_')
+    ? even(edge + tileSize - overlap)
+    : even(height - edge - panelHeight);
   const tileX = even(panelX + (panelWidth - tileSize) / 2);
   const tileY = even(panelY - tileSize + overlap);
   const arm = even(34 * u);

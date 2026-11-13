@@ -37,9 +37,10 @@ describe('the money-format sweep', () => {
     expect(statsGrid).not.toContain('en-US');
 
     // CART-V1 — the cart montants moved into the two docked forms; both stay on the formatter.
+    // DISP-TOURS — the line's amount is its exact price when quoted (features/cart/lib/cart-quote).
     for (const file of ['CartDockBar.tsx', 'CartEdgeTab.tsx']) {
       const source = readFileSync(join(WEB_SRC, 'features', 'cart', 'components', file), 'utf8');
-      expect(source).toContain('tndOrDash(item.requested_budget)');
+      expect(source).toContain('tndOrDash(cartLineFigures(item).amountTnd)');
       expect(source).not.toMatch(/\$\{item\.requested_budget\} TND/);
     }
   });

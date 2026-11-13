@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { ApiNotification } from '@/services/notifications.service';
 
-import { POLL_INTERVAL_MS, actionFor, toFeed } from './useAdvertiserNotifications';
+import {
+  CALENDAR_NOTICE_KINDS,
+  POLL_INTERVAL_MS,
+  actionFor,
+  toFeed,
+} from './useAdvertiserNotifications';
 
 const notif = (over: Partial<ApiNotification> = {}): ApiNotification => ({
   id: 'n1',
@@ -21,6 +26,19 @@ describe('actionFor (advertiser bell CTA routing by type)', () => {
       label: 'Consulter',
       path: '/my-campaigns?status=draft',
     });
+  });
+
+  it('DISP-TOURS §3.2 — a draft about to go opens the drafts; a cart campaign, the cart', () => {
+    expect(actionFor(notif({ type: 'campaign_draft_expiry' }))).toEqual({
+      label: 'Consulter',
+      path: '/my-campaigns?status=draft',
+    });
+    expect(actionFor(notif({ type: 'campaign_cart_expiry' }))).toEqual({
+      label: 'Consulter',
+      path: '/my-cart',
+    });
+    expect(CALENDAR_NOTICE_KINDS.has('campaign_cart_expiry')).toBe(true);
+    expect(CALENDAR_NOTICE_KINDS.has('campaign_draft_expiry')).toBe(true);
   });
 
   it('FCT1 — routes every recharge transition to the wallet (prefix-matched)', () => {

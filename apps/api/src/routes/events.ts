@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { type EventRow, events } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { eventPoolDemoVenuesForUser } from '../lib/demo.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import {
   type MatchWire,
@@ -12,6 +13,7 @@ import {
   matchesByEvent,
   positioningRefusal,
 } from '../lib/event-catalogue.js';
+import { fixtureKeys, matchNameKey } from '../lib/event-match-name.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import {
   SUGGESTED_MATCH_DURATION_HOURS,
@@ -159,7 +161,7 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     const dayStart = new Date(`${date}T00:00:00+01:00`);
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
     const sameDay = await db
-      .select({ name: events.name, source: events.source })
+      .select({ id: events.id, name: events.name, source: events.source })
       .from(events)
       .where(
         and(
@@ -168,26 +170,32 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
           lt(events.kickoffAt, dayEnd),
         ),
       );
-    const candidates = new Set([
-      `${teamA} – ${teamB}`.toLowerCase(),
-      `${teamB} – ${teamA}`.toLowerCase(),
-    ]);
-    const twins = sameDay.filter((r) => candidates.has(r.name.toLowerCase()));
-    if (twins.some((r) => r.source === 'official')) {
+    // SUGG-2 — compared on lib/event-match-name.ts's key: case, accents and the separator
+    // (« - », « – », « vs ») fold, so a hand-typed official « Libye - Tunisie » is recognised.
+    const candidates = fixtureKeys(teamA, teamB);
+    const twins = sameDay.filter((r) => candidates.has(matchNameKey(r.name)));
+    // SUGG-2 (ruling Q1 A, 2026-10-26) — the refusal names the twin (`existing_event_id`), so the
+    // « Suggérer un match » window positions the screencaster on the match that already exists
+    // instead of stopping them. The official twin wins over a suggested one.
+    const official = twins.find((r) => r.source === 'official');
+    if (official) {
       return reply.status(409).send({
         error: 'CONFLICT',
         message: 'Ce match existe déjà dans le catalogue officiel.',
         statusCode: 409,
         requestId: request.id,
+        existing_event_id: official.id,
       });
     }
-    if (twins.length > 0) {
+    const [twin] = twins;
+    if (twin) {
       return reply.status(409).send({
         error: 'CONFLICT',
         message:
           'Ce match a déjà été suggéré pour cette date — retrouvez-le dans « Ce que les screencasters suggèrent ».',
         statusCode: 409,
         requestId: request.id,
+        existing_event_id: twin.id,
       });
     }
 
@@ -314,21 +322,24 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     const eventCpm = own?.eventCpmTnd ?? (await getDispatchConfig()).eventCpmTnd;
     // EVT-PRICE2 (ruling 2026-10-08) — the catalogue card leaves R out: no spot is chosen yet, so
     // i_max is the AUDIENCE (A_max ÷ 3 per minute); the price follows the spot in the parcours.
+    // DEMO-3 — a demo account sees the match on its demo venues.
     const result = await computeEventCmax(
-      { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+      { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt, seatMinutes: row.seatMinutes },
       eventCpm,
       new Set(),
       1,
+      request.user ? await eventPoolDemoVenuesForUser(db, request.user.id) : null,
     );
     return reply.status(200).send({
       c_max_evt_tnd: result.cMaxEvtTnd,
       i_max: result.iMax,
       eligible_count: result.eligibleCount,
       min_budget_tnd: MIN_CAMPAIGN_BUDGET_TND,
-      // EVT-MIN1 — the minutes a positioning created now could buy (one per venue × bloc with a
-      // free pod seat); the minimum purchase is one minute.
+      // EVT-MIN1 — the minutes a positioning created now could buy (a seat per venue × bloc with
+      // a free pod seat); the minimum purchase is one seat (Mariem 04/11: 2 minutes).
       max_minutes: result.maxMinutes,
-      min_minutes: 1,
+      seat_minutes: result.seatMinutes,
+      min_minutes: result.seatMinutes,
       // SUGG-1 — the pool's distinct sectors (stored names), for the suggestion card's tags.
       sectors: result.sectors,
     });

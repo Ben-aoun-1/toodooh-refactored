@@ -1,6 +1,7 @@
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import type { ReactNode } from 'react';
 
-import { declareConfirmCopy } from '@/features/screenhost/lib/diffusion-calendar';
+import type { DayState } from '@/features/screenhost/lib/hour-unavailability';
 import {
   TILE_CLASSES,
   isTileToggleable,
@@ -29,16 +30,17 @@ interface Props {
   onShiftMonth: (delta: number) => void;
   cells: CalendarCell[];
   todayIso: string;
-  declared: ReadonlySet<string>;
+  /** HOUR-UNAV1 — a day's state: available / partial (some hours) / unavailable (whole day). */
+  dayState: (iso: string) => DayState;
   /** Future days carrying an accepted diffusion on this venue → the campaigns' names. */
   diffusionDays: ReadonlyMap<string, string[]>;
-  onToggle: (iso: string) => void;
+  /** A future tile was clicked — the page opens that day's hours. */
+  onSelectDay: (iso: string) => void;
+  selectedDay: string | null;
   busy: boolean;
   loading: boolean;
-  /** The pending declaration on a day that carries diffusion — confirmed inline, never by a browser dialog. */
-  pending: { iso: string; label: string; campaigns: string[] } | null;
-  onConfirm: () => void;
-  onCancel: () => void;
+  /** The selected day's hours panel (DayHoursPanel), rendered under the grid. */
+  panel?: ReactNode;
   /** HOST-EDIT1 — the admin « Fiche Host » reuses the card under its own heading. */
   title?: string;
   subtitle?: string;
@@ -52,14 +54,13 @@ export function AvailabilityCalendarCard({
   onShiftMonth,
   cells,
   todayIso,
-  declared,
+  dayState,
   diffusionDays,
-  onToggle,
+  onSelectDay,
+  selectedDay,
   busy,
   loading,
-  pending,
-  onConfirm,
-  onCancel,
+  panel,
   title = 'Disponibilités de mes écrans',
   subtitle = 'Définissez les périodes de disponibilité de vos écrans',
 }: Props) {
@@ -127,7 +128,7 @@ export function AvailabilityCalendarCard({
           </div>
         ))}
         {cells.map((cell) => {
-          const state = tileStateOf(cell, todayIso, declared);
+          const state = tileStateOf(cell, todayIso, dayState);
           const toggleable = isTileToggleable(state);
           const airing = diffusionDays.get(cell.iso);
           return (
@@ -135,17 +136,24 @@ export function AvailabilityCalendarCard({
               <button
                 type="button"
                 disabled={!toggleable || busy}
-                onClick={() => onToggle(cell.iso)}
+                onClick={() => onSelectDay(cell.iso)}
+                aria-pressed={selectedDay === cell.iso}
                 aria-label={`${cell.iso}${
                   state === 'unavailable'
                     ? ' — indisponible'
-                    : state === 'available'
-                      ? ' — disponible'
-                      : ''
+                    : state === 'partial'
+                      ? ' — indisponible certaines heures'
+                      : state === 'available'
+                        ? ' — disponible'
+                        : ''
                 }${airing ? ' — diffusion prévue' : ''}`}
                 className={`relative flex h-10 w-10 flex-col items-center justify-center rounded-lg text-sm transition-shadow disabled:cursor-default ${
                   TILE_CLASSES[state]
-                } ${airing && toggleable ? 'ring-2 ring-brand-deep/60' : ''}`}
+                } ${airing && toggleable ? 'ring-2 ring-brand-deep/60' : ''} ${
+                  selectedDay === cell.iso
+                    ? 'outline outline-2 outline-offset-2 outline-gray-900'
+                    : ''
+                }`}
               >
                 {cell.dayOfMonth}
                 {state === 'today' && (
@@ -157,36 +165,13 @@ export function AvailabilityCalendarCard({
         })}
       </div>
 
-      {pending && (
-        <div
-          role="alertdialog"
-          aria-label="Confirmer l'indisponibilité"
-          className="mt-4 rounded-xl border border-red-200 bg-[#FFEBEC] p-4 text-sm text-gray-800"
-        >
-          <p className="font-medium first-letter:uppercase">{pending.label}</p>
-          <p className="mt-1 text-gray-700">{declareConfirmCopy(pending.campaigns)}</p>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={onConfirm}
-              disabled={busy}
-              className="rounded-lg bg-red-600 px-3 py-1.5 font-medium text-white disabled:opacity-50"
-            >
-              Confirmer
-            </button>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
+      {panel}
 
       <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4 text-xs">
         <span className="rounded-full bg-[#FFC0C5] px-3 py-1 text-gray-800">Indisponibles</span>
+        <span className="rounded-full bg-[linear-gradient(135deg,#E3F7EC_50%,#FFEBEC_50%)] px-3 py-1 text-gray-800">
+          Certaines heures
+        </span>
         <span className="rounded-full bg-[#E3F7EC] px-3 py-1 text-gray-800">Disponibles</span>
         <span className="rounded-full px-3 py-1 text-gray-700 ring-2 ring-brand-deep/60">
           Diffusion prévue

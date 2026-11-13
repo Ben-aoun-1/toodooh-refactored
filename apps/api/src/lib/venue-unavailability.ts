@@ -8,9 +8,12 @@ import {
   campaigns,
   eventAllocations,
   events,
+  screenhosts,
   screenhostUnavailability,
+  screenhostUnavailableHours,
 } from '../db/schema.js';
 
+import { notDemoCampaignSql } from './demo.js';
 import { runRefusalCascade } from './dispatch/cascade.js';
 import { campaignCpmRates } from './dispatch/config.js';
 import { createEngineTrace, type EngineTrace } from './engine-journal/trace.js';
@@ -22,8 +25,10 @@ import {
 import { parseBlocs } from './event-playout/spots.js';
 import { blocCells } from './event-pricing/pricing.js';
 import { recomputeVenueSps } from './sps-score.js';
+import { type Cell, cellKey, cellsForHours, openingDayCells } from './unavailable-hours.js';
 
-// E2 / CAL-1 — declare or undeclare ONE unavailable day of a venue, moving the day's live share.
+// E2 / CAL-1 → HOUR-UNAV1 — declare or undeclare a venue's unavailability (a whole day or some of
+// its hours), moving the live shares of the declared hours.
 // Moved VERBATIM out of PUT /api/screenhosts/:id/unavailability (HOST-EDIT1, 2026-10-25) so the
 // admin « Fiche Host » mirror (PUT /api/admin/screenhosts/:id/unavailability) runs the SAME
 // re-placement — the route keeps its scoping and the FUTURE-only day check; this does the write.
@@ -39,7 +44,7 @@ import { recomputeVenueSps } from './sps-score.js';
 export interface RedispatchedShare {
   campaign_id: string;
   campaign_name: string;
-  /** DEACT-1 — 'evenement': a sold event slot of a deactivated Host, re-placed (event cascade). */
+  /** HOUR-UNAV1 — 'evenement': a sold event slot in the declared hours, re-placed (event cascade). */
   mode: 'cascade' | 'reliquat' | 'evenement';
   slots_moved: number;
   v_fact: number;
@@ -47,40 +52,104 @@ export interface RedispatchedShare {
   residual: number;
 }
 
-export const setVenueDayUnavailability = async (
+/**
+ * HOUR-UNAV1 — declare or undeclare unavailability on opening day `day`: the WHOLE day (`hours`
+ * null) or some of its clock hours. Storage is normalised: a declaration that covers every hour of
+ * the day is one screenhost_unavailability row (its hour rows dropped); undeclaring some hours of
+ * a whole declared day leaves the other hours as hour rows. Returns null when `hours` names no
+ * hour of the venue's window. Declaring moves the live shares of the declared hours: classic
+ * créneaux exactly as CAL-1 (cascade / reliquat), and sold EVENT slots through the event refusal
+ * cascade (ruling 8.2) — the venue keeps its slots outside the declared hours.
+ */
+export const setVenueUnavailability = async (
   venueId: string,
   day: string,
+  hours: readonly number[] | null,
   unavailable: boolean,
   logger: FastifyBaseLogger,
-): Promise<RedispatchedShare[]> => {
+): Promise<RedispatchedShare[] | null> => {
+  const [venue] = await db
+    .select({ openingHour: screenhosts.openingHour, closingHour: screenhosts.closingHour })
+    .from(screenhosts)
+    .where(eq(screenhosts.id, venueId))
+    .limit(1);
+  const openingHour = venue?.openingHour ?? null;
+  const closingHour = venue?.closingHour ?? null;
+  const dayCells = openingDayCells(day, openingHour, closingHour);
+  const cells = hours === null ? dayCells : cellsForHours(day, hours, openingHour, closingHour);
+  if (cells === null) return null;
+  const keys = new Set(cells.map((c) => cellKey(c.date, c.hour)));
+  const whole = dayCells.every((c) => keys.has(cellKey(c.date, c.hour)));
+
+  const dropHourRows = async (tx: Tx, which: readonly Cell[]): Promise<void> => {
+    for (const c of which) {
+      await tx
+        .delete(screenhostUnavailableHours)
+        .where(
+          and(
+            eq(screenhostUnavailableHours.screenhostId, venueId),
+            eq(screenhostUnavailableHours.day, c.date),
+            eq(screenhostUnavailableHours.hour, c.hour),
+          ),
+        );
+    }
+  };
+
   if (!unavailable) {
-    await db
-      .delete(screenhostUnavailability)
-      .where(
-        and(
-          eq(screenhostUnavailability.screenhostId, venueId),
-          eq(screenhostUnavailability.day, day),
-        ),
-      );
+    await db.transaction(async (tx) => {
+      const removedDay = await tx
+        .delete(screenhostUnavailability)
+        .where(
+          and(
+            eq(screenhostUnavailability.screenhostId, venueId),
+            eq(screenhostUnavailability.day, day),
+          ),
+        )
+        .returning({ id: screenhostUnavailability.id });
+      // A whole declared day minus some hours: its OTHER hours stay unavailable, as hour rows.
+      if (removedDay.length > 0 && !whole) {
+        const rest = dayCells.filter((c) => !keys.has(cellKey(c.date, c.hour)));
+        if (rest.length > 0) {
+          await tx
+            .insert(screenhostUnavailableHours)
+            .values(rest.map((c) => ({ screenhostId: venueId, day: c.date, hour: c.hour })))
+            .onConflictDoNothing();
+        }
+      }
+      await dropHourRows(tx, cells);
+    });
     return [];
   }
+
+  const dates = cells.map((c) => c.date).sort();
+  const firstDate = dates[0] ?? day;
+  const lastDate = dates[dates.length - 1] ?? day;
 
   // LOG1 — one cascade trace per re-placed campaign, flushed after the tx on both outcomes.
   const traces: EngineTrace[] = [];
   const redispatched = await db
     .transaction(async (tx) => {
-      // The day row FIRST, so the cascade's pool assembly already excludes this venue/day.
-      await tx
-        .insert(screenhostUnavailability)
-        .values({ screenhostId: venueId, day })
-        .onConflictDoNothing();
+      // The declaration FIRST, so the cascades' pool assembly already excludes these hours.
+      if (whole) {
+        await tx
+          .insert(screenhostUnavailability)
+          .values({ screenhostId: venueId, day })
+          .onConflictDoNothing();
+        await dropHourRows(tx, dayCells);
+      } else {
+        await tx
+          .insert(screenhostUnavailableHours)
+          .values(cells.map((c) => ({ screenhostId: venueId, day: c.date, hour: c.hour })))
+          .onConflictDoNothing();
+      }
 
-      return moveClassicShares(
+      return moveVenueShares(
         tx,
         venueId,
-        (c) => c.date === day,
-        { firstDate: day, lastDate: day },
+        (c) => keys.has(cellKey(c.date, c.hour)),
+        { firstDate, lastDate },
         traces,
+        new Date(),
       );
     })
     .catch(async (err: unknown) => {
@@ -103,10 +172,12 @@ export const setVenueDayUnavailability = async (
 type Tx = Parameters<Parameters<(typeof db)['transaction']>[0]>[0];
 
 /**
- * DEACT-1 — moves this venue's live shares off the clock cells `inScope` selects: the classic
- * créneaux (moveClassicShares) and the sold EVENT slots, through the event refusal cascade. Used by
- * an account deactivation (every future hour). The caller has already made the venue ineligible
- * (owner status) in the same transaction, so no cascade lands back on it.
+ * Moves this venue's live shares off the clock cells `inScope` selects, within the campaign window
+ * [firstDate, lastDate]: classic créneaux exactly as CAL-1 (pending / upcoming → refusal cascade;
+ * active → the stored reliquat E6 re-places), and sold EVENT slots through the event refusal
+ * cascade. Shared by a declared unavailability (HOUR-UNAV1: the declared hours) and an account
+ * deactivation (DEACT-1: every future hour). The caller has already made the venue ineligible
+ * (declaration rows / owner status) in the same transaction, so no cascade lands back on it.
  */
 export const moveVenueShares = async (
   tx: Tx,
@@ -115,22 +186,6 @@ export const moveVenueShares = async (
   window: { firstDate: string; lastDate: string },
   traces: EngineTrace[],
   now: Date,
-): Promise<RedispatchedShare[]> => [
-  ...(await moveClassicShares(tx, venueId, inScope, window, traces)),
-  ...(await moveEventSlots(tx, venueId, inScope, now)),
-];
-
-/**
- * CAL-1 — moves this venue's classic créneaux off the clock cells `inScope` selects, within the
- * campaign window [firstDate, lastDate]: pending / upcoming → refusal cascade; active → the stored
- * reliquat E6 re-places. Shared by a declared unavailable day and an account deactivation.
- */
-const moveClassicShares = async (
-  tx: Tx,
-  venueId: string,
-  inScope: (c: { date: string; hour: number }) => boolean,
-  window: { firstDate: string; lastDate: string },
-  traces: EngineTrace[],
 ): Promise<RedispatchedShare[]> => {
   const { firstDate, lastDate } = window;
   // The colliding shares: this venue's live allocations whose campaign window covers the
@@ -246,14 +301,16 @@ const moveClassicShares = async (
       });
     }
   }
+  // HOUR-UNAV1 (ruling 8.2) — sold event slots inside the declared hours are re-placed too.
+  moved.push(...(await moveEventSlots(tx, venueId, inScope, now)));
   return moved;
 };
 
 const round3 = (n: number): number => Math.round(n * 1000) / 1000;
 
 /**
- * HOUR-UNAV1 ruling 8.2, carried by DEACT-1 — the venue's FUTURE event slots (live positionings,
- * ACCEPTE / EN_ATTENTE, match not annulé) whose hours are in scope leave its allocation, and their
+ * HOUR-UNAV1 (ruling 8.2) — the venue's FUTURE event slots (live positionings, ACCEPTE /
+ * EN_ATTENTE, match not annulé) whose hours touch the declaration leave its allocation, and their
  * value goes back through the event refusal cascade — the same repair an owner's refusal runs. The
  * venue keeps its other slots (impressions and value pro rata); an allocation left with none is a
  * refusal (REFUSE, no money). The venue's holds for the event are rewritten from what it keeps.
@@ -275,6 +332,7 @@ const moveEventSlots = async (
       eventId: events.id,
       kickoffAt: events.kickoffAt,
       endsAt: events.endsAt,
+      seatMinutes: events.seatMinutes,
     })
     .from(eventAllocations)
     .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
@@ -285,6 +343,8 @@ const moveEventSlots = async (
         inArray(eventAllocations.statut, ['ACCEPTE', 'EN_ATTENTE']),
         inArray(campaigns.status, ['pending', 'upcoming', 'active']),
         eq(events.annule, false),
+        // DEMO-3 — a demo positioning airs on its own timeline and is never re-placed.
+        notDemoCampaignSql(),
       ),
     )
     .for('update', { of: eventAllocations });
@@ -336,11 +396,16 @@ const moveEventSlots = async (
     const outcome = await runEventRefusalCascade(
       tx,
       { id: row.campaignId, name: row.campaignName, eventMinutes: row.eventMinutes },
-      { id: row.eventId, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+      {
+        id: row.eventId,
+        kickoffAt: row.kickoffAt,
+        endsAt: row.endsAt,
+        seatMinutes: row.seatMinutes,
+      },
       {
         screenhostId: venueId,
         impressionsTotal: removedImpressions,
-        minutes: hit.length,
+        seats: hit.length,
         montantTnd: removedMontant,
       },
       campaignCpmRates(row).eventCpmTnd,

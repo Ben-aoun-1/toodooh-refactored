@@ -269,7 +269,8 @@ describe('db schema', () => {
   });
 
   it('dispatch_acceptation enum + the frozen-plan tables expose their columns (L-disp A.7)', () => {
-    expect(dispatchAcceptation.enumValues).toEqual(['EN_ATTENTE', 'ACCEPTE', 'REFUSE']);
+    // DISP-TOURS Q1 — 0103 appends RESERVE (a tours allocation held while its spot is reviewed).
+    expect(dispatchAcceptation.enumValues).toEqual(['EN_ATTENTE', 'ACCEPTE', 'REFUSE', 'RESERVE']);
     expect(campaignDispatchPlan.campaignId).toBeDefined();
     expect(campaignDispatchPlan.iCible).toBeDefined();
     expect(campaignDispatchPlan.seuilDiffusable).toBeDefined();

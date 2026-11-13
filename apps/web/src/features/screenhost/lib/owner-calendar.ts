@@ -1,6 +1,7 @@
 import type { SensorStatus } from '@/features/screenhost/services/owner-sensors.service';
 
 import type { DeviceStatus } from './device-liveness';
+import type { DayState } from './hour-unavailability';
 import type { CalendarCell } from './unavailability-calendar';
 
 // CAL-2 — the pure rules of the Figma owner calendar (« Mon calendrier et mes dispositifs de
@@ -12,24 +13,25 @@ import type { CalendarCell } from './unavailability-calendar';
  *  - past        : a day before today, number only, greyed, no tile;
  *  - today       : number with a green dot, not toggleable (the api refuses today);
  *  - available   : a future day, green tile;
- *  - unavailable : a future day the owner declared, red tile.
+ *  - partial     : a future day with SOME hours declared (HOUR-UNAV1), striped tile;
+ *  - unavailable : a future day the owner declared whole, red tile.
  */
-export type TileState = 'blank' | 'past' | 'today' | 'available' | 'unavailable';
+export type TileState = 'blank' | 'past' | 'today' | 'available' | 'partial' | 'unavailable';
 
 export const tileStateOf = (
   cell: CalendarCell,
   todayIso: string,
-  declared: ReadonlySet<string>,
+  dayState: (iso: string) => DayState,
 ): TileState => {
   if (!cell.inMonth) return 'blank';
   if (cell.iso < todayIso) return 'past';
   if (cell.iso === todayIso) return 'today';
-  return declared.has(cell.iso) ? 'unavailable' : 'available';
+  return dayState(cell.iso);
 };
 
-/** Only a future tile can be clicked. */
+/** Only a future tile can be clicked (it opens the day's hours). */
 export const isTileToggleable = (state: TileState): boolean =>
-  state === 'available' || state === 'unavailable';
+  state === 'available' || state === 'partial' || state === 'unavailable';
 
 /** Figma's tile colours (exact hexes from the frame). */
 export const TILE_CLASSES: Record<TileState, string> = {
@@ -37,6 +39,8 @@ export const TILE_CLASSES: Record<TileState, string> = {
   past: 'text-gray-300',
   today: 'text-gray-900 font-semibold',
   available: 'bg-[#E3F7EC] text-gray-900 hover:ring-2 hover:ring-brand-primary',
+  partial:
+    'bg-[linear-gradient(135deg,#E3F7EC_50%,#FFEBEC_50%)] text-gray-900 hover:ring-2 hover:ring-red-300',
   unavailable: 'bg-[#FFEBEC] text-gray-900 hover:ring-2 hover:ring-red-300',
 };
 

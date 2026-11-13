@@ -27,6 +27,13 @@ import { campaignTiersOf } from './helpers/cpm-config.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // IMP-FACT1 (operator, 2026-09-23) — « estimé et prévu should be the same »: what the screencaster
 // sees when paying is THE OBJECTIVE, I_cible = ⌊budget × 1000 ÷ CPM⌋ in BILLABLE impressions, at the
 // campaign's own CPM. The typical week decides whether it is deliverable (the C_max gate at payment,
@@ -355,7 +362,7 @@ describe('IMP-FACT1 — « Impressions prévues » is the objective fixed at pay
         requestedBudget: 600,
         eventMinutes: null,
       },
-      { id: ev?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS },
+      { id: ev?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
       15,
     );
     expect(outcome.status).toBe('OK');

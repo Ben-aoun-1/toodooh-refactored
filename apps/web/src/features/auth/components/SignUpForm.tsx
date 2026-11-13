@@ -24,6 +24,12 @@ import {
 import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import { screencasterSignupDocuments } from '@/features/auth/lib/signup-documents';
 import {
+  initialVenueDeclarations,
+  isValidVenueDeclarations,
+  venueDeclarationErrors,
+  venueDeclarationsPayload,
+} from '@/features/auth/lib/venue-declarations';
+import {
   DEFAULT_CLOSING_HOUR,
   DEFAULT_OPENING_HOUR,
   HOUR_OPTIONS,
@@ -70,6 +76,7 @@ import { DECLARED_COUNT_ERROR, parseDeclaredCount } from '@/lib/screen-declarati
 
 import SignupDocumentSlots from './SignupDocumentSlots';
 import SignupOwnerDocuments from './SignupOwnerDocuments';
+import VenueDeclarationFields from './VenueDeclarationFields';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
 
@@ -224,6 +231,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [ownerClosingHour, setOwnerClosingHour] = useState(DEFAULT_CLOSING_HOUR);
   const [fleetDraftOpeningHour, setFleetDraftOpeningHour] = useState(DEFAULT_OPENING_HOUR);
   const [fleetDraftClosingHour, setFleetDraftClosingHour] = useState(DEFAULT_CLOSING_HOUR);
+  // Mariem 11/11 — the Ramadan window + « Diffusez-vous les matchs ? » (individual / fleet draft).
+  const [ownerDeclarations, setOwnerDeclarations] = useState(initialVenueDeclarations);
+  const [fleetDraftDeclarations, setFleetDraftDeclarations] = useState(initialVenueDeclarations);
   const [companyLogo, setCompanyLogo] = useState<File | null>(null);
   const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(null);
   const [lastName, setLastName] = useState('');
@@ -651,7 +661,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const goNext = async () => {
     if (currentStep >= 4) return;
     const ctx = syncStepFromDom(currentStep);
-    const errors = stepFieldErrors(currentStep, ctx);
+    const errors = {
+      ...stepFieldErrors(currentStep, ctx),
+      ...(currentStep === 2 && selectedProfileType === 'individual_owner'
+        ? venueDeclarationErrors(ownerDeclarations)
+        : {}),
+    };
     applyStepErrors(errors);
     if (Object.keys(errors).length > 0) return;
     if (currentStep === 1) {
@@ -710,7 +725,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       fleetDraftZone.trim() &&
       fleetDraftGovernorate &&
       // H1 — per-establishment hours: a valid window is required (HOURS-M1: no skip).
-      isValidHoursWindow(fleetDraftOpeningHour, fleetDraftClosingHour),
+      isValidHoursWindow(fleetDraftOpeningHour, fleetDraftClosingHour) &&
+      isValidVenueDeclarations(fleetDraftDeclarations),
     );
   };
 
@@ -761,6 +777,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       wifi_password: fleetDraftWifiPassword.trim() || undefined,
       // H1 — the establishment's working hours (HOURS-M1: always sent).
       ...hoursPayload(fleetDraftOpeningHour, fleetDraftClosingHour),
+      ...venueDeclarationsPayload(fleetDraftDeclarations),
     };
     clearFieldError('fleet');
     setFleetEstablishments((prev) => [...prev, row]);
@@ -777,6 +794,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     setFleetDraftWifiPassword('');
     setFleetDraftOpeningHour(DEFAULT_OPENING_HOUR);
     setFleetDraftClosingHour(DEFAULT_CLOSING_HOUR);
+    setFleetDraftDeclarations(initialVenueDeclarations());
     toast.success('Établissement ajouté au réseau');
   };
 
@@ -838,7 +856,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             : undefined,
         // H1 — the individual_owner's working-hours window (HOURS-M1: always sent for owners).
         ...(selectedProfileType === 'individual_owner'
-          ? hoursPayload(ownerOpeningHour, ownerClosingHour)
+          ? {
+              ...hoursPayload(ownerOpeningHour, ownerClosingHour),
+              ...venueDeclarationsPayload(ownerDeclarations),
+            }
           : {}),
         // SCR-DECL1 — the step-2 counts belong to the individual_owner only (a fleet sends them
         // per entry); a profile switch after step 2 must not carry them along.
@@ -1419,6 +1440,16 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             },
           })}
           {fieldError('hours')}
+          <VenueDeclarationFields
+            idPrefix="owner"
+            value={ownerDeclarations}
+            onChange={(next) => {
+              clearFieldError('ramadanHours');
+              clearFieldError('broadcastsMatches');
+              setOwnerDeclarations(next);
+            }}
+            matchesError={fieldErrors['broadcastsMatches'] ?? null}
+          />
         </>
       ) : (
         <>
@@ -2005,6 +2036,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           closing: fleetDraftClosingHour,
           setClosing: setFleetDraftClosingHour,
         })}
+        <VenueDeclarationFields
+          idPrefix="fleet-draft"
+          value={fleetDraftDeclarations}
+          onChange={setFleetDraftDeclarations}
+        />
         {renderLocationWifiFields({
           idPrefix: 'fleet-draft',
           lat: fleetDraftLatitude,

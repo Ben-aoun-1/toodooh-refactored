@@ -52,19 +52,23 @@ export const campaignsOnDay = (airings: readonly DayAiring[] | undefined): strin
   ...new Set((airings ?? []).map((a) => a.campaignName)),
 ];
 
-/** The confirm question before declaring a day that carries accepted diffusion. */
+/**
+ * The confirm question before declaring hours that carry accepted diffusion (HOUR-UNAV1: the
+ * share of THOSE HOURS moves, not the whole day's).
+ */
 export const declareConfirmCopy = (campaignNames: readonly string[]): string => {
   const n = campaignNames.length;
   const list = campaignNames.map((name) => `« ${name} »`).join(', ');
   return n === 1
-    ? `La campagne ${list} diffuse ce jour-là. Sa part sur ce jour sera redistribuée à d'autres établissements. Confirmer l'indisponibilité ?`
-    : `${n} campagnes diffusent ce jour-là (${list}). Leur part sur ce jour sera redistribuée à d'autres établissements. Confirmer l'indisponibilité ?`;
+    ? `La campagne ${list} diffuse à ces heures. Sa part sur ces heures sera redistribuée à d'autres établissements. Confirmer l'indisponibilité ?`
+    : `${n} campagnes diffusent à ces heures (${list}). Leur part sur ces heures sera redistribuée à d'autres établissements. Confirmer l'indisponibilité ?`;
 };
 
 export interface RedispatchedShare {
   campaign_id: string;
   campaign_name: string;
-  mode: 'cascade' | 'reliquat';
+  /** HOUR-UNAV1 — 'evenement': a sold match slot in the declared hours, re-placed. */
+  mode: 'cascade' | 'reliquat' | 'evenement';
   slots_moved: number;
   v_fact: number;
   absorbed: number;
@@ -73,15 +77,17 @@ export interface RedispatchedShare {
 
 /** The success toast after a declaration, from the api's own account of what moved. */
 export const declareResultCopy = (redispatched: readonly RedispatchedShare[]): string => {
-  if (redispatched.length === 0) return 'Jour déclaré indisponible.';
+  if (redispatched.length === 0) return 'Indisponibilité enregistrée.';
   const parts = redispatched.map((r) =>
     r.mode === 'reliquat'
-      ? `« ${r.campaign_name} » : la part de ce jour sera redistribuée au prochain passage`
+      ? `« ${r.campaign_name} » : la part de ces heures sera redistribuée au prochain passage`
       : r.residual > 0
         ? `« ${r.campaign_name} » : part redistribuée en partie (reste à replacer)`
-        : `« ${r.campaign_name} » : part redistribuée à d'autres établissements`,
+        : r.mode === 'evenement'
+          ? `« ${r.campaign_name} » : créneaux du match redistribués à d'autres établissements`
+          : `« ${r.campaign_name} » : part redistribuée à d'autres établissements`,
   );
-  return `Jour déclaré indisponible — ${parts.join(' ; ')}.`;
+  return `Indisponibilité enregistrée — ${parts.join(' ; ')}.`;
 };
 
 export const fmtLongDate = (iso: string): string => {

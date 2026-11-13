@@ -13,6 +13,10 @@ import { tunisDateOf } from './campaign-dates.js';
 import { cpmFreezeCheck } from './cpm-freeze-guard.js';
 import { campaignCpmRates, campaignTTiers, cpmForCampaign } from './dispatch/config.js';
 import { runDispatch } from './dispatch/dispatch-service.js';
+import { usesToursEngine } from './dispatch/engine-switch.js';
+import { runToursDispatch } from './dispatch/tours/dispatch.js';
+import { type ShownQuote } from './dispatch/tours/quote.js';
+import { proposeReserved } from './dispatch/tours/reservation.js';
 import { createEngineTrace } from './engine-journal/trace.js';
 import { runEventDispatch } from './event-dispatch/dispatch.js';
 import { walletSpendable } from './recharges.js';
@@ -64,6 +68,9 @@ export type ActivationOutcome =
   // CPM-3 — an admin CPM change landed between the campaign read and the freeze: nothing was
   // frozen; retryable (the next attempt reads the new CPM). lib/cpm-freeze-guard.ts.
   | { status: 'CPM_CHANGED' }
+  // DISP-TOURS §3.4 — a place was taken since the cart showed its figures: nothing persisted;
+  // the cart shows the new ones (only the cart passes expectedQuote).
+  | { status: 'QUOTE_CHANGED' }
   | { status: 'NO_WINDOW' }
   | { status: 'WRONG_STATUS'; currentStatus: string }
   | { status: 'PLAN_MISSING' };
@@ -76,6 +83,14 @@ export interface ActivationInput {
   activatedBy: string | null;
   /** Which status the atomic flip transitions FROM (guards the concurrent-flip race). */
   fromStatus: ActivationFromStatus;
+  /** DISP-TOURS §3.4 — the figures the cart showed at « Lancer » (the tours engine checks them). */
+  expectedQuote?: ShownQuote;
+  /**
+   * DISP-TOURS Q1 — the cart's « Lancer » on a spot still awaiting validation: a tours campaign is
+   * frozen and its places reserved now (RESERVE allocations, no owner told), the flip stays the
+   * caller's (draft → pending); the validation proposes it (finalizeActivation).
+   */
+  reserveUnderReview?: boolean;
 }
 
 // Derived I_cible from the indicative budget at the given CPM, or null when un-derivable.
@@ -133,7 +148,10 @@ export const prepareActivation = async (
   if (campaign.status !== fromStatus) {
     return { status: 'WRONG_STATUS', currentStatus: campaign.status };
   }
-  if (contentValidationStatus !== 'approved') {
+  // DISP-TOURS — the tours engine (R13 · Q1: a spot under review is reserved, not refused).
+  const tours = campaign.eventId === null && (await usesToursEngine(db, campaign.id));
+  const reserving = input.reserveUnderReview === true && tours;
+  if (contentValidationStatus !== 'approved' && !reserving) {
     return { status: 'NOT_ACTIVATABLE', reason: 'content_not_approved', contentValidationStatus };
   }
 
@@ -170,7 +188,9 @@ export const prepareActivation = async (
   const spendable = (
     await walletSpendable(campaign.advertiserId, { excludeCampaignId: campaign.id })
   ).spendable_tnd;
-  if (spendable < requestedBudget) {
+  // DISP-TOURS (R13) — the tours engine engages its exact price, at or under the budget: its
+  // dispatch checks the wallet against that price, under its locks (./dispatch/tours/dispatch.ts).
+  if (!tours && spendable < requestedBudget) {
     return {
       status: 'NOT_ACTIVATABLE',
       reason: 'insufficient_balance',
@@ -198,7 +218,7 @@ export const prepareActivation = async (
         requestedBudget,
         eventMinutes: campaign.eventMinutes,
       },
-      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
       cpm,
       cpmCheck,
     );
@@ -224,14 +244,39 @@ export const prepareActivation = async (
   // entry constructs the journal collector; runDispatch buffers and flushes it POST-outcome
   // (committed OR rolled-back clôture), so the operator can see WHY an activation refused.
   // CPM-2 — T derives from the campaign's OWN tiers (in effect when it was created).
-  const result = await runDispatch(
-    campaign,
-    { iCible, cpm, s, tiers: campaignTTiers(campaign) },
-    createEngineTrace('dispatch', campaign.id),
-    cpmCheck,
-  );
+  // DISP-TOURS — the tours engine fills to the targeted BUDGET (its price lands at or under it).
+  const result = tours
+    ? await runToursDispatch(
+        campaign,
+        {
+          budgetTnd: requestedBudget,
+          cpm,
+          s,
+          tiers: campaignTTiers(campaign),
+          ...(input.expectedQuote ? { expected: input.expectedQuote } : {}),
+          spendableTnd: spendable,
+          reserve: contentValidationStatus !== 'approved',
+        },
+        createEngineTrace('dispatch', campaign.id),
+        cpmCheck,
+      )
+    : await runDispatch(
+        campaign,
+        { iCible, cpm, s, tiers: campaignTTiers(campaign) },
+        createEngineTrace('dispatch', campaign.id),
+        cpmCheck,
+      );
   if (result.status === 'NO_WINDOW') return { status: 'NO_WINDOW' };
   if (result.status === 'CPM_CHANGED') return { status: 'CPM_CHANGED' };
+  if (result.status === 'QUOTE_CHANGED') return { status: 'QUOTE_CHANGED' };
+  if (result.status === 'INSUFFICIENT_BALANCE') {
+    return {
+      status: 'NOT_ACTIVATABLE',
+      reason: 'insufficient_balance',
+      requiredTnd: result.requiredTnd,
+      availableTnd: result.availableTnd,
+    };
+  }
   // Clôture — NOT a deliverable plan → do NOT activate; the campaign keeps its status.
   if (result.status === 'TOO_THIN') {
     return { status: 'NOT_DELIVERABLE', reason: 'too_thin', nMin: result.nMin, nMax: result.nMax };
@@ -253,6 +298,8 @@ export const prepareActivation = async (
  * transaction). The date routing (CF-S1): a future start becomes 'upcoming' (the lifecycle job
  * flips it to 'active' on day one); today-or-past goes straight to 'active'. NO money moves —
  * the funded gate was a READ in prepare; the settlement debit stays at reconciliation.
+ * DISP-TOURS Q1 — a tours campaign reserved while its spot awaited validation is proposed to its
+ * owners here, with the flip (its RESERVE allocations turn EN_ATTENTE, each owner is told).
  */
 export const finalizeActivation = async (
   executor: DbExecutor,
@@ -275,6 +322,7 @@ export const finalizeActivation = async (
       .limit(1);
     return { status: 'WRONG_STATUS', currentStatus: current?.status ?? campaign.status };
   }
+  await proposeReserved(executor, activated);
   return { activated };
 };
 
@@ -286,17 +334,21 @@ export const finalizeActivation = async (
 export const activateCampaign = async (input: ActivationInput): Promise<ActivationOutcome> => {
   const prepared = await prepareActivation(input);
   if (prepared.status !== 'READY') return prepared;
-  const flipped = await finalizeActivation(db, input.campaign, {
-    activatedBy: input.activatedBy,
-    fromStatus: input.fromStatus,
-  });
+  // The flip and the Q1 proposal land together (a validated campaign never stays unproposed).
+  const flipped = await db.transaction((tx) =>
+    finalizeActivation(tx, input.campaign, {
+      activatedBy: input.activatedBy,
+      fromStatus: input.fromStatus,
+    }),
+  );
   if ('currentStatus' in flipped) {
     return { status: 'WRONG_STATUS', currentStatus: flipped.currentStatus };
   }
+  const loaded = prepared.plan === null ? null : await loadPlan(input.campaign.id);
   return {
     status: 'OK',
     campaign: flipped.activated,
     plan: prepared.plan,
-    allocations: prepared.allocations,
+    allocations: loaded?.allocations ?? prepared.allocations,
   };
 };

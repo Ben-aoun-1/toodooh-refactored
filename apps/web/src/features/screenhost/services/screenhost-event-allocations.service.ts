@@ -20,6 +20,9 @@ export interface EventAllocationBloc {
 export interface PendingEventAllocation {
   id: string;
   campaign_id: string;
+  /** Mariem 05/11 — the match; a `grouped` share is answered in its « Soir de match » popup. */
+  event_id: string;
+  grouped: boolean;
   match_name: string;
   kickoff_at: string;
   ends_at: string;

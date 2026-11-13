@@ -18,7 +18,16 @@ import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { matchesByEvent } from '../lib/event-catalogue.js';
 import { upsertEventAttestation } from '../lib/event-playout/attestation.js';
-import { remapEventPositionings, voidEventPositionings } from '../lib/event-playout/reschedule.js';
+import {
+  MAX_EXTENSION_MINUTES,
+  MIN_EXTENSION_MINUTES,
+  extendEventEnd,
+} from '../lib/event-playout/extend.js';
+import {
+  loadEvent,
+  remapEventPositionings,
+  voidEventPositionings,
+} from '../lib/event-playout/reschedule.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
 import { pushPlaylistToAllConnected } from '../lib/playout/push.js';
@@ -53,6 +62,12 @@ const attestationBodySchema = z.object({
 const reporterBodySchema = z.object({
   kickoff_at: z.string(),
   ends_at: z.string().optional(),
+});
+
+// EVT-ET1 (Mariem 26/10 + operator 2026-10-27) — the admin's manual extension: how many minutes
+// the end of the match moves later (the « après » ads with it), in steps of 5.
+const prolongerBodySchema = z.object({
+  minutes: z.number().int().min(MIN_EXTENSION_MINUTES).max(MAX_EXTENSION_MINUTES).multipleOf(5),
 });
 
 const MAX_EVENT_IMAGE_BYTES = 10 * 1024 * 1024; // affiche: JPEG/PNG ≤ 10 MB (the CF-M2 posture)
@@ -145,8 +160,17 @@ const replaceMatches = async (
 };
 
 /** The admin wire: the shared view + its matches. */
-const adminEventWire = async (row: EventRow, now: Date) =>
-  eventView(row, now, (await matchesByEvent([row.id])).get(row.id) ?? []);
+// EVT-ET1 — the admin also sees the live-match link and the total extension (never served to
+// advertisers: the catalogue's eventView stays as it was).
+const adminEventWire = async (row: EventRow, now: Date) => ({
+  ...eventView(row, now, (await matchesByEvent([row.id])).get(row.id) ?? []),
+  api_football: {
+    fixture_id: row.apiFootballFixtureId,
+    status: row.apiFootballStatus,
+    checked_at: row.apiFootballCheckedAt,
+  },
+  extension_minutes: row.extensionMinutes,
+});
 
 const parseInstant = (value: string): Date | null => {
   const d = new Date(value);
@@ -196,6 +220,13 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
         annule: r.annule,
         suggested_by: r.suggestedBy,
         created_at: r.createdAt.toISOString(),
+        // EVT-ET1 — the live-match link and the total extension, for the admin list.
+        api_football: {
+          fixture_id: r.apiFootballFixtureId,
+          status: r.apiFootballStatus,
+          checked_at: r.apiFootballCheckedAt,
+        },
+        extension_minutes: r.extensionMinutes,
       })),
     });
   });
@@ -304,15 +335,32 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
     if (Object.keys(patch).length === 0 && body.matches === undefined) {
       return reply.status(200).send(await adminEventWire(row, new Date()));
     }
+    // EVT-ET1 — a date edit used to store the new instants only: the frozen blocs and the hour
+    // holds stayed on the old window while the blackout moved. It now remaps exactly like
+    // « Reporter » (same notices — a moved match is a moved match).
+    const datesMoved =
+      kickoffAt.getTime() !== row.kickoffAt.getTime() || endsAt.getTime() !== row.endsAt.getTime();
     const updated = await db.transaction(async (tx) => {
       const [next] =
         Object.keys(patch).length > 0
           ? await tx.update(events).set(patch).where(eq(events.id, params.data.id)).returning()
           : [row];
       if (next && body.matches) await replaceMatches(tx, next.id, body.matches);
+      if (next && datesMoved) {
+        await remapEventPositionings(
+          tx,
+          { id: next.id, name: next.name, kickoffAt: next.kickoffAt, endsAt: next.endsAt },
+          { kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+        );
+      }
       return next;
     });
     if (!updated) return sendNotFound(reply);
+    if (datesMoved) {
+      await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
+        request.log.warn({ err }, 'network playlist re-push failed'),
+      );
+    }
     return reply.status(200).send(await adminEventWire(updated, new Date()));
   });
 
@@ -413,6 +461,43 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
       ...eventView(outcome.moved, new Date()),
       positionnements_recalcules: outcome.remapped.positionings,
       allocations_recalculees: outcome.remapped.allocations,
+    });
+  });
+
+  // POST /api/admin/events/:id/prolonger { minutes } — EVT-ET1: move the END of the match later
+  // by the chosen minutes (5–180, steps of 5); the « après » ads, their holds and the classic
+  // campaigns' pause follow, every TV is re-pushed, and nobody is notified (ruling 7.4). Allowed
+  // until the match has ended (its current ends_at). The automatic extra-time jumps use the same
+  // writer (lib/event-playout/extend.ts).
+  app.post('/api/admin/events/:id/prolonger', adminGuard, async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) return invalidField(reply, 'id', 'must be a uuid');
+    const body = prolongerBodySchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return invalidField(
+        reply,
+        'minutes',
+        `Durée invalide : entre ${MIN_EXTENSION_MINUTES} et ${MAX_EXTENSION_MINUTES} minutes, par pas de 5.`,
+      );
+    }
+    const [row] = await db.select().from(events).where(eq(events.id, params.data.id)).limit(1);
+    if (!row) return sendNotFound(reply);
+    const conflict = (message: string) =>
+      reply
+        .status(409)
+        .send({ error: 'CONFLICT', message, statusCode: 409, requestId: request.id });
+    if (row.annule) return conflict('Événement annulé — il ne peut plus être prolongé.');
+    if (row.endsAt.getTime() <= Date.now()) {
+      return conflict('Le match est terminé — il ne peut plus être prolongé.');
+    }
+    const outcome = await extendEventEnd(row.id, body.data.minutes, 'admin', request.log);
+    if (!outcome) return sendNotFound(reply);
+    const fresh = await loadEvent(row.id);
+    if (!fresh) return sendNotFound(reply);
+    return reply.status(200).send({
+      ...(await adminEventWire(fresh, new Date())),
+      positionnements_recalcules: outcome.positionings,
+      allocations_recalculees: outcome.allocations,
     });
   });
 
@@ -582,7 +667,7 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
     const cfg = await getDispatchConfig();
     // EVT-PRICE2 — no spot yet: the AUDIENCE per minute (A_max ÷ 3, R = 1), as the catalogue.
     const result = await computeEventCmax(
-      { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+      { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt, seatMinutes: row.seatMinutes },
       cfg.eventCpmTnd,
       new Set(),
       1,

@@ -77,7 +77,7 @@ export const inspectCampaign = async (campaignId: string) => {
     if (ev) {
       cMaxTnd = (
         await computeEventCmax(
-          { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+          { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
           Number(c.eventCpmTnd),
           new Set(),
           await campaignPlaysPerMinute(c.id),

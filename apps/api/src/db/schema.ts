@@ -403,6 +403,12 @@ export const screenhosts = pgTable(
     // set. Per-weekday hours + overnight (closing ≤ opening) semantics are deferred to L-disp.
     openingHour: integer('opening_hour'),
     closingHour: integer('closing_hour'),
+    // Mariem 11/11 (mig 0107) — declared at signup, read by NOTHING in dispatch/pricing yet: the
+    // Ramadan window (same model as the pair above; both NULL = not declared) and « Diffusez-vous
+    // les matchs ? » (NULL = not declared). Not the event switch — that stays broadcast_capacity.
+    ramadanOpeningHour: integer('ramadan_opening_hour'),
+    ramadanClosingHour: integer('ramadan_closing_hour'),
+    broadcastsMatches: boolean('broadcasts_matches'),
     // « Capacité de diffusion » — CAP-EVT1: the venue's EVENT SWITCH. SET (not NULL) makes it eligible
     // to events; its numeric value is unused, and standard campaigns never read it. One home for the
     // rule: lib/event-pricing/event-switch.ts. Nullable = switch off.
@@ -470,6 +476,10 @@ export const screenhosts = pgTable(
     check(
       'screenhosts_closing_hour_range',
       sql`${table.closingHour} IS NULL OR (${table.closingHour} >= 0 AND ${table.closingHour} <= 23)`,
+    ),
+    check(
+      'screenhosts_ramadan_hours_valid',
+      sql`(${table.ramadanOpeningHour} IS NULL AND ${table.ramadanClosingHour} IS NULL) OR (${table.ramadanOpeningHour} BETWEEN 0 AND 23 AND ${table.ramadanClosingHour} BETWEEN 0 AND 23 AND ${table.ramadanOpeningHour} <> ${table.ramadanClosingHour})`,
     ),
     check(
       'screenhosts_broadcast_capacity_pos',
@@ -671,6 +681,35 @@ export const screenhostUnavailability = pgTable(
 );
 
 export type ScreenhostUnavailability = typeof screenhostUnavailability.$inferSelect;
+
+// HOUR-UNAV1 (Mariem 26/10, operator rulings 2026-10-27: whole hours · sold event slots are
+// redistributed · the mobile app too) — PARTIAL unavailability: one row per unavailable clock
+// HOUR, dated on the calendar day the hour falls on (an overnight venue's 00:00–02:00 belongs to
+// the next date, exactly as its créneaux do). A WHOLE day stays a screenhost_unavailability row;
+// every reader merges both into one set of (date, hour) cells through lib/unavailable-hours.ts.
+export const screenhostUnavailableHours = pgTable(
+  'screenhost_unavailable_hours',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    hour: integer('hour').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('screenhost_unavailable_hours_cell_uq').on(
+      table.screenhostId,
+      table.day,
+      table.hour,
+    ),
+    check(
+      'screenhost_unavailable_hours_hour_range',
+      sql`${table.hour} >= 0 AND ${table.hour} <= 23`,
+    ),
+  ],
+);
 
 // Monthly screenhost stats — the ACTUAL monthly audience the hub pushes (operator ruling: real
 // monthly figures, NOT toodooh's rolling weekly affluence average). One row per (screenhost, month);
@@ -1128,6 +1167,20 @@ export const agentUnavailableDays = pgTable(
   (table) => [primaryKey({ columns: [table.agentUserId, table.day] })],
 );
 
+// AGT-HOUR1 — single appointment HOURS an agent blocked (whole days: agent_unavailable_days).
+export const agentUnavailableHours = pgTable(
+  'agent_unavailable_hours',
+  {
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    hour: integer('hour').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.agentUserId, table.day, table.hour] })],
+);
+
 // The appointment reasons, per agent type, administered in the hub.
 export const agentAppointmentObjectives = pgTable('agent_appointment_objectives', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -1299,6 +1352,10 @@ export const deviceSessions = pgTable(
     accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }).notNull(),
     refreshExpiresAt: timestamp('refresh_expires_at', { withTimezone: true }).notNull(),
     deviceType: text('device_type'),
+    // MOBILE-1 — the screenhost phone app's Expo push token (« ExponentPushToken[…] »), bound to
+    // this session: cleared on logout/revocation, and moved (never duplicated) when the same
+    // phone signs in again. Null for TV sessions and for phones that declined notifications.
+    pushToken: text('push_token'),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1308,6 +1365,7 @@ export const deviceSessions = pgTable(
     uniqueIndex('device_sessions_access_token_hash_uq').on(table.accessTokenHash),
     uniqueIndex('device_sessions_refresh_token_hash_uq').on(table.refreshTokenHash),
     index('device_sessions_user_id_idx').on(table.userId),
+    uniqueIndex('device_sessions_push_token_uq').on(table.pushToken),
   ],
 );
 
@@ -1480,7 +1538,13 @@ export const campaigns = pgTable(
       .default(sql`current_t_30s()`),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     // CF-S1 — the J-3 draft reminder stamp (one reminder per draft; NEVER an auto-delete).
+    // DISP-TOURS — event positionings only since 0102 (classic drafts: the two expiry notices).
     draftReminderSentAt: timestamp('draft_reminder_sent_at', { withTimezone: true }),
+    // DISP-TOURS §3.1/3.2 (0102) — the advertiser's own last save (creation, an edit, an add to or
+    // a removal from the cart; never a system write) and the last expiry notice sent: the clock
+    // of a never-launched classic campaign's deletion (lib/campaign-expiry.ts).
+    lastSavedAt: timestamp('last_saved_at', { withTimezone: true }).notNull().defaultNow(),
+    expiryNoticeSentAt: timestamp('expiry_notice_sent_at', { withTimezone: true }),
     // Admin moderation audit (activation wiring). activated_at/by stamp the admin approval that flips
     // pending → active (and triggers dispatch); rejected_at/reject_reason stamp a pending → rejected.
     // All nullable — only one branch is ever taken, and a draft/pending campaign has neither set.
@@ -1505,6 +1569,8 @@ export const campaigns = pgTable(
     ctaStorageKey: text('cta_storage_key'),
     ctaSourceCreativeId: uuid('cta_source_creative_id'),
     ctaError: text('cta_error'),
+    /** Mariem 04/11 — the QR card's corner (lib/spot-cta.ts CTA_POSITIONS); NULL = bottom-left. */
+    ctaPosition: text('cta_position'),
     // STOP-1 — a superadmin stopped the campaign (lib/campaign-stop.ts): when, who, why, and the
     // end date it had before (an active campaign ends the day it is stopped). All NULL = not stopped.
     stoppedAt: timestamp('stopped_at', { withTimezone: true }),
@@ -1524,6 +1590,10 @@ export const campaigns = pgTable(
     check(
       'campaigns_event_minutes_positive',
       sql`${table.eventMinutes} IS NULL OR ${table.eventMinutes} >= 1`,
+    ),
+    check(
+      'campaigns_cta_position_valid',
+      sql`${table.ctaPosition} IS NULL OR ${table.ctaPosition} IN ('bottom_left', 'bottom_right', 'top_left', 'top_right')`,
     ),
   ],
 );
@@ -1837,10 +1907,14 @@ export type DispatchConfig = typeof dispatchConfig.$inferSelect;
 // VALUE` + `SET DEFAULT <new value>` pair — the latter trips Postgres's "unsafe use of new value"
 // when both run in one transaction against an already-migrated DB (drizzle runs all pending
 // migrations in a single transaction).
+// DISP-TOURS (0103) — RESERVE: a tours allocation frozen at « Lancer » while the campaign's spot
+// awaits validation. It holds its places but is not proposed: no owner sees it until the
+// validation turns it EN_ATTENTE (lib/dispatch/tours/reservation.ts). Appended (ADD VALUE).
 export const dispatchAcceptation = pgEnum('dispatch_acceptation', [
   'EN_ATTENTE',
   'ACCEPTE',
   'REFUSE',
+  'RESERVE',
 ]);
 
 export type DispatchAcceptation = (typeof dispatchAcceptation.enumValues)[number];
@@ -1876,12 +1950,65 @@ export const campaignDispatchPlan = pgTable(
     // impressions for the redispatch (E6) to add to its own remaining loss. Fed at freeze time
     // (buildPlan.reliquatStocke) and grown by the refusal cascade's sub-seuil shortfalls.
     reliquatStocke: integer('reliquat_stocke').notNull().default(0),
+    // DISP-TOURS (migration 0101) — which engine froze the plan: 'v1' (every plan before it) or
+    // 'tours' (lib/dispatch/tours). A tours plan stores its exact price (the amount the launch
+    // engages) and the snapshot the admin fiche reads.
+    engine: text('engine').$type<'v1' | 'tours'>().notNull().default('v1'),
+    priceTnd: numeric('price_tnd', { precision: 14, scale: 4 }),
+    detail: jsonb('detail').$type<ToursPlanDetail>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex('campaign_dispatch_plan_campaign_uq').on(table.campaignId)],
 );
 
 export type CampaignDispatchPlan = typeof campaignDispatchPlan.$inferSelect;
+
+/**
+ * DISP-TOURS — the frozen calculation of a tours plan, for the admin fiche (Mariem's spec §3.3):
+ * the parameters, the maximum, each venue's potential, tours, amount and status, its week grid
+ * (affluence, the tour that took each hour, its passages) and the engine journal's phases.
+ */
+export interface ToursPlanDetail {
+  computedAt: string;
+  params: {
+    fMaxSeconds: number;
+    s: number;
+    rPlein: number;
+    t: number;
+    cpm: number;
+    pctSh: number;
+    seuilShTnd: number;
+    capHeure: number;
+  };
+  budgetTnd: number;
+  iCible: number;
+  iMax: number;
+  cMaxTnd: number;
+  iAlloue: number;
+  prixTnd: number;
+  venues: {
+    venueId: string;
+    ordre: number;
+    sps: number;
+    pleinImpressions: number;
+    pleinMontantTnd: number;
+    impressions: number;
+    montantTnd: number;
+    statut: 'retenu' | 'plein' | 'non_retenu' | 'retire_budget' | 'exclu_plein';
+    tours: { tour: number; passages: number }[];
+    week: {
+      dayOfWeek: number;
+      hour: number;
+      affluence: number;
+      /** Usable dates of the hour in the period (0 = unavailable, closed or full). */
+      n: number;
+      tour: number | null;
+      passages: number | null;
+    }[];
+  }[];
+  excluded: { venueId: string; reason: string }[];
+  journal: { phase: string; result: Record<string, number | string | boolean>; ms: number }[];
+}
 
 // A.7 créneau — one broadcastable (date, hour) with planned reps + potential impressions. Stored as
 // JSON per allocation (the frozen plan is written once + read back whole; no per-créneau querying).
@@ -2615,9 +2742,18 @@ export const notifications = pgTable(
     appointmentId: uuid('appointment_id').references((): AnyPgColumn => agentAppointments.id, {
       onDelete: 'set null',
     }),
+    // Mariem 05/11 (mig 0106) — the « Soir de match » notice names its match and venue: it spans
+    // every campaign positioned on that match at that venue.
+    eventId: uuid('event_id').references((): AnyPgColumn => events.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id').references((): AnyPgColumn => screenhosts.id, {
+      onDelete: 'cascade',
+    }),
     readAt: timestamp('read_at', { withTimezone: true }),
     // AGT-6 — when the email double of an agent notification went out (spec §8).
     emailedAt: timestamp('emailed_at', { withTimezone: true }),
+    // MOBILE-1 — stamped when the push outbox sent (or deliberately skipped) this row to the
+    // owner's phone(s); null = not yet handled. Rows older than the outbox window are never sent.
+    pushedAt: timestamp('pushed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('notifications_user_id_idx').on(table.userId)],
@@ -2668,6 +2804,23 @@ export const events = pgTable(
     qualificationPending: boolean('qualification_pending').notNull().default(false),
     /** The card's date line when the date is not a single day (« Week-end du 30 octobre … »). */
     dateLabel: text('date_label'),
+    // EVT-ET1 (operator rulings 2026-10-27) — the live match behind the event and the extensions
+    // its « après » ads received. lib/api-football/* links the fixture automatically (date + teams)
+    // and moves ends_at by fixed jumps: +35 min when extra time starts, +15 min when penalties
+    // start — each applied ONCE (the *_applied_at stamps). An admin may also extend by hand.
+    // `extension_minutes` sums every move (automatic + manual), for the admin's display.
+    apiFootballFixtureId: integer('api_football_fixture_id'),
+    apiFootballStatus: text('api_football_status'),
+    apiFootballCheckedAt: timestamp('api_football_checked_at', { withTimezone: true }),
+    extraTimeAppliedAt: timestamp('extra_time_applied_at', { withTimezone: true }),
+    penaltiesAppliedAt: timestamp('penalties_applied_at', { withTimezone: true }),
+    extensionMinutes: integer('extension_minutes').notNull().default(0),
+    /**
+     * Mariem 04/11 — the match's seat length: NULL = 2-minute seats, 3 per bloc (the model since
+     * 2026-11-04); 1 = EVT-MIN1's 1-minute seats, 5 per bloc, kept by a match already sold under
+     * them (migration 0104). lib/event-pricing/minutes.ts eventSeatModel reads it.
+     */
+    seatMinutes: smallint('seat_minutes'),
   },
   (table) => [
     index('events_kickoff_at_idx').on(table.kickoffAt),
@@ -2678,6 +2831,10 @@ export const events = pgTable(
     check('events_type_sport', sql`${table.type} = 'sport'`),
     check('events_ends_after_kickoff', sql`${table.endsAt} > ${table.kickoffAt}`),
     check('events_source_valid', sql`${table.source} in ('official', 'suggested')`),
+    check(
+      'events_seat_minutes_valid',
+      sql`${table.seatMinutes} IS NULL OR ${table.seatMinutes} IN (1, 2)`,
+    ),
   ],
 );
 
@@ -2815,6 +2972,13 @@ export const eventAllocations = pgTable(
     montantTnd: numeric('montant_tnd', { precision: 12, scale: 3 }).notNull(),
     statut: text('statut').notNull().default('EN_ATTENTE'),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
+    /**
+     * Mariem 05/11 (mig 0106) — how the owner is asked about this share (lib/event-host-notice):
+     * NULL = waits for the match's grouped notice (kick-off − 24 h), 'grouped', 'single' (the
+     * default: proposed alone, as before), 'auto' (accepted on the owner's behalf) or
+     * 'withheld' (never asked).
+     */
+    notice: text('notice').default('single'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -2825,6 +2989,10 @@ export const eventAllocations = pgTable(
     check(
       'event_allocations_statut_valid',
       sql`${table.statut} in ('EN_ATTENTE', 'ACCEPTE', 'REFUSE')`,
+    ),
+    check(
+      'event_allocations_notice_valid',
+      sql`${table.notice} IS NULL OR ${table.notice} IN ('grouped', 'single', 'auto', 'withheld')`,
     ),
   ],
 );

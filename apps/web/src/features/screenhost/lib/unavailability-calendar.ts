@@ -5,7 +5,7 @@
 /** The honest consequence copy. CAL-1 (ruling 2026-09-12): a declared day that carries an accepted
  * diffusion moves that day's share — the old « ne sont pas affectées » is no longer true. */
 export const UNAVAILABILITY_CONSEQUENCE_COPY =
-  "Les jours indisponibles sont exclus des prochaines campagnes. Si une campagne acceptée y diffuse, sa part sur ce jour est automatiquement redistribuée à d'autres établissements.";
+  "Les heures indisponibles sont exclues des prochaines campagnes. Si une campagne acceptée ou un match y diffuse, sa part sur ces heures est automatiquement redistribuée à d'autres établissements.";
 
 /** Only STRICTLY-FUTURE days toggle — today and the past are locked (the api's PAST_OR_TODAY). */
 export const isDayToggleable = (dayIso: string, todayIso: string): boolean => dayIso > todayIso;

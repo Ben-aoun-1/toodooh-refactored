@@ -9,6 +9,7 @@ import {
   campaignTargeting,
   campaignZones,
   campaigns,
+  cartItems,
   creatives,
   eventAllocations,
   events,
@@ -23,7 +24,7 @@ import {
   premiereDateDisponible,
   startDateViolation,
 } from '../lib/campaign-dates.js';
-import { isDemoUser } from '../lib/demo.js';
+import { eventPoolDemoVenues, isDemoUser } from '../lib/demo.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
@@ -354,10 +355,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         deliveredImp: campaignReconciliation.deliveredImp,
         spendTnd: campaignReconciliation.spendTnd,
         reconciledAt: campaignReconciliation.reconciledAt,
+        cartItemId: cartItems.id,
       })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .leftJoin(campaignReconciliation, eq(campaignReconciliation.campaignId, campaigns.id))
+      .leftJoin(cartItems, eq(cartItems.campaignId, campaigns.id))
       .where(eq(campaigns.advertiserId, userId))
       .orderBy(desc(campaigns.createdAt));
 
@@ -413,13 +416,17 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         delivered_impressions: r.deliveredImp ?? null,
         spend_tnd: r.spendTnd == null ? null : Number(r.spendTnd),
         reconciled_at: r.reconciledAt ?? null,
+        // DISP-TOURS §3.1 — a campaign in the cart shows in the cart only, never in « Mes
+        // campagnes » (the web list drops it on this flag; the other readers of this list keep it).
+        in_cart: r.cartItemId !== null,
         targeting: targetingByCampaign.get(r.id) ?? [],
         planned_impressions: plannedByCampaign.get(r.id)?.impressions ?? null,
         planned_airtime_seconds: airtimeByCampaign.get(r.id) ?? null,
         // IMP-FACT1 — the advertiser's « Impressions prévues »: the BILLABLE objective paid for,
         // identical before and after dispatch (lib/impressions-objectif.ts). planned_impressions
         // above stays the PHYSICAL plan read (the real audience), for the surfaces that ask it.
-        impressions_objectif: impressionsObjectif(r),
+        // DISP-TOURS — a tours plan's objective is what it allocated (the cart's figure).
+        impressions_objectif: plannedByCampaign.get(r.id)?.objectif ?? impressionsObjectif(r),
       })),
     );
   });
@@ -552,6 +559,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           minutes,
           campaignCpmRates(existing).eventCpmTnd,
           await positioningPlaysPerMinute(creativeId ?? null),
+          await eventPoolDemoVenues(db, existing.id),
         );
         if (!verdict.ok && verdict.reason === 'EVENT_ANNULE') {
           return reply
@@ -568,6 +576,13 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           return reply.status(400).send({
             error: 'EVENT_SPOT_REQUIRED',
             message: 'Choisissez d’abord votre vidéo : le prix d’une minute en dépend.',
+          });
+        } else if (!verdict.ok && verdict.reason === 'MINUTES_STEP') {
+          // Mariem 04/11 — a campaign takes whole seats of the match (2 minutes per bloc).
+          return reply.status(400).send({
+            error: 'EVENT_MINUTES_STEP',
+            message: `Les minutes se choisissent par tranches de ${verdict.seatMinutes}.`,
+            seat_minutes: verdict.seatMinutes,
           });
         } else if (!verdict.ok) {
           return reply.status(400).send({
@@ -617,25 +632,20 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         }
       }
     }
-    // CF-Z1 — a zone-only PATCH has an empty columns patch: skip the UPDATE (drizzle rejects an
-    // empty set()) and re-read the row; otherwise update as before. Zones replace-set after.
-    const columnsPatch = { ...buildUpdatePatch(parsed.data), ...(minutesPatch ?? {}) };
-    let updated: CampaignRow | undefined;
-    if (Object.keys(columnsPatch).length > 0) {
-      const [row] = await db
-        .update(campaigns)
-        .set(columnsPatch)
-        .where(and(eq(campaigns.id, existing.id), eq(campaigns.advertiserId, userId)))
-        .returning(campaignSelection);
-      updated = row as CampaignRow;
-    } else {
-      const [row] = await db
-        .select(campaignSelection)
-        .from(campaigns)
-        .where(and(eq(campaigns.id, existing.id), eq(campaigns.advertiserId, userId)))
-        .limit(1);
-      updated = row as CampaignRow;
-    }
+    // DISP-TOURS §3.1 — every PATCH is a save: it stamps the advertiser's last save, the clock of
+    // an undated draft's deletion (lib/campaign-expiry.ts). A zone-only PATCH (CF-Z1) is one too,
+    // so the UPDATE always runs. Zones replace-set after.
+    const columnsPatch = {
+      ...buildUpdatePatch(parsed.data),
+      ...(minutesPatch ?? {}),
+      lastSavedAt: new Date(),
+    };
+    const [row] = await db
+      .update(campaigns)
+      .set(columnsPatch)
+      .where(and(eq(campaigns.id, existing.id), eq(campaigns.advertiserId, userId)))
+      .returning(campaignSelection);
+    const updated = row as CampaignRow;
     if (parsed.data.zone_ids !== undefined) {
       await replaceCampaignZones(existing.id, parsed.data.zone_ids);
     }
@@ -694,20 +704,23 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       // CPM-1 — the positioning's own event CPM (CPM-3: its screencaster's; see campaignCpmRates).
       // EVT-PRICE2 — priced at its spot's R; no spot yet = the audience alone (R = 1).
       const evCmax = await computeEventCmax(
-        { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+        { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
         campaignCpmRates(row).eventCpmTnd,
         new Set(),
         (await positioningPlaysPerMinute(row.creativeId)) ?? 1,
+        await eventPoolDemoVenues(db, row.id),
       );
       return reply.status(200).send({
         c_max_tnd: evCmax.cMaxEvtTnd,
         i_max_facturable: evCmax.iMax,
         eligible_count: evCmax.eligibleCount,
         targeted_count: evCmax.eligibleCount,
-        // EVT-MIN1 — the minutes slider: its max, and each minute's price/impressions in the
-        // ORDERED list (the price of N minutes = Σ of the first N; lowering the slider drops the
-        // last venue's latest bloc first).
+        // EVT-MIN1 — the minutes slider: its max, and each SEAT's price/impressions in the
+        // ORDERED list (Mariem 04/11: a seat = seat_minutes minutes, the slider's step; the price
+        // of N minutes = Σ of the first N ÷ seat_minutes; lowering the slider drops the last
+        // venue's latest bloc first).
         max_minutes: evCmax.maxMinutes,
+        seat_minutes: evCmax.seatMinutes,
         minute_prices_tnd: evCmax.minutes.map((m) => m.priceTnd),
         minute_impressions: evCmax.minutes.map((m) => m.impressions),
       });
@@ -969,11 +982,19 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         existing.eventMinutes ?? 0,
         campaignCpmRates(existing).eventCpmTnd,
         await positioningPlaysPerMinute(existing.creativeId),
+        await eventPoolDemoVenues(db, existing.id),
       );
       if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') {
         return reply.status(400).send({
           error: 'EVENT_SPOT_REQUIRED',
           message: 'Choisissez d’abord votre vidéo : le prix d’une minute en dépend.',
+        });
+      }
+      if (!verdict.ok && verdict.reason === 'MINUTES_STEP') {
+        return reply.status(400).send({
+          error: 'EVENT_MINUTES_STEP',
+          message: `Les minutes se choisissent par tranches de ${verdict.seatMinutes}.`,
+          seat_minutes: verdict.seatMinutes,
         });
       }
       if (!verdict.ok) {

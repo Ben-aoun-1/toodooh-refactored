@@ -31,6 +31,13 @@ import { campaignTiersOf } from './helpers/cpm-config.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // IMP-EST1 (ruled Q1 A · Q2 A · Q3 A) — « Impressions estimées » = a READ-ONLY dry-run of the real
 // dispatch: the live semaine type over the campaign's own window, in PHYSICAL impressions
 // (Σ créneau.impressions, what « prédites » reads), never ⌊budget × 1000 ÷ CPM⌋.
@@ -248,6 +255,7 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
       objectif: 10_000,
       venues_count: 1,
       days_count: 4,
+      prix_tnd: null, // DISP-TOURS — the exact price rides the wire on the tours engine only
     });
     // The PHYSICAL field is never the billable objective (⌊150 × 1000 ÷ 15⌋ = 10 000) — that one
     // is `objectif` since IMP-FACT1 (2026-09-23).
@@ -327,6 +335,7 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
       objectif: iCible,
       venues_count: 2,
       days_count: 2,
+      prix_tnd: null, // DISP-TOURS — the exact price rides the wire on the tours engine only
     });
   });
 
@@ -380,6 +389,7 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
       objectif: null,
       venues_count: null,
       days_count: null,
+      prix_tnd: null, // DISP-TOURS — the exact price rides the wire on the tours engine only
     });
 
     const noDates = await seedCampaign(advertiserId, { startDate: null, endDate: null });
@@ -485,7 +495,7 @@ describe('IMP-EST1 — GET /api/campaigns/:id/impressions-estimate (real Postgre
           requestedBudget: 600,
           eventMinutes: null,
         },
-        { id: event?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS },
+        { id: event?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
         15,
       );
       expect(outcome.status).toBe('OK');
