@@ -96,7 +96,8 @@ const offer = async (
     revenuPrevisionnel: '5',
     statutAcceptation: statut,
     creneaux: FUTURE,
-    createdAt: new Date('2026-10-10T10:00:00Z'),
+    // Three days old on today's clock: inside the job's 30-day window, past the 24 h answer delay.
+    createdAt: addDays(new Date(), -3),
   });
   return c?.id ?? '';
 };
@@ -217,18 +218,20 @@ describe('AGT-7 — the Screenhost agent (real Postgres)', () => {
   });
 
   it('the follow-up job raises an attention point once, notifies once, and clears it', async () => {
+    // The offers are created on today's clock, so the job runs on it too (its 30-day window).
+    const tick = new Date();
     const s = await setup();
     await offer(s.venueId, s.advertiser, 'REFUSE', 'A');
     await offer(s.venueId, s.advertiser, 'REFUSE', 'B');
     await offer(s.venueId, s.advertiser, 'ACCEPTE', 'C');
     // The first computation is a silent baseline: no notice for signals already there.
-    await runAgentShFollowupTick(new Date(NOW.getTime() - 2 * 24 * 60 * 60 * 1000));
+    await runAgentShFollowupTick(new Date(tick.getTime() - 2 * 24 * 60 * 60 * 1000));
     expect(
       await db.select().from(notifications).where(eq(notifications.userId, s.agent)),
     ).toHaveLength(0);
     await db.delete(agentAttentionEvents).where(eq(agentAttentionEvents.screenhostId, s.venueId));
-    await runAgentShFollowupTick(NOW);
-    await runAgentShFollowupTick(NOW);
+    await runAgentShFollowupTick(tick);
+    await runAgentShFollowupTick(tick);
     const open = await db
       .select()
       .from(agentAttentionEvents)
@@ -274,7 +277,7 @@ describe('AGT-7 — the Screenhost agent (real Postgres)', () => {
       .update(campaignDispatchAllocation)
       .set({ statutAcceptation: 'ACCEPTE' })
       .where(eq(campaignDispatchAllocation.screenhostId, s.venueId));
-    await runAgentShFollowupTick(NOW);
+    await runAgentShFollowupTick(tick);
     const [ev] = await db
       .select()
       .from(agentAttentionEvents)
