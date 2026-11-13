@@ -6,6 +6,8 @@ import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
 
+import { authenticateDeviceToken, bearerToken, MOBILE_DEVICE_TYPE } from './require-device-auth.js';
+
 export interface AuthUser {
   id: string;
   role: string;
@@ -28,7 +30,26 @@ declare module 'fastify' {
 // admin into an advertiser and 403-ing every /api/admin/* call with « Accès administrateur
 // requis » despite a valid admin session. A role/status-less session user now resolves from the
 // users row instead of assuming; the defaults only apply when the row itself is gone.
+//
+// MOBILE-1 — the screenhost phone app (toodooh-mobile) carries no cookie: a request with
+// `Authorization: Bearer <token>` is authenticated against a MOBILE device session instead (a TV
+// token is refused here — it lives on a box in a venue and never acts on the owner surface). A
+// bearer header never falls back to the cookie: an invalid token is a 401, not a cookie read.
 export const requireAuth = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  const token = bearerToken(request);
+  if (token !== null) {
+    const context = await authenticateDeviceToken(request, token);
+    if (context?.deviceType === MOBILE_DEVICE_TYPE) return;
+    request.user = undefined;
+    request.deviceSession = undefined;
+    await reply.status(401).send({
+      error: 'UNAUTHENTICATED',
+      message: 'Authentification requise.',
+      statusCode: 401,
+      requestId: request.id,
+    });
+    return;
+  }
   const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
   if (!session) {
     await reply.status(401).send({

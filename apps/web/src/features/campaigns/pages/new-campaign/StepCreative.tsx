@@ -8,47 +8,24 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import PillButton from '@/components/PillButton';
-import { useCreativeUpload, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
+import { useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
 import {
-  VIDEO_DROPZONE_HINT,
-  VIDEO_DURATION_MESSAGE,
-  isClassicVideoDurationValid,
-} from '@/features/campaigns/lib/spot-duration';
+  PHOTO_DURATIONS,
+  type PhotoDuration,
+  useSpotUpload,
+} from '@/features/campaigns/hooks/useSpotUpload';
+import { creativeStatusLabel } from '@/features/campaigns/lib/creative-status';
+import { VIDEO_DROPZONE_HINT } from '@/features/campaigns/lib/spot-duration';
 import CreativeSpecs from '@/features/campaigns/pages/new-campaign/CreativeSpecs';
 import SelectedSpotPreview from '@/features/campaigns/pages/new-campaign/SelectedSpotPreview';
 import SpotCtaFields from '@/features/campaigns/pages/new-campaign/SpotCtaFields';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
-import {
-  PHOTO_ACCEPT,
-  VIDEO_ACCEPT,
-  creativeUploadErrorMessage,
-  readVideoDurationSeconds,
-  unreadableVideoMessage,
-} from '@/features/campaigns/services/creative-media';
-import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
-import EventRepeatsNote from '@/features/events/components/EventRepeatsNote';
-import { EVENT_VIDEO_MIN_SECONDS, eventSlotSeconds } from '@/features/events/lib/event-minutes';
-import {
-  EVENT_SPOT_MAX_SECONDS,
-  EVENT_SPOT_TOO_LONG_MESSAGE,
-  filterEventSpots,
-} from '@/features/events/lib/event-positioning';
-import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
+import { PHOTO_ACCEPT, VIDEO_ACCEPT } from '@/features/campaigns/services/creative-media';
+import type { CreativeView } from '@/features/campaigns/services/creatives.api';
 
-const log = logger.child({ module: 'StepCreative' });
-
-const PHOTO_DURATIONS = [10, 20, 30] as const;
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: 'En attente de validation',
-  approved: 'Validée',
-  rejected: 'Refusée',
-};
 const STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-700',
   approved: 'bg-green-50 text-green-700',
@@ -68,14 +45,6 @@ interface StepCreativeProps {
   linking: boolean;
   onNext: () => void | Promise<void>;
   onBack: () => void;
-  /**
-   * EV3 — the positioning parcours' Vidéo step: videos cap at 15 s (client probe + for_event
-   * upload flag + the bibliothèque filtered to grid-fitting spots). Absent/false = the classic
-   * wizard, byte-identical behavior.
-   */
-  eventMode?: boolean;
-  /** EVT-PLAY1 — eventMode: the minutes bought so far, for the total-repeats line. */
-  eventMinutes?: number | null;
 }
 
 /**
@@ -83,6 +52,8 @@ interface StepCreativeProps {
  * library (multipart POST /api/creatives) and links the chosen creative onto the draft
  * (PATCH /api/campaigns/:id { creative_id }) — replacing the legacy Supabase video upload. Video
  * duration is probed client-side (≤30s); a photo's diffusion duration is chosen from {10,20,30}s.
+ * The Foot parcours has its own Création step (events/components/positioning/FootCreativeStep);
+ * both upload through hooks/useSpotUpload.
  */
 export default function StepCreative({
   draftCampaignId,
@@ -93,67 +64,10 @@ export default function StepCreative({
   linking,
   onNext,
   onBack,
-  eventMode = false,
-  eventMinutes = null,
 }: StepCreativeProps) {
-  const { data: allCreatives = [], isLoading } = useMyCreatives(userId);
-  // EV3 — the bibliothèque only offers spots that can air in an event pod slot (EVT-MIN1: videos
-  // 10–30 s, images 10/20/30 s). The classic wizard shows everything.
-  const creatives = eventMode ? filterEventSpots(allCreatives) : allCreatives;
-  const selectedCreative = creatives.find((c) => c.id === selectedCreativeId);
-  const upload = useCreativeUpload(userId);
-
-  const [uploadType, setUploadType] = useState<CreativeType>('video');
-  const [photoDuration, setPhotoDuration] = useState<(typeof PHOTO_DURATIONS)[number]>(20);
-
-  const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !draftCampaignId) return;
-
-    let durationSeconds: number;
-    if (uploadType === 'video') {
-      const probed = await readVideoDurationSeconds(file);
-      if (probed == null) {
-        // UPL-2 — a photo or a PDF picked under « Vidéo » stops here, before any upload: its
-        // bytes name the kind (and the type to choose) instead of a duration error.
-        toast.error(await unreadableVideoMessage(file));
-        return;
-      }
-      // EVT-MIN1 (events) / SPOT-MIN1 (classic, Mariem 27/10): a video lasts 10 to 30 s.
-      const validLength = eventMode
-        ? probed >= EVENT_VIDEO_MIN_SECONDS && probed <= EVENT_SPOT_MAX_SECONDS
-        : isClassicVideoDurationValid(probed);
-      if (!validLength) {
-        toast.error(eventMode ? EVENT_SPOT_TOO_LONG_MESSAGE : VIDEO_DURATION_MESSAGE);
-        return;
-      }
-      durationSeconds = Math.max(1, probed);
-    } else {
-      durationSeconds = photoDuration;
-    }
-
-    try {
-      const created = await upload.mutateAsync({
-        file,
-        type: uploadType,
-        duration_seconds: durationSeconds,
-        title: file.name,
-        // EV3 — the server re-checks the event range on its own measured duration.
-        ...(eventMode ? { for_event: true } : {}),
-      });
-      toast.success('Création téléversée avec succès.');
-      await onSelectCreative(created.id);
-    } catch (error) {
-      log.error({ err: error }, 'creative upload failed');
-      // CF-SH1 — the server's hardening rejections get their French copy; anything else keeps
-      // the generic fallback.
-      toast.error(
-        creativeUploadErrorMessage(error) ??
-          (getErrorMessage(error) || 'Erreur lors du téléversement de la création.'),
-      );
-    }
-  };
+  const { data: creatives = [], isLoading } = useMyCreatives(userId);
+  const { uploadType, setUploadType, photoDuration, setPhotoDuration, handleFile, uploading } =
+    useSpotUpload({ draftCampaignId, userId, eventMode: false, onSelectCreative });
 
   const handleNext = () => {
     if (!selectedCreativeId) {
@@ -164,7 +78,7 @@ export default function StepCreative({
   };
 
   const accept = uploadType === 'video' ? VIDEO_ACCEPT : PHOTO_ACCEPT;
-  const busy = upload.isPending || linking;
+  const busy = uploading || linking;
 
   return (
     <div className="space-y-6">
@@ -214,9 +128,7 @@ export default function StepCreative({
                 <select
                   id="creative-photo-duration"
                   value={photoDuration}
-                  onChange={(e) =>
-                    setPhotoDuration(Number(e.target.value) as (typeof PHOTO_DURATIONS)[number])
-                  }
+                  onChange={(e) => setPhotoDuration(Number(e.target.value) as PhotoDuration)}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                 >
                   {PHOTO_DURATIONS.map((d) => (
@@ -234,7 +146,7 @@ export default function StepCreative({
             <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center bg-gray-50/50">
               <Loader2 className="h-8 w-8 text-brand-primary animate-spin mx-auto mb-3" />
               <p className="text-sm font-medium text-gray-700">
-                {upload.isPending ? 'Téléversement…' : 'Association à la campagne…'}
+                {uploading ? 'Téléversement…' : 'Association à la campagne…'}
               </p>
             </div>
           ) : (
@@ -248,11 +160,7 @@ export default function StepCreative({
                 </div>
                 <p className="font-bold text-gray-900">Téléverser une nouvelle création</p>
                 <p className="text-sm text-gray-500">
-                  {uploadType === 'video'
-                    ? eventMode
-                      ? `MP4 ou MOV (H.264) · ${EVENT_VIDEO_MIN_SECONDS} à ${EVENT_SPOT_MAX_SECONDS} secondes`
-                      : VIDEO_DROPZONE_HINT
-                    : 'JPEG, PNG ou WebP'}
+                  {uploadType === 'video' ? VIDEO_DROPZONE_HINT : 'JPEG, PNG ou WebP'}
                 </p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
                   Parcourir les fichiers
@@ -310,26 +218,13 @@ export default function StepCreative({
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <span>{creative.duration_seconds ?? '—'}s</span>
-                          {/* EVT-MIN1 — the pod slot this spot airs in (23 s → créneau de 30 s). */}
-                          {eventMode &&
-                            eventSlotSeconds(creative.creative_type, creative.duration_seconds) !==
-                              null && (
-                              <span className="text-gray-400">
-                                → créneau de{' '}
-                                {eventSlotSeconds(
-                                  creative.creative_type,
-                                  creative.duration_seconds,
-                                )}{' '}
-                                s
-                              </span>
-                            )}
                           <span
                             className={`px-2 py-0.5 rounded-full font-medium ${
                               STATUS_STYLE[creative.validation_status] ??
                               'bg-gray-100 text-gray-600'
                             }`}
                           >
-                            {STATUS_LABEL[creative.validation_status] ?? creative.validation_status}
+                            {creativeStatusLabel(creative.validation_status)}
                           </span>
                         </div>
                       </button>
@@ -352,21 +247,15 @@ export default function StepCreative({
                 })}
               </div>
             )}
-            {eventMode && selectedCreative && (
-              <div className="mt-4">
-                <EventRepeatsNote
-                  creativeType={selectedCreative.creative_type}
-                  durationSeconds={selectedCreative.duration_seconds}
-                  minutes={eventMinutes}
-                />
-              </div>
-            )}
           </div>
 
-          {!eventMode && draftCampaignId && selectedCreativeId && (
-            <SpotCtaFields campaignId={draftCampaignId} />
+          {/* Keyed by the spot: a new spot gets a new copy, so its state is read again (the
+              parents set the spot only once the server has it) instead of keeping the old
+              spot's status. */}
+          {draftCampaignId && selectedCreativeId && (
+            <SpotCtaFields key={selectedCreativeId} campaignId={draftCampaignId} />
           )}
-          <CreativeSpecs eventMode={eventMode} />
+          <CreativeSpecs />
         </div>
       </div>
 

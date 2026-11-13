@@ -114,7 +114,7 @@ const seedVenue = async (sps: string, zoneId?: string) => {
 
 const KICKOFF = new Date('2027-06-10T20:00:00+01:00');
 const ENDS = new Date('2027-06-10T22:00:00+01:00');
-const EVENT_REF = (id: string) => ({ id, kickoffAt: KICKOFF, endsAt: ENDS });
+const EVENT_REF = (id: string) => ({ id, kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null });
 
 const seedEvent = async (): Promise<string> => {
   seq += 1;
@@ -216,30 +216,31 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
     const eventId = await seedEvent();
     const { campaignId, advertiserId } = await positionner(eventId, '100.00');
     await setCpmConfig('15.000', '30.000');
-    // EVT-PRICE2 — its 10 s spot plays 6 times a minute: six minutes of A_max 100 → 100 ÷ 3 × 6
-    // = 200 impressions, 15 × 200 / 1000 = 3 TND each.
+    // Mariem 04/11 — its 10 s spot plays 6 times a minute, 12 in its 2-minute seat: six seats of
+    // A_max 100 → 100 × 12 = 1 200 impressions, 15 × 1 200 / 1000 = 18 TND each.
     const at15 = await computeEventCmax(EVENT_REF(eventId), 15, new Set(), 6);
     const at30 = await computeEventCmax(EVENT_REF(eventId), 30, new Set(), 6);
-    expect(at15.cMaxEvtTnd).toBe(18);
-    expect(at30.cMaxEvtTnd).toBe(36);
+    expect(at15.cMaxEvtTnd).toBe(108);
+    expect(at30.cMaxEvtTnd).toBe(216);
 
     mockSession(advertiserId, 'advertiser');
     const cursor = await app.inject({ method: 'GET', url: `/api/campaigns/${campaignId}/cmax` });
-    expect((cursor.json() as { c_max_tnd: number }).c_max_tnd).toBe(18);
+    expect((cursor.json() as { c_max_tnd: number }).c_max_tnd).toBe(108);
 
-    // Its minutes are PRICED at its own CPM (15), never the one saved since (30).
+    // Its minutes are PRICED at its own CPM (15), never the one saved since (30): 2 minutes = one
+    // seat = 18 TND.
     const sized = await app.inject({
       method: 'PATCH',
       url: `/api/campaigns/${campaignId}`,
       payload: { event_minutes: 2 },
     });
     expect(sized.statusCode).toBe(200);
-    expect((sized.json() as { requested_budget: number }).requested_budget).toBe(6);
+    expect((sized.json() as { requested_budget: number }).requested_budget).toBe(18);
 
     // More minutes than are free refuses at the cart and at submit, the ceiling at its own CPM.
     await db
       .update(campaigns)
-      .set({ eventMinutes: 7, requestedBudget: '21.00' })
+      .set({ eventMinutes: 14, requestedBudget: '126.00' })
       .where(eq(campaigns.id, campaignId));
     const cart = await app.inject({
       method: 'POST',
@@ -250,7 +251,7 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
     expect((cart.json() as { error: string }).error).toBe('BUDGET_EXCEEDS_CMAX');
     const submit = await app.inject({ method: 'POST', url: `/api/campaigns/${campaignId}/submit` });
     expect(submit.statusCode).toBe(400);
-    expect((submit.json() as { c_max_tnd: number }).c_max_tnd).toBe(18);
+    expect((submit.json() as { c_max_tnd: number }).c_max_tnd).toBe(108);
 
     const adminId = await seedUser({ role: 'admin' });
     mockSession(adminId, 'admin');
@@ -260,7 +261,7 @@ describe('CPM-1 — a positioning keeps its event CPM (real Postgres)', () => {
     });
     const report = hosts.json() as { cpm_tnd: number; totals: { c_max_tnd: number } };
     expect(report.cpm_tnd).toBe(15);
-    expect(report.totals.c_max_tnd).toBe(18);
+    expect(report.totals.c_max_tnd).toBe(108);
   });
 
   it('an owner refusal re-places the refused VALUE at the positioning’s CPM (== its montant)', async () => {

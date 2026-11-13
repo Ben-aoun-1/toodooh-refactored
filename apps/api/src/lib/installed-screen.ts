@@ -1,5 +1,6 @@
-import { type Name, type SQL, sql } from 'drizzle-orm';
+import { type Name, type SQL, eq, sql } from 'drizzle-orm';
 
+import { db } from '../db/client.js';
 import { screenhosts, screens } from '../db/schema.js';
 
 // MAP-TV1 (operator ruling 2026-09-21, M1 A · M2 A) — a venue is SELLABLE only when it has AT
@@ -54,3 +55,23 @@ export const isScreenInstalled = (row: {
 /** SQL boolean — TRUE iff one of the row's venue's screens was ever paired or ever seen. */
 export const venueHasInstalledScreenSql = (): SQL<boolean> =>
   sql<boolean>`exists (select 1 from ${screens} where ${screens}.${column(screens.screenhostId)} = ${screenhosts}.${column(screenhosts.id)} and ${screenIsInstalledSql()})`;
+
+/**
+ * SCR-INST1 (Mariem 26/10, operator 2026-10-27) — a TV that has just signed in and opened its
+ * screen connection IS a real device: record it at once. `paired_at` keeps the FIRST connection
+ * (coalesce) and `last_seen_at` moves to now. Before this, nothing marked the screen until the
+ * TV's first HEARTBEAT (sent 30 s after connecting) — the APK never calls POST /:id/pair — so the
+ * admin read « 0 installé » right after an installation.
+ */
+export const markScreenConnected = async (
+  screenId: string,
+  at: Date = new Date(),
+): Promise<void> => {
+  await db
+    .update(screens)
+    .set({
+      pairedAt: sql`coalesce(${screens.pairedAt}, ${at.toISOString()}::timestamptz)`,
+      lastSeenAt: at,
+    })
+    .where(eq(screens.id, screenId));
+};

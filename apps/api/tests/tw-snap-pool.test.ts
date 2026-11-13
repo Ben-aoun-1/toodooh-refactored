@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
 import { screenhostAffluence } from '../src/db/schema.js';
@@ -20,6 +20,13 @@ import {
   seedVenue,
 } from './helpers/installed-screen-matrix.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
+
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
 
 // TW-SNAP (operator ruling Z-A, 2026-09-25) — a campaign added to the cart prices and places on
 // the typical week AS IT STOOD at that add, whatever the hub pushes afterwards. Fixture = MAP-TV1's

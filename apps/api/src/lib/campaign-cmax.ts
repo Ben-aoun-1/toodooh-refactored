@@ -9,8 +9,11 @@ import {
   cpmForCampaign,
   getDispatchConfig,
 } from './dispatch/config.js';
+import { usesToursEngine } from './dispatch/engine-switch.js';
 import { assemblePool } from './dispatch/pool.js';
 import { tForDuration } from './dispatch/thresholds.js';
+import { calculerCampagne } from './dispatch/tours/campaign-calcul.js';
+import { EPS } from './dispatch/tours/remplir.js';
 
 // E5 (VF US-1.3/1.4) — the C_max ceiling the budget cursor is bounded by:
 //
@@ -38,6 +41,12 @@ export interface CampaignCmax {
   targetedCount: number;
   /** The CPM the ceiling priced at (event vs standard) — handy for callers/tests. */
   cpmTnd: number;
+  /**
+   * DISP-TOURS — the cart's figures at the targeted budget (asked with `budgetTnd`): the exact
+   * price (at or under the budget, R9) and the qualified impressions it buys. 0 = the budget is
+   * too small to give any venue 30 DT. Absent on the v1 engine.
+   */
+  quote?: { budgetTnd: number; prixTnd: number; impressions: number; venuesCount: number };
 }
 
 export const computeCampaignCmax = async (
@@ -57,6 +66,8 @@ export const computeCampaignCmax = async (
     t30s: string;
   },
   spotSeconds: number,
+  /** DISP-TOURS — also price the campaign at this targeted budget (the cart's quote). */
+  budgetTnd?: number,
 ): Promise<CampaignCmax> => {
   // EV3 — THE ENGINE BOUNDARY (pinned): the classic C_max never prices a POSITIONING (an
   // event-BOUND row — the binding, not the type string, discriminates; a legacy 'event'-typed
@@ -82,6 +93,35 @@ export const computeCampaignCmax = async (
   // draft carrying a frozen plan (a cart skip item whose confirm later failed on another item)
   // re-prices against itself on retry — the ceiling collapses below its own budget and the cart
   // wedges on BUDGET_EXCEEDS_CMAX forever. Plan-less campaigns are untouched (empty exclusion).
+  // DISP-TOURS (R10) — the ceiling is the tours maximum: every usable heure-type of the pool, the
+  // venues under 30 DT even full left out; floored to the centime so it is always deliverable.
+  // A campaign never competes with its own allocations (assemble.ts excludes them).
+  if (await usesToursEngine(db, campaign.id)) {
+    const { pool, calcul } = await calculerCampagne(
+      db,
+      { id: campaign.id, startDate: campaign.startDate, endDate: campaign.endDate },
+      { s: spotSeconds, t, cpm, budgetTnd: budgetTnd ?? Number.POSITIVE_INFINITY },
+      { typicalWeek: 'live' },
+    );
+    const retained = calcul.venues.filter((v) => v.impressions > EPS).length;
+    return {
+      cMaxTnd: Math.floor(calcul.cMaxTnd * 100 + 1e-6) / 100,
+      iMaxFacturable: calcul.iMax,
+      eligibleCount: calcul.venues.filter((v) => v.statut !== 'exclu_plein').length,
+      targetedCount: pool.candidateCount,
+      cpmTnd: cpm,
+      ...(budgetTnd === undefined
+        ? {}
+        : {
+            quote: {
+              budgetTnd,
+              prixTnd: Math.round(calcul.prixTnd * 1e4) / 1e4,
+              impressions: calcul.iAlloue,
+              venuesCount: retained,
+            },
+          }),
+    };
+  }
   const [ownPlan] = await db
     .select({ id: campaignDispatchPlan.id })
     .from(campaignDispatchPlan)

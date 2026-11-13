@@ -10,6 +10,7 @@ import {
   ESTIMATE_NONE_TEXT,
   ESTIMATE_NO_DISPATCH_REASON,
   ESTIMATE_REASONS,
+  estimatedAmount,
   PRE_DISPATCH_STATUSES,
   estimateInputsKey,
   estimateView,
@@ -56,6 +57,7 @@ describe('estimateView — loading / value / reason', () => {
       text: '48 000',
       reason: null,
       impressions: 48_000,
+      prixTnd: null,
     });
     expect(estimateView({ ...settled, data: ok(0) }).text).toBe('0');
   });
@@ -183,6 +185,7 @@ describe('IMP-FACT1 — the estimate shows the objective', () => {
       text: '10\u202f000',
       reason: null,
       impressions: 10_000,
+      prixTnd: null,
     });
   });
 
@@ -194,5 +197,33 @@ describe('IMP-FACT1 — the estimate shows the objective', () => {
     expect(
       estimateView({ ...settled, data: { ...refused('saturated'), objectif: null } }).kind,
     ).toBe('none');
+  });
+});
+
+// DISP-TOURS (R9) — the Validation step's « Montant estimé » is the exact price the cursor buys.
+describe('estimatedAmount — the exact price beside the budget aimed at', () => {
+  it('the tours engine prices the cursor: 149,90 for 150 visés', () => {
+    const view = estimateView({ ...settled, data: { ...ok(12_492), prix_tnd: 149.904 } });
+    expect(view).toMatchObject({ kind: 'value', prixTnd: 149.904 });
+    expect(estimatedAmount(150, view)).toEqual({ amountTnd: 149.9, budgetViseTnd: 150 });
+  });
+
+  it('the budget aimed at is not repeated when the price meets it to the centime', () => {
+    const view = estimateView({ ...settled, data: { ...ok(22_800), prix_tnd: 273.6 } });
+    expect(estimatedAmount(273.6, view)).toEqual({ amountTnd: 273.6, budgetViseTnd: null });
+  });
+
+  it('no price (the v1 engine, the estimate loading): the cursor’s budget', () => {
+    expect(estimatedAmount(150, estimateView({ ...settled, data: ok(12_000) }))).toEqual({
+      amountTnd: 150,
+      budgetViseTnd: null,
+    });
+    expect(estimatedAmount(150, estimateView({ ...settled, pending: true, data: undefined }))).toEqual({
+      amountTnd: 150,
+      budgetViseTnd: null,
+    });
+    expect(
+      estimatedAmount(null, estimateView({ ...settled, budgetUnset: true, data: undefined })),
+    ).toEqual({ amountTnd: null, budgetViseTnd: null });
   });
 });

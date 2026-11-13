@@ -179,7 +179,7 @@ describe('MAP-TV1 — new placements land only on installed venues (real Postgre
       {
         screenhostId: refused.screenhostId,
         impressionsTotal: refused.impressionsTotal,
-        minutes: 6,
+        seats: 6,
         montantTnd: Number(refused.montantTnd),
       },
       EVENT_CPM,

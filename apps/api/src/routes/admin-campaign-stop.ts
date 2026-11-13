@@ -5,8 +5,8 @@ import { STOP_REASON_MAX, STOP_REASON_MIN, stopCampaign } from '../lib/campaign-
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
 // STOP-1 (operator rulings 2026-10-27) — POST /api/admin/campaigns/:id/stop {reason}: a
-// SUPERADMIN ends a standard campaign now (it moves money: refund + venue earnings). The rules
-// live in lib/campaign-stop.ts.
+// SUPERADMIN ends a standard campaign — or, since Mariem 05/11, a match positioning — now (it
+// moves money: refund + venue earnings). The rules live in lib/campaign-stop.ts.
 
 const paramsSchema = z.object({ id: z.uuid() });
 const bodySchema = z
@@ -15,10 +15,6 @@ const bodySchema = z
 
 const REFUSALS = {
   NOT_FOUND: { code: 404, message: 'Campagne introuvable.' },
-  EVENT_CAMPAIGN: {
-    code: 409,
-    message: 'Une campagne événementielle s’annule depuis la page de l’événement.',
-  },
   NOT_STOPPABLE: {
     code: 409,
     message: 'Seule une campagne en cours ou à venir peut être arrêtée.',

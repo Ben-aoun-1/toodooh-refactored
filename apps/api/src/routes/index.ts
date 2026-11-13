@@ -6,6 +6,8 @@ import { adminAccountDeactivationRoutes } from './admin-account-deactivation.js'
 import { adminAccountDeletionRoutes } from './admin-account-deletion.js';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminAgentsRoutes } from './admin-agents.js';
+import { adminCampaignCtaRoutes } from './admin-campaign-cta.js';
+import { adminCampaignDeleteRoutes } from './admin-campaign-delete.js';
 import { adminCampaignStopRoutes } from './admin-campaign-stop.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
@@ -64,6 +66,7 @@ import { publicNetworkStatsRoutes } from './public-network-stats.js';
 import { rechargesRoutes } from './recharges.js';
 import { referenceRoutes } from './reference.js';
 import { screenhostDeclarationRoutes } from './screenhost-declaration.js';
+import { screenhostEventMatchRoutes } from './screenhost-event-matches.js';
 import { screenhostsRoutes } from './screenhosts.js';
 import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
@@ -93,6 +96,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // Owner + admin WiFi maintenance for screenhosts (SSID/password) — every edit re-pushes the
   // owner's approved screenhosts to wedooh (S-T1 Edge B2) so the hub's credentials stay current.
   await app.register(screenhostsRoutes);
+  // Mariem 05/11 — the « Soir de match » popup: one answer for every spot of a match at a venue.
+  await app.register(screenhostEventMatchRoutes);
   // SCR-DECL1 — the per-venue declared screens / rooms edit (owner + admin twin); rows follow.
   await app.register(screenhostDeclarationRoutes);
   await app.register(meRoutes);
@@ -165,7 +170,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // approved creative + funded, then dispatch → status='active') / reject. The keystone that lets
   // the dispatch → playout → proof-of-play chain run end-to-end.
   await app.register(adminCampaignsRoutes);
+  await app.register(adminCampaignCtaRoutes);
   await app.register(adminCampaignStopRoutes);
+  await app.register(adminCampaignDeleteRoutes);
   await app.register(adminAccountDeactivationRoutes);
   // CPM CONFIG — admin-editable dispatch CPM (standard/event TND-per-1000). The activation
   // derivation reads it to compute I_cible = ⌊budget·1000/cpm⌋; editable without a migration.

@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -84,7 +84,8 @@ export const loadOwnerEventCampaigns = async (
     .innerJoin(events, eq(campaigns.eventId, events.id))
     .innerJoin(users, eq(campaigns.advertiserId, users.id))
     .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
-    .where(eq(screenhosts.ownerId, ownerId))
+    // DEMO-3 — a demo positioning was accepted on the owner's behalf and never shown to them.
+    .where(and(eq(screenhosts.ownerId, ownerId), eq(users.isDemo, false)))
     .orderBy(desc(campaigns.createdAt), desc(campaigns.id), screenhosts.name);
 
   const byCampaign = new Map<string, OwnerEventCampaignGroup>();

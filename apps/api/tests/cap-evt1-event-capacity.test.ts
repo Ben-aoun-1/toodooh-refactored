@@ -270,10 +270,11 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
       expect((await eventEligibleVenues(ref)).map((x) => x.id)).toEqual([v.on]);
       const cmax = await computeEventCmax(ref, EVENT_CPM, new Set(), 3);
       expect(cmax.venues.map((x) => x.screenhostId)).toEqual([v.on]);
-      // EVT-PRICE2 — one venue × six minutes × 100 pers/h ÷ 3 × R 3 = 600 impressions → 6 × 1.50
-      expect(cmax.iMax).toBe(600);
-      expect(cmax.maxMinutes).toBe(6);
-      expect(cmax.cMaxEvtTnd).toBe(9);
+      // Mariem 04/11 — one venue × six 2-minute seats × 100 pers/h × R 3 × 2 minutes = 3 600
+      // impressions → 6 × 9 TND; twelve minutes.
+      expect(cmax.iMax).toBe(3600);
+      expect(cmax.maxMinutes).toBe(12);
+      expect(cmax.cMaxEvtTnd).toBe(54);
       expect((await assembleEventPool(ref)).map((x) => x.screenhostId)).toEqual([v.on]);
     });
 
@@ -326,7 +327,7 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
         {
           screenhostId: refused.screenhostId,
           impressionsTotal: refused.impressionsTotal,
-          minutes: 6,
+          seats: 6,
           montantTnd: Number(refused.montantTnd),
         },
         EVENT_CPM,
@@ -414,7 +415,12 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
         }
 
         // ONE home: the map's set IS the set event pricing and event dispatch read.
-        const ref = { id: event.id, kickoffAt: event.kickoffAt, endsAt: event.endsAt };
+        const ref = {
+          id: event.id,
+          kickoffAt: event.kickoffAt,
+          endsAt: event.endsAt,
+          seatMinutes: null,
+        };
         expect((await eventEligibleVenues(ref)).map((x) => x.id).sort()).toEqual(expectedPool);
         expect(
           (await computeEventCmax(ref, EVENT_CPM, new Set(), 1)).venues

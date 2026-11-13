@@ -90,6 +90,9 @@ const EnvSchema = z.object({
   // WEDOOH_* pattern: unset, the feature is OFF — every report keeps the generic pistes and boot
   // logs ONE warning. The operator provisions the real key in /srv/toodooh/.env at switch-on.
   ANTHROPIC_API_KEY: z.string().min(16).optional(),
+  // MOBILE-1 — optional Expo access token for the push outbox (only needed once « enhanced push
+  // security » is turned on in the Expo project). Unset = unauthenticated sends, which Expo accepts.
+  EXPO_ACCESS_TOKEN: z.string().min(16).optional(),
   // SIM-0 — the admin « Simulateur ». OPTIONAL by design (the WEDOOH_* posture: eager parse must
   // never fail-fast an entrypoint). Off → every /api/admin/simulations/* answers 503
   // SIMULATOR_DISABLED and the boot orphan sweep does not run. MAX bounds the number of sandbox
@@ -103,6 +106,14 @@ const EnvSchema = z.object({
   // reader resolves it from here (each accepts a per-call override for tests). Flip it only after
   // the hub's own flag is on AND its full-history push has landed (spec §6, steps 5 → 6).
   LEARNED_AFFLUENCE_ENABLED: z.stringbool().default(false),
+  // EVT-ET1 — API-Football (api-sports.io direct, header x-apisports-key). OPTIONAL by design (the
+  // ANTHROPIC_API_KEY posture): unset, the automatic extra-time tracking is OFF with ONE boot
+  // warning and the admin's manual « Prolonger » keeps working. The operator provisions the key in
+  // the servers' .env. The free plan allows 100 requests a day — see lib/api-football/tracker.ts
+  // for how the polling stays inside it.
+  API_FOOTBALL_KEY: z.string().min(8).optional(),
+  API_FOOTBALL_BASE_URL: z.url().default('https://v3.football.api-sports.io'),
+  API_FOOTBALL_POLL_SECONDS: z.coerce.number().int().min(30).max(900).default(120),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

@@ -3,6 +3,7 @@ import {
   BLACKOUT_HORIZON_MS,
   eventBlackouts,
   isInBlackout,
+  mergeBlackouts,
   upcomingBlackouts,
   windowsForVenue,
 } from '../event-blackout.js';
@@ -37,7 +38,9 @@ export const computeScreenPlaylist = async (
     now,
   );
   const blackedOut = isInBlackout(windows, now);
-  const allocations = blackedOut ? [] : await activeAllocationsForScreenhost(screenhostId, now);
+  const allocations = blackedOut
+    ? []
+    : await activeAllocationsForScreenhost(screenhostId, now, undefined, { includeOffHours: true });
 
   const sources: PlaylistSource[] = [];
   for (const allocation of allocations) {
@@ -52,7 +55,10 @@ export const computeScreenPlaylist = async (
       // EV4 rider — the media kind rides the wire ('photo' maps to 'image' at build).
       creativeType: allocation.creativeType === 'photo' ? 'photo' : 'video',
       validUntil: allocation.validUntil,
-      blackouts: windows,
+      // DISP-TOURS — a tours entry is also blacked out outside its own hours (offline included).
+      blackouts: allocation.offWindows
+        ? mergeBlackouts([...windows, ...allocation.offWindows])
+        : windows,
     });
   }
 

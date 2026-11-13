@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { MATCH_NOTIFICATION_TYPE } from '@/features/screenhost/lib/match-decision';
 import { logger } from '@/lib/logger';
 import {
   markFeedRead,
@@ -30,8 +31,9 @@ const toDate = (value?: string | null): Date => {
 // notification opens "Mes performances" (Mejri prod-test #1 — never the campaigns route);
 // everything else falls back to the owner campaigns page.
 export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath: string } => {
-  if (n.type === 'dispatch_pending_acceptance')
-    // NOTIF-D2 — the bell opens the popup in place; this path is only the no-campaign fallback.
+  if (n.type === 'dispatch_pending_acceptance' || n.type === MATCH_NOTIFICATION_TYPE)
+    // NOTIF-D2 — the bell opens the popup in place (Mariem 05/11: the « Soir de match » one for a
+    // match notice); this path is only the fallback.
     return { actionLabel: 'Consulter', actionPath: '/owner-dashboard' };
   if (n.type === 'monthly_report_ready')
     return { actionLabel: 'Consulter', actionPath: '/owner-performance' };
@@ -82,6 +84,8 @@ const toFeed = (rows: ApiNotification[]): NotificationFeed<string> => ({
     timestamp: toDate(n.created_at),
     detail: detailFor(n),
     campaignId: n.campaign_id,
+    eventId: n.event_id ?? null,
+    screenhostId: n.screenhost_id ?? null,
     ...actionFor(n),
   })),
   // read_at non-null ⇒ already read; the bell filters unread by `!readIds.has(id)`.

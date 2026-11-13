@@ -62,6 +62,22 @@ export const authService = {
     // 400. profile_type is a non-privileged hint, mapped server-side (role input:false).
     const t = (v?: string) => (v && v.trim() ? v.trim() : undefined);
     const n = (v?: number) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+    // Mariem 11/11 — the Ramadan pair (both or neither) + the match answer, when present.
+    const declarations = (d: {
+      ramadan_opening_hour?: number;
+      ramadan_closing_hour?: number;
+      broadcasts_matches?: boolean;
+    }) => ({
+      ...(n(d.ramadan_opening_hour) !== undefined && n(d.ramadan_closing_hour) !== undefined
+        ? {
+            ramadan_opening_hour: d.ramadan_opening_hour,
+            ramadan_closing_hour: d.ramadan_closing_hour,
+          }
+        : {}),
+      ...(typeof d.broadcasts_matches === 'boolean'
+        ? { broadcasts_matches: d.broadcasts_matches }
+        : {}),
+    });
     // One fleet establishment → one wire object. street_address → `address` (the endpoint's field);
     // optionals omitted-when-empty so a blank field never 400s on validate-when-present.
     const fleetEstablishments = data.fleet_establishments?.map((e) => ({
@@ -80,6 +96,7 @@ export const authService = {
       // H1 — per-establishment working hours (single window, ints 0–23; n() keeps a valid 0).
       ...(n(e.opening_hour) !== undefined ? { opening_hour: n(e.opening_hour) } : {}),
       ...(n(e.closing_hour) !== undefined ? { closing_hour: n(e.closing_hour) } : {}),
+      ...declarations(e),
     }));
     const payload = {
       email: data.email,
@@ -109,6 +126,7 @@ export const authService = {
       // H1 — the individual_owner's working-hours window (skip = both absent → NULL columns).
       ...(n(data.opening_hour) !== undefined ? { opening_hour: n(data.opening_hour) } : {}),
       ...(n(data.closing_hour) !== undefined ? { closing_hour: n(data.closing_hour) } : {}),
+      ...declarations(data),
       ...(n(data.screen_count) !== undefined ? { screen_count: n(data.screen_count) } : {}),
       ...(n(data.room_count) !== undefined ? { room_count: n(data.room_count) } : {}),
       ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),

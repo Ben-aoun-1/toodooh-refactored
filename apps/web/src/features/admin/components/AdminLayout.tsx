@@ -24,6 +24,7 @@ import {
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+import AppVersion from '@/components/AppVersion';
 import AdminNotificationsBell from '@/features/admin/components/AdminNotificationsBell';
 import { usePlatformStats } from '@/features/admin/hooks/usePlatformStats';
 import {
@@ -410,6 +411,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                   <LogOut className="h-5 w-5" />
                 </button>
               </div>
+              <AppVersion className="mt-2 px-1" />
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ctaBracketHtml, ctaCardHtml } from '../src/lib/spot-cta-card.js';
+import { ctaBracketHtml, ctaCardHtml, ctaLabelFontUnits } from '../src/lib/spot-cta-card.js';
 import { ctaFilterGraph, ctaLayout, ctaWindow } from '../src/lib/spot-cta-layout.js';
 import {
   CTA_DEFAULT_LABEL,
@@ -89,14 +89,25 @@ describe('QR-CTA1 — call-to-action rules', () => {
     expect(ctaFilterGraph(ctaLayout(1080), 10, 'frame').startsWith('[frame]split=2')).toBe(true);
   });
 
-  it("the card says « Scannez le code », escapes the advertiser's words, carries POWERED BY", () => {
+  it("the card shows only the advertiser's words (no « Scannez le code »), escaped, with POWERED BY", () => {
     const html = ctaCardHtml(ctaLayout(1080), 'data:image/png;base64,AAAA', 'Promo <b>&</b>');
-    expect(html).toContain('Scannez le code');
+    expect(html).not.toContain('Scannez');
     expect(html).toContain('Promo &lt;b&gt;&amp;&lt;/b&gt;');
     expect(html).not.toContain('<b>&</b>');
     expect(html).toContain('POWERED BY');
     expect(html).toContain('data:image/png;base64,AAAA');
     expect(ctaBracketHtml(ctaLayout(1080))).toContain('#76E6AB');
+  });
+
+  it("the advertiser's words keep the headline's bold 23 and shrink only to fit one line", () => {
+    expect(ctaLabelFontUnits('Promo')).toBe(23);
+    expect(ctaLabelFontUnits(CTA_DEFAULT_LABEL)).toBe(23);
+    const longest = ctaLabelFontUnits('x'.repeat(20));
+    expect(longest).toBeLessThan(23);
+    expect(longest * 0.6 * 20).toBeLessThanOrEqual(270);
+    expect(ctaCardHtml(ctaLayout(1080), 'data:,', 'Promo')).toContain(
+      'font-weight:700;font-size:23px',
+    );
   });
 
   it('the cart refuses only a failed copy of the CURRENT spot', () => {

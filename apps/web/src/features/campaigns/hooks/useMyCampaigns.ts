@@ -51,6 +51,8 @@ export interface MyCampaignRow {
   planned_impressions: number | null;
   /** IMP-FACT1 — the billable objective (« Impressions prévues »). */
   impressions_objectif: number | null;
+  /** DISP-TOURS §3.1 — sits in the cart (lib/campaign-filters: listedInMesCampagnes). */
+  in_cart: boolean;
 }
 
 // Targeting chip labels come from the shared lib (`toChipLabel`) so this list and the wizard's
@@ -87,6 +89,7 @@ function toRow(c: CampaignView): MyCampaignRow {
     selected_zones: (c.zones ?? []).map((z) => z.name),
     planned_impressions: c.planned_impressions ?? null,
     impressions_objectif: c.impressions_objectif ?? null,
+    in_cart: c.in_cart ?? false,
     raw: c,
   };
 }

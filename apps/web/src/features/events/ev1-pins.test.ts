@@ -29,10 +29,11 @@ describe('the match card (CatalogueEventCard)', () => {
 describe('the Événements page', () => {
   const source = read('./pages/Events.tsx');
 
-  it('unfolds « Ce que les screencasters suggèrent » behind « Voir plus », with the suggest form', () => {
+  it('unfolds « Ce que les screencasters suggèrent » behind « Voir plus »; « Suggérer un match » opens its window from the toolbar (SUGG-2)', () => {
     expect(source).toContain('Voir plus');
     expect(source).toContain('Ce que les screencasters suggèrent');
-    expect(source).toContain('SuggestMatchForm');
+    expect(source).toContain('SuggestMatchModal');
+    expect(source).toContain('SUGGEST_CTA');
     expect(source).not.toContain('components/EventCard'); // the suggestions use the catalogue card
   });
 
@@ -87,7 +88,7 @@ describe('the Supabase-era events tree is DEAD', () => {
     for (const rel of [
       './pages/Events.tsx',
       './components/catalogue/CatalogueEventCard.tsx',
-      './components/SuggestMatchForm.tsx',
+      './components/SuggestMatchModal.tsx',
       './services/events.api.ts',
       './hooks/useEvents.ts',
       '../admin/pages/EventManagement.tsx',

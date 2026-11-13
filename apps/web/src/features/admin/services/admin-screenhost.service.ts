@@ -21,6 +21,10 @@ export interface ScreenhostEligibility {
   closing_hour: number | null;
   broadcast_capacity: number | null;
   sps: number;
+  /** Mariem 11/11 — declared at signup, read-only (GET only; null = not declared). */
+  ramadan_opening_hour?: number | null;
+  ramadan_closing_hour?: number | null;
+  broadcasts_matches?: boolean | null;
 }
 
 /**

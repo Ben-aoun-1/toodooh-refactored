@@ -4,6 +4,7 @@ import {
   EVENT_SLOT_CLASSES,
   clampEventMinutes,
   distributeEventMinutes,
+  eventSeatExplainer,
   groupMinutesBounds,
   eventMinutesImpressions,
   eventMinutesPrice,
@@ -148,5 +149,43 @@ describe('distributeEventMinutes — ruling A1 (proportional to each match’s f
       next.forEach((p, i) => expect(p).toBeGreaterThanOrEqual(prev[i] ?? 0));
       prev = next;
     }
+  });
+});
+
+// Mariem 04/11/2026 — a match sells 2-minute seats (three per bloc); the api sends one price per
+// seat and the match's seat_minutes. The EVT-MIN1 cases above are the 1-minute model, kept.
+describe('Mariem 04/11 — the 2-minute seat, web side', () => {
+  const prices = [18, 18, 9]; // one entry per SEAT
+  const impressions = [1200, 1200, 600];
+
+  it('N minutes cost the first N ÷ 2 seats; an odd tail buys nothing extra', () => {
+    expect(eventMinutesPrice(prices, 2, 2)).toBe(18);
+    expect(eventMinutesPrice(prices, 6, 2)).toBe(45);
+    expect(eventMinutesPrice(prices, 5, 2)).toBe(36);
+    expect(eventMinutesImpressions(impressions, 4, 2)).toBe(2400);
+  });
+
+  it('the cursor stays on whole seats inside [2, max]', () => {
+    expect(clampEventMinutes(18, 6, 2)).toBe(6); // Mariem's 18-minute draft on a 6-minute pool
+    expect(clampEventMinutes(3, 12, 2)).toBe(2);
+    expect(clampEventMinutes(1, 12, 2)).toBe(2);
+    expect(clampEventMinutes(5, 7, 2)).toBe(4);
+    expect(clampEventMinutes(4, 1, 2)).toBeNull(); // not one whole seat left
+    expect(clampEventMinutes(null, 12, 2)).toBeNull();
+  });
+
+  it('the multi-match slider splits whole seats in proportion', () => {
+    expect(groupMinutesBounds([12, 6, 0], 2)).toEqual({ min: 4, max: 18 });
+    const parts = distributeEventMinutes(10, [12, 6], 2);
+    expect(parts.every((p) => p % 2 === 0)).toBe(true);
+    expect(parts.reduce((a, b) => a + b, 0)).toBe(10);
+    expect(parts).toEqual([6, 4]);
+  });
+
+  it('the explanation follows the match’s model', () => {
+    expect(eventSeatExplainer(2)).toContain('page publicitaire de 6 minutes');
+    expect(eventSeatExplainer(2)).toContain('3 campagnes au plus par bloc');
+    expect(eventSeatExplainer(2)).toContain('vous retirez 2 minutes à chaque fois');
+    expect(eventSeatExplainer(1)).toContain('page publicitaire de 5 minutes');
   });
 });

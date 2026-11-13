@@ -30,6 +30,7 @@ import {
   cmaxHelperLine,
   isInventoryInsufficient,
 } from '@/features/campaigns/lib/cmax-budget';
+import { estimatedAmount } from '@/features/campaigns/lib/impressions-estimate';
 import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
@@ -136,6 +137,9 @@ export default function StepCart({
       creativeDurationSeconds: linkedCreative?.duration_seconds ?? null,
     },
   });
+  // DISP-TOURS (R9) — the amount is the exact price this cursor buys (at or under the budget).
+  const amount = estimatedAmount(value, estimate);
+  const exactPrice = estimate.kind === 'value' && estimate.prixTnd !== null;
 
   return (
     <div className="space-y-6">
@@ -254,8 +258,13 @@ export default function StepCart({
                 <p className="text-sm text-gray-600">Montant estimé</p>
                 {/* CF-U1 — every displayed montant carries its TTC (Mejri item 6). */}
                 <p className="mt-0.5 text-lg font-bold text-brand-deep">
-                  {value == null ? '—' : tndLabel(value)}
+                  {amount.amountTnd == null ? '—' : tndLabel(amount.amountTnd)}
                 </p>
+                {amount.budgetViseTnd !== null && (
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Budget visé : {tndLabel(amount.budgetViseTnd)}
+                  </p>
+                )}
               </div>
               <div className="rounded-2xl bg-brand-accent/10 p-4">
                 <span className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white">
@@ -393,10 +402,13 @@ export default function StepCart({
               </div>
               <p className="text-sm text-gray-600">
                 {/* IMP-FACT1 — the figure is the objective paid for; the semaine type only confirms it
-                    can be delivered (the dry-run), it does not size it. */}
-                <strong>Note :</strong> Les impressions prévues sont l’objectif de votre campagne :
-                elles découlent de votre budget. La semaine type des établissements éligibles
-                confirme qu’elles peuvent être diffusées sur vos dates.
+                    can be delivered (the dry-run), it does not size it. DISP-TOURS (R9, R12) — on
+                    the tours engine the amount and the impressions are those of the passages
+                    placed now, recomputed at every opening of the cart until « Lancer ». */}
+                <strong>Note :</strong>{' '}
+                {exactPrice
+                  ? 'Le montant est le prix exact des passages retenus, au plus près de votre budget sans le dépasser. Votre budget reste la cible : le montant et les impressions s’ajustent à l’affluence et aux places disponibles, et sont recalculés à chaque ouverture du panier jusqu’au lancement.'
+                  : 'Les impressions prévues sont l’objectif de votre campagne : elles découlent de votre budget. La semaine type des établissements éligibles confirme qu’elles peuvent être diffusées sur vos dates.'}
               </p>
             </div>
           </section>

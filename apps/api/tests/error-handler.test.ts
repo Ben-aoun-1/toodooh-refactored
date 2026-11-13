@@ -33,6 +33,8 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       SIMULATOR_MAX_SANDBOXES: 5,
       LEARNED_AFFLUENCE_ENABLED: false,
       CTA_PUBLIC_BASE_URL: 'https://too-dooh.com',
+      API_FOOTBALL_BASE_URL: 'https://v3.football.api-sports.io',
+      API_FOOTBALL_POLL_SECONDS: 120,
     }),
   );
   app.setNotFoundHandler(buildNotFoundHandler());

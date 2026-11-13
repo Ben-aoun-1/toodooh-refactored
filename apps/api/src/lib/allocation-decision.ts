@@ -78,6 +78,9 @@ export const decideAllocation = async (input: {
       if (!row) return { kind: 'not_found' };
 
       const current = row.allocation.statutAcceptation;
+      // DISP-TOURS Q1 — a reservation is not proposed until its spot is validated: nothing to
+      // decide (indistinguishable from a missing one).
+      if (current === 'RESERVE') return { kind: 'not_found' };
       if (current === statut) {
         return {
           kind: 'ok',

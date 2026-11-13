@@ -9,6 +9,7 @@ import {
   agentAppointmentObjectives,
   agentAppointments,
   agentUnavailableDays,
+  agentUnavailableHours,
   agents,
   notifications,
   screenhosts,
@@ -92,8 +93,21 @@ export const objectivesFor = (role: AgentRole) =>
     )
     .orderBy(asc(agentAppointmentObjectives.position), asc(agentAppointmentObjectives.label));
 
-/** Unavailable days and taken slots of one agent between two days (inclusive, exclusive). */
+/**
+ * Unavailable days, unavailable single hours (AGT-HOUR1) and taken slots of one agent between two
+ * days (inclusive, exclusive).
+ */
 export const agentCalendar = async (agentUserId: string, from: string, to: string) => {
+  const offHours = await db
+    .select({ day: agentUnavailableHours.day, hour: agentUnavailableHours.hour })
+    .from(agentUnavailableHours)
+    .where(
+      and(
+        eq(agentUnavailableHours.agentUserId, agentUserId),
+        gte(agentUnavailableHours.day, from),
+        lt(agentUnavailableHours.day, to),
+      ),
+    );
   const off = await db
     .select({ day: agentUnavailableDays.day })
     .from(agentUnavailableDays)
@@ -124,10 +138,19 @@ export const agentCalendar = async (agentUserId: string, from: string, to: strin
       taken.push({ day: a.proposedDay, hour: a.proposedHour });
     }
   }
-  return { unavailable: off.map((o) => o.day), taken };
+  return {
+    unavailable: off.map((o) => o.day),
+    unavailableHours: offHours.map((o) => ({ day: o.day, hour: o.hour })),
+    taken,
+  };
 };
 
-export type SlotError = 'PAST_SLOT' | 'NOT_A_SLOT' | 'DAY_UNAVAILABLE' | 'SLOT_TAKEN';
+export type SlotError =
+  | 'PAST_SLOT'
+  | 'NOT_A_SLOT'
+  | 'DAY_UNAVAILABLE'
+  | 'HOUR_UNAVAILABLE'
+  | 'SLOT_TAKEN';
 
 /** Whether the agent can still be asked for that slot (excluding one appointment's own hold). */
 export const slotProblem = async (
@@ -142,6 +165,7 @@ export const slotProblem = async (
   const next = tunisDateOf(addDays(new Date(`${day}T12:00:00Z`), 1));
   const cal = await agentCalendar(agentUserId, day, next);
   if (cal.unavailable.includes(day)) return 'DAY_UNAVAILABLE';
+  if (cal.unavailableHours.some((o) => o.day === day && o.hour === hour)) return 'HOUR_UNAVAILABLE';
   const held = await db
     .select({ id: agentAppointments.id })
     .from(agentAppointments)
@@ -367,31 +391,75 @@ export const cancelAppointment = async (
   return { ok: true };
 };
 
-/** The agent marks future days unavailable (or available again); past days never change. */
+/**
+ * The agent marks future days unavailable (or available again); past days never change.
+ * AGT-HOUR1 — `hours` narrows the change to those slot hours of the days. Storage stays
+ * normalised: a day whose every slot hour is blocked is ONE agent_unavailable_days row; freeing
+ * some hours of a blocked day leaves its other hours as single-hour rows. Confirmed appointments
+ * are kept (ruling 2026-10-27, as for whole days): only new requests are blocked, and the
+ * confirmed ones in the blocked time are reported back.
+ */
 export const setAvailability = async (
   agentUserId: string,
   days: string[],
   available: boolean,
   now: Date = new Date(),
+  hours?: number[],
 ): Promise<{ changed: string[]; confirmed_kept: string[] }> => {
   const today = tunisDateOf(now);
   const future = [...new Set(days)].filter((d) => d >= today);
   if (future.length === 0) return { changed: [], confirmed_kept: [] };
-  if (available) {
-    await db
-      .delete(agentUnavailableDays)
-      .where(
-        and(
-          eq(agentUnavailableDays.agentUserId, agentUserId),
-          inArray(agentUnavailableDays.day, future),
-        ),
-      );
-    return { changed: future, confirmed_kept: [] };
-  }
-  await db
-    .insert(agentUnavailableDays)
-    .values(future.map((day) => ({ agentUserId, day })))
-    .onConflictDoNothing();
+  const chosen =
+    hours === undefined ? [...SLOT_HOURS] : SLOT_HOURS.filter((h) => hours.includes(h));
+  if (chosen.length === 0) return { changed: [], confirmed_kept: [] };
+  const whole = chosen.length === SLOT_HOURS.length;
+
+  await db.transaction(async (tx) => {
+    for (const day of future) {
+      const [dayRow] = await tx
+        .select({ day: agentUnavailableDays.day })
+        .from(agentUnavailableDays)
+        .where(
+          and(eq(agentUnavailableDays.agentUserId, agentUserId), eq(agentUnavailableDays.day, day)),
+        );
+      const hourRows = await tx
+        .select({ hour: agentUnavailableHours.hour })
+        .from(agentUnavailableHours)
+        .where(
+          and(
+            eq(agentUnavailableHours.agentUserId, agentUserId),
+            eq(agentUnavailableHours.day, day),
+          ),
+        );
+      const before = new Set<number>(dayRow ? SLOT_HOURS : hourRows.map((r) => r.hour));
+      const after = new Set(before);
+      for (const h of chosen) {
+        if (available) after.delete(h);
+        else after.add(h);
+      }
+      await tx
+        .delete(agentUnavailableDays)
+        .where(
+          and(eq(agentUnavailableDays.agentUserId, agentUserId), eq(agentUnavailableDays.day, day)),
+        );
+      await tx
+        .delete(agentUnavailableHours)
+        .where(
+          and(
+            eq(agentUnavailableHours.agentUserId, agentUserId),
+            eq(agentUnavailableHours.day, day),
+          ),
+        );
+      if (after.size === SLOT_HOURS.length) {
+        await tx.insert(agentUnavailableDays).values({ agentUserId, day });
+      } else if (after.size > 0) {
+        await tx
+          .insert(agentUnavailableHours)
+          .values([...after].map((hour) => ({ agentUserId, day, hour })));
+      }
+    }
+  });
+  if (available) return { changed: future, confirmed_kept: [] };
   const kept = await db
     .selectDistinct({ day: agentAppointments.day })
     .from(agentAppointments)
@@ -400,6 +468,7 @@ export const setAvailability = async (
         eq(agentAppointments.agentUserId, agentUserId),
         eq(agentAppointments.status, 'confirme'),
         inArray(agentAppointments.day, future),
+        ...(whole ? [] : [inArray(agentAppointments.hour, chosen)]),
       ),
     );
   return { changed: future, confirmed_kept: kept.map((k) => k.day) };

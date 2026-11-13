@@ -4,7 +4,12 @@ import { ApiError } from '@/lib/api-client';
 
 import { cartKeys } from '../hooks/queryKeys';
 
-import { CART_WIDGET_Z_CLASS, cartReasonFr, parseCartConfirmFailure } from './cart-confirm';
+import {
+  CART_WIDGET_Z_CLASS,
+  cartReasonFr,
+  parseCartConfirmFailure,
+  withCartReasonMessage,
+} from './cart-confirm';
 
 // CF-C1 — the confirm-refusal parsing + the stacking/caching pins.
 
@@ -74,6 +79,60 @@ describe('cartReasonFr — every api gate code speaks French', () => {
 
   it('unknown codes get the generic fallback', () => {
     expect(cartReasonFr('???')).toBe('Cette campagne n’est plus lançable.');
+  });
+});
+
+describe('withCartReasonMessage — an add refusal reads as its reason (Mariem 04/11)', () => {
+  const refusal = (code: string) =>
+    new ApiError({
+      status: 400,
+      code,
+      message: "La campagne n'est pas prête pour le panier.",
+      body: { error: code },
+    });
+
+  it('a known gate code: its French line, the code, status and body kept', () => {
+    const out = withCartReasonMessage(refusal('MISSING_CREATIVE'));
+    expect(out).toBeInstanceOf(ApiError);
+    const err = out as ApiError;
+    expect(err.message).toBe('Aucun spot n’est associé à cette campagne.');
+    expect(err.code).toBe('MISSING_CREATIVE');
+    expect(err.status).toBe(400);
+    expect(err.body).toEqual({ error: 'MISSING_CREATIVE' });
+  });
+
+  it('an unknown code, or not an api refusal: the error passes through untouched', () => {
+    const unknown = refusal('SOMETHING_ELSE');
+    expect(withCartReasonMessage(unknown)).toBe(unknown);
+    const plain = new Error('réseau');
+    expect(withCartReasonMessage(plain)).toBe(plain);
+    // An inherited key is no gate code.
+    const proto = refusal('toString');
+    expect(withCartReasonMessage(proto)).toBe(proto);
+  });
+
+  // Every code routes/cart.ts's add gate can answer (cartGateVerdict + the 404) has its line.
+  it.each([
+    'NOT_DRAFT',
+    'MISSING_DATES',
+    'INVALID_START_DATE',
+    'MISSING_CREATIVE',
+    'SPOT_QR_FAILED',
+    'MISSING_BUDGET',
+    'BUDGET_BELOW_MINIMUM',
+    'EVENT_ANNULE',
+    'EVENT_MINUTES_STEP',
+    'BUDGET_EXCEEDS_CMAX',
+    'BUDGET_BELOW_VENUE_MINIMUM',
+    'NOT_FOUND',
+  ])('the add gate code %s reads as its own reason', (code) => {
+    const out = withCartReasonMessage(refusal(code)) as ApiError;
+    expect(out.message).not.toBe("La campagne n'est pas prête pour le panier.");
+    expect(out.message).toBe(cartReasonFr(code));
+  });
+
+  it('DEMO-3 — events are open to demo accounts: the demo refusal is gone', () => {
+    expect(cartReasonFr('DEMO_EVENTS_UNAVAILABLE')).toBe('Cette campagne n’est plus lançable.');
   });
 });
 

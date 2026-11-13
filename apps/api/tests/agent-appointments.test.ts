@@ -6,6 +6,8 @@ import {
   type NewUser,
   agentAppointmentObjectives,
   agentAppointments,
+  agentUnavailableDays,
+  agentUnavailableHours,
   agents,
   notifications,
   users,
@@ -13,6 +15,7 @@ import {
 import {
   affiliateRespond,
   agentAccept,
+  agentCalendar,
   agentPropose,
   appointmentsOf,
   cancelAppointment,
@@ -172,6 +175,38 @@ describe('AGT-5 — agent appointments (real Postgres)', () => {
         )
       ).ok,
     ).toBe(true);
+  });
+
+  // AGT-HOUR1 (Mariem 26/10 point 2) — agents block single HOURS; whole days stay whole.
+  it('blocked hours refuse new requests at those hours only; storage stays normalised', async () => {
+    const s = await setup();
+    const req = { objectiveId: s.objectiveId, day: DAY, hour: 10, message: null };
+    // A confirmed appointment at 14 h survives blocking 14–15 h (kept, reported).
+    const r = await requestAppointment(s.a, { ...req, hour: 14 }, NOW);
+    await agentAccept(s.agent, r.ok ? r.appointment.id : '');
+    expect(await setAvailability(s.agent, [DAY], false, NOW, [10, 14, 15])).toEqual({
+      changed: [DAY],
+      confirmed_kept: [DAY],
+    });
+    expect(await requestAppointment(s.b, req, NOW)).toEqual({
+      ok: false,
+      error: 'HOUR_UNAVAILABLE',
+    });
+    expect((await requestAppointment(s.b, { ...req, hour: 11 }, NOW)).ok).toBe(true);
+    const cal = await agentCalendar(s.agent, DAY, '2026-10-21');
+    expect(cal.unavailable).toEqual([]);
+    expect(cal.unavailableHours.map((h) => h.hour).sort((x, y) => x - y)).toEqual([10, 14, 15]);
+
+    // Blocking the rest of the day makes it ONE whole-day row; freeing 9 h leaves 8 hours.
+    await setAvailability(s.agent, [DAY], false, NOW, [9, 11, 12, 13, 16, 17]);
+    expect(await db.$count(agentUnavailableDays)).toBe(1);
+    expect(await db.$count(agentUnavailableHours)).toBe(0);
+    await setAvailability(s.agent, [DAY], true, NOW, [9]);
+    expect(await db.$count(agentUnavailableDays)).toBe(0);
+    expect(await db.$count(agentUnavailableHours)).toBe(8);
+    // Freeing every hour leaves nothing.
+    await setAvailability(s.agent, [DAY], true, NOW);
+    expect(await db.$count(agentUnavailableHours)).toBe(0);
   });
 
   it('the tick expires unanswered requests, reminds 24 h ahead once, and derives « Passé »', async () => {

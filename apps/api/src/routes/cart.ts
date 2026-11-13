@@ -7,10 +7,12 @@ import { type Campaign, cartItems, campaigns, creatives, events } from '../db/sc
 import { finalizeActivation, prepareActivation } from '../lib/activation-service.js';
 import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { isBelowCampaignMinimum } from '../lib/campaign-budget.js';
-import { computeCampaignCmax } from '../lib/campaign-cmax.js';
+import { type CampaignCmax, computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
-import { demoAirsAt, demoDelayMinutes, isDemoUser } from '../lib/demo.js';
+import { demoAirsAt, demoDelayMinutes, demoVenueIds, isDemoUser } from '../lib/demo.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
+import { toursEngineOn, usesToursEngine } from '../lib/dispatch/engine-switch.js';
+import { type ShownQuote, quoteMoved } from '../lib/dispatch/tours/quote.js';
 import { checkEventMinutes } from '../lib/event-minutes-gate.js';
 import { positioningPlaysPerMinute } from '../lib/event-pricing/spot.js';
 import { pushPlaylistToAllConnected } from '../lib/playout/push.js';
@@ -33,6 +35,23 @@ import { eventView } from './events.js';
 
 const addBodySchema = z.object({ campaign_id: z.uuid() });
 const campaignIdParamSchema = z.object({ campaign_id: z.uuid() });
+// DISP-TOURS §3.4 — the figures the cart showed for each classic item when « Lancer » was
+// clicked (its exact price, its qualified impressions). Optional: an older client sends none.
+const confirmBodySchema = z.object({
+  quotes: z
+    .array(z.object({ campaign_id: z.uuid(), prix_tnd: z.number(), impressions: z.number() }))
+    .max(200)
+    .optional(),
+});
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * DISP-TOURS (R13 · Q1) — a tours item is frozen at « Lancer » when its spot is approved (it
+ * launches) or awaits validation (it is reserved); a refused spot is not reserved.
+ */
+const freezesAtLaunch = (contentValidationStatus: string | null): boolean =>
+  contentValidationStatus === 'approved' || contentValidationStatus === 'pending';
 
 const sendUnauthenticated = (reply: FastifyReply) =>
   reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
@@ -51,7 +70,7 @@ interface GateRow {
  * when the campaign is launchable. Mirrors the submit gates (CF-S1 dates, CF-Q2 floor, CF-U3
  * budget minimum, E5 ceiling) so the cart can never hold a promise the submit would refuse.
  */
-/** The screencaster's start-date rule (DEMO-1: a demo account may start today, sells no event). */
+/** The screencaster's start-date rule (DEMO-1: a demo account may start today). */
 interface CartRule {
   lead: number;
   demo: boolean;
@@ -77,37 +96,45 @@ const ctaCartBlockFor = async (campaignId: string): Promise<string | null> => {
   return row ? ctaCartBlock(row) : null;
 };
 
-const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | null> => {
+/** The gate's answer: why the item is refused, or — launchable — its live quote (tours engine). */
+interface GateVerdict {
+  reason: string | null;
+  /** DISP-TOURS — a classic item's exact price and qualified impressions, computed right now. */
+  quote: NonNullable<CampaignCmax['quote']> | null;
+}
+
+const refused = (reason: string): GateVerdict => ({ reason, quote: null });
+
+const cartGateVerdict = async (row: GateRow, rule: CartRule): Promise<GateVerdict> => {
   const c = row.campaign;
   // EV3 — a POSITIONING is an event-BOUND row (event_id set): the binding, not the type string,
   // is the discriminator (a legacy 'event'-typed row without a binding stays fully classic).
   const isEvent = c.eventId !== null;
-  if (c.status !== 'draft') return 'NOT_DRAFT';
-  if (!c.startDate || !c.endDate) return 'MISSING_DATES';
+  if (c.status !== 'draft') return refused('NOT_DRAFT');
+  if (!c.startDate || !c.endDate) return refused('MISSING_DATES');
   // EV3 — an event positioning's dates are the SNAPSHOTTED diffusion window (the kickoff is the
   // truth, not the advertiser's choice): the J+2 working-day floor does not apply. The too-late
   // guard is the lifecycle's (past-kickoff drafts are auto-deleted).
-  // DEMO-1 — a demo account shows the classic network only: no event positioning.
-  if (isEvent && rule.demo) return 'DEMO_EVENTS_UNAVAILABLE';
   if (!isEvent && startDateViolation(c.startDate, new Date(), rule.lead, rule.demo))
-    return 'INVALID_START_DATE';
+    return refused('INVALID_START_DATE');
   if (
     c.creativeId === null ||
     row.creativeDurationSeconds === null ||
     row.creativeDurationSeconds <= 0
   ) {
-    return 'MISSING_CREATIVE';
+    return refused('MISSING_CREATIVE');
   }
   // QR-CTA1 — a call to action whose QR copy could not be made would never air: refused until the
   // screencaster re-saves the link or changes the spot (a copy still being made is fine — the
   // playout gate holds the campaign until it is ready).
   const ctaBlock = await ctaCartBlockFor(c.id);
-  if (ctaBlock) return ctaBlock;
-  if (c.requestedBudget === null || Number(c.requestedBudget) <= 0) return 'MISSING_BUDGET';
+  if (ctaBlock) return refused(ctaBlock);
+  if (c.requestedBudget === null || Number(c.requestedBudget) <= 0)
+    return refused('MISSING_BUDGET');
   // EVT-MIN1 — a positioning is sized in minutes (minimum 1, ruling 4A): no 100 TND floor.
-  if (isEvent && c.eventMinutes === null) return 'MISSING_BUDGET';
+  if (isEvent && c.eventMinutes === null) return refused('MISSING_BUDGET');
   if (!isEvent && isBelowCampaignMinimum(Number(c.requestedBudget))) {
-    return 'BUDGET_BELOW_MINIMUM';
+    return refused('BUDGET_BELOW_MINIMUM');
   }
   if (isEvent && c.eventId !== null) {
     // EV3 — the event ceiling (EV2 pricing, CPM_evt): the classic C_max never prices a
@@ -115,18 +142,44 @@ const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | nu
     // CPM-1 — priced at the positioning's OWN event CPM (CPM-3: its screencaster's, realigned
     // while it is a draft not yet frozen).
     // EVT-MIN1 — its minutes must still be free (lib/event-minutes-gate — the PATCH's own check).
+    // DEMO-3 — a demo account's positioning is priced on the demo venues.
     const verdict = await checkEventMinutes(
       c.eventId,
       c.eventMinutes ?? 0,
       campaignCpmRates(c).eventCpmTnd,
       await positioningPlaysPerMinute(c.creativeId),
+      rule.demo ? await demoVenueIds(db) : null,
     );
-    if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') return 'MISSING_CREATIVE';
+    if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') return refused('MISSING_CREATIVE');
     if (!verdict.ok)
-      return verdict.reason === 'EVENT_ANNULE' ? 'EVENT_ANNULE' : 'BUDGET_EXCEEDS_CMAX';
-    return null;
+      return refused(
+        verdict.reason === 'EVENT_ANNULE'
+          ? 'EVENT_ANNULE'
+          : verdict.reason === 'MINUTES_STEP'
+            ? 'EVENT_MINUTES_STEP'
+            : 'BUDGET_EXCEEDS_CMAX',
+      );
+    return { reason: null, quote: null };
   }
-  const cmax = await computeCampaignCmax(
+  const cmax = await cartQuote(row);
+  if (cmax === null) return refused('MISSING_DATES');
+  if (Number(c.requestedBudget) > cmax.cMaxTnd) return refused('BUDGET_EXCEEDS_CMAX');
+  // DISP-TOURS (R11) — a budget that gives no venue 30 DT places nothing: not launchable.
+  if (cmax.quote && cmax.quote.impressions <= 0) return refused('BUDGET_BELOW_VENUE_MINIMUM');
+  return { reason: null, quote: cmax.quote ?? null };
+};
+
+const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | null> =>
+  (await cartGateVerdict(row, rule)).reason;
+
+/**
+ * The classic item's C_max and — on the tours engine — its quote at the targeted budget (R12: the
+ * exact price and the qualified impressions, recomputed at every opening, nothing reserved).
+ */
+const cartQuote = async (row: GateRow): Promise<CampaignCmax | null> => {
+  const c = row.campaign;
+  if (!c.startDate || !c.endDate || row.creativeDurationSeconds === null) return null;
+  return computeCampaignCmax(
     {
       id: c.id,
       startDate: c.startDate,
@@ -140,9 +193,8 @@ const cartGateReason = async (row: GateRow, rule: CartRule): Promise<string | nu
       t30s: c.t30s,
     },
     row.creativeDurationSeconds,
+    c.requestedBudget === null ? undefined : Number(c.requestedBudget),
   );
-  if (Number(c.requestedBudget) > cmax.cMaxTnd) return 'BUDGET_EXCEEDS_CMAX';
-  return null;
 };
 
 const loadGateRow = async (campaignId: string, userId: string): Promise<GateRow | null> => {
@@ -223,7 +275,15 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         .values({ userId, campaignId: row.campaign.id })
         .onConflictDoNothing()
         .returning({ campaignId: cartItems.campaignId });
-      if (inserted.length > 0 && row.campaign.eventId === null) {
+      if (inserted.length === 0) return;
+      // DISP-TOURS §3.1 — putting it in the cart is a save (lib/campaign-expiry.ts).
+      await tx
+        .update(campaigns)
+        .set({ lastSavedAt: new Date() })
+        .where(eq(campaigns.id, row.campaign.id));
+      // DISP-TOURS (R2/R12) — nothing is frozen in the cart: the week is read live at every
+      // opening and frozen at the launch (lib/dispatch/tours/dispatch.ts).
+      if (row.campaign.eventId === null && !(await usesToursEngine(tx, row.campaign.id))) {
         await freezeTypicalWeek(tx, row.campaign.id);
       }
     });
@@ -238,7 +298,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // DELETE /api/cart/items/:campaign_id — « conserver en brouillon »: the item leaves the cart,
-  // the campaign STAYS a draft (and re-exposes to the CF-S2 deletion tick).
+  // the campaign STAYS a draft (back in « Mes campagnes », on the draft's own expiry clock).
   app.delete('/api/cart/items/:campaign_id', advertiserGuard, async (request, reply) => {
     const parsed = campaignIdParamSchema.safeParse(request.params);
     if (!parsed.success) {
@@ -256,7 +316,15 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         .delete(cartItems)
         .where(and(eq(cartItems.campaignId, parsed.data.campaign_id), eq(cartItems.userId, userId)))
         .returning({ campaignId: cartItems.campaignId });
-      if (row) await dropTypicalWeekFreeze(tx, row.campaignId);
+      if (row) {
+        await dropTypicalWeekFreeze(tx, row.campaignId);
+        // DISP-TOURS §3.1 — « Conserver en brouillon » saves it back among the drafts: the
+        // draft's own clock restarts (lib/campaign-expiry.ts).
+        await tx
+          .update(campaigns)
+          .set({ lastSavedAt: new Date() })
+          .where(eq(campaigns.id, row.campaignId));
+      }
       return row;
     });
     if (!removed) {
@@ -283,24 +351,50 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(cartItems.userId, userId))
       .orderBy(cartItems.addedAt);
     const now = new Date();
-    const items = rows.map((r) => ({
-      ...campaignView(r.campaign as CampaignRow, r.contentValidationStatus),
-      added_at: r.addedAt,
-      // EV3 — the panier's ÉVÉNEMENTS section needs the match + its derived window; null for
-      // classic campaigns (the web splits the two sections on this).
-      event: r.event === null ? null : eventView(r.event, now),
-    }));
-    const totalHt = rows.reduce(
-      (sum, r) =>
-        sum + (r.campaign.requestedBudget === null ? 0 : Number(r.campaign.requestedBudget)),
-      0,
-    );
-    return reply.status(200).send({ items, total_ht: totalHt, count: items.length });
+    // DISP-TOURS (R12) — every opening recomputes each classic item at its targeted budget: the
+    // budget stays the target, the impressions and the exact price follow the affluence and the
+    // places left right now (no alert — the advertiser sees the new figures).
+    const quotes = new Map<string, NonNullable<CampaignCmax['quote']> & { cMaxTnd: number }>();
+    if (toursEngineOn()) {
+      for (const r of rows) {
+        if (r.campaign.eventId !== null) continue;
+        const gate = await loadGateRow(r.campaign.id, userId);
+        const cmax = gate ? await cartQuote(gate) : null;
+        if (cmax?.quote) quotes.set(r.campaign.id, { ...cmax.quote, cMaxTnd: cmax.cMaxTnd });
+      }
+    }
+    const items = rows.map((r) => {
+      const q = quotes.get(r.campaign.id);
+      return {
+        ...campaignView(r.campaign as CampaignRow, r.contentValidationStatus),
+        added_at: r.addedAt,
+        // EV3 — the panier's ÉVÉNEMENTS section needs the match + its derived window; null for
+        // classic campaigns (the web splits the two sections on this).
+        event: r.event === null ? null : eventView(r.event, now),
+        quote: q
+          ? {
+              prix_tnd: q.prixTnd,
+              impressions: Math.round(q.impressions),
+              venues_count: q.venuesCount,
+              c_max_tnd: q.cMaxTnd,
+            }
+          : null,
+      };
+    });
+    const totalHt = rows.reduce((sum, r) => {
+      const q = quotes.get(r.campaign.id);
+      if (q) return sum + q.prixTnd;
+      return sum + (r.campaign.requestedBudget === null ? 0 : Number(r.campaign.requestedBudget));
+    }, 0);
+    return reply
+      .status(200)
+      .send({ items, total_ht: Math.round(totalHt * 1e4) / 1e4, count: items.length });
   });
 
   // POST /api/cart/confirm — ONE confirm launches them all (spec §1.12/§1.13): revalidate EVERY
-  // item against LIVE state (the same gates as add — dates/floor, budget floor, C_max), then the
-  // solde (walletBalance ≥ Σ budgets HT). ANY failure → 400 with per-item reasons and the cart
+  // item against LIVE state (the same gates as add — dates/floor, budget floor, C_max; DISP-TOURS
+  // §3.4: the figures the cart showed, when sent), then the solde (spendable ≥ Σ what the items
+  // engage: a tours item launched now its exact price, any other its budget HT). ANY failure → 400 with per-item reasons and the cart
   // INTACT. Success → ONE transaction flips every campaign draft → pending (submittedAt stamped,
   // any rejection audit shed — the resubmit convention) and clears the cart rows. NO money moves:
   // the activation funding gate and the settlement debit are UNCHANGED — the cart only sequences
@@ -308,6 +402,20 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/cart/confirm', advertiserGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) return sendUnauthenticated(reply);
+    const body = confirmBodySchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation échouée',
+        fields: body.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const shown = new Map<string, ShownQuote>(
+      (body.data.quotes ?? []).map((q) => [
+        q.campaign_id,
+        { prixTnd: q.prix_tnd, impressions: q.impressions },
+      ]),
+    );
 
     const carted = await db
       .select({ campaignId: cartItems.campaignId })
@@ -321,15 +429,35 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     const rule = await cartRuleFor(userId);
     const failures: { campaign_id: string; reason: string }[] = [];
     let requiredHt = 0;
+    // DISP-TOURS — each classic item's live quote, carried to its launch (checked there again,
+    // under the dispatch's locks).
+    const liveQuotes = new Map<string, ShownQuote>();
     for (const { campaignId } of carted) {
       const row = await loadGateRow(campaignId, userId);
       if (!row) {
         failures.push({ campaign_id: campaignId, reason: 'NOT_FOUND' });
         continue;
       }
-      const reason = await cartGateReason(row, rule);
-      if (reason !== null) failures.push({ campaign_id: campaignId, reason });
-      else requiredHt += Number(row.campaign.requestedBudget ?? 0);
+      const { reason, quote } = await cartGateVerdict(row, rule);
+      if (reason !== null) {
+        failures.push({ campaign_id: campaignId, reason });
+        continue;
+      }
+      // §3.4 — « si une place a été prise entre l'ouverture du panier et le clic, réafficher les
+      // chiffres à jour avant de débiter »: nothing moves, the cart re-reads its new figures.
+      const seen = shown.get(campaignId);
+      if (quote && seen && quoteMoved(seen, quote)) {
+        failures.push({ campaign_id: campaignId, reason: 'QUOTE_CHANGED' });
+        continue;
+      }
+      if (quote)
+        liveQuotes.set(campaignId, { prixTnd: quote.prixTnd, impressions: quote.impressions });
+      // R13 — an item frozen now (launched, or reserved under review — Q1) engages its exact
+      // price; any other item its budget.
+      requiredHt +=
+        quote && freezesAtLaunch(row.contentValidationStatus)
+          ? round2(quote.prixTnd)
+          : Number(row.campaign.requestedBudget ?? 0);
     }
     if (failures.length > 0) {
       return reply.status(400).send({
@@ -361,6 +489,10 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     // admin review, so it launches at confirm (draft → upcoming/active, date-routed, via the
     // SAME activation core the admin route runs, activated_by NULL = system). Items whose spot
     // is pending/rejected take the normal draft → pending path and wait for the admin.
+    // DISP-TOURS Q1 (Mariem: « ok ») — a tours item whose spot awaits validation is frozen and
+    // its places reserved in PHASE 1 too (RESERVE allocations, no owner told), then waits as
+    // « en attente »; the admin's validation proposes it, a refusal frees its places
+    // (lib/dispatch/tours/reservation.ts).
     //
     // TWO PHASES (the CF-SK1 amendment, ratified): PREPARE freezes (or RESUMES) every skip
     // item's plan first — no flips; then ONE transaction flips everything (skip items →
@@ -385,16 +517,22 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       row: NonNullable<Awaited<ReturnType<typeof loadGateRow>>>;
     }[] = [];
     const reviewIds: string[] = [];
+    const reserveItems: typeof skipItems = [];
     for (const { campaignId } of carted) {
       const row = await loadGateRow(campaignId, userId);
       if (!row) continue; // revalidation above already proved every item loads
       if (row.contentValidationStatus === 'approved') skipItems.push({ campaignId, row });
-      else reviewIds.push(campaignId);
+      else {
+        reviewIds.push(campaignId);
+        if (liveQuotes.has(campaignId) && freezesAtLaunch(row.contentValidationStatus)) {
+          reserveItems.push({ campaignId, row });
+        }
+      }
     }
 
     // PHASE 1 — prepare (gate → dispatch/resume → plan loaded). No status flips yet.
     const preparedSkips: { full: Campaign }[] = [];
-    for (const { campaignId, row } of skipItems) {
+    for (const { campaignId, row } of [...skipItems, ...reserveItems]) {
       const [full] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
       if (!full) {
         return reply.status(400).send({
@@ -403,11 +541,15 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           items: [{ campaign_id: campaignId, reason: 'NOT_FOUND' }],
         });
       }
+      const expectedQuote = liveQuotes.get(campaignId);
+      const reserve = row.contentValidationStatus !== 'approved';
       const prepared = await prepareActivation({
         campaign: full,
         contentValidationStatus: row.contentValidationStatus,
         creativeDurationSeconds: row.creativeDurationSeconds,
         fromStatus: 'draft',
+        ...(expectedQuote ? { expectedQuote } : {}),
+        ...(reserve ? { reserveUnderReview: true } : {}),
       });
       if (prepared.status !== 'READY') {
         // EV4 — the event dispatch's refusals ride the same per-item vocabulary; so does CPM-3's
@@ -428,7 +570,14 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           items: [{ campaign_id: campaignId, reason }],
         });
       }
-      preparedSkips.push({ full });
+      if (reserve) continue;
+      // DEMO-3 — a demo positioning's dispatch moved its start onto the demo timeline: the launch
+      // flips the row as it now stands (active today, its on-air instant from today).
+      const [launchRow] =
+        rule.demo && full.eventId !== null
+          ? await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1)
+          : [full];
+      preparedSkips.push({ full: launchRow ?? full });
     }
 
     // DEMO-1 (ruled Q3 A) — the on-air instant: confirm + the admin's delay.

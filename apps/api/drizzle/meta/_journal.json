@@ -680,6 +680,83 @@
       "when": 1794580000000,
       "tag": "0096_account_deactivation",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1794590000000,
+      "tag": "0097_event_extra_time",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1794600000000,
+      "tag": "0098_screenhost_unavailable_hours",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1794610000000,
+      "tag": "0099_mobile_push",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1794620000000,
+      "tag": "0100_agent_unavailable_hours",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1794630000000,
+      "tag": "0101_dispatch_tours",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1794640000000,
+      "tag": "0102_campaign_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1794650000000,
+      "tag": "0103_dispatch_reserve",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1794660000000,
+      "tag": "0104_event_seat_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1794670000000,
+      "tag": "0105_cta_position",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1794680000000,
+      "tag": "0106_event_host_notice",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794690000000,
+      "tag": "0107_venue_ramadan_matches",
+      "breakpoints": true
     }
   ]
 }

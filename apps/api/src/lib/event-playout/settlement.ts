@@ -15,6 +15,7 @@ import {
 } from '../../db/schema.js';
 import { acquireAgentCommissions, settlementAgentTerms } from '../agent-commissions.js';
 import { campaignReportReadyNotification } from '../campaign-report-notification.js';
+import { isDemoCampaign } from '../demo.js';
 import { fenetreDiffusion } from '../fenetre-diffusion.js';
 import { proofInstantSql } from '../playout/proof-instant.js';
 import { computeReversement, millimesToTnd, tndToMillimes } from '../reversement/split.js';
@@ -102,6 +103,8 @@ export interface EventDelivery {
 export const measureEventDelivery = async (
   positioningId: string,
   eventId: string,
+  /** A stop's instant (lib/campaign-stop): a proof played at or after it does not count. */
+  until?: Date,
 ): Promise<EventDelivery> => {
   const allocations = await db
     .select()
@@ -118,6 +121,7 @@ export const measureEventDelivery = async (
     );
   const proofsByVenue = new Map<string, number[]>();
   for (const p of proofs) {
+    if (until && p.playedAt.getTime() >= until.getTime()) continue;
     const list = proofsByVenue.get(p.screenhostId) ?? [];
     list.push(p.playedAt.getTime());
     proofsByVenue.set(p.screenhostId, list);
@@ -218,10 +222,14 @@ export const measureEventDelivery = async (
 /**
  * Settle ONE positioning: measure every (venue, bloc), value the delivered part, refund the rest.
  * `now` is injected (the reconcile-tick idiom) so tests and the sweep drive the clock.
+ * `stoppedAt` (Mariem 05/11, ruling 1A — a superadmin stops a positioning, lib/campaign-stop):
+ * settled at once, the window open or not; only what aired before the stop is billed and paid to
+ * the venues, the rest is refunded; the stop sends its own notice instead of « terminé ».
  */
 export const settleEventPositioning = async (
   positioningId: string,
   now: Date = new Date(),
+  opts: { stoppedAt?: Date } = {},
 ): Promise<EventSettlementResult> => {
   const [row] = await db
     .select({ campaign: campaigns, event: events })
@@ -233,7 +241,9 @@ export const settleEventPositioning = async (
 
   // The window must be CLOSED (an annulé event settles through the R4 void path, not here).
   const fenetre = fenetreDiffusion(row.event.kickoffAt, row.event.endsAt);
-  if (now.getTime() < fenetre.windowEnd.getTime()) return { status: 'WINDOW_OPEN' };
+  if (!opts.stoppedAt && now.getTime() < fenetre.windowEnd.getTime()) {
+    return { status: 'WINDOW_OPEN' };
+  }
 
   const existing = await db
     .select({ id: campaignReconciliation.id })
@@ -242,7 +252,7 @@ export const settleEventPositioning = async (
     .limit(1);
   if (existing.length > 0) return { status: 'ALREADY_SETTLED' };
 
-  const measured = await measureEventDelivery(positioningId, row.event.id);
+  const measured = await measureEventDelivery(positioningId, row.event.id, opts.stoppedAt);
   if (measured.venues.length === 0) return { status: 'NO_ALLOCATIONS' };
   const { engagedTnd, deliveredTnd, refundTnd, expectedImp, deliveredImp, venues } = measured;
 
@@ -253,7 +263,10 @@ export const settleEventPositioning = async (
   // holds for events by construction. A fully-refunded positioning writes NO lines at all.
   // AGT-3 — the agents' frozen rates and attribution, exactly as the campaign path reads them
   // (lib/agent-commissions); Toodooh takes what the agents' rates leave.
-  const paying = venues.filter((v) => v.deliveredTnd > 0);
+  // DEMO-3 (DEMO-1 Q1 A) — a demo positioning settles its demo wallet like any positioning, but
+  // pays no venue: no payout row, no reversement line (so no facture, no versement).
+  const demo = await isDemoCampaign(db, positioningId);
+  const paying = demo ? [] : venues.filter((v) => v.deliveredTnd > 0);
   const terms = await settlementAgentTerms(
     positioningId,
     paying.map((v) => v.screenhostId),
@@ -330,13 +343,17 @@ export const settleEventPositioning = async (
   await acquireAgentCommissions(positioningId);
 
   await db.insert(notifications).values([
-    {
-      userId: row.campaign.advertiserId,
-      type: 'event_settled',
-      title: EVENT_SETTLED_TITLE,
-      body: eventSettledBody(row.campaign.name, refundTnd),
-      campaignId: positioningId,
-    },
+    ...(opts.stoppedAt
+      ? []
+      : [
+          {
+            userId: row.campaign.advertiserId,
+            type: 'event_settled',
+            title: EVENT_SETTLED_TITLE,
+            body: eventSettledBody(row.campaign.name, refundTnd),
+            campaignId: positioningId,
+          },
+        ]),
     // SC-P epic 2 — a positioning's clôture is a clôture: its report is ready too.
     campaignReportReadyNotification({
       id: positioningId,

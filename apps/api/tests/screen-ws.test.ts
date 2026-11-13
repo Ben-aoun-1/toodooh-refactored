@@ -134,26 +134,67 @@ describe('screen WebSocket (/ws/screen) — auth + lifecycle', () => {
     expect(await nextCloseCode(ws)).toBe(4403);
   }, 10_000);
 
-  it('HEARTBEAT updates the screen last-seen', async () => {
+  const screenRow = async (screenId: string) => {
+    const [row] = await db
+      .select({ pairedAt: screens.pairedAt, lastSeenAt: screens.lastSeenAt })
+      .from(screens)
+      .where(eq(screens.id, screenId))
+      .limit(1);
+    return row;
+  };
+  const waitFor = async <T>(read: () => Promise<T>, ok: (v: T) => boolean): Promise<T> => {
+    let v = await read();
+    for (let i = 0; i < 40 && !ok(v); i += 1) {
+      await sleep(75);
+      v = await read();
+    }
+    return v;
+  };
+
+  it('SCR-INST1 — connecting makes the screen installed at once (no heartbeat needed); a reconnect keeps the first pairing', async () => {
+    const { ownerId, screenId } = await seedOwnerWithScreen();
+    const token = await seedDeviceToken(ownerId);
+    const first = connect(`screen_id=${screenId}&token=${token}`);
+    await nextMessage(first); // CONNECTED — no message sent by the player
+    const afterFirst = await waitFor(
+      () => screenRow(screenId),
+      (r) => r?.pairedAt != null,
+    );
+    expect(afterFirst?.pairedAt).not.toBeNull();
+    expect(afterFirst?.lastSeenAt).not.toBeNull();
+    first.close();
+
+    await sleep(20);
+    const second = connect(`screen_id=${screenId}&token=${token}`);
+    await nextMessage(second);
+    const afterSecond = await waitFor(
+      () => screenRow(screenId),
+      (r) => (r?.lastSeenAt?.getTime() ?? 0) > (afterFirst?.lastSeenAt?.getTime() ?? 0),
+    );
+    expect(afterSecond?.pairedAt?.getTime()).toBe(afterFirst?.pairedAt?.getTime());
+    expect(afterSecond?.lastSeenAt?.getTime()).toBeGreaterThan(
+      afterFirst?.lastSeenAt?.getTime() ?? 0,
+    );
+  }, 10_000);
+
+  it('HEARTBEAT moves the screen last-seen forward', async () => {
     const { ownerId, screenId } = await seedOwnerWithScreen();
     const token = await seedDeviceToken(ownerId);
     const ws = connect(`screen_id=${screenId}&token=${token}`);
     await nextMessage(ws); // CONNECTED
+    const connected = await waitFor(
+      () => screenRow(screenId),
+      (r) => r?.lastSeenAt != null,
+    );
+    await sleep(20);
     ws.send(
       JSON.stringify({ event: 'HEARTBEAT', data: { screen_id: screenId, status: 'playing' } }),
     );
-
-    let lastSeen: Date | null = null;
-    for (let i = 0; i < 40 && lastSeen === null; i += 1) {
-      await sleep(75);
-      const [row] = await db
-        .select({ lastSeenAt: screens.lastSeenAt })
-        .from(screens)
-        .where(eq(screens.id, screenId))
-        .limit(1);
-      lastSeen = row?.lastSeenAt ?? null;
-    }
-    expect(lastSeen).not.toBeNull();
+    const beat = await waitFor(
+      () => screenRow(screenId),
+      (r) => (r?.lastSeenAt?.getTime() ?? 0) > (connected?.lastSeenAt?.getTime() ?? 0),
+    );
+    expect(beat?.lastSeenAt?.getTime()).toBeGreaterThan(connected?.lastSeenAt?.getTime() ?? 0);
   }, 10_000);
 
   it('a malformed message is ignored — the socket stays open', async () => {

@@ -1,13 +1,12 @@
-import { and, eq, gte, inArray, lt } from 'drizzle-orm';
+import { and, eq, gte, inArray } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
-import { proofOfPlay, screenhosts, screenhostUnavailability } from '../db/schema.js';
+import { proofOfPlay, screenhosts } from '../db/schema.js';
 
 import { plusCalendarDays } from './campaign-dates.js';
 import { realVenueSql } from './demo.js';
 import { getDispatchConfig } from './dispatch/config.js';
-import { broadcastableHours } from './dispatch/eligibility.js';
 import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
 import {
   blackoutMinutesByCell,
@@ -32,6 +31,7 @@ import {
   tunisDateOf,
   tunisWeekStart,
 } from './sps-observations.js';
+import { cellKey, loadUnavailableCells } from './unavailable-hours.js';
 import { SCREEN_SECONDS_PER_HOUR } from './vf-constants.js';
 
 // E4 — the SPS score engine (Mejri 2026-07-27, Kais-validated): 40 % taux d'acceptation des
@@ -205,25 +205,27 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
     .from(screenhosts)
     .where(eq(screenhosts.id, screenhostId))
     .limit(1);
-  const bHours = broadcastableHours(venue?.openingHour ?? null, venue?.closingHour ?? null);
-  // Ratification amendment: E2-declared days leave BOTH sides of the ratio — dispatch schedules
-  // nothing on them (the numerator is already empty there), so counting them in the denominator
-  // would turn honest declaration into a hidden SPS penalty. UNIQUE(screenhost, day) makes the
-  // row count the declared-day count.
-  const declaredRows = await db
-    .select({ day: screenhostUnavailability.day })
-    .from(screenhostUnavailability)
-    .where(
-      and(
-        eq(screenhostUnavailability.screenhostId, screenhostId),
-        gte(screenhostUnavailability.day, weekStart),
-        lt(screenhostUnavailability.day, weekEnd),
-      ),
-    );
-  const availableDays = 7 - declaredRows.length;
-  // EVT-STOP (P2 A) — the blacked-out open minutes of the week's available days were never the
+  // Ratification amendment: declared unavailability leaves BOTH sides of the ratio — dispatch
+  // schedules nothing there (the numerator is already empty), so counting it in the denominator
+  // would turn honest declaration into a hidden SPS penalty. HOUR-UNAV1: hour by hour now — the
+  // merged cells (whole days + declared hours) of lib/unavailable-hours.ts.
+  const unavailable =
+    (
+      await loadUnavailableCells(
+        db,
+        [
+          {
+            id: screenhostId,
+            openingHour: venue?.openingHour ?? null,
+            closingHour: venue?.closingHour ?? null,
+          },
+        ],
+        weekStart,
+        weekEnd,
+      )
+    ).get(screenhostId) ?? new Set<string>();
+  // EVT-STOP (P2 A) — the blacked-out open minutes of the week's available hours were never the
   // screen's to fill: they leave the denominator (and their share leaves engaged seconds).
-  const declaredDays = new Set(declaredRows.map((r) => r.day));
   const weekWindows = windowsForVenue(
     await eventBlackouts(
       new Date(`${weekStart}T00:00:00+01:00`),
@@ -231,21 +233,17 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
     ),
     screenhostId,
   );
-  let blackoutSeconds = 0;
-  if (weekWindows.length > 0) {
-    const open = openingHours(venue?.openingHour ?? null, venue?.closingHour ?? null);
-    for (let d = weekStart; d < weekEnd; d = plusCalendarDays(d, 1)) {
-      if (declaredDays.has(d)) continue;
-      for (const { hour, dayOffset } of open) {
-        const cellDate = dayOffset ? plusCalendarDays(d, 1) : d;
-        blackoutSeconds += blackoutMinutesInHour(weekWindows, cellDate, hour) * 60;
-      }
+  const open = openingHours(venue?.openingHour ?? null, venue?.closingHour ?? null);
+  let availableSeconds = 0;
+  for (let d = weekStart; d < weekEnd; d = plusCalendarDays(d, 1)) {
+    for (const { hour, dayOffset } of open) {
+      const cellDate = dayOffset ? plusCalendarDays(d, 1) : d;
+      if (unavailable.has(cellKey(cellDate, hour))) continue;
+      const blackout =
+        weekWindows.length > 0 ? blackoutMinutesInHour(weekWindows, cellDate, hour) : 0;
+      availableSeconds += Math.max(0, SCREEN_SECONDS_PER_HOUR - blackout * 60);
     }
   }
-  const availableSeconds = Math.max(
-    0,
-    SCREEN_SECONDS_PER_HOUR * bHours.length * availableDays - blackoutSeconds,
-  );
   let engagedSeconds = 0;
   for (const a of allocations) {
     for (const c of a.creneaux) {

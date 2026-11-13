@@ -14,6 +14,9 @@ export interface ApiNotification {
   title: string;
   body: string;
   campaign_id: string | null;
+  /** Mariem 05/11 — a « Soir de match » notice names its match and venue. */
+  event_id?: string | null;
+  screenhost_id?: string | null;
   read_at: string | null;
   created_at: string;
 }

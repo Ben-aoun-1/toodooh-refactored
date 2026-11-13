@@ -82,6 +82,7 @@ describe.skipIf(!enabled)('QR-CTA2 — burning the QR card with ffmpeg + chromiu
         qrUrl: 'https://too-dooh.com/q/abcd2345',
         label: 'pour en savoir plus',
         durationSeconds: 12,
+        position: 'bottom_left',
       });
       expect(out).toMatchObject({ contentType: 'video/mp4', extension: 'mp4' });
       const probed = await probeMedia(out.bytes);
@@ -109,6 +110,7 @@ describe.skipIf(!enabled)('QR-CTA2 — burning the QR card with ffmpeg + chromiu
       qrUrl: 'https://too-dooh.com/q/abcd2345',
       label: 'Promo du jour',
       durationSeconds: 10,
+      position: 'bottom_left',
     });
     expect(out).toMatchObject({ contentType: 'video/mp4', extension: 'mp4' });
     const probed = await probeMedia(out.bytes);
@@ -142,6 +144,7 @@ describe.skipIf(!enabled)('QR-CTA2 — burning the QR card with ffmpeg + chromiu
           qrUrl: 'https://too-dooh.com/q/abcd2345',
           label: 'pour en savoir plus',
           durationSeconds: 10,
+          position: 'bottom_left',
         }),
       ).rejects.toThrow('SPOT_TOO_SMALL');
     } finally {

@@ -2,7 +2,10 @@ import { Bell, CalendarDays, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useAdvertiserNotifications } from '@/features/advertiser/hooks/useAdvertiserNotifications';
+import {
+  CALENDAR_NOTICE_KINDS,
+  useAdvertiserNotifications,
+} from '@/features/advertiser/hooks/useAdvertiserNotifications';
 import { shouldAutoOpen } from '@/lib/popover-auto-open';
 
 const relativeTime = (date: Date) => {
@@ -120,7 +123,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
                   >
                     <div className="flex items-start gap-3">
                       <div className="relative mt-0.5 h-10 w-10 rounded-full border border-brand-primary text-[#2A7A47] flex items-center justify-center">
-                        {item.kind === 'campaign_draft_reminder' ? (
+                        {CALENDAR_NOTICE_KINDS.has(item.kind) ? (
                           <CalendarDays className="h-4 w-4" />
                         ) : (
                           <Bell className="h-4 w-4" />

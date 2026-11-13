@@ -34,11 +34,14 @@ import {
 import type { RechargeRow } from '@/features/wallet/services/wallet.service';
 import { tndLabel } from '@/lib/money';
 
+// Mariem 11/11 — the five « Rechargement rapide » amounts. A click only pre-fills the recharge
+// modal; the api's MIN/MAX_RECHARGE_TND still decide what is accepted.
 const QUICK_AMOUNTS = [
-  { value: 1000, label: '1 000 TND', tag: 'Populaire' },
-  { value: 2500, label: '2 500 TND', tag: 'Populaire' },
+  { value: 2000, label: '2 000 TND', tag: 'Populaire' },
   { value: 5000, label: '5 000 TND', tag: 'Populaire' },
   { value: 10000, label: '10 000 TND', tag: 'Recommandé' },
+  { value: 20000, label: '20 000 TND', tag: 'Populaire' },
+  { value: 50000, label: '50 000 TND', tag: 'Populaire' },
 ];
 
 // RECH-F1 (Mejri 07/09 point 3): ajustements exist in the list, so they get their filter.

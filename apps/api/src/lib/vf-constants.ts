@@ -21,6 +21,13 @@
 //                                        delivered × cpm/1000 formula is UNTOUCHED until then).
 
 export const S_MIN_TND = 20;
+/**
+ * DISP-TOURS (Mariem 03/11, spec §3.4 + her Q3 answer) — on a tours plan the 20 TND above is 30:
+ * « les seuils sont à 30 dinars et non plus à 20 dinars, que ce soit pour le redispatching ou le
+ * remboursement ». A loss is redispatched once its value reaches it; a net loss under it is not
+ * refunded. v1 plans keep S_MIN_TND.
+ */
+export const S_MIN_TOURS_TND = 30;
 
 /**
  * CAP-F1 (operator ruling 2026-09-24) — a screen's shared broadcast limit: the physical hour. F
@@ -29,6 +36,13 @@ export const S_MIN_TND = 20;
  */
 export const SCREEN_SECONDS_PER_HOUR = 3600;
 export const SEUIL_DIFFUSABLE = 5000;
+/**
+ * DISP-TOURS (Mariem, 03/11/2026) — SEUIL_SH: the minimum a venue sees for a WHOLE standard
+ * campaign — its own qualified impressions × CPM ÷ 1000 × the Screenhost share. Under it, the
+ * tours engine removes the venue (lib/dispatch/tours/anti-miette.ts). It replaces the 20 TND and
+ * 5 000-impression floors on the tours path.
+ */
+export const SEUIL_SH_TND = 30;
 export const G_MOIS_TND = 100;
 export const VALEUR_MIN_SH_TND = 20;
 export const PCT_SH = 0.5;

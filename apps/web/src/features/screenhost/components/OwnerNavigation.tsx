@@ -30,6 +30,7 @@ import financeIcon from '@/assets/sidebar/portefeuille.png';
 import financeIconActive from '@/assets/sidebar/portefeuilles.png';
 import supportIcon from '@/assets/support.png';
 import supportIconActive from '@/assets/supports.png';
+import AppVersion from '@/components/AppVersion';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import SupportModal from '@/features/support/components/SupportModal';
@@ -398,6 +399,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                 </>
               )}
             </button>
+            {sidebarExpanded && <AppVersion className="px-3 pb-2" />}
           </div>
         </div>
       </div>

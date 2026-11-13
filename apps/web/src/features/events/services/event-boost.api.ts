@@ -14,6 +14,8 @@ export interface EventBoostPreviewView {
    * positioning (it keeps the TND amount).
    */
   max_minutes?: number;
+  /** Mariem 04/11 — the match's seat length (2; 1 under EVT-MIN1): one price per SEAT above. */
+  seat_minutes?: number;
   minute_prices_tnd?: number[];
   minute_impressions?: number[];
 }

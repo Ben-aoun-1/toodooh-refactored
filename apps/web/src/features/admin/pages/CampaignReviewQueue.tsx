@@ -17,7 +17,8 @@ import { useSearchParams } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
-import CampaignStopButton from '@/features/admin/components/CampaignStopButton';
+import CampaignLifecycleActions from '@/features/admin/components/CampaignLifecycleActions';
+import CampaignQrPanel from '@/features/admin/components/CampaignQrPanel';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import {
   useAdminCampaigns,
@@ -444,6 +445,8 @@ export default function CampaignReviewQueue() {
                   )}
                 </div>
 
+                <CampaignQrPanel campaignId={selected.id} />
+
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     {/* ADM-FIX1 — the examen names the annonceur; the uuid is the muted line. */}
@@ -734,7 +737,7 @@ export default function CampaignReviewQueue() {
                     Rejeter
                   </button>
                 )}
-                <CampaignStopButton campaign={selected} onStopped={closeReview} />
+                <CampaignLifecycleActions campaign={selected} onDone={closeReview} />
                 <button
                   onClick={closeReview}
                   disabled={submitting}

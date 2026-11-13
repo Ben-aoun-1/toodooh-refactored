@@ -11,7 +11,7 @@ import { env } from '../env.js';
 import { probeMedia } from './media-probe.js';
 import { renderPng, resolveChromiumPath } from './report/render.js';
 import { CTA_QR_DARK, ctaBracketHtml, ctaCardHtml, ctaShapeHtml } from './spot-cta-card.js';
-import { ctaFilterGraph, ctaLayout } from './spot-cta-layout.js';
+import { type CtaPosition, ctaFilterGraph, ctaLayout } from './spot-cta-layout.js';
 import { CTA_MIN_QR_PX } from './spot-cta.js';
 
 // QR-CTA1 → QR-CTA2 (Mariem 27/10 point 1) — burns the call-to-action card into a COPY of a
@@ -41,10 +41,12 @@ export interface BurnInput {
   mimeType: string | null;
   /** What the QR encodes (the /q/<code> redirect). */
   qrUrl: string;
-  /** The advertiser's words under « Scannez le code ». */
+  /** The advertiser's words, the card's headline. */
   label: string;
   /** The spot's length: a photo's diffusion duration (a video's is measured). */
   durationSeconds: number | null;
+  /** Mariem 04/11 — the card's corner. */
+  position: CtaPosition;
 }
 
 export interface BurnOutput {
@@ -70,7 +72,7 @@ export const burnCtaIntoSpot: CtaBurner = async (input) => {
     ? (input.durationSeconds ?? DEFAULT_PHOTO_SECONDS)
     : (probed.durationSeconds ?? input.durationSeconds ?? 0);
   if (!(duration > 0)) throw new CtaBurnError('SPOT_UNREADABLE');
-  const layout = ctaLayout(frame.height);
+  const layout = ctaLayout(frame.height, frame.width, input.position);
   // Below ~4 px a module a phone camera cannot read the code off a TV: refuse rather than air it.
   if (layout.qr < CTA_MIN_QR_PX) throw new CtaBurnError('SPOT_TOO_SMALL');
 

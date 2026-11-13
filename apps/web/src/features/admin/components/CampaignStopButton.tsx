@@ -9,6 +9,7 @@ import {
   canStopCampaign,
   parseStopReason,
   stopConsequence,
+  stopLabel,
   stoppedToast,
 } from '@/features/admin/lib/campaign-stop';
 import { adminCampaignsService } from '@/features/admin/services/admin-campaigns.service';
@@ -17,8 +18,9 @@ import { getErrorMessage } from '@/lib/errors';
 
 /**
  * STOP-1 (operator rulings 2026-10-27) — « Arrêter la campagne » in the admin campaign review:
- * superadmin only, on an active or upcoming standard campaign. A confirm window says what happens
- * to the money and asks for a reason; the api settles the campaign at once.
+ * superadmin only, on an active or upcoming campaign — since Mariem 05/11, a match positioning
+ * too. A confirm window says what happens to the money and asks for a reason; the api settles
+ * the campaign at once.
  */
 export default function CampaignStopButton({
   campaign,
@@ -70,7 +72,7 @@ export default function CampaignStopButton({
         className="inline-flex w-full items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-base font-medium text-red-700 shadow-sm hover:bg-red-50 sm:w-auto sm:text-sm"
       >
         <XOctagon className="mr-2 h-4 w-4" />
-        Arrêter la campagne
+        {stopLabel(campaign)}
       </button>
       {/* A portal: inside the scrolling review window, `fixed` would centre on that window. */}
       {open &&
@@ -78,11 +80,11 @@ export default function CampaignStopButton({
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4">
             <div
               role="dialog"
-              aria-label="Arrêter la campagne"
+              aria-label={stopLabel(campaign)}
               className="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-xl"
             >
               <h3 className="text-lg font-semibold text-gray-900">Arrêter « {campaign.name} » ?</h3>
-              <p className="text-sm text-gray-600">{stopConsequence(campaign.status)}</p>
+              <p className="text-sm text-gray-600">{stopConsequence(campaign)}</p>
               <p className="text-sm text-gray-600">
                 L’annonceur est prévenu. Cette action est définitive.
               </p>

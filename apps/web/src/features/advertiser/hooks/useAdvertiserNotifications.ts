@@ -39,6 +39,13 @@ const toDate = (value?: string | null): Date => {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 };
 
+/** The kinds the bell marks with a calendar: a deadline on one of the advertiser's campaigns. */
+export const CALENDAR_NOTICE_KINDS: ReadonlySet<string> = new Set([
+  'campaign_draft_reminder',
+  'campaign_draft_expiry',
+  'campaign_cart_expiry',
+]);
+
 // Bell CTA by notification type (exported for the routing tests). The J-3 draft reminder sends
 // the user to the draft list — MyCampaigns already honors ?status=draft — where Reprendre resumes
 // the wizard. FCT1 — every recharge transition (recharge_virement_created / bon_issued /
@@ -46,8 +53,12 @@ const toDate = (value?: string | null): Date => {
 // new transition type gets the CTA without an FE change. Unknown types get NO CTA (rendered
 // plainly).
 export const actionFor = (n: ApiNotification): AdvertiserNotificationItem['action'] => {
-  if (n.type === 'campaign_draft_reminder') {
+  // DISP-TOURS §3.2 — a draft about to be deleted opens the drafts; a cart campaign, the cart.
+  if (n.type === 'campaign_draft_reminder' || n.type === 'campaign_draft_expiry') {
     return { label: 'Consulter', path: '/my-campaigns?status=draft' };
+  }
+  if (n.type === 'campaign_cart_expiry') {
+    return { label: 'Consulter', path: '/my-cart' };
   }
   if (n.type.startsWith('recharge_')) {
     return { label: 'Consulter', path: '/my-recharges' };

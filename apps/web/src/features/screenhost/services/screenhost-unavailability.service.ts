@@ -1,26 +1,40 @@
 import type { RedispatchedShare } from '@/features/screenhost/lib/diffusion-calendar';
+import type { UnavailabilityView } from '@/features/screenhost/lib/hour-unavailability';
 import { apiClient } from '@/lib/api-client';
 
-// E2 (VF jours_dispo_i) — the owner's per-day unavailability wire. VENUE-level only; future-only
+// E2 → HOUR-UNAV1 — the owner's availability wire, by the HOUR. VENUE-level only; future-only
 // writes (the api refuses PAST_OR_TODAY); idempotent both directions.
 
 export interface ToggleResult {
   screenhost_id: string;
   day: string;
+  hours: number[] | null;
   unavailable: boolean;
   redispatched: RedispatchedShare[];
 }
 
 export const screenhostUnavailabilityService = {
-  /** The declared days in [from, to] (ISO dates), sorted. */
-  list(screenhostId: string, from: string, to: string): Promise<string[]> {
-    return apiClient
-      .get<{ days: string[] }>(`/screenhosts/${screenhostId}/unavailability?from=${from}&to=${to}`)
-      .then((r) => r.days);
+  /** Whole unavailable days, every unavailable hour and the venue's window, over [from, to]. */
+  list(screenhostId: string, from: string, to: string): Promise<UnavailabilityView> {
+    return apiClient.get<UnavailabilityView>(
+      `/screenhosts/${screenhostId}/unavailability?from=${from}&to=${to}`,
+    );
   },
-  /** Declare (unavailable: true) or undeclare one FUTURE day. CAL-1: a declaration returns what
-   * the api moved (accepted créneaux on that day → re-placed elsewhere). */
-  toggle(screenhostId: string, day: string, unavailable: boolean): Promise<ToggleResult> {
-    return apiClient.put(`/screenhosts/${screenhostId}/unavailability`, { day, unavailable });
+  /**
+   * Declare (unavailable: true) or free some HOURS of one future opening day — no `hours` = the
+   * whole day. CAL-1: a declaration returns what the api moved (créneaux and event slots of those
+   * hours → re-placed elsewhere).
+   */
+  toggle(
+    screenhostId: string,
+    day: string,
+    unavailable: boolean,
+    hours?: readonly number[],
+  ): Promise<ToggleResult> {
+    return apiClient.put(`/screenhosts/${screenhostId}/unavailability`, {
+      day,
+      unavailable,
+      ...(hours ? { hours } : {}),
+    });
   },
 };

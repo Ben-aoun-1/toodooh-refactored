@@ -1,6 +1,7 @@
 import { ShoppingCart } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { cartLineFigures } from '@/features/cart/lib/cart-quote';
 import { tndLabel, tndOrDash } from '@/lib/money';
 
 import { useCartRead } from '../hooks/useCart';
@@ -41,7 +42,9 @@ export default function CartDockBar() {
               {item.name}
             </p>
             {/* CF-U4 — every montant rides the house formatter. */}
-            <p className="mt-0.5 text-xs text-gray-500">{tndOrDash(item.requested_budget)}</p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              {tndOrDash(cartLineFigures(item).amountTnd)}
+            </p>
           </li>
         ))}
       </ul>

@@ -47,12 +47,12 @@ describe('groupCreneauxByDate', () => {
 
 describe('copy', () => {
   it('the confirm names the campaigns and says the share moves', () => {
-    expect(declareConfirmCopy(['Été'])).toContain('La campagne « Été » diffuse ce jour-là');
-    expect(declareConfirmCopy(['Été', 'Hiver'])).toContain('2 campagnes diffusent ce jour-là');
+    expect(declareConfirmCopy(['Été'])).toContain('La campagne « Été » diffuse à ces heures');
+    expect(declareConfirmCopy(['Été', 'Hiver'])).toContain('2 campagnes diffusent à ces heures');
   });
 
   it('the result toast comes from the api account of what moved', () => {
-    expect(declareResultCopy([])).toBe('Jour déclaré indisponible.');
+    expect(declareResultCopy([])).toBe('Indisponibilité enregistrée.');
     const base = { campaign_id: 'c', slots_moved: 3, v_fact: 100 };
     expect(
       declareResultCopy([
@@ -69,5 +69,11 @@ describe('copy', () => {
         { ...base, campaign_name: 'Été', mode: 'reliquat', absorbed: 0, residual: 100 },
       ]),
     ).toContain('au prochain passage');
+    // HOUR-UNAV1 — a sold match slot in the declared hours.
+    expect(
+      declareResultCopy([
+        { ...base, campaign_name: 'Derby', mode: 'evenement', absorbed: 100, residual: 0 },
+      ]),
+    ).toContain("« Derby » : créneaux du match redistribués à d'autres établissements");
   });
 });

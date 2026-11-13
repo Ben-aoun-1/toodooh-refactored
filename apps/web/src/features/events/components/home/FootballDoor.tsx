@@ -7,7 +7,7 @@ import DoorArrow from './DoorArrow';
 
 /**
  * The « Football » door of the Événements home (Youssef's design): the stadium scene, the
- * catalogue's count and months, and its three featured fixtures — all live from the catalogue.
+ * catalogue's count and months, and its next three matches — all live from the catalogue.
  */
 export default function FootballDoor({ data }: { data: FootballDoorData }) {
   return (

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import {
   type Campaign,
+  campaignDispatchPlan,
   campaignReconciliation,
   campaigns,
   creatives,
@@ -15,6 +16,7 @@ import {
 import { activateCampaign } from '../lib/activation-service.js';
 import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
 import { campaignCpmRates, cpmForCampaign } from '../lib/dispatch/config.js';
+import { releaseReservation } from '../lib/dispatch/tours/reservation.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { pushPlaylistToAllConnected, pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
 import { walletSpendable } from '../lib/recharges.js';
@@ -112,6 +114,8 @@ const adminCampaignView = (
   activated_by: row.activatedBy,
   rejected_at: row.rejectedAt,
   reject_reason: row.rejectReason,
+  // STOP-1 — set once a superadmin stopped it (« Supprimer » is offered only then).
+  stopped_at: row.stoppedAt,
   created_at: row.createdAt,
   updated_at: row.updatedAt,
 });
@@ -144,10 +148,13 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         advertiserBusinessName: users.businessName,
         advertiserContactName: users.contactName,
         advertiserEmail: users.email,
+        planEngine: campaignDispatchPlan.engine,
+        planICible: campaignDispatchPlan.iCible,
       })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .innerJoin(users, eq(campaigns.advertiserId, users.id))
+      .leftJoin(campaignDispatchPlan, eq(campaignDispatchPlan.campaignId, campaigns.id))
       .where(status ? eq(campaigns.status, status) : undefined)
       .orderBy(desc(campaigns.createdAt));
     const out = await Promise.all(
@@ -175,7 +182,10 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
             await walletSpendable(r.campaign.advertiserId, { excludeCampaignId: r.campaign.id })
           ).spendable_tnd,
           cpm_tnd: cpm,
-          derived_i_cible: deriveICible(requestedBudget, cpm),
+          // DISP-TOURS — a tours plan was launched at its targeted budget's I_cible; its
+          // requested_budget now holds the exact price engaged, a few impressions under it.
+          derived_i_cible:
+            r.planEngine === 'tours' ? r.planICible : deriveICible(requestedBudget, cpm),
         };
       }),
     );
@@ -363,6 +373,14 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         .status(500)
         .send({ error: 'INTERNAL_ERROR', message: 'Plan de diffusion introuvable.' });
     }
+    // DISP-TOURS §3.4 — only the cart passes the figures it showed; handled for completeness.
+    if (outcome.status === 'QUOTE_CHANGED') {
+      return reply.status(409).send({
+        error: 'QUOTE_CHANGED',
+        message: 'Les places disponibles viennent de changer — relancez l’activation.',
+        statusCode: 409,
+      });
+    }
 
     const activated = outcome.campaign;
     // CF-HF4 — re-push the plan's venues (their playlists include the campaign the moment its
@@ -527,11 +545,19 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       email: existing.advertiserEmail,
     });
 
-    const [updated] = await db
-      .update(campaigns)
-      .set({ status: 'rejected', rejectedAt: new Date(), rejectReason: parsedBody.data.reason })
-      .where(and(eq(campaigns.id, id), eq(campaigns.status, 'pending')))
-      .returning();
+    // DISP-TOURS Q1 — « un spot refusé libère les créneaux et le montant revient au wallet »: a
+    // tours campaign reserved at « Lancer » gives its places back with the refusal, atomically.
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(campaigns)
+        .set({ status: 'rejected', rejectedAt: new Date(), rejectReason: parsedBody.data.reason })
+        .where(and(eq(campaigns.id, id), eq(campaigns.status, 'pending')))
+        .returning();
+      if (!row) return undefined;
+      await releaseReservation(tx, id);
+      const [released] = await tx.select().from(campaigns).where(eq(campaigns.id, id)).limit(1);
+      return released ?? row;
+    });
     if (!updated) {
       const [current] = await db
         .select({ status: campaigns.status })

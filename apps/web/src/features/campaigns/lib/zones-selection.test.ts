@@ -4,6 +4,7 @@ import {
   COVERAGE_MAP_NOTE,
   defaultZoneSelection,
   toggleZone,
+  zonesHint,
   zonesRecapLabel,
 } from './zones-selection';
 
@@ -58,5 +59,15 @@ describe('COVERAGE_MAP_NOTE (MAP-5)', () => {
     expect(COVERAGE_MAP_NOTE).toBe(
       "La carte montre les screenhosts éligibles à votre campagne. C'est une visualisation : votre campagne ne sera pas forcément diffusée sur chacun d'eux.",
     );
+  });
+});
+
+describe('zonesHint', () => {
+  it('no zone means the whole network; any zone, only those', () => {
+    expect(zonesHint(0)).toBe(
+      'Aucune zone sélectionnée : votre campagne sera diffusée sur tout le réseau.',
+    );
+    expect(zonesHint(1)).toBe('Votre campagne sera diffusée dans les zones sélectionnées.');
+    expect(zonesHint(3)).toBe('Votre campagne sera diffusée dans les zones sélectionnées.');
   });
 });

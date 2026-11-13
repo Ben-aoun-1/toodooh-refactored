@@ -33,6 +33,14 @@ import { storage } from '../src/storage/s3-storage.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
+// DISP-TOURS — the feature under test is engine-agnostic; its fixtures air at the instant they
+// pick, which the v1 engine's every-hour allocation guarantees (a tours one airs its peak hours
+// only): pinned to v1 (lib/dispatch/engine-switch.ts).
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // QR-CTA1 (Youssef 2026-10-18) — a spot's call to action end to end on a real Postgres: the link
 // is set at the spot step, a QR copy is made in the background, the campaign airs only once the
 // copy is ready and then airs THE COPY, and the QR's redirect counts scans of a campaign on air.

@@ -36,6 +36,9 @@ describe('the booster copies (ONE home)', () => {
     expect(eventBoostReasonFr(err('INSUFFICIENT_BALANCE'))).toContain('Solde insuffisant');
     expect(eventBoostReasonFr(err('NO_ELIGIBLE'))).toContain('Aucun établissement éligible');
     expect(eventBoostReasonFr(err('NOT_BOOSTABLE'))).toContain('à venir ou actif');
+    expect(eventBoostReasonFr(err('DEMO_NOT_BOOSTABLE'))).toBe(
+      'Le booster n’est pas disponible sur un compte démo.',
+    );
     expect(eventBoostReasonFr(err('UNKNOWN'))).toBeNull();
   });
 });

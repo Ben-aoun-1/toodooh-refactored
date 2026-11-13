@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { AppointmentView } from '../services/appointments.service';
 
-import { dayState, freeHours, monthCells, shiftMonth, splitAppointments } from './appointments';
+import {
+  blockedHoursOf,
+  dayState,
+  freeHours,
+  monthCells,
+  partialDays,
+  shiftMonth,
+  splitAppointments,
+} from './appointments';
 
 const view = (over: Partial<AppointmentView>): AppointmentView => ({
   id: 'x',
@@ -54,5 +62,30 @@ describe('AGT-5 — appointment calendar rules', () => {
     const { upcoming, past } = splitAppointments(rows);
     expect(upcoming.map((r) => r.id)).toEqual(['b', 'a']);
     expect(past.map((r) => r.id)).toEqual(['c', 'd']);
+  });
+});
+
+describe('AGT-HOUR1 — agent hours', () => {
+  const view = {
+    unavailable: ['2026-10-20'],
+    unavailable_hours: [
+      { day: '2026-10-21', hour: 14 },
+      { day: '2026-10-21', hour: 10 },
+    ],
+    slot_hours: [9, 10, 11, 12, 13, 14, 15, 16, 17],
+  };
+
+  it('a day with some blocked hours is partial; a whole day stays unavailable', () => {
+    expect(partialDays(view.unavailable_hours, view.unavailable)).toEqual(['2026-10-21']);
+    expect(dayState('2026-10-21', '2026-10-13', view.unavailable, ['2026-10-21'])).toBe('partial');
+    expect(dayState('2026-10-20', '2026-10-13', view.unavailable, ['2026-10-20'])).toBe(
+      'unavailable',
+    );
+  });
+
+  it('the blocked hours of a day, in slot order (a whole day = every slot)', () => {
+    expect(blockedHoursOf('2026-10-21', view)).toEqual([10, 14]);
+    expect(blockedHoursOf('2026-10-20', view)).toEqual(view.slot_hours);
+    expect(blockedHoursOf('2026-10-22', view)).toEqual([]);
   });
 });

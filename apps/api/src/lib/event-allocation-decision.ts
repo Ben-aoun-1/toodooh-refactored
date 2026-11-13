@@ -3,6 +3,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { campaigns, eventAllocations, events, screenhosts } from '../db/schema.js';
 
+import { notStoppedCampaignSql } from './campaign-stopped.js';
+import { notDemoEventAllocationSql } from './demo.js';
 import { campaignCpmRates } from './dispatch/config.js';
 import { releaseBlocHours, runEventRefusalCascade } from './event-dispatch/dispatch.js';
 
@@ -11,6 +13,10 @@ import { releaseBlocHours, runEventRefusalCascade } from './event-dispatch/dispa
 // emulator drives the same transaction the product route does: owner-scoped FOR UPDATE,
 // definitive refusal, and on a refusal the venue's reserved bloc hours are released before the
 // event cascade re-places the share.
+
+/** Spoken on every event accept — a share, or a whole match (routes/screenhost-event-matches). */
+export const EVENT_ACCEPT_REMINDER =
+  'Merci de maintenir vos écrans actifs pendant la fenêtre de diffusion.';
 
 export type EventDecisionOutcome =
   | { kind: 'not_found' }
@@ -43,6 +49,7 @@ export const decideEventAllocation = async (input: {
         eventMinutes: campaigns.eventMinutes,
         eventId: events.id,
         kickoffAt: events.kickoffAt,
+        seatMinutes: events.seatMinutes,
         endsAt: events.endsAt,
       })
       .from(eventAllocations)
@@ -51,6 +58,10 @@ export const decideEventAllocation = async (input: {
       .where(
         and(
           eq(eventAllocations.id, allocationId),
+          // DEMO-3 — accepted on the owner's behalf: not theirs to decide.
+          notDemoEventAllocationSql(),
+          // Mariem 05/11 — a positioning a superadmin stopped is over: nothing left to decide.
+          notStoppedCampaignSql(),
           inArray(
             eventAllocations.screenhostId,
             tx
@@ -86,12 +97,17 @@ export const decideEventAllocation = async (input: {
       await runEventRefusalCascade(
         tx,
         { id: row.campaignId, name: row.matchName, eventMinutes: row.eventMinutes },
-        { id: row.eventId, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+        {
+          id: row.eventId,
+          kickoffAt: row.kickoffAt,
+          endsAt: row.endsAt,
+          seatMinutes: row.seatMinutes,
+        },
         {
           screenhostId: row.allocation.screenhostId,
           impressionsTotal: row.allocation.impressionsTotal,
-          // EVT-MIN1 — one placed bloc = one minute; the refused value caps the re-placement.
-          minutes: Array.isArray(row.allocation.blocs) ? row.allocation.blocs.length : 0,
+          // EVT-MIN1 — one placed bloc = one seat; the refused value caps the re-placement.
+          seats: Array.isArray(row.allocation.blocs) ? row.allocation.blocs.length : 0,
           montantTnd: Number(row.allocation.montantTnd),
         },
         // CPM-1 — the refused share's value and its re-placement price at the positioning's

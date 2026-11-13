@@ -3,14 +3,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import DecisionModal from '@/features/screenhost/components/decision/DecisionModal';
+import MatchDecisionModal from '@/features/screenhost/components/decision/MatchDecisionModal';
 import { useOwnerNotifications } from '@/features/screenhost/hooks/useOwnerNotifications';
 import { useScreenhostAllocations } from '@/features/screenhost/hooks/useScreenhostAllocations';
 import { useScreenhostEventAllocations } from '@/features/screenhost/hooks/useScreenhostEventAllocations';
+import { useScreenhostEventMatches } from '@/features/screenhost/hooks/useScreenhostEventMatches';
 import {
   isDecisionNotification,
-  pendingCampaignIds,
+  pendingDecisionKeys,
   splitNotifications,
 } from '@/features/screenhost/lib/decision-notifications';
+import { matchOfNotification } from '@/features/screenhost/lib/match-decision';
 import { shouldAutoOpen } from '@/lib/popover-auto-open';
 
 const relativeTime = (date: Date) => {
@@ -33,6 +36,11 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'active' | 'history'>('active');
   const [decisionCampaignId, setDecisionCampaignId] = useState<string | null>(null);
+  // Mariem 05/11 — a « Soir de match » notice opens its match popup.
+  const [decisionMatch, setDecisionMatch] = useState<{
+    eventId: string;
+    screenhostId: string;
+  } | null>(null);
 
   // Feed + mark-read via React Query (Commit 8 — D5). Optimistic-with-rollback
   // mutation; the 60 s poll is the hook's `refetchInterval`.
@@ -48,20 +56,34 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
   // once read. Main list: unread first.
   const pendingAllocations = useScreenhostAllocations(userId);
   const pendingEvents = useScreenhostEventAllocations(userId);
+  const pendingMatches = useScreenhostEventMatches(userId);
   const pendingKnown =
     !pendingAllocations.loading &&
     !pendingEvents.loading &&
+    !pendingMatches.loading &&
     !pendingAllocations.isError &&
-    !pendingEvents.isError;
+    !pendingEvents.isError &&
+    !pendingMatches.isError;
   const { active, history } = useMemo(
     () =>
       splitNotifications(
         items.map((n) => ({ ...n, campaignId: n.campaignId ?? null })),
         readIdSet,
-        pendingCampaignIds(pendingAllocations.allocations, pendingEvents.proposals),
+        pendingDecisionKeys(
+          pendingAllocations.allocations,
+          pendingEvents.proposals,
+          pendingMatches.matches,
+        ),
         pendingKnown,
       ),
-    [items, readIdSet, pendingAllocations.allocations, pendingEvents.proposals, pendingKnown],
+    [
+      items,
+      readIdSet,
+      pendingAllocations.allocations,
+      pendingEvents.proposals,
+      pendingMatches.matches,
+      pendingKnown,
+    ],
   );
   const visibleItems = useMemo(
     () =>
@@ -204,9 +226,13 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                             onClick={() => {
                               markRead(item.id);
                               setOpen(false);
-                              // NOTIF-D1 — an accept/refuse notification opens the popup in place.
+                              // NOTIF-D1 — an accept/refuse notification opens the popup in place;
+                              // Mariem 05/11 — a match notice opens the « Soir de match » one.
                               const target = { ...item, campaignId: item.campaignId ?? null };
-                              if (isDecisionNotification(target) && target.campaignId) {
+                              const match = matchOfNotification(target);
+                              if (match) {
+                                setDecisionMatch(match);
+                              } else if (isDecisionNotification(target) && target.campaignId) {
                                 setDecisionCampaignId(target.campaignId);
                               } else {
                                 navigate(item.actionPath);
@@ -263,6 +289,13 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
         <DecisionModal
           campaignId={decisionCampaignId}
           onClose={() => setDecisionCampaignId(null)}
+        />
+      ) : null}
+      {decisionMatch ? (
+        <MatchDecisionModal
+          eventId={decisionMatch.eventId}
+          screenhostId={decisionMatch.screenhostId}
+          onClose={() => setDecisionMatch(null)}
         />
       ) : null}
     </div>

@@ -9,6 +9,7 @@ import {
   MAP_OVERLAY_Z_CLASS,
   MAP_STACK_CLASSES,
 } from '@/features/campaigns/lib/map-layering';
+import { spreadCoincident } from '@/features/campaigns/lib/map-venues';
 import type { CoverageVenue } from '@/features/campaigns/services/campaigns.api';
 import { MAP_TILE_ATTRIBUTION, MAP_TILE_MAX_ZOOM, MAP_TILE_URL } from '@/lib/map-tiles';
 
@@ -42,29 +43,7 @@ const MARKER_STYLE: L.CircleMarkerOptions = {
 
 // MAP-DOTS (Mejri 21/10 point 2) — the screencaster's map shows the green dots and NOTHING else:
 // no category on hover, no popup on click (it used to show the venue's category; the venue's name
-// was already gone since 2026-10-09).
-
-/**
- * MAP-2 — établissements sharing one coordinate (same building, same typed address) painted as
- * ONE dot, so the map showed fewer dots than the caption counted. Spread coincident venues on a
- * small ring (~15 m) so every covered venue has its own visible dot.
- */
-export const spreadCoincident = (venues: CoverageVenue[]): CoverageVenue[] => {
-  const seen = new Map<string, number>();
-  return venues.map((v) => {
-    const key = `${v.latitude.toFixed(5)}:${v.longitude.toFixed(5)}`;
-    const n = seen.get(key) ?? 0;
-    seen.set(key, n + 1);
-    if (n === 0) return v;
-    const angle = (n * 2 * Math.PI) / 6;
-    const delta = 0.00014; // ≈ 15 m
-    return {
-      ...v,
-      latitude: v.latitude + delta * Math.sin(angle),
-      longitude: v.longitude + delta * Math.cos(angle),
-    };
-  });
-};
+// was already gone since 2026-10-09). MAP-2 — coincident venues spread apart (lib/map-venues).
 
 const fitToVenues = (map: L.Map, venues: CoverageVenue[]): void => {
   if (venues.length === 0) return;

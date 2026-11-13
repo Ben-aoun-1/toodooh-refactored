@@ -5,6 +5,8 @@ import type { EventItemView } from '../services/events.api';
 import {
   EVENT_SPOT_RANGE_MESSAGE,
   EVENT_VIDEO_MAX_SECONDS,
+  EVENT_VIDEO_MIN_SECONDS,
+  eventSlotLabel,
   eventSlotSeconds,
 } from './event-minutes';
 
@@ -16,6 +18,12 @@ export const EVENT_SPOT_MAX_SECONDS = EVENT_VIDEO_MAX_SECONDS;
 
 /** The French refusal for a video outside 10–30 s — mirrors the api's message. */
 export const EVENT_SPOT_TOO_LONG_MESSAGE = EVENT_SPOT_RANGE_MESSAGE;
+
+/** The Création step's drop zone line for a video (formats + the event length range). */
+export const EVENT_VIDEO_DROPZONE_HINT = `MP4 ou MOV (H.264) · ${EVENT_VIDEO_MIN_SECONDS} à ${EVENT_SPOT_MAX_SECONDS} secondes`;
+
+/** The « Spécifications » video line: the length range, the 2-minute seat, the pod slots. */
+export const EVENT_VIDEO_SPEC_LINE = `Vidéo : ${EVENT_VIDEO_MIN_SECONDS} à ${EVENT_SPOT_MAX_SECONDS} secondes — chaque campagne dispose de 2 minutes dans la page publicitaire de 6 minutes du bloc ; votre vidéo occupe un créneau de 10, 12, 15, 20 ou 30 s (ex. ${eventSlotLabel('video', 23) ?? ''})`;
 
 /**
  * The bibliothèque filter of the Vidéo step: EVT-MIN1 — a spot is offered iff it can air in a pod

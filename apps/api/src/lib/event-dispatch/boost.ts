@@ -7,15 +7,17 @@ import {
   campaigns,
   eventAllocations,
   events,
-  notifications,
   screenhosts,
   zones,
 } from '../../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND, isBelowCampaignMinimum } from '../campaign-budget.js';
+import { isDemoCampaign } from '../demo.js';
 import { campaignCpmRates } from '../dispatch/config.js';
 import {
   type EventMinute,
   eventMinutesPriceTnd,
+  eventSeatModel,
+  eventSeatsFor,
   takeEventMinutes,
 } from '../event-pricing/minutes.js';
 import { REPS_PER_BLOC, computeEventCmax } from '../event-pricing/pricing.js';
@@ -23,14 +25,11 @@ import { campaignPlaysPerMinute } from '../event-pricing/spot.js';
 import { walletSpendable } from '../recharges.js';
 
 import {
-  EVENT_PROPOSAL_TITLE,
   type EventPoolVenue,
   assembleEventPool,
-  eventProposalBody,
   fillEventBlocs,
   lockEventSeats,
-  reserveBlocHours,
-  writeMinutePlacements,
+  writeEventPlacements,
 } from './dispatch.js';
 
 // EV6 (flow §7) — THE EVENT BOOSTER: extend a live positioning on ONE axis, ZONES ONLY. The spot,
@@ -53,6 +52,7 @@ export type EventBoostRefusal =
   | { status: 'NOT_FOUND' }
   | { status: 'NOT_POSITIONING' }
   | { status: 'NOT_BOOSTABLE'; currentStatus: string }
+  | { status: 'DEMO_NOT_BOOSTABLE' }
   | { status: 'EVENT_ANNULE' }
   | { status: 'NO_ADDITION' }
   | { status: 'ZONE_NOT_FOUND'; zoneId: string }
@@ -74,7 +74,13 @@ export interface EventBoostPreview {
    * EVT-MIN1 — set for a positioning sized in minutes: the ORDERED minutes the added zones offer
    * (venues this positioning already holds excluded) — the booster's slider reads them.
    */
-  minutes?: { maxMinutes: number; pricesTnd: number[]; impressions: number[] };
+  minutes?: {
+    maxMinutes: number;
+    /** Mariem 04/11 — the match's seat length: the slider's step (each price is one seat's). */
+    seatMinutes: number;
+    pricesTnd: number[];
+    impressions: number[];
+  };
 }
 
 export interface EventBoostApplied {
@@ -131,6 +137,10 @@ const gate = async (
       refusal: { status: 'NOT_BOOSTABLE', currentStatus: loaded.campaign.status },
     };
   }
+  // DEMO-3 — a demo positioning airs on the demo timeline: a boost would reach the real network.
+  if (await isDemoCampaign(db, campaignId)) {
+    return { ok: false, refusal: { status: 'DEMO_NOT_BOOSTABLE' } };
+  }
   if (loaded.event.annule) return { ok: false, refusal: { status: 'EVENT_ANNULE' } };
 
   const currentRows = await db
@@ -170,6 +180,7 @@ const complementaryCeiling = async (
       id: loaded.event.id,
       kickoffAt: loaded.event.kickoffAt,
       endsAt: loaded.event.endsAt,
+      seatMinutes: loaded.event.seatMinutes,
     },
     campaignCpmRates(loaded.campaign).eventCpmTnd,
     new Set(),
@@ -199,7 +210,12 @@ const addedPerimeter = async (
     .from(eventAllocations)
     .where(eq(eventAllocations.campaignId, loaded.campaign.id));
   const pool = await assembleEventPool(
-    { id: loaded.event.id, kickoffAt: loaded.event.kickoffAt, endsAt: loaded.event.endsAt },
+    {
+      id: loaded.event.id,
+      kickoffAt: loaded.event.kickoffAt,
+      endsAt: loaded.event.endsAt,
+      seatMinutes: loaded.event.seatMinutes,
+    },
     new Set(held.map((h) => h.screenhostId)),
   );
   if (pool.length === 0) return [];
@@ -233,7 +249,12 @@ const addedPerimeterMinutes = async (
     .from(eventAllocations)
     .where(eq(eventAllocations.campaignId, loaded.campaign.id));
   const { minutes } = await computeEventCmax(
-    { id: loaded.event.id, kickoffAt: loaded.event.kickoffAt, endsAt: loaded.event.endsAt },
+    {
+      id: loaded.event.id,
+      kickoffAt: loaded.event.kickoffAt,
+      endsAt: loaded.event.endsAt,
+      seatMinutes: loaded.event.seatMinutes,
+    },
     campaignCpmRates(loaded.campaign).eventCpmTnd,
     new Set(held.map((h) => h.screenhostId)),
     await campaignPlaysPerMinute(loaded.campaign.id),
@@ -262,12 +283,14 @@ export const previewEventBoost = async (
   if (!gated.ok) return gated.refusal;
   if (gated.loaded.campaign.eventMinutes !== null) {
     const minutes = await addedPerimeterMinutes(gated.loaded, gated.additions);
+    const model = eventSeatModel(gated.loaded.event.seatMinutes);
     return {
       status: 'PREVIEW',
-      cMaxEvtTnd: eventMinutesPriceTnd(minutes, minutes.length),
+      cMaxEvtTnd: eventMinutesPriceTnd(minutes, minutes.length * model.seatMinutes, model),
       eligibleCount: new Set(minutes.map((m) => m.screenhostId)).size,
       minutes: {
-        maxMinutes: minutes.length,
+        maxMinutes: minutes.length * model.seatMinutes,
+        seatMinutes: model.seatMinutes,
         pricesTnd: minutes.map((m) => m.priceTnd),
         impressions: minutes.map((m) => m.impressions),
       },
@@ -344,32 +367,15 @@ export const applyEventBoost = async (
       })
       .where(eq(campaigns.id, campaignId));
 
-    const owners = new Set<string>();
-    let placedImpressions = 0;
-    for (const placement of fill.placements) {
-      await tx.insert(eventAllocations).values({
-        campaignId,
-        screenhostId: placement.screenhostId,
-        blocs: placement.blocs,
-        impressionsTotal: placement.impressionsTotal,
-        montantTnd: placement.montantTnd.toFixed(3),
-        statut: 'EN_ATTENTE',
-      });
-      await reserveBlocHours(tx, loaded.event.id, placement.screenhostId, placement.blocs);
-      owners.add(placement.ownerId);
-      placedImpressions += placement.impressionsTotal;
-    }
-    if (owners.size > 0) {
-      await tx.insert(notifications).values(
-        [...owners].map((ownerId) => ({
-          userId: ownerId,
-          type: 'dispatch_pending_acceptance',
-          title: EVENT_PROPOSAL_TITLE,
-          body: eventProposalBody(loaded.campaign.name),
-          campaignId,
-        })),
-      );
-    }
+    // Mariem 05/11 — each new share's notice (lib/event-host-notice) is set by the writer.
+    await writeEventPlacements(
+      tx,
+      { id: campaignId, name: loaded.campaign.name },
+      loaded.event,
+      fill.placements,
+      'booking',
+    );
+    const placedImpressions = fill.placements.reduce((sum, p) => sum + p.impressionsTotal, 0);
 
     // The audit row REUSES campaign_boosts as-is (no migration): the event boost has no date
     // move, so previous/new end date both record the positioning's frozen window end and the
@@ -417,13 +423,16 @@ const applyEventMinutesBoost = async (
   advertiserId: string,
   minutes: number,
 ): Promise<EventBoostApplied | EventBoostRefusal> => {
-  if (!Number.isInteger(minutes) || minutes < 1) return { status: 'MINUTES_REQUIRED' };
+  // Mariem 04/11 — minutes come in whole seats of the match (2 minutes, or 1 under EVT-MIN1).
+  const model = eventSeatModel(loaded.event.seatMinutes);
+  const seats = eventSeatsFor(minutes, model);
+  if (seats === null || seats < 1) return { status: 'MINUTES_REQUIRED' };
   const preview = await addedPerimeterMinutes(loaded, additions);
   if (preview.length === 0) return { status: 'NO_ELIGIBLE' };
-  if (preview.length < minutes) {
-    return { status: 'MINUTES_UNAVAILABLE', availableMinutes: preview.length };
+  if (preview.length < seats) {
+    return { status: 'MINUTES_UNAVAILABLE', availableMinutes: preview.length * model.seatMinutes };
   }
-  const priceTnd = eventMinutesPriceTnd(preview, minutes);
+  const priceTnd = eventMinutesPriceTnd(preview, minutes, model);
   const balance = (await walletSpendable(advertiserId)).spendable_tnd;
   if (balance < priceTnd) {
     return { status: 'INSUFFICIENT_BALANCE', requiredTnd: priceTnd, availableTnd: balance };
@@ -434,7 +443,7 @@ const applyEventMinutesBoost = async (
       await lockEventSeats(tx, loaded.event.id);
       // Re-read under the lock: a seat sold since the preview must not be sold twice.
       const list = await addedPerimeterMinutes(loaded, additions);
-      const take = takeEventMinutes(list, minutes, priceTnd);
+      const take = takeEventMinutes(list, minutes, priceTnd, model);
       if (take.status === 'NOT_ENOUGH') {
         return { status: 'MINUTES_UNAVAILABLE', availableMinutes: take.available };
       }
@@ -449,11 +458,12 @@ const applyEventMinutesBoost = async (
           eventMinutes: (loaded.campaign.eventMinutes ?? 0) + minutes,
         })
         .where(eq(campaigns.id, campaignId));
-      await writeMinutePlacements(
+      await writeEventPlacements(
         tx,
         { id: campaignId, name: loaded.campaign.name },
-        loaded.event.id,
+        loaded.event,
         take.placements,
+        'booking',
       );
       const [audit] = await tx
         .insert(campaignBoosts)

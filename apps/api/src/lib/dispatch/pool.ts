@@ -11,7 +11,6 @@ import {
   campaigns,
   hourReservations,
   screenhostAffluence,
-  screenhostUnavailability,
   screenhosts,
 } from '../../db/schema.js';
 import { ownerApprovedSql } from '../approved-owner.js';
@@ -24,6 +23,7 @@ import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
 import { spsObservationsFor } from '../sps-observations.js';
 import { SPS_NEUTRAL, spsComputable } from '../sps-score.js';
 import { frozenVenueIds, hasTypicalWeekFreeze } from '../typical-week-freeze.js';
+import { loadUnavailableCells } from '../unavailable-hours.js';
 import { SCREEN_SECONDS_PER_HOUR } from '../vf-constants.js';
 
 import {
@@ -90,41 +90,6 @@ export interface AssemblePoolResult {
    *  0 = the targeting matches nothing; > 0 with an empty pool = saturated inventory. */
   candidateCount: number;
 }
-
-/**
- * E2 — the owner-declared unavailable days of `screenhostIds` inside [windowStart, windowEnd]
- * (inclusive, Tunis calendar dates), keyed by venue. The pool's ONE read of the declarations,
- * shared with the coverage map (MAP-4) so both see the same days.
- */
-export const loadUnavailableDays = async (
-  executor: DbExecutor,
-  screenhostIds: string[],
-  windowStart: string,
-  windowEnd: string,
-): Promise<Map<string, Set<string>>> => {
-  const rows = screenhostIds.length
-    ? await executor
-        .select({
-          screenhostId: screenhostUnavailability.screenhostId,
-          day: screenhostUnavailability.day,
-        })
-        .from(screenhostUnavailability)
-        .where(
-          and(
-            inArray(screenhostUnavailability.screenhostId, screenhostIds),
-            gte(screenhostUnavailability.day, windowStart),
-            lte(screenhostUnavailability.day, windowEnd),
-          ),
-        )
-    : [];
-  const bySh = new Map<string, Set<string>>();
-  for (const u of rows) {
-    const set = bySh.get(u.screenhostId) ?? new Set<string>();
-    set.add(u.day);
-    bySh.set(u.screenhostId, set);
-  }
-  return bySh;
-};
 
 export const assemblePool = async (
   executor: DbExecutor,
@@ -294,7 +259,14 @@ export const assemblePool = async (
   // (PoolEntry.days is what buildCreneaux consumers iterate), so they can never diverge.
   const windowStart = windowDays[0]?.date ?? campaign.startDate;
   const windowEnd = windowDays[windowDays.length - 1]?.date ?? campaign.endDate;
-  const unavailableBySh = await loadUnavailableDays(executor, candidateIds, windowStart, windowEnd);
+  // HOUR-UNAV1 — whole declared days AND declared hours, merged into clock cells (one day past
+  // the window so the last opening day's post-midnight hours are covered).
+  const unavailableBySh = await loadUnavailableCells(
+    executor,
+    candidates,
+    windowStart,
+    addIsoDays(windowEnd, 1),
+  );
 
   // EV1 — hour_reservations: venue-hours held by SOMETHING ELSE (whatever writes the table —
   // the engine is deliberately blind to what; no event semantics here). A reserved (day, hour)
@@ -404,7 +376,8 @@ export const assemblePool = async (
     // E2 — jours_dispo_i: this venue's window days MINUS its declared unavailability. Zero
     // available days = ineligible for the whole window → out of the pool (US-2.1); a partial
     // declaration shrinks Hi (and so capacity and C_max) exactly proportionally.
-    const days = availableWindowDays(windowDays, unavailableBySh.get(sh.id));
+    const unavailable = unavailableBySh.get(sh.id);
+    const days = availableWindowDays(windowDays, unavailable, sh.openingHour, sh.closingHour);
     if (days.length === 0) {
       trace.event('venue_excluded', { reason: 'no_available_days' }, sh.id);
       continue;
@@ -436,9 +409,11 @@ export const assemblePool = async (
       for (const { hour, dayOffset } of oHours) {
         const cellDate = dayOffset ? addIsoDays(day.date, dayOffset) : day.date;
         const cellKey = `${cellDate}:${hour}`;
-        const blackout = reserved?.has(cellKey)
-          ? 60
-          : Math.min(60, blackoutMinutesInHour(venueBlackouts, cellDate, hour));
+        // HOUR-UNAV1 — an hour the owner declared unavailable counts like a reserved one.
+        const blackout =
+          reserved?.has(cellKey) || unavailable?.has(cellKey)
+            ? 60
+            : Math.min(60, blackoutMinutesInHour(venueBlackouts, cellDate, hour));
         if (blackout > 0) blackoutByCell.set(cellKey, blackout);
         if (blackout >= 60) continue;
         const share = (60 - blackout) / 60;

@@ -1,0 +1,135 @@
+# Staging app vhost — infra/nginx/toodooh.conf (production) with the staging differences only:
+#   • host + certificate come from the env (${APP_HOST}, ${CERT_NAME}), rendered at nginx start;
+#   • the pages people browse (landing, app shell, Mailpit) sit behind basic auth, while every path
+#     a device or a link hits on its own stays open: /api/ /auth/ /ws/screen /q/ /storage/
+#     /downloads/ and the static files (the TV, the mobile app, QR scans, presigned media);
+#   • no HSTS (staging hostnames change) and noindex everywhere;
+#   • /mailpit/ shows every email the api sent (nothing is delivered for real).
+# Keep the proxied locations in step with production's when they change there.
+
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+server {
+  listen 80;
+  server_name ${APP_HOST};
+  location /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+  }
+  location / {
+    return 301 https://${APP_HOST}$request_uri;
+  }
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name ${APP_HOST};
+  ssl_certificate /etc/letsencrypt/live/${CERT_NAME}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/${CERT_NAME}/privkey.pem;
+
+  root /srv/toodooh/www;
+  client_max_body_size 20m;
+
+  # Locations below that declare their own add_header stop inheriting these (nginx rule), so
+  # they re-declare them.
+  add_header X-Robots-Tag "noindex, nofollow" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Content-Security-Policy "frame-ancestors 'self'" always;
+
+  gzip on;
+  gzip_vary on;
+  gzip_min_length 1024;
+  gzip_types text/css application/javascript image/svg+xml application/json;
+
+  location = /api/signup {
+    client_max_body_size 64m;
+    proxy_pass http://api:4000;
+    include /etc/nginx/proxy_common.conf;
+  }
+  location /api/ {
+    proxy_pass http://api:4000;
+    include /etc/nginx/proxy_common.conf;
+  }
+  location /auth/ {
+    proxy_pass http://api:4000;
+    include /etc/nginx/proxy_common.conf;
+  }
+  location /q/ {
+    proxy_pass http://api:4000;
+    include /etc/nginx/proxy_common.conf;
+  }
+
+  location /ws/screen {
+    proxy_pass http://api:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  # Path- + host-preserving presign proxy (SigV4 is signed over host + /storage/<key>); the
+  # staging bucket is named `storage` like production's.
+  location /storage/ {
+    proxy_pass http://minio:9000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  location /assets/ {
+    try_files $uri =404;
+  }
+  location /images/ {
+    try_files $uri =404;
+  }
+  location /fonts/ {
+    try_files $uri =404;
+  }
+  location /downloads/ {
+    alias /srv/toodooh/apk/;
+    try_files $uri =404;
+  }
+
+  location /mailpit/ {
+    auth_basic "Toodooh staging";
+    auth_basic_user_file /etc/nginx/staging-htpasswd;
+    proxy_pass http://mailpit:8025;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+  }
+
+  location = / {
+    auth_basic "Toodooh staging";
+    auth_basic_user_file /etc/nginx/staging-htpasswd;
+    try_files /index.html =404;
+  }
+  location = /mentions-legales {
+    return 301 /#page-mentions;
+  }
+  location = /modalites-tarifaires {
+    return 301 /#page-tarifs;
+  }
+  location = /politique-remboursement {
+    return 301 /#page-remboursement;
+  }
+
+  location / {
+    auth_basic "Toodooh staging";
+    auth_basic_user_file /etc/nginx/staging-htpasswd;
+    add_header Cache-Control "no-cache" always;
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Content-Security-Policy "frame-ancestors 'self'" always;
+    try_files $uri /app.html;
+  }
+}

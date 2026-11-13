@@ -19,13 +19,14 @@ import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { blackoutMinutesByVenueCell } from '../event-blackout.js';
 import { PLAYOUT_TZ, loadDeliveredSlots } from '../reconcile/delivered-slots.js';
 import { lateBlackoutShare, slotKey } from '../reconcile/valuation.js';
-import { S_MIN_TND } from '../vf-constants.js';
+import { S_MIN_TND, S_MIN_TOURS_TND } from '../vf-constants.js';
 
 import { computeR, computeRi, physicalFromFacturable } from './eligibility.js';
 import { buildCreneaux } from './plan.js';
 import { type DbExecutor, assemblePool } from './pool.js';
 import { type EligibleScreenhost, selection } from './selection.js';
 import { seuilImpressions } from './thresholds.js';
+import { placerToursIncrement } from './tours/placer.js';
 
 const log = logger.child({ module: 'redispatch' });
 
@@ -230,7 +231,12 @@ export const runRedispatchRound = async (
         vFact,
         totalValueTnd,
       });
-      if (totalValueTnd < S_MIN_TND) return { status: 'BELOW_THRESHOLD', totalValueTnd };
+      // DISP-TOURS (R14, Mariem Q3) — a tours plan redispatches once the loss is worth 30 DT
+      // (S_MIN_TOURS_TND, the 20 TND trigger raised); a new venue must also reach 30 DT of share
+      // (./tours/placer).
+      if (totalValueTnd < (plan.engine === 'tours' ? S_MIN_TOURS_TND : S_MIN_TND)) {
+        return { status: 'BELOW_THRESHOLD', totalValueTnd };
+      }
 
       // The rattrapage places FORWARD only: the pool's capacity window starts today (past days are
       // gone), and the créneaux filter below drops today's already-started hours.
@@ -246,6 +252,55 @@ export const runRedispatchRound = async (
       const cutoff = new Date(now.getTime() - REDISPATCH_HEARTBEAT_TOLERANCE_MS);
       const deadIds = await deadScreenhostIds(tx, cutoff);
       const excludeScreenhostIds = [...new Set([...refuserIds, ...defaulterIds, ...deadIds])];
+      // DISP-TOURS (R14) — the tours placement: the venues already in the campaign first, then
+      // new ones at 30 DT, on the remaining créneaux; never onto the defaulters.
+      if (plan.engine === 'tours') {
+        const placed = await placerToursIncrement(
+          tx,
+          {
+            plan,
+            campaign,
+            volumeFact: vFact,
+            excludeVenueIds: excludeScreenhostIds,
+            now,
+          },
+          trace,
+        );
+        const placedFactInt = Math.floor(placed.placedFact);
+        if (placedFactInt <= 0) return { status: 'NOTHING_PLACEABLE', vFact };
+        const reliquatConsumedFact = Math.min(placedFactInt, plan.reliquatStocke);
+        if (reliquatConsumedFact > 0) {
+          await tx
+            .update(campaignDispatchPlan)
+            .set({ reliquatStocke: plan.reliquatStocke - reliquatConsumedFact })
+            .where(eq(campaignDispatchPlan.id, plan.id));
+        }
+        const placedTo = placed.placedTo.map((p) => ({
+          screenhost_id: p.screenhost_id,
+          added_fact: Math.floor(p.added_fact),
+          merged: p.merged,
+        }));
+        const residualFact = Math.max(0, vFact - placedFactInt);
+        await tx.insert(campaignRedispatchRounds).values({
+          campaignId: campaign.id,
+          planId: plan.id,
+          roundTs: now,
+          reliquatConsumedFact,
+          missedFact: netMissedFact,
+          missedFrom: detected.perScreenhost,
+          placedFact: placedFactInt,
+          placedTo,
+          residualFact,
+        });
+        return {
+          status: 'PLACED',
+          vFact,
+          placedFact: placedFactInt,
+          residualFact,
+          reliquatConsumedFact,
+          placedTo,
+        };
+      }
       // Belt: the excluded screenhosts' allocations for THIS plan drop out of the netting too.
       const excludeAllocationIds = allocations
         .filter((a) => excludeScreenhostIds.includes(a.screenhostId))

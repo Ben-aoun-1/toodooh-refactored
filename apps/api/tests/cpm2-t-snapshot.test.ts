@@ -35,6 +35,13 @@ import {
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // CPM-2 (ruling 4A, 2026-09-17) — the attention index T is frozen per campaign at CREATION, like
 // CPM-1 froze the CPM. An admin T change (PATCH /api/admin/dispatch-config, t_10s/t_20s/t_30s)
 // prices only campaigns created after it; an existing campaign keeps its own tiers wherever it is

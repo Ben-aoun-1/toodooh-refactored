@@ -14,12 +14,7 @@ import { tndLabel } from '@/lib/money';
 
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
 import { formatEventDate, formatEventHours } from '../lib/event-display';
-import {
-  EVENT_MIN_MINUTES,
-  eventMinutesImpressions,
-  eventMinutesPrice,
-  minutesLabel,
-} from '../lib/event-minutes';
+import { eventMinutesImpressions, eventMinutesPrice, minutesLabel } from '../lib/event-minutes';
 
 // EV6 (flow §7) — the POSITIONING booster: ONE axis, ZONES ONLY. The spot, the categories and the
 // diffusion window belong to the match, so they are shown FROZEN (padlocked, read-only) instead of
@@ -56,6 +51,9 @@ export const eventBoostReasonFr = (error: unknown): string | null => {
       return 'Le budget complémentaire dépasse la limite de concentration.';
     case 'NOT_BOOSTABLE':
       return 'Seul un positionnement à venir ou actif peut être boosté.';
+    // DEMO-3 — a demo positioning airs on the demo timeline: no boost onto the real network.
+    case 'DEMO_NOT_BOOSTABLE':
+      return 'Le booster n’est pas disponible sur un compte démo.';
     case 'EVENT_ANNULE':
       return 'Cet événement est annulé — le positionnement ne peut plus être boosté.';
     default:
@@ -97,6 +95,8 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
   const ceiling = previewQuery.data?.c_max_evt_tnd;
   const eligibleCount = previewQuery.data?.eligible_count ?? 0;
   const maxMinutes = previewQuery.data?.max_minutes ?? 0;
+  // Mariem 04/11 — the match's seat: the slider's minimum and step (2 minutes; 1 under EVT-MIN1).
+  const seat = previewQuery.data?.seat_minutes ?? 1;
   const minutePrices = previewQuery.data?.minute_prices_tnd ?? [];
   const minuteImpressions = previewQuery.data?.minute_impressions ?? [];
 
@@ -124,7 +124,7 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
     zoneIds.length > 0 &&
     !apply.isPending &&
     (minutesMode
-      ? minutes !== null && minutes >= EVENT_MIN_MINUTES && minutes <= maxMinutes
+      ? minutes !== null && minutes >= seat && minutes % seat === 0 && minutes <= maxMinutes
       : amount !== null && isBudgetAccepted(amount) && ceiling !== undefined && amount <= ceiling);
 
   return (
@@ -212,7 +212,8 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
             </p>
           ) : ceiling === undefined ? (
             <p className="mt-2 text-sm text-red-600">
-              Impossible de calculer le budget disponible — réessayez.
+              {eventBoostReasonFr(previewQuery.error) ??
+                'Impossible de calculer le budget disponible — réessayez.'}
             </p>
           ) : minutesMode ? (
             <>
@@ -226,28 +227,28 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
               <p className="text-center text-sm text-gray-600">
                 {minutes === null
                   ? 'Déplacez le curseur pour ajouter des minutes.'
-                  : `${tndLabel(eventMinutesPrice(minutePrices, minutes))} · ${new Intl.NumberFormat('fr-TN').format(eventMinutesImpressions(minuteImpressions, minutes))} impressions`}
+                  : `${tndLabel(eventMinutesPrice(minutePrices, minutes, seat))} · ${new Intl.NumberFormat('fr-TN').format(eventMinutesImpressions(minuteImpressions, minutes, seat))} impressions`}
               </p>
               <input
                 id="event-boost-minutes"
                 type="range"
-                min={EVENT_MIN_MINUTES}
-                max={Math.max(EVENT_MIN_MINUTES, maxMinutes)}
-                step={1}
-                value={minutes ?? EVENT_MIN_MINUTES}
+                min={seat}
+                max={Math.max(seat, maxMinutes)}
+                step={seat}
+                value={minutes ?? seat}
                 onChange={(e) => {
                   setRefusal(null);
                   setMinutes(Number(e.target.value));
                 }}
-                disabled={maxMinutes < EVENT_MIN_MINUTES}
+                disabled={maxMinutes < seat}
                 aria-label="Minutes à ajouter"
                 className="mt-2 w-full cursor-pointer accent-brand-primary disabled:opacity-40"
               />
               <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
-                <span>MIN : {minutesLabel(EVENT_MIN_MINUTES)}</span>
+                <span>MIN : {minutesLabel(seat)}</span>
                 <span>MAX : {minutesLabel(maxMinutes)}</span>
               </div>
-              {maxMinutes < EVENT_MIN_MINUTES && (
+              {maxMinutes < seat && (
                 <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   Aucune minute n’est encore disponible dans les zones ajoutées sur cette fenêtre.
                 </p>

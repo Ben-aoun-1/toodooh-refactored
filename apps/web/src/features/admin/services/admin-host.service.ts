@@ -1,4 +1,5 @@
 import type { RedispatchedShare } from '@/features/screenhost/lib/diffusion-calendar';
+import type { UnavailabilityView } from '@/features/screenhost/lib/hour-unavailability';
 import { apiClient } from '@/lib/api-client';
 
 // HOST-EDIT1 — the admin « Fiche Host » wire (GET/PATCH /api/admin/screenhosts/:id and its
@@ -91,10 +92,12 @@ export interface HostHistoryEntry {
   created_at: string;
 }
 
-export interface HostUnavailability {
-  days: string[];
+/** HOUR-UNAV1 — the owner calendar's view, plus where live campaign shares air. */
+export interface HostUnavailability extends UnavailabilityView {
   /** Days in range carrying a live campaign share → the campaigns' names. */
   diffusion_days: Record<string, string[]>;
+  /** The same per clock cell (`YYYY-MM-DD:H`). */
+  diffusion_hours: Record<string, string[]>;
 }
 
 export const adminHostService = {
@@ -120,11 +123,17 @@ export const adminHostService = {
       `/admin/screenhosts/${id}/unavailability?from=${from}&to=${to}`,
     );
   },
+  /** Declare / free some HOURS of one future opening day (no `hours` = the whole day). */
   toggleDay(
     id: string,
     day: string,
     unavailable: boolean,
+    hours?: readonly number[],
   ): Promise<{ day: string; unavailable: boolean; redispatched: RedispatchedShare[] }> {
-    return apiClient.put(`/admin/screenhosts/${id}/unavailability`, { day, unavailable });
+    return apiClient.put(`/admin/screenhosts/${id}/unavailability`, {
+      day,
+      unavailable,
+      ...(hours ? { hours } : {}),
+    });
   },
 };

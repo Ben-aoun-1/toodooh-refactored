@@ -4,12 +4,15 @@ import { db } from '../../db/client.js';
 import { campaigns, creatives, eventAllocations, events, screenhosts } from '../../db/schema.js';
 import {
   type EventPod,
+  type EventSeatModel,
   eventPodTimeline,
   eventPodWindow,
+  eventSeatModel,
   eventSlotSeconds,
 } from '../event-pricing/minutes.js';
 import { ANTENNE_SECONDS_PER_BLOC } from '../event-pricing/pricing.js';
 import { BLOC_MINUTES } from '../fenetre-diffusion.js';
+import { airedCreativeTypeSql, airedStorageKeySql, ctaAirableSql } from '../spot-cta.js';
 
 // EV5 — THE EVENT AIRABILITY GATE. An event spot airs on a venue iff ALL hold:
 //   • the venue has an ACCEPTE event_allocation for the positioning (the owner said yes),
@@ -97,6 +100,8 @@ interface AiringRow {
   blocs: unknown;
   eventMinutes: number | null;
   kickoffAt: Date;
+  /** events.seat_minutes — the match's seat model (lib/event-pricing/minutes.ts). */
+  seatMinutes: number | null;
   allocationCreatedAt: Date;
 }
 
@@ -112,6 +117,7 @@ const podOf = (
   bloc: StoredBloc,
   kickoffAt: Date,
   seatRows: readonly AiringRow[],
+  model: EventSeatModel,
 ): EventPod | null => {
   const ordered = [...seatRows].sort((a, b) => {
     const t = a.allocationCreatedAt.getTime() - b.allocationCreatedAt.getTime();
@@ -129,6 +135,7 @@ const podOf = (
         r.creativeType === 'video' && r.durationSeconds !== null ? r.durationSeconds : slotSeconds;
       return { campaignId: r.campaignId, slotSeconds, spotSeconds };
     }),
+    model,
   );
 };
 
@@ -138,12 +145,15 @@ const airingRows = async (screenhostId: string): Promise<AiringRow[]> =>
       campaignId: campaigns.id,
       campaignName: campaigns.name,
       creativeId: creatives.id,
-      storageKey: creatives.storageKey,
+      // Mariem 04/11 (Foot point 1) — the QR copy when the positioning has one (a photo's copy
+      // is a video of the photo's own length: the pod slots it the same way).
+      storageKey: airedStorageKeySql(),
       durationSeconds: creatives.durationSeconds,
-      creativeType: creatives.creativeType,
+      creativeType: airedCreativeTypeSql(),
       blocs: eventAllocations.blocs,
       eventMinutes: campaigns.eventMinutes,
       kickoffAt: events.kickoffAt,
+      seatMinutes: events.seatMinutes,
       allocationCreatedAt: eventAllocations.createdAt,
     })
     .from(eventAllocations)
@@ -157,6 +167,8 @@ const airingRows = async (screenhostId: string): Promise<AiringRow[]> =>
         eq(campaigns.status, 'active'),
         eq(events.annule, false),
         eq(creatives.validationStatus, 'approved'),
+        // A positioning with a call to action airs only once its QR copy is ready.
+        ctaAirableSql(),
       ),
     );
 
@@ -211,7 +223,7 @@ export const activeEventSpots = async (
             (b) => new Date(b.start).getTime() === new Date(bloc.start).getTime(),
           ),
       );
-      const pod = podOf(bloc, row.kickoffAt, seatRows);
+      const pod = podOf(bloc, row.kickoffAt, seatRows, eventSeatModel(row.seatMinutes));
       if (!pod) continue;
       // The announce edge is INCLUDED: the pusher fires exactly at pod start − lead.
       if (
@@ -247,6 +259,7 @@ export const venuesAtBlocEdge = async (since: Date, until: Date): Promise<string
       blocs: eventAllocations.blocs,
       eventMinutes: campaigns.eventMinutes,
       kickoffAt: events.kickoffAt,
+      seatMinutes: events.seatMinutes,
     })
     .from(eventAllocations)
     .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
@@ -263,7 +276,10 @@ export const venuesAtBlocEdge = async (since: Date, until: Date): Promise<string
   const untilMs = until.getTime();
   const edged = new Set<string>();
   // EVT-MIN1 — seats per (venue, bloc) of minutes positionings, to size each pod.
-  const seats = new Map<string, { venue: string; bloc: StoredBloc; kickoffAt: Date; n: number }>();
+  const seats = new Map<
+    string,
+    { venue: string; bloc: StoredBloc; kickoffAt: Date; model: EventSeatModel; n: number }
+  >();
   for (const row of rows) {
     for (const bloc of parseBlocs(row.blocs)) {
       for (const edge of [new Date(bloc.start).getTime(), new Date(bloc.end).getTime()]) {
@@ -275,6 +291,7 @@ export const venuesAtBlocEdge = async (since: Date, until: Date): Promise<string
           venue: row.screenhostId,
           bloc,
           kickoffAt: row.kickoffAt,
+          model: eventSeatModel(row.seatMinutes),
           n: 0,
         };
         cell.n += 1;
@@ -288,6 +305,7 @@ export const venuesAtBlocEdge = async (since: Date, until: Date): Promise<string
       new Date(cell.bloc.start),
       new Date(cell.bloc.end),
       cell.n,
+      cell.model,
     );
     if (!pod) continue;
     // EVT-PLAY1 — the pod is announced EVENT_POD_LEAD_MS before it opens, dropped when it closes.

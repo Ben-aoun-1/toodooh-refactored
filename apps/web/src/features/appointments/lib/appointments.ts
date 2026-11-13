@@ -44,15 +44,49 @@ export const shiftMonth = (month: string, delta: number) => {
   return format(new Date(d.getFullYear(), d.getMonth() + delta, 1), MONTH_FMT);
 };
 
-export type DayState = 'past' | 'unavailable' | 'available';
+/** AGT-HOUR1 — 'partial': some of the day's hours are blocked. */
+export type DayState = 'past' | 'unavailable' | 'partial' | 'available';
 
-export const dayState = (day: string, today: string, unavailable: string[]): DayState =>
-  day < today ? 'past' : unavailable.includes(day) ? 'unavailable' : 'available';
+export const dayState = (
+  day: string,
+  today: string,
+  unavailable: string[],
+  partial: string[] = [],
+): DayState =>
+  day < today
+    ? 'past'
+    : unavailable.includes(day)
+      ? 'unavailable'
+      : partial.includes(day)
+        ? 'partial'
+        : 'available';
+
+/** The days with SOME blocked hours (whole days excluded). */
+export const partialDays = (
+  hours: readonly { day: string; hour: number }[],
+  unavailable: readonly string[],
+): string[] => [...new Set(hours.map((h) => h.day))].filter((d) => !unavailable.includes(d));
+
+/** The blocked hours of one day, in slot order (a whole unavailable day = every slot). */
+export const blockedHoursOf = (
+  day: string,
+  view: {
+    unavailable: string[];
+    unavailable_hours: { day: string; hour: number }[];
+    slot_hours: number[];
+  },
+): number[] =>
+  view.unavailable.includes(day)
+    ? [...view.slot_hours]
+    : view.slot_hours.filter((h) =>
+        view.unavailable_hours.some((u) => u.day === day && u.hour === h),
+      );
 
 /** Pale green available, pale red unavailable (the Screenhost calendar's colours). */
 export const DAY_CLASS: Record<DayState, string> = {
   past: 'bg-gray-50 text-gray-300',
   unavailable: 'bg-red-50 text-red-700',
+  partial: 'bg-[linear-gradient(135deg,#ecfdf5_50%,#fef2f2_50%)] text-gray-800',
   available: 'bg-emerald-50 text-emerald-800',
 };
 

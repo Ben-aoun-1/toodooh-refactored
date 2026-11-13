@@ -417,7 +417,9 @@ describe('HOST-EDIT1 admin « Fiche Host » (real Postgres)', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       section: 'unavailability',
-      after: { [future]: true },
+      // HOUR-UNAV1 — the day's state in words.
+      before: { [future]: 'Disponible' },
+      after: { [future]: 'Indisponible toute la journée' },
       changed_by: { label: 'Admin Un' },
     });
   });

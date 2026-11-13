@@ -23,7 +23,7 @@ import {
   millimesToTnd,
   reversementBaseMillimes,
 } from '../reversement/split.js';
-import { S_MIN_TND } from '../vf-constants.js';
+import { S_MIN_TND, S_MIN_TOURS_TND } from '../vf-constants.js';
 
 // E6 — the delivered-per-créneau bucketing is SHARED with the redispatch detector
 // (delivered-slots.ts): one FIX A implementation, zero drift between detection and settlement.
@@ -73,7 +73,10 @@ export const reconcileCampaignById = async (
   // plan's derived snapshot (seuil × CPM/1000 ≈ 15 TND at POC values). The snapshot column stays
   // stored for audit; only the GATE moved. BEHAVIOR CHANGE: gaps valued in [old_s_min, 20) TND now
   // settle RÉUSSIE (no refund) instead of PARTIAL.
-  const sMin = options.stoppedAt === undefined ? S_MIN_TND : 0;
+  // DISP-TOURS (R14, Mariem Q3) — a tours plan's floor is 30 DT (S_MIN_TOURS_TND): a net loss
+  // under it is not refunded. STOP-1 — a stopped campaign still refunds whatever it is.
+  const sMin =
+    options.stoppedAt !== undefined ? 0 : plan.engine === 'tours' ? S_MIN_TOURS_TND : S_MIN_TND;
 
   const allocations = await db
     .select()

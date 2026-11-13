@@ -1,4 +1,5 @@
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
+import type { ShownQuote } from '@/features/cart/lib/cart-quote';
 import type { EventItemView } from '@/features/events/services/events.api';
 import { apiClient } from '@/lib/api-client';
 
@@ -9,10 +10,23 @@ import { apiClient } from '@/lib/api-client';
  * and settlement are unchanged).
  */
 
+/**
+ * DISP-TOURS — a classic item's figures, recomputed at every opening of the cart (Mariem R12):
+ * the budget stays the target; the exact price (at or under it) and the qualified impressions
+ * follow the affluence and the places left right now. null = an event item, or the v1 engine.
+ */
+export interface CartQuote {
+  prix_tnd: number;
+  impressions: number;
+  venues_count: number;
+  c_max_tnd: number;
+}
+
 export interface CartItemView extends CampaignView {
   added_at: string;
   /** EV3 — the positioned match + its DERIVED window (null on classic campaign items). */
   event: EventItemView | null;
+  quote: CartQuote | null;
 }
 
 export interface CartRead {
@@ -47,7 +61,8 @@ export const cartApi = {
    * approved — ruling #9) and are upcoming/active; `pending_review` await the admin. `confirmed`
    * is the union (back-compatible).
    */
-  confirm(): Promise<CartConfirmResult> {
-    return apiClient.post('/cart/confirm');
+  confirm(quotes: ShownQuote[] = []): Promise<CartConfirmResult> {
+    // DISP-TOURS §3.4 — the figures shown: the api launches nothing if they moved since.
+    return apiClient.post('/cart/confirm', { quotes });
   },
 };

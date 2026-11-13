@@ -34,6 +34,11 @@ import {
   fillEventBlocs,
   reserveBlocHours,
 } from '../src/lib/event-dispatch/dispatch.js';
+import {
+  EVENT_MATCH_NOTICE_TYPE,
+  EVENT_NOTICE_LEAD_MS,
+  runEventGroupedNotices,
+} from '../src/lib/event-host-notice.js';
 import { activeAllocationsForScreenhost } from '../src/lib/playout/active-allocations.js';
 import { buildPlaylist } from '../src/lib/playout/playlist.js';
 import { computeSps } from '../src/lib/sps-score.js';
@@ -310,7 +315,7 @@ describe('EV4 — the bloc dispatch engine (real Postgres)', () => {
   });
 
   describe('the dispatch through EV3’s seam (prepareActivation)', () => {
-    it('validating a positioning places EN_ATTENTE allocations + reservations + owner proposals; plan stays NULL', async () => {
+    it('validating a positioning places EN_ATTENTE allocations + reservations; the owner is asked 24 h before kick-off (Mariem 05/11); plan stays NULL', async () => {
       const venue = await seedVenue({ sps: '80' });
       const eventId = await seedEvent();
       const { campaignId } = await seedPositioning(eventId, '150.00');
@@ -331,15 +336,22 @@ describe('EV4 — the bloc dispatch engine (real Postgres)', () => {
         '2027-06-10:19',
         '2027-06-10:22',
       ]);
-      // The §11.1 proposal reached the owner.
-      const notifs = await db
-        .select()
-        .from(notifications)
-        .where(eq(notifications.userId, venue.ownerId));
-      expect(notifs.some((n) => n.title === EVENT_PROPOSAL_TITLE)).toBe(true);
+      // Mariem 05/11 — placed more than 24 h before kick-off: no proposal yet, the share waits…
+      expect(allocs[0]?.notice).toBeNull();
+      const ownerNotifs = () =>
+        db.select().from(notifications).where(eq(notifications.userId, venue.ownerId));
+      expect(await ownerNotifs()).toHaveLength(0);
+      // …for the match's « Soir de match » notice (the owner's share of 150 TND clears 20).
+      await runEventGroupedNotices(new Date(KICKOFF.getTime() - EVENT_NOTICE_LEAD_MS + 60_000));
+      const notifs = await ownerNotifs();
+      expect(notifs).toHaveLength(1);
+      expect(notifs[0]?.type).toBe(EVENT_MATCH_NOTICE_TYPE);
+      expect(notifs[0]?.eventId).toBe(eventId);
+      expect(notifs[0]?.screenhostId).toBe(venue.id);
+      expect((await allocationsOf(campaignId))[0]?.notice).toBe('grouped');
     });
 
-    it('a re-prepare RESUMES (no duplicate allocations, reservations or proposals)', async () => {
+    it('a re-prepare RESUMES (no duplicate allocations, reservations or notices)', async () => {
       const venue = await seedVenue({ sps: '80' });
       const eventId = await seedEvent();
       const { campaignId } = await seedPositioning(eventId, '150.00');
@@ -348,11 +360,16 @@ describe('EV4 — the bloc dispatch engine (real Postgres)', () => {
       expect(again.status).toBe('READY');
       expect(await allocationsOf(campaignId)).toHaveLength(1);
       expect(await reservationsOf(eventId)).toHaveLength(2);
+      // Two sweeps after the notice time: still ONE notice.
+      const at = new Date(KICKOFF.getTime() - EVENT_NOTICE_LEAD_MS + 60_000);
+      await runEventGroupedNotices(at);
+      await runEventGroupedNotices(new Date(at.getTime() + 5 * 60_000));
       const notifs = await db
         .select()
         .from(notifications)
         .where(eq(notifications.userId, venue.ownerId));
-      expect(notifs.filter((n) => n.title === EVENT_PROPOSAL_TITLE)).toHaveLength(1);
+      expect(notifs.filter((n) => n.type === EVENT_MATCH_NOTICE_TYPE)).toHaveLength(1);
+      expect(notifs.filter((n) => n.title === EVENT_PROPOSAL_TITLE)).toHaveLength(0);
     });
 
     it('D7 excess REFUSES ATOMICALLY through the admin route (409, nothing persisted, no flip)', async () => {
@@ -510,12 +527,15 @@ describe('EV4 — the bloc dispatch engine (real Postgres)', () => {
       expect(replaced?.statut).toBe('EN_ATTENTE');
       expect(replaced?.impressionsTotal).toBe(10_000); // the refused share, re-placed whole
       expect(await reservationsOf(eventId, v2.id)).toHaveLength(2);
-      // The proposal reached the SECOND owner.
+      // Mariem 05/11 — re-placed more than 24 h before kick-off on a venue that has not accepted
+      // the match: it waits, and the match's notice reaches the SECOND owner.
+      expect(replaced?.notice).toBeNull();
+      await runEventGroupedNotices(new Date(KICKOFF.getTime() - EVENT_NOTICE_LEAD_MS + 60_000));
       const notifs = await db
         .select()
         .from(notifications)
         .where(eq(notifications.userId, v2.ownerId));
-      expect(notifs.some((n) => n.title === EVENT_PROPOSAL_TITLE)).toBe(true);
+      expect(notifs.some((n) => n.type === EVENT_MATCH_NOTICE_TYPE)).toBe(true);
       // A re-refuse is a 409 (final).
       const again = await app.inject({
         method: 'POST',

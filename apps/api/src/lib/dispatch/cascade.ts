@@ -16,6 +16,7 @@ import { buildCreneaux } from './plan.js';
 import { type DbExecutor, assemblePool } from './pool.js';
 import { type EligibleScreenhost, selection } from './selection.js';
 import { seuilImpressions } from './thresholds.js';
+import { placerToursIncrement } from './tours/placer.js';
 
 const log = logger.child({ module: 'dispatch-cascade' });
 
@@ -86,6 +87,27 @@ export const runRefusalCascade = async (
   const excludeScreenhostIds = [
     ...new Set([...refusedRows.map((r) => r.screenhostId), refused.screenhostId]),
   ];
+
+  // DISP-TOURS (R14) — a tours plan re-places the share like a loss: the venues already in the
+  // campaign first, then new ones at 30 DT, on the remaining créneaux. What cannot be placed is
+  // refunded by the settlement (a tours plan always refunds the undelivered — reconcile-service).
+  if (plan.engine === 'tours') {
+    const placed = await placerToursIncrement(
+      tx,
+      { plan, campaign, volumeFact: v, excludeVenueIds: excludeScreenhostIds, now: new Date() },
+      trace,
+    );
+    const shortfall = Math.max(0, v - placed.placedFact);
+    if (shortfall > 0) trace.event('partial_coverage', { shortfall, engine: 'tours' });
+    return {
+      v,
+      absorbed: Math.floor(placed.placedFact),
+      createdAllocations: placed.placedTo.filter((p) => !p.merged).length,
+      updatedAllocations: placed.placedTo.filter((p) => p.merged).length,
+      reliquatStored: 0,
+      flippedPartial: false,
+    };
+  }
 
   // E5.1 — the pool always assembles (zero targeting lines = the whole network); the defensive
   // NO_TARGETING fallback is gone with the retired status. CAL-1: a partial move keeps the source

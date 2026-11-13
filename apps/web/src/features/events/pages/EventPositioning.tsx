@@ -1,6 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, Save, X } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
@@ -19,14 +18,15 @@ import {
   isBudgetExceedsCmax,
 } from '@/features/campaigns/lib/cmax-budget';
 import { setNavigationGuard } from '@/features/campaigns/lib/navigation-guard';
-import StepCreative from '@/features/campaigns/pages/new-campaign/StepCreative';
-import StepZones from '@/features/campaigns/pages/new-campaign/StepZones';
 import { useCartMutations } from '@/features/cart/hooks/useCart';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
-import EventMatchHeader from '../components/EventMatchHeader';
 import EventRecapStep from '../components/EventRecapStep';
+import FootCreativeStep from '../components/positioning/FootCreativeStep';
+import FootZonesStep from '../components/positioning/FootZonesStep';
+import MatchTicket from '../components/positioning/MatchTicket';
+import PositioningHero from '../components/positioning/PositioningHero';
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
 import { EVENTS_PATHS } from '../lib/events-home';
 import { resumeStepFor } from '../lib/positioning-resume';
@@ -40,14 +40,15 @@ const STEPS = [
 ] as const;
 
 /**
- * EV3 — the 3-step positioning parcours (Zones → Vidéo → Récapitulatif), the match récap PINNED
- * on top of every step. The positioning DRAFT already exists when this page opens (« Je me
- * positionne » creates it — POST /:id/positionner) so every step composes the CLASSIC draft
- * machinery: StepZones + the zone replace-set PATCH, StepCreative in eventMode (15 s grid) +
- * the creative-link PATCH, the bounded budget slider on the EVENT ceiling, « Ajouter au
- * panier » → the panier's Événements section. §1.9 exit machinery reused whole (popup +
- * beforeunload + browser-back sentinel); Quitter on a FRESH parcours deletes the row, on a
- * RESUMED one (Reprendre) it only leaves — the row IS already a Brouillon server-side.
+ * EV3 — the 3-step positioning parcours (Zones → Vidéo → Récapitulatif), the match ticket PINNED
+ * on top of every step, drawn as Mariem's 04/11 mockup (the lit pitch, the ticket, the step
+ * cards). The positioning DRAFT already exists when this page opens (« Je me positionne »
+ * creates it — POST /:id/positionner) so every step composes the CLASSIC draft machinery: the
+ * zone replace-set PATCH, the creative-link PATCH (EVT-MIN1 spots only), the bounded minutes
+ * slider on the EVENT ceiling, « Ajouter au panier » → the panier's Événements section. §1.9 exit
+ * machinery reused whole (popup + beforeunload + browser-back sentinel); Quitter on a FRESH
+ * parcours deletes the row, on a RESUMED one (Reprendre) it only leaves — the row IS already a
+ * Brouillon server-side.
  */
 export default function EventPositioning() {
   const navigate = useNavigate();
@@ -296,112 +297,61 @@ export default function EventPositioning() {
     return null;
   }
 
+  // The page bleeds to the edges of the layout's padded <main> (the AnalysisFilterBar idiom): the
+  // pitch runs under the top bar, the light stripes under the steps.
   return (
-    <div className="w-full mx-auto space-y-6">
-      <div className="bg-white rounded-xl p-6">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-gray-900">Je me positionne</h1>
-            <p className="text-sm text-gray-600">
-              Positionnez votre marque sur la fenêtre de diffusion du match
-            </p>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={updateCampaign.isPending}
-              className="flex items-center gap-2 rounded-lg border border-brand-primary/60 px-4 py-2 text-brand-deep transition-colors hover:bg-brand-primary/10 disabled:opacity-50"
-            >
-              <Save className="h-4 w-4" />
-              <span>Enregistrer</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => requestExit(EVENTS_PATHS.football)}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-            >
-              <X className="h-5 w-5" />
-              <span>Annuler</span>
-            </button>
-          </div>
-        </div>
+    <div className="-mx-4 -my-6 min-h-full bg-stadium-stage sm:-mx-6 lg:-mx-8 lg:-my-8">
+      <PositioningHero
+        title="Je me positionne"
+        subtitle="Positionnez votre marque sur la fenêtre de diffusion du match"
+        steps={STEPS}
+        currentStep={currentStep}
+        onStep={setCurrentStep}
+        onSave={() => void handleSave()}
+        saving={updateCampaign.isPending}
+        onCancel={() => requestExit(EVENTS_PATHS.football)}
+      />
 
-        <div className="flex w-full items-center">
-          {STEPS.map((step, index) => (
-            <React.Fragment key={step.id}>
-              <div className="flex flex-1 flex-col items-center">
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
-                    currentStep > step.id
-                      ? 'bg-brand-primary text-brand-deep'
-                      : currentStep === step.id
-                        ? 'border-2 border-brand-primary text-brand-deep'
-                        : 'border border-gray-300 text-gray-400'
-                  }`}
-                >
-                  {step.id}
-                </div>
-                <span
-                  className={`mt-1.5 text-xs ${
-                    currentStep === step.id
-                      ? 'font-semibold text-gray-900'
-                      : 'font-normal text-gray-500'
-                  }`}
-                >
-                  {step.title}
-                </span>
-              </div>
-              {index < STEPS.length - 1 && (
-                <ChevronRight
-                  className="mt-[-14px] h-5 w-5 flex-shrink-0 text-gray-300"
-                  aria-hidden
-                />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
+      <div className="relative z-[2] -mt-14 px-4 pb-10 sm:px-6 lg:px-8">
+        <MatchTicket event={event} campaignName={campaign.data?.name ?? ''} />
+
+        {currentStep === 1 && (
+          <FootZonesStep
+            zoneIds={zoneIds}
+            setZoneIds={setZoneIds}
+            draftCampaignId={campaignId}
+            saving={savingZones}
+            onNext={handleZonesNext}
+            onBack={() => requestExit(EVENTS_PATHS.football)}
+          />
+        )}
+        {currentStep === 2 && (
+          <FootCreativeStep
+            draftCampaignId={campaignId}
+            userId={user?.id}
+            selectedCreativeId={creativeId}
+            onSelectCreative={handleSelectCreative}
+            onDeselectCreative={handleDeselectCreative}
+            linking={updateCampaign.isPending}
+            eventMinutes={eventMinutes}
+            onNext={() => setCurrentStep(3)}
+            onBack={() => setCurrentStep(1)}
+          />
+        )}
+        {currentStep === 3 && (
+          <EventRecapStep
+            campaignId={campaignId}
+            event={event}
+            zoneNames={zoneNames}
+            eventMinutes={eventMinutes}
+            setEventMinutes={setEventMinutes}
+            spotValidationStatus={campaign.data?.content_validation_status ?? null}
+            onAddToCart={handleAddToCart}
+            adding={adding}
+            onBack={() => setCurrentStep(2)}
+          />
+        )}
       </div>
-
-      <EventMatchHeader event={event} campaignName={campaign.data?.name ?? ''} />
-
-      {currentStep === 1 && (
-        <StepZones
-          zoneIds={zoneIds}
-          setZoneIds={setZoneIds}
-          draftCampaignId={campaignId}
-          saving={savingZones}
-          onNext={handleZonesNext}
-          onBack={() => requestExit(EVENTS_PATHS.football)}
-        />
-      )}
-      {currentStep === 2 && (
-        <StepCreative
-          draftCampaignId={campaignId}
-          userId={user?.id}
-          selectedCreativeId={creativeId}
-          onSelectCreative={handleSelectCreative}
-          onDeselectCreative={handleDeselectCreative}
-          linking={updateCampaign.isPending}
-          eventMode
-          eventMinutes={eventMinutes}
-          onNext={() => setCurrentStep(3)}
-          onBack={() => setCurrentStep(1)}
-        />
-      )}
-      {currentStep === 3 && (
-        <EventRecapStep
-          campaignId={campaignId}
-          event={event}
-          zoneNames={zoneNames}
-          eventMinutes={eventMinutes}
-          setEventMinutes={setEventMinutes}
-          spotValidationStatus={campaign.data?.content_validation_status ?? null}
-          onAddToCart={handleAddToCart}
-          adding={adding}
-          onBack={() => setCurrentStep(2)}
-        />
-      )}
 
       <WizardExitDialog
         open={exitPrompt !== null}

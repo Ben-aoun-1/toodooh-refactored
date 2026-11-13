@@ -28,6 +28,13 @@ import { campaignTiersOf } from './helpers/cpm-config.js';
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
+// DISP-TOURS — these are the v1 engine's rules (kept for its plans and the rollback switch,
+// lib/dispatch/engine-switch.ts): pinned to v1. The tours engine's own: tests/dispatch-tours*.
+vi.mock('../src/lib/dispatch/engine-switch.js', () => ({
+  toursEngineOn: () => false,
+  usesToursEngine: async () => false,
+}));
+
 // IMP-UNIT1 (operator ruling B, 2026-09-22) — « we are talking about real audience not billable,
 // because billable is real × T ». The advertiser-facing « Impressions prévues » is PHYSICAL (the
 // real audience) on BOTH sides of dispatch:
@@ -368,7 +375,7 @@ describe('IMP-UNIT1 — « Impressions prévues » is the real audience on both 
           requestedBudget: 600,
           eventMinutes: null,
         },
-        { id: ev?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS },
+        { id: ev?.id ?? '', kickoffAt: KICKOFF, endsAt: ENDS, seatMinutes: null },
         15,
       );
       expect(outcome.status).toBe('OK');

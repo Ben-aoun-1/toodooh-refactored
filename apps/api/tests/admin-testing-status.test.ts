@@ -36,7 +36,8 @@ describe('hourStatuses — the five states', () => {
     const rows = hourStatuses(
       ['2026-09-10', '2026-09-12'],
       [9, 10, 11, 12],
-      new Set(['2026-09-12']),
+      // HOUR-UNAV1 — unavailability arrives as clock cells: the whole 12th here.
+      new Set(['2026-09-12:9', '2026-09-12:10', '2026-09-12:11', '2026-09-12:12']),
       new Set(['2026-09-10:12']),
       [alloc()],
       F,

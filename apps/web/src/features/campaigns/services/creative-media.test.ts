@@ -285,11 +285,17 @@ describe('StepCreative hint copy (source pins — UPL-1: no ratio promised)', ()
     'utf8',
   );
 
+  // The upload itself (probe, refusals, POST) lives in the hook both Création steps share.
+  const uploadHook = readFileSync(
+    fileURLToPath(new URL('../hooks/useSpotUpload.ts', import.meta.url)),
+    'utf8',
+  );
+
   it('names the formats and the length range, never a 16:9 ratio', () => {
     expect(step).not.toContain('16:9');
     expect(specs).not.toContain('16:9');
-    expect(step).toContain('`MP4 ou MOV (H.264) · ${');
-    // SPOT-MIN1 — the classic range comes from lib/spot-duration (10 à 30 s).
+    // SPOT-MIN1 — the classic range comes from lib/spot-duration (10 à 30 s); the Foot parcours'
+    // own line is lib/event-positioning EVENT_VIDEO_DROPZONE_HINT (pinned there).
     expect(step).toContain('VIDEO_DROPZONE_HINT');
     expect(specs).toContain('VIDEO_SPEC_LABEL');
     expect(step).toContain("'JPEG, PNG ou WebP'");
@@ -299,8 +305,9 @@ describe('StepCreative hint copy (source pins — UPL-1: no ratio promised)', ()
   });
 
   it('UPL-2 — an unreadable video takes its toast from the bytes (a photo picked as « Vidéo »)', () => {
-    expect(step).toContain('toast.error(await unreadableVideoMessage(file));');
-    expect(step).not.toContain('Impossible de lire la durée');
+    expect(uploadHook).toContain('toast.error(await unreadableVideoMessage(file));');
+    expect(uploadHook).not.toContain('Impossible de lire la durée');
+    expect(step).toContain('useSpotUpload(');
   });
 
   it('the file picker takes its filter from the pinned accept lists', () => {

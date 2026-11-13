@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Loader2, MapPin } from 'lucide-react';
 import { useState } from 'react';
 
+import { CampaignToursFiche } from '@/features/admin/components/CampaignToursFiche';
 import { useCampaignEligibleHosts } from '@/features/admin/hooks/useAdminCampaigns';
 import { useSimulationCampaignEligibleHosts } from '@/features/admin/hooks/useAdminSimulator';
 import {
@@ -70,7 +71,7 @@ export function CampaignEligibleHosts({
 
           {report && cols && (
             <>
-              <p className="text-xs text-gray-500">
+              <p className={`text-xs text-gray-500 ${report.tours ? 'hidden' : ''}`}>
                 Calcul à l&apos;instant, par le moteur de{' '}
                 {report.kind === 'event' ? 'tarification événement' : 'dispatch'} · spot{' '}
                 {report.spot_seconds} s
@@ -79,7 +80,9 @@ export function CampaignEligibleHosts({
                 {nf(report.totals.capacity)} impressions.
               </p>
 
-              {report.eligible.length === 0 ? (
+              {report.tours ? (
+                <CampaignToursFiche fiche={report.tours} />
+              ) : report.eligible.length === 0 ? (
                 <p className="text-sm text-gray-600">Aucun établissement éligible.</p>
               ) : (
                 <div className="overflow-x-auto">

@@ -9,9 +9,11 @@ import {
   decisionTarget,
   notificationBucket,
   outcomeCopy,
-  pendingCampaignIds,
+  pendingDecisionKeys,
+  refuseQuestion,
   splitNotifications,
 } from './decision-notifications';
+import { MATCH_NOTIFICATION_TYPE, matchKey } from './match-decision';
 
 const decision = (id: string, campaignId: string) => ({
   id,
@@ -45,6 +47,23 @@ describe('notificationBucket — ruling 5A', () => {
     const orphan = { id: 'n3', kind: DECISION_NOTIFICATION_TYPE, campaignId: null };
     expect(notificationBucket(orphan, true, pending, true)).toBe('history');
   });
+
+  it('keeps a « Soir de match » notice active while its match is still to answer (Mariem 05/11)', () => {
+    const notice = {
+      id: 'n4',
+      kind: MATCH_NOTIFICATION_TYPE,
+      campaignId: null,
+      eventId: 'ev1',
+      screenhostId: 'sh1',
+    };
+    expect(notificationBucket(notice, true, new Set([matchKey('ev1', 'sh1')]), true)).toBe(
+      'active',
+    );
+    expect(notificationBucket(notice, false, new Set([matchKey('ev1', 'sh2')]), true)).toBe(
+      'history',
+    );
+    expect(notificationBucket(notice, true, new Set(), false)).toBe('active');
+  });
 });
 
 describe('splitNotifications', () => {
@@ -56,10 +75,18 @@ describe('splitNotifications', () => {
   });
 });
 
-describe('pendingCampaignIds', () => {
-  it('unions classic allocations and event proposals', () => {
-    const ids = pendingCampaignIds([{ campaign_id: 'c1' }], [{ campaign_id: 'e1' }]);
-    expect([...ids].sort()).toEqual(['c1', 'e1']);
+describe('pendingDecisionKeys', () => {
+  it('unions classic allocations, event shares proposed alone and matches to answer', () => {
+    const keys = pendingDecisionKeys(
+      [{ campaign_id: 'c1' }],
+      [
+        { campaign_id: 'e1', grouped: false },
+        { campaign_id: 'e2', grouped: true },
+      ],
+      [{ event_id: 'ev1', screenhost_id: 'sh1' }],
+    );
+    // A grouped share keeps no campaign notification open: its match popup answers it.
+    expect([...keys].sort()).toEqual(['c1', 'e1', matchKey('ev1', 'sh1')].sort());
   });
 });
 
@@ -74,8 +101,17 @@ const campaign = (statuts: OwnerCampaign['allocations'][number]['statut_acceptat
 
 describe('decisionTarget', () => {
   it('prefers the event proposals for an event positioning', () => {
-    const events = [{ id: 'ev1', campaign_id: 'c1' }] as PendingEventAllocation[];
+    const events = [{ id: 'ev1', campaign_id: 'c1', grouped: false }] as PendingEventAllocation[];
     expect(decisionTarget('c1', events, [campaign(['EN_ATTENTE'])]).kind).toBe('event');
+  });
+
+  it('never decides a grouped share, nor an event positioning through the campaign endpoints', () => {
+    const grouped = [{ id: 'ev1', campaign_id: 'c1', grouped: true }] as PendingEventAllocation[];
+    const eventCampaign = {
+      ...campaign(['EN_ATTENTE']),
+      event: { kickoff_at: '2027-09-15T19:00:00Z', ends_at: '2027-09-15T21:00:00Z' },
+    } as OwnerCampaign;
+    expect(decisionTarget('c1', grouped, [eventCampaign]).kind).toBe('missing');
   });
 
   it('decides every pending allocation of the campaign together (fleet owner)', () => {
@@ -113,5 +149,24 @@ describe('outcomeCopy — Figma frames 589 / 591', () => {
     expect(outcomeCopy('refused', 'event').lines[0]).toBe(
       'Cet événement ne sera pas diffusé dans votre établissement.',
     );
+  });
+  it('speaks of the match for a « Soir de match » answer', () => {
+    expect(outcomeCopy('accepted', 'match').lines[0]).toBe(
+      'Le match est désormais programmé pour diffusion dans votre établissement.',
+    );
+    expect(outcomeCopy('refused', 'match').lines[0]).toBe(
+      'Ce match ne sera pas diffusé dans votre établissement.',
+    );
+    expect(outcomeCopy('accepted', 'campaign').lines[0]).toBe(
+      'La campagne est désormais programmée pour diffusion dans votre établissement.',
+    );
+  });
+});
+
+describe('refuseQuestion', () => {
+  it('asks about the subject being refused', () => {
+    expect(refuseQuestion('campaign')).toBe('Êtes-vous sûr de vouloir refuser cette campagne ?');
+    expect(refuseQuestion('event')).toBe('Êtes-vous sûr de vouloir refuser cet événement ?');
+    expect(refuseQuestion('match')).toBe('Êtes-vous sûr de vouloir refuser ce match ?');
   });
 });

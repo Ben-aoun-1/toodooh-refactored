@@ -8,6 +8,11 @@
 //     (lowering the slider gives up the last venue's latest bloc first);
 //   • an event video lasts 10–30 s and airs in the smallest slot dividing the minute
 //     (10/12/15/20/30 s); an image shows 10, 20 or 30 s.
+//
+// Mariem 04/11/2026 — a match now sells 2-minute SEATS, three per bloc (a 6-minute pod), priced
+// A_max × R × blocs; the slider moves a seat at a time. The api sends the match's `seat_minutes`
+// (2; 1 for a match sold under EVT-MIN1) and ONE price/impressions entry per SEAT: every helper
+// below takes that step (1 by default — the EVT-MIN1 model, and an api that predates it).
 
 export const EVENT_MIN_MINUTES = 1;
 export const EVENT_VIDEO_MIN_SECONDS = 10;
@@ -117,23 +122,49 @@ export const eventRepeatsLabel = (
 
 const centimes = (tnd: number): number => Math.round(tnd * 100) / 100;
 
-/** The price of the first `minutes` minutes (what the slider shows). */
-export const eventMinutesPrice = (pricesTnd: readonly number[], minutes: number): number =>
-  centimes(pricesTnd.slice(0, Math.max(0, minutes)).reduce((sum, p) => sum + p, 0));
+/** The seats `minutes` covers (whole seats only — the slider never stops between two). */
+const seatsOf = (minutes: number, seatMinutes: number): number =>
+  Math.max(0, Math.floor(minutes / seatMinutes));
 
-/** The impressions of the first `minutes` minutes. */
-export const eventMinutesImpressions = (impressions: readonly number[], minutes: number): number =>
-  impressions.slice(0, Math.max(0, minutes)).reduce((sum, n) => sum + n, 0);
+/** The price of the first `minutes` minutes (what the slider shows): one entry per seat. */
+export const eventMinutesPrice = (
+  pricesTnd: readonly number[],
+  minutes: number,
+  seatMinutes = 1,
+): number =>
+  centimes(pricesTnd.slice(0, seatsOf(minutes, seatMinutes)).reduce((sum, p) => sum + p, 0));
+
+/** The impressions of the first `minutes` minutes: one entry per seat. */
+export const eventMinutesImpressions = (
+  impressions: readonly number[],
+  minutes: number,
+  seatMinutes = 1,
+): number => impressions.slice(0, seatsOf(minutes, seatMinutes)).reduce((sum, n) => sum + n, 0);
 
 /**
- * Keep a chosen count inside [1, max]: null stays null (nothing chosen yet), and a max of 0 (no
- * free seat left) leaves nothing to choose.
+ * Keep a chosen count inside [one seat, max], on whole seats: null stays null (nothing chosen
+ * yet), and a max under one seat (no free seat left) leaves nothing to choose.
  */
-export const clampEventMinutes = (minutes: number | null, maxMinutes: number): number | null => {
+export const clampEventMinutes = (
+  minutes: number | null,
+  maxMinutes: number,
+  seatMinutes = 1,
+): number | null => {
   if (minutes === null) return null;
-  if (maxMinutes < EVENT_MIN_MINUTES) return null;
-  return Math.min(Math.max(EVENT_MIN_MINUTES, Math.round(minutes)), maxMinutes);
+  const top = seatsOf(maxMinutes, seatMinutes) * seatMinutes;
+  if (top < seatMinutes) return null;
+  const whole = seatsOf(Math.round(minutes), seatMinutes) * seatMinutes;
+  return Math.min(Math.max(seatMinutes, whole), top);
 };
+
+/**
+ * The slider's explanation, for the match's seat model. Mariem 04/11: 2-minute seats in a
+ * 6-minute pod; EVT-MIN1: one-minute seats in a 5-minute pod.
+ */
+export const eventSeatExplainer = (seatMinutes: number): string =>
+  seatMinutes === 2
+    ? '2 minutes = votre spot dans la page publicitaire de 6 minutes d’un bloc, chez un établissement (3 campagnes au plus par bloc). Les 3 blocs avant le match ouvrent par la publicité, les 3 blocs après la terminent. En réduisant le curseur, vous retirez 2 minutes à chaque fois, en commençant par le dernier établissement de la liste.'
+    : 'Une minute = votre spot dans la page publicitaire de 5 minutes d’un bloc, chez un établissement. Les 3 blocs avant le match ouvrent par la publicité, les 3 blocs après la terminent. En réduisant le curseur, vous retirez d’abord les minutes du dernier établissement de la liste.';
 
 /** « 1 minute » / « 12 minutes ». */
 export const minutesLabel = (minutes: number): string =>
@@ -141,19 +172,36 @@ export const minutesLabel = (minutes: number): string =>
 
 // ─── The multi-match recap (EVT-CAT2, ruling A1) ─────────────────────────────────────────────
 
-/** The big slider's bounds: one minute per match that still has one, up to all their minutes. */
-export function groupMinutesBounds(maxes: readonly number[]): { min: number; max: number } {
-  const open = maxes.filter((m) => m >= EVENT_MIN_MINUTES);
-  return { min: open.length, max: open.reduce((s, m) => s + m, 0) };
+/**
+ * The big slider's bounds: one seat per match that still has one, up to all their whole seats.
+ * Mariem 04/11 — `seatMinutes` is the group's seat (2 as soon as one match sells 2-minute seats).
+ */
+export function groupMinutesBounds(
+  maxes: readonly number[],
+  seatMinutes = 1,
+): { min: number; max: number } {
+  const seats = maxes.map((m) => seatsOf(m, seatMinutes));
+  const open = seats.filter((n) => n >= 1);
+  return { min: open.length * seatMinutes, max: open.reduce((s, n) => s + n, 0) * seatMinutes };
 }
 
 /**
  * Ruling A1 — spread the big slider's `total` over the matches IN PROPORTION to their free
  * minutes: every match with a free minute gets ≥ 1 and ≤ its max, the parts sum to `total`
  * (clamped into the bounds). Largest remainder, ties to the earlier match. A match with no free
- * minute gets 0.
+ * minute gets 0. Mariem 04/11 — with `seatMinutes` 2 the same split runs on whole seats.
  */
-export function distributeEventMinutes(total: number, maxes: readonly number[]): number[] {
+export function distributeEventMinutes(
+  total: number,
+  maxes: readonly number[],
+  seatMinutes = 1,
+): number[] {
+  if (seatMinutes !== 1) {
+    return distributeEventMinutes(
+      Math.round(total / seatMinutes),
+      maxes.map((m) => seatsOf(m, seatMinutes)),
+    ).map((seats) => seats * seatMinutes);
+  }
   const { min, max } = groupMinutesBounds(maxes);
   if (max === 0) return maxes.map(() => 0);
   const target = Math.min(Math.max(Math.round(total), min), max);

@@ -93,16 +93,19 @@ describe('notifications (session-user-scoped, real Postgres)', () => {
     expect(body).toHaveLength(2);
     expect(body[0]?.['title']).toBe('Récente');
     expect(body[1]?.['title']).toBe('Ancienne');
-    // AGT-6 added link / appointment_id / appointment_status (the agent bell's actions).
+    // AGT-6 added link / appointment_id / appointment_status (the agent bell's actions); Mariem
+    // 05/11 added event_id / screenhost_id (the « Soir de match » notice's match and venue).
     expect(Object.keys(body[0] ?? {}).sort()).toEqual([
       'appointment_id',
       'appointment_status',
       'body',
       'campaign_id',
       'created_at',
+      'event_id',
       'id',
       'link',
       'read_at',
+      'screenhost_id',
       'title',
       'type',
     ]);

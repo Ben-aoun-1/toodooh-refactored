@@ -5,6 +5,7 @@ import type {
   AdminCampaignRow,
   CampaignStatusFilter,
 } from '@/features/admin/types/campaign-review';
+import type { CtaPosition } from '@/features/campaigns/services/campaigns.api';
 import { apiClient } from '@/lib/api-client';
 
 // Admin campaign-moderation surface (the ACTIVATION keystone) over REST. Mirrors adminCreativesService:
@@ -19,6 +20,18 @@ import { apiClient } from '@/lib/api-client';
 export interface AdminActivateResult {
   campaign: { id: string; status: string };
   plan: { i_cible: number; couvert: number; n_retenus: number };
+}
+
+/** Mariem 04/11 — the campaign's QR card as the admin reviews it (GET /admin/campaigns/:id/cta). */
+export interface AdminCampaignCta {
+  url: string | null;
+  label: string | null;
+  position: CtaPosition;
+  status: 'pending' | 'ready' | 'failed' | null;
+  /** The spot with its QR, once made (short-lived signed URL). */
+  preview_url: string | null;
+  /** The card may still move: the campaign has a QR code and was never on air. */
+  position_editable: boolean;
 }
 
 export const adminCampaignsService = {
@@ -50,6 +63,11 @@ export const adminCampaignsService = {
     );
   },
 
+  // Mariem 05/11 — a superadmin deletes a STOPPED campaign or positioning that aired nothing.
+  async remove(id: string): Promise<void> {
+    return apiClient.del<void>(`/admin/campaigns/${id}`);
+  },
+
   // E7 — the settlement's per-SH 50/44/3/3 breakdown + totals (empty lines = not settled yet).
   async getReversements(id: string): Promise<AdminCampaignReversements> {
     return apiClient.get<AdminCampaignReversements>(`/admin/campaigns/${id}/reversements`);
@@ -58,6 +76,15 @@ export const adminCampaignsService = {
   // ELIG-1 — the venues this campaign can reach at any status, and why the others are out.
   async getEligibleHosts(id: string): Promise<EligibleHostsReport> {
     return apiClient.get<EligibleHostsReport>(`/admin/campaigns/${id}/eligible-hosts`);
+  },
+
+  // Mariem 04/11 (Foot point 1) — the QR card at the review, and moving it to another corner (the
+  // copy is made again; the campaign airs once it is ready).
+  async getCta(id: string): Promise<AdminCampaignCta> {
+    return apiClient.get<AdminCampaignCta>(`/admin/campaigns/${id}/cta`);
+  },
+  async setCtaPosition(id: string, position: CtaPosition): Promise<AdminCampaignCta> {
+    return apiClient.put<AdminCampaignCta>(`/admin/campaigns/${id}/cta-position`, { position });
   },
 
   // LOG1 — the engine journal: runs newest-first with their events. One 50-run page (the modal's

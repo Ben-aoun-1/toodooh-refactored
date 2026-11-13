@@ -504,4 +504,81 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(res.statusCode).toBe(201);
     expect(await db.select().from(screenhosts)).toHaveLength(0);
   });
+  // ── Mariem 11/11 — the Ramadan window and « Diffusez-vous les matchs ? », declared next to the
+  // hours: stored as typed, NULL when not sent (mobile / older clients), the pair all-or-nothing.
+  it('individual_owner: Ramadan hours + broadcasts_matches stored; omitted → NULL (Mariem 11/11)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBase,
+        profile_type: 'individual_owner',
+        ramadan_opening_hour: 20,
+        ramadan_closing_hour: 2,
+        broadcasts_matches: false,
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const ownerId = await userIdByEmail(ownerBase.email);
+    const [row] = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
+    expect(row?.ramadanOpeningHour).toBe(20);
+    expect(row?.ramadanClosingHour).toBe(2);
+    expect(row?.broadcastsMatches).toBe(false);
+
+    await resetAuthTables();
+    const bare = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner' }),
+    });
+    expect(bare.statusCode).toBe(201);
+    const bareId = await userIdByEmail(ownerBase.email);
+    const [plain] = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, bareId));
+    expect(plain?.ramadanOpeningHour).toBeNull();
+    expect(plain?.ramadanClosingHour).toBeNull();
+    expect(plain?.broadcastsMatches).toBeNull();
+  });
+
+  it('fleet entries carry their own Ramadan hours + broadcasts_matches (Mariem 11/11)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBaseNoHours,
+        profile_type: 'fleet_owner',
+        fleet_establishments: [
+          {
+            name: 'Café A',
+            ...HOURS,
+            ...FLEET_COUNTS,
+            ramadan_opening_hour: 19,
+            ramadan_closing_hour: 3,
+            broadcasts_matches: true,
+          },
+        ],
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const ownerId = await userIdByEmail(ownerBase.email);
+    const [row] = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
+    expect(row?.ramadanOpeningHour).toBe(19);
+    expect(row?.ramadanClosingHour).toBe(3);
+    expect(row?.broadcastsMatches).toBe(true);
+  });
+
+  it('a one-sided or zero-width Ramadan pair → 400, no user (Mariem 11/11)', async () => {
+    for (const bad of [
+      { ramadan_opening_hour: 20 },
+      { ramadan_opening_hour: 20, ramadan_closing_hour: 20 },
+      { ramadan_opening_hour: 24, ramadan_closing_hour: 2 },
+    ]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/signup',
+        ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner', ...bad }),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(await userIdByEmail(ownerBase.email)).toBe('');
+    }
+  });
 });

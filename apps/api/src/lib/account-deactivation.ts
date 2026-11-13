@@ -15,6 +15,7 @@ import {
 } from '../db/schema.js';
 
 import { stopCampaign } from './campaign-stop.js';
+import { releaseReservation } from './dispatch/tours/reservation.js';
 import type { EngineTrace } from './engine-journal/trace.js';
 import { pushPlaylistToVenue } from './playout/push.js';
 import { screenRegistry } from './playout/registry.js';
@@ -196,7 +197,7 @@ export async function deactivateAccount(input: {
       await tx.delete(sessions).where(eq(sessions.userId, input.userId));
       await tx
         .update(deviceSessions)
-        .set({ revokedAt: now })
+        .set({ revokedAt: now, pushToken: null })
         .where(and(eq(deviceSessions.userId, input.userId), isNull(deviceSessions.revokedAt)));
 
       const movedShares: RedispatchedShare[] = [];
@@ -220,6 +221,8 @@ export async function deactivateAccount(input: {
           .where(and(eq(campaigns.advertiserId, input.userId), eq(campaigns.status, 'pending')))
           .returning({ id: campaigns.id });
         rejectedCount = rows.length;
+        // DISP-TOURS Q1 — a refused campaign gives back the places reserved at its « Lancer ».
+        for (const row of rows) await releaseReservation(tx, row.id);
       }
       return { moved: movedShares, rejected: rejectedCount };
     })

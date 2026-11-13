@@ -1,8 +1,20 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
-import { eventAllocations, hourReservations, notifications } from '../../db/schema.js';
-import { type EventMinutePlacement, takeEventMinutes } from '../event-pricing/minutes.js';
+import { campaigns, eventAllocations, hourReservations, notifications } from '../../db/schema.js';
+import { demoEventPlacements, demoEventStart, demoEventStartDate } from '../demo-event.js';
+import { demoDelayMinutes, eventPoolDemoVenues } from '../demo.js';
+import {
+  EVENT_PROPOSAL_TITLE,
+  type ShareOrigin,
+  eventProposalBody,
+  noticeNewEventShares,
+} from '../event-host-notice.js';
+import {
+  type EventMinutePlacement,
+  eventSeatModel,
+  takeEventMinutes,
+} from '../event-pricing/minutes.js';
 import {
   REPS_PER_BLOC,
   type EventRef,
@@ -222,10 +234,9 @@ export const fillEventBlocs = (
   };
 };
 
-// §11.1 — the proposal + alert copies (French, ONE home).
-export const EVENT_PROPOSAL_TITLE = 'Événement en attente de votre acceptation';
-export const eventProposalBody = (matchName: string): string =>
-  `Le positionnement « ${matchName} » attend votre acceptation.`;
+// §11.1 — the proposal copy lives with the rule that sends it (lib/event-host-notice); the alert
+// copy is this module's own (French, ONE home each).
+export { EVENT_PROPOSAL_TITLE, eventProposalBody };
 export const EVENT_PARTIAL_TITLE = 'Placement partiel de votre positionnement';
 export const eventPartialBody = (matchName: string): string =>
   `Votre positionnement « ${matchName} » n'a pas pu être placé en totalité — l'inventaire disponible sur la fenêtre est limité.`;
@@ -294,35 +305,7 @@ export const runEventDispatch = async (
   // all-or-nothing (the classic freeze-tx idiom).
   const allocationIds = await db.transaction(async (tx) => {
     if (cpmCheck && !(await cpmCheck(tx, cpmEvtTnd))) return null;
-    const ids: string[] = [];
-    const owners = new Set<string>();
-    for (const placement of fill.placements) {
-      const [row] = await tx
-        .insert(eventAllocations)
-        .values({
-          campaignId: positioning.id,
-          screenhostId: placement.screenhostId,
-          blocs: placement.blocs,
-          impressionsTotal: placement.impressionsTotal,
-          montantTnd: placement.montantTnd.toFixed(3),
-          statut: 'EN_ATTENTE',
-        })
-        .returning({ id: eventAllocations.id });
-      if (row) ids.push(row.id);
-      await reserveBlocHours(tx, event.id, placement.screenhostId, placement.blocs);
-      owners.add(placement.ownerId);
-    }
-    if (owners.size > 0) {
-      await tx.insert(notifications).values(
-        [...owners].map((ownerId) => ({
-          userId: ownerId,
-          type: 'dispatch_pending_acceptance',
-          title: EVENT_PROPOSAL_TITLE,
-          body: eventProposalBody(positioning.name),
-          campaignId: positioning.id,
-        })),
-      );
-    }
+    const ids = await writeEventPlacements(tx, positioning, event, fill.placements, 'booking');
     if (fill.partial) {
       // D6 — the alert: the advertiser learns the placement is partial.
       await tx.insert(notifications).values({
@@ -351,15 +334,25 @@ export const lockEventSeats = async (executor: DbExecutor, eventId: string): Pro
   await executor.execute(sql`select pg_advisory_xact_lock(hashtext(${`event-seats:${eventId}`}))`);
 };
 
-/** Write minute placements: allocations EN_ATTENTE + hour holds + one proposal per owner. */
-export const writeMinutePlacements = async (
+/**
+ * Write placements (whole blocs or minute seats): allocations EN_ATTENTE + hour holds, then each
+ * share's notice — Mariem 05/11 (lib/event-host-notice): it waits for the match's grouped
+ * notice, is proposed alone, or is accepted on the owner's behalf. `origin` tells a booking from
+ * a re-placement after a refusal.
+ */
+export const writeEventPlacements = async (
   executor: DbExecutor,
   positioning: { id: string; name: string },
-  eventId: string,
-  placements: readonly EventMinutePlacement[],
+  event: { id: string; kickoffAt: Date },
+  placements: readonly (EventPlacement | EventMinutePlacement)[],
+  origin: ShareOrigin,
 ): Promise<string[]> => {
-  const ids: string[] = [];
-  const owners = new Set<string>();
+  const shares: {
+    allocationId: string;
+    screenhostId: string;
+    ownerId: string;
+    montantTnd: number;
+  }[] = [];
   for (const placement of placements) {
     const [row] = await executor
       .insert(eventAllocations)
@@ -370,23 +363,58 @@ export const writeMinutePlacements = async (
         impressionsTotal: placement.impressionsTotal,
         montantTnd: placement.montantTnd.toFixed(3),
         statut: 'EN_ATTENTE',
+        // Waiting for its notice until noticeNewEventShares (below) says otherwise.
+        notice: null,
+      })
+      .returning({ id: eventAllocations.id });
+    if (row) {
+      shares.push({
+        allocationId: row.id,
+        screenhostId: placement.screenhostId,
+        ownerId: placement.ownerId,
+        montantTnd: placement.montantTnd,
+      });
+    }
+    await reserveBlocHours(executor, event.id, placement.screenhostId, placement.blocs);
+  }
+  await noticeNewEventShares(executor, { positioning, event, shares, origin });
+  return shares.map((s) => s.allocationId);
+};
+
+/**
+ * DEMO-3 — a demo positioning's placements: moved onto the demo timeline (lib/demo-event.ts),
+ * ACCEPTE on the owner's behalf with no proposal sent (DEMO-1 Q1 A), and no hour held (a demo pod
+ * must not keep the venue's hours from the campaign engine). The positioning starts on the demo's
+ * first day, so its launch makes it active.
+ */
+export const writeDemoMinutePlacements = async (
+  executor: DbExecutor,
+  positioningId: string,
+  placements: readonly EventMinutePlacement[],
+  now: Date = new Date(),
+): Promise<string[]> => {
+  const start = demoEventStart(now, await demoDelayMinutes(executor));
+  const ids: string[] = [];
+  for (const placement of demoEventPlacements(placements, start)) {
+    const [row] = await executor
+      .insert(eventAllocations)
+      .values({
+        campaignId: positioningId,
+        screenhostId: placement.screenhostId,
+        blocs: placement.blocs,
+        impressionsTotal: placement.impressionsTotal,
+        montantTnd: placement.montantTnd.toFixed(3),
+        statut: 'ACCEPTE',
+        decidedAt: now,
+        notice: 'auto',
       })
       .returning({ id: eventAllocations.id });
     if (row) ids.push(row.id);
-    await reserveBlocHours(executor, eventId, placement.screenhostId, placement.blocs);
-    owners.add(placement.ownerId);
   }
-  if (owners.size > 0) {
-    await executor.insert(notifications).values(
-      [...owners].map((ownerId) => ({
-        userId: ownerId,
-        type: 'dispatch_pending_acceptance',
-        title: EVENT_PROPOSAL_TITLE,
-        body: eventProposalBody(positioning.name),
-        campaignId: positioning.id,
-      })),
-    );
-  }
+  await executor
+    .update(campaigns)
+    .set({ startDate: demoEventStartDate(start) })
+    .where(eq(campaigns.id, positioningId));
   return ids;
 };
 
@@ -400,18 +428,29 @@ const runEventMinutesDispatch = async (
   const outcome = await db.transaction(async (tx): Promise<EventDispatchOutcome> => {
     if (cpmCheck && !(await cpmCheck(tx, cpmEvtTnd))) return { status: 'CPM_CHANGED' };
     await lockEventSeats(tx, event.id);
+    // DEMO-3 — a demo screencaster's minutes are taken on the demo venues.
+    const demoVenues = await eventPoolDemoVenues(tx, positioning.id);
     const { minutes } = await computeEventCmax(
       event,
       cpmEvtTnd,
       new Set(),
       await campaignPlaysPerMinute(positioning.id, tx),
+      demoVenues,
     );
     if (minutes.length === 0) return { status: 'NO_POOL' };
-    const take = takeEventMinutes(minutes, positioning.eventMinutes, positioning.requestedBudget);
+    const take = takeEventMinutes(
+      minutes,
+      positioning.eventMinutes,
+      positioning.requestedBudget,
+      eventSeatModel(event.seatMinutes),
+    );
     if (take.status === 'NOT_ENOUGH') {
       return { status: 'MINUTES_UNAVAILABLE', availableMinutes: take.available };
     }
-    const allocationIds = await writeMinutePlacements(tx, positioning, event.id, take.placements);
+    const allocationIds =
+      demoVenues === null
+        ? await writeEventPlacements(tx, positioning, event, take.placements, 'booking')
+        : await writeDemoMinutePlacements(tx, positioning.id, take.placements);
     return { status: 'OK', partial: false, allocationIds };
   });
   return outcome;
@@ -450,6 +489,33 @@ export const releaseBlocHours = async (
     );
 };
 
+/**
+ * Mariem 05/11 — a positioning a superadmin stopped no longer airs: each of its venues drops the
+ * match's holds, unless another live positioning still holds a share there (its blocs still air).
+ */
+export const releaseIdleBlocHours = async (
+  executor: DbExecutor,
+  eventId: string,
+  screenhostIds: readonly string[],
+): Promise<void> => {
+  for (const screenhostId of new Set(screenhostIds)) {
+    const [live] = await executor
+      .select({ id: eventAllocations.id })
+      .from(eventAllocations)
+      .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
+      .where(
+        and(
+          eq(campaigns.eventId, eventId),
+          eq(eventAllocations.screenhostId, screenhostId),
+          ne(eventAllocations.statut, 'REFUSE'),
+          inArray(campaigns.status, ['pending', 'upcoming', 'active']),
+        ),
+      )
+      .limit(1);
+    if (!live) await releaseBlocHours(executor, eventId, screenhostId);
+  }
+};
+
 export interface EventCascadeOutcome {
   status: 'REPLACED' | 'PARTIAL' | 'NO_POOL';
   allocationIds: string[];
@@ -466,7 +532,8 @@ export const runEventRefusalCascade = async (
   executor: DbExecutor,
   positioning: { id: string; name: string; eventMinutes: number | null },
   event: EventRef,
-  refused: { screenhostId: string; impressionsTotal: number; minutes: number; montantTnd: number },
+  /** `seats` = the refused allocation's placed blocs (one seat each, of the match's model). */
+  refused: { screenhostId: string; impressionsTotal: number; seats: number; montantTnd: number },
   cpmEvtTnd: number,
 ): Promise<EventCascadeOutcome> => {
   const held = await executor
@@ -476,9 +543,9 @@ export const runEventRefusalCascade = async (
   const exclude = new Set<string>(held.map((h) => h.screenhostId));
   exclude.add(refused.screenhostId);
 
-  // EVT-MIN1 — a minutes positioning re-places the refused MINUTES on the next free seats of the
+  // EVT-MIN1 — a minutes positioning re-places the refused SEATS on the next free seats of the
   // ordered list (held + refused venues out), charged up to the refused value. A repair, not a
-  // purchase: fewer free minutes than refused places what exists (PARTIAL), the rest is refunded
+  // purchase: fewer free seats than refused places what exists (PARTIAL), the rest is refunded
   // at settlement (REFUSE carries no money).
   if (positioning.eventMinutes !== null) {
     await lockEventSeats(executor, event.id);
@@ -488,12 +555,19 @@ export const runEventRefusalCascade = async (
       exclude,
       await campaignPlaysPerMinute(positioning.id, executor),
     );
-    const count = Math.min(refused.minutes, minutes.length);
+    const model = eventSeatModel(event.seatMinutes);
+    const count = Math.min(refused.seats, minutes.length);
     if (count === 0) return { status: 'NO_POOL', allocationIds: [] };
-    const take = takeEventMinutes(minutes, count, refused.montantTnd);
+    const take = takeEventMinutes(minutes, count * model.seatMinutes, refused.montantTnd, model);
     if (take.status === 'NOT_ENOUGH') return { status: 'NO_POOL', allocationIds: [] };
-    const ids = await writeMinutePlacements(executor, positioning, event.id, take.placements);
-    return { status: count < refused.minutes ? 'PARTIAL' : 'REPLACED', allocationIds: ids };
+    const ids = await writeEventPlacements(
+      executor,
+      positioning,
+      event,
+      take.placements,
+      'redispatch',
+    );
+    return { status: count < refused.seats ? 'PARTIAL' : 'REPLACED', allocationIds: ids };
   }
 
   const pool = await assembleEventPool(event, exclude);
@@ -506,34 +580,12 @@ export const runEventRefusalCascade = async (
   if (fill.status === 'NMAX_EXCEEDED' || fill.status === 'NO_POOL')
     return { status: 'NO_POOL', allocationIds: [] };
 
-  const ids: string[] = [];
-  const owners = new Set<string>();
-  for (const placement of fill.placements) {
-    const [row] = await executor
-      .insert(eventAllocations)
-      .values({
-        campaignId: positioning.id,
-        screenhostId: placement.screenhostId,
-        blocs: placement.blocs,
-        impressionsTotal: placement.impressionsTotal,
-        montantTnd: placement.montantTnd.toFixed(3),
-        statut: 'EN_ATTENTE',
-      })
-      .returning({ id: eventAllocations.id });
-    if (row) ids.push(row.id);
-    await reserveBlocHours(executor, event.id, placement.screenhostId, placement.blocs);
-    owners.add(placement.ownerId);
-  }
-  if (owners.size > 0) {
-    await executor.insert(notifications).values(
-      [...owners].map((ownerId) => ({
-        userId: ownerId,
-        type: 'dispatch_pending_acceptance',
-        title: EVENT_PROPOSAL_TITLE,
-        body: eventProposalBody(positioning.name),
-        campaignId: positioning.id,
-      })),
-    );
-  }
+  const ids = await writeEventPlacements(
+    executor,
+    positioning,
+    event,
+    fill.placements,
+    'redispatch',
+  );
   return { status: fill.partial ? 'PARTIAL' : 'REPLACED', allocationIds: ids };
 };

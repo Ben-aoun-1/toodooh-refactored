@@ -31,6 +31,40 @@ export const ORDER_MESSAGE =
 export const HOURS_REQUIRED_MESSAGE =
   'opening_hour and closing_hour are required for a screenhost signup';
 
+// Mariem 11/11 — the Ramadan window and « Diffusez-vous les matchs ? », next to the hours. Both
+// OPTIONAL on the wire (the mobile app and older clients do not send them; the web wizard always
+// does); the Ramadan pair follows the opening pair's rules: all-or-nothing, never equal.
+interface RamadanPair {
+  ramadan_opening_hour?: number;
+  ramadan_closing_hour?: number;
+}
+export const ramadanIsPaired = (b: RamadanPair): boolean =>
+  (b.ramadan_opening_hour === undefined) === (b.ramadan_closing_hour === undefined);
+export const ramadanIsOrdered = (b: RamadanPair): boolean =>
+  b.ramadan_opening_hour === undefined ||
+  b.ramadan_closing_hour === undefined ||
+  b.ramadan_opening_hour !== b.ramadan_closing_hour;
+export const RAMADAN_PAIR_MESSAGE =
+  'ramadan_opening_hour and ramadan_closing_hour must be provided together and differ';
+export const venueDeclarationFields = {
+  ramadan_opening_hour: hourField.optional(),
+  ramadan_closing_hour: hourField.optional(),
+  broadcasts_matches: z.boolean().optional(),
+};
+
+/** The screenhosts columns the declarations land in (undefined → NULL = not declared). */
+export const venueDeclarationColumns = (
+  b: RamadanPair & { broadcasts_matches?: boolean },
+): {
+  ramadanOpeningHour: number | null;
+  ramadanClosingHour: number | null;
+  broadcastsMatches: boolean | null;
+} => ({
+  ramadanOpeningHour: b.ramadan_opening_hour ?? null,
+  ramadanClosingHour: b.ramadan_closing_hour ?? null,
+  broadcastsMatches: b.broadcasts_matches ?? null,
+});
+
 export const fleetEstablishmentSchema = z
   .object({
     name: z.string().min(1).max(200),
@@ -52,6 +86,11 @@ export const fleetEstablishmentSchema = z
     // « préciser plus tard » is gone from the wizard and refused on the wire.
     opening_hour: hourField,
     closing_hour: hourField,
+    ...venueDeclarationFields,
   })
   .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
-  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] });
+  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] })
+  .refine((b) => ramadanIsPaired(b) && ramadanIsOrdered(b), {
+    message: RAMADAN_PAIR_MESSAGE,
+    path: ['ramadan_closing_hour'],
+  });

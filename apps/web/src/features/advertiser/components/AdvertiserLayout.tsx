@@ -19,6 +19,7 @@ import financeIcon from '@/assets/sidebar/portefeuille.png';
 import financeIconActive from '@/assets/sidebar/portefeuilles.png';
 import supportIcon from '@/assets/support.png';
 import supportIconActive from '@/assets/supports.png';
+import AppVersion from '@/components/AppVersion';
 import ContentErrorBoundary from '@/components/ContentErrorBoundary';
 import { ModalProvider, useModal } from '@/contexts/ModalContext';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -244,6 +245,7 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
               </>
             )}
           </button>
+          {sidebarExpanded && <AppVersion className="px-3 pb-2" />}
         </div>
       </aside>
 

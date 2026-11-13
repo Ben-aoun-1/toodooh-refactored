@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import ScreenhostLiveness from '@/features/admin/components/ScreenhostLiveness';
 import ScreenhostSpsBreakdown from '@/features/admin/components/ScreenhostSpsBreakdown';
 import { useUpdateScreenhostEligibility } from '@/features/admin/hooks/useAdminScreenhostEligibility';
+import { venueDeclarationsLine } from '@/features/admin/lib/venue-declarations-line';
 import {
   CAPACITY_FIELD_HINT,
   CAPACITY_FIELD_LABEL,
@@ -128,6 +129,12 @@ export default function ScreenhostEligibilityCard({
       {/* E4 — the SPS insight beside the readiness badge (read-only; the operator/Mejri read it
           during testing). */}
       <ScreenhostSpsBreakdown screenhostId={screenhost.id} />
+
+      {/* Mariem 11/11 — declared by the Host at signup (read-only). */}
+      <p className="text-xs text-gray-600">
+        <span className="font-medium text-gray-700">Déclaré à l&apos;inscription — </span>
+        {venueDeclarationsLine(view)}
+      </p>
 
       {/* CF-HF4 — the LIVE devices line (« N écran(s) » + state chip, the E6 heartbeat truth). */}
       <ScreenhostLiveness screenhostId={screenhost.id} />

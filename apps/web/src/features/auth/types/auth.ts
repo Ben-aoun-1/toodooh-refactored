@@ -100,6 +100,10 @@ export interface FleetEstablishmentInput {
   // Optionnels ("préciser plus tard") — omis ensemble quand l'utilisateur passe.
   opening_hour?: number;
   closing_hour?: number;
+  // Mariem 11/11 — the Ramadan window + « Diffusez-vous les matchs ? » (lib/venue-declarations).
+  ramadan_opening_hour?: number;
+  ramadan_closing_hour?: number;
+  broadcasts_matches?: boolean;
 }
 
 export interface SignUpData {
@@ -142,6 +146,10 @@ export interface SignUpData {
   // H1 — horaires d'ouverture de l'établissement (individual_owner; fenêtre unique, heures 0–23).
   opening_hour?: number;
   closing_hour?: number;
+  // Mariem 11/11 — the individual_owner's Ramadan window + « Diffusez-vous les matchs ? ».
+  ramadan_opening_hour?: number;
+  ramadan_closing_hour?: number;
+  broadcasts_matches?: boolean;
   /** Localités créées après inscription (propriétaire de parc) */
   fleet_establishments?: FleetEstablishmentInput[];
 }

@@ -2,6 +2,7 @@ import { Megaphone, PartyPopper } from 'lucide-react';
 
 import {
   type DecisionOutcome,
+  type DecisionSubject,
   outcomeCopy,
 } from '@/features/screenhost/lib/decision-notifications';
 
@@ -12,7 +13,7 @@ export default function DecisionOutcomeCard({
   onDashboard,
 }: {
   outcome: DecisionOutcome;
-  target: 'campaign' | 'event';
+  target: DecisionSubject;
   onDashboard: () => void;
 }) {
   const copy = outcomeCopy(outcome, target);

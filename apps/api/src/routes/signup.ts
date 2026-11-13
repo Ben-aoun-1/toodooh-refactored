@@ -34,10 +34,15 @@ import {
   HOURS_REQUIRED_MESSAGE,
   ORDER_MESSAGE,
   PAIR_MESSAGE,
+  RAMADAN_PAIR_MESSAGE,
   fleetEstablishmentSchema,
   hourField,
   hoursAreOrdered,
   hoursArePaired,
+  ramadanIsOrdered,
+  ramadanIsPaired,
+  venueDeclarationColumns,
+  venueDeclarationFields,
 } from '../validation/signup-venue.js';
 import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
@@ -83,6 +88,8 @@ const signupBodySchema = z
     // « préciser plus tard » skip is gone; NULL hours now only exist on legacy rows.
     opening_hour: hourField.optional(),
     closing_hour: hourField.optional(),
+    // Mariem 11/11 — the individual_owner's Ramadan window + « Diffusez-vous les matchs ? ».
+    ...venueDeclarationFields,
     // SCR-DECL1 — the individual_owner's venue counts, REQUIRED like its hours (fleet: per entry).
     screen_count: declaredCountSchema.optional(),
     room_count: declaredCountSchema.optional(),
@@ -90,6 +97,10 @@ const signupBodySchema = z
   })
   .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
   .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] })
+  .refine((b) => ramadanIsPaired(b) && ramadanIsOrdered(b), {
+    message: RAMADAN_PAIR_MESSAGE,
+    path: ['ramadan_closing_hour'],
+  })
   .refine((b) => b.profile_type !== 'individual_owner' || b.opening_hour !== undefined, {
     message: HOURS_REQUIRED_MESSAGE,
     path: ['opening_hour'],
@@ -231,6 +242,9 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       wifi_password,
       opening_hour,
       closing_hour,
+      ramadan_opening_hour,
+      ramadan_closing_hour,
+      broadcasts_matches,
       screen_count,
       room_count,
       fleet_establishments,
@@ -372,6 +386,11 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
             wifiPasswordEncrypted: wifi_password ? encryptWifiPassword(wifi_password) : null,
             openingHour: opening_hour ?? null,
             closingHour: closing_hour ?? null,
+            ...venueDeclarationColumns({
+              ramadan_opening_hour,
+              ramadan_closing_hour,
+              broadcasts_matches,
+            }),
             // SCR-DECL1 — both present for an individual_owner (the refines above).
             screenCount: screen_count ?? 0,
             roomCount: room_count ?? null,
@@ -399,6 +418,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
                 : null,
               openingHour: establishment.opening_hour ?? null,
               closingHour: establishment.closing_hour ?? null,
+              ...venueDeclarationColumns(establishment),
               businessSectorId: business_sector_id ?? null,
               ownerId: persisted.id,
             })),

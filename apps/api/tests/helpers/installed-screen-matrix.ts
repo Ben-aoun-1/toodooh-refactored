@@ -125,7 +125,7 @@ const seedMatch = async (name: string) => {
     })
     .returning({ id: events.id });
   if (!event) throw new Error('seedMatch: no row');
-  return { id: event.id, kickoffAt: MATCH_KICKOFF, endsAt: MATCH_ENDS };
+  return { id: event.id, kickoffAt: MATCH_KICKOFF, endsAt: MATCH_ENDS, seatMinutes: null };
 };
 
 /** A match alone — what the event ceiling and the bloc pool read. */

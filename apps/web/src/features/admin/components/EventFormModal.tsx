@@ -58,6 +58,9 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
   const [catalogue, setCatalogue] = useState(() => catalogueDraftOf(event));
   const [managingTeams, setManagingTeams] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Mariem 11/11 — the event a FAILED create-then-upload already created. A retry (another
+  // affiche, after the first was refused) must UPDATE it, never create a second copy of the match.
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const create = useCreateEvent();
   const update = useUpdateEvent();
   const uploadImage = useUploadEventImage();
@@ -81,9 +84,11 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
       ...catalogueInput(catalogue),
     };
     try {
-      const saved = event
-        ? await update.mutateAsync({ id: event.id, patch: payload })
+      const existingId = event?.id ?? createdId;
+      const saved = existingId
+        ? await update.mutateAsync({ id: existingId, patch: payload })
         : await create.mutateAsync(payload);
+      if (!event) setCreatedId(saved.id);
       if (imageFile) await uploadImage.mutateAsync({ id: saved.id, file: imageFile });
       toast.success(event ? 'Événement modifié.' : 'Événement créé.');
       onClose();

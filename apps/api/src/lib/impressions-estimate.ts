@@ -4,18 +4,21 @@ import { db } from '../db/client.js';
 import { events } from '../db/schema.js';
 
 import { deriveICible } from './activation-service.js';
+import { eventPoolDemoVenues } from './demo.js';
 import {
   campaignCpmRates,
   campaignTTiers,
   cpmForCampaign,
   getDispatchConfig,
 } from './dispatch/config.js';
+import { usesToursEngine } from './dispatch/engine-switch.js';
 import { planFromPool } from './dispatch/plan-outcome.js';
 import { assemblePool } from './dispatch/pool.js';
 import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
+import { calculerCampagne } from './dispatch/tours/campaign-calcul.js';
 import { buildWindowDays } from './dispatch/window.js';
 import { assembleEventPool, fillEventBlocs } from './event-dispatch/dispatch.js';
-import { eventMinutesPriceTnd } from './event-pricing/minutes.js';
+import { eventMinutesPriceTnd, eventSeatModel } from './event-pricing/minutes.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
 import { campaignPlaysPerMinute } from './event-pricing/spot.js';
 import { predictedImpressions } from './impressions-display.js';
@@ -90,6 +93,8 @@ export type ImpressionsEstimate =
       venuesCount: number;
       /** Calendar days of the window (inclusive); null for a positioning (the event's window). */
       daysCount: number | null;
+      /** DISP-TOURS — the exact price of the simulated plan (at or under the budget). */
+      prixTnd?: number;
     }
   | { status: EstimateRefusal };
 
@@ -112,7 +117,7 @@ const frozenPlanEstimate = async (c: EstimateCampaign): Promise<ImpressionsEstim
     status: 'OK',
     source: 'PLAN',
     impressions: planned.impressions,
-    objectif: impressionsObjectif(c),
+    objectif: planned.objectif ?? impressionsObjectif(c),
     venuesCount: planned.venuesCount,
     daysCount: windowDaysCount(c),
   };
@@ -140,6 +145,29 @@ const classicEstimate = async (
   const t = tForDuration(s, campaignTTiers(c));
   const seuil = seuilImpressions(cpm);
 
+  // DISP-TOURS — the tours engine's own calculation (the cart's, the launch's): the qualified
+  // impressions it allocates are the billable objective, their audience the physical figure.
+  if (await usesToursEngine(db, c.id)) {
+    const { pool, calcul } = await calculerCampagne(
+      db,
+      { id: c.id, startDate: c.startDate, endDate: c.endDate },
+      { s, t, cpm, budgetTnd: budget },
+      { typicalWeek: 'live' },
+    );
+    if (pool.venues.length === 0) {
+      return { status: pool.candidateCount > 0 ? 'SATURATED' : 'NO_ELIGIBLE' };
+    }
+    if (calcul.iAlloue <= 0) return { status: 'TOO_THIN' };
+    return {
+      status: 'OK',
+      source: 'SIMULATION',
+      impressions: Math.round(calcul.iAlloue / t),
+      objectif: Math.round(calcul.iAlloue),
+      venuesCount: calcul.venues.filter((v) => v.impressions > 0).length,
+      daysCount: pool.windowDays.length,
+      prixTnd: Math.round(calcul.prixTnd * 1e4) / 1e4,
+    };
+  }
   // Read-only assembly: the plain executor, no occupancy lock, the no-op journal.
   const assembled = await assemblePool(
     db,
@@ -191,18 +219,21 @@ const eventEstimate = async (
   const minutesWanted = minutesOverride ?? c.eventMinutes;
   if (minutesWanted !== null) {
     const { minutes } = await computeEventCmax(
-      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
       cpm,
       new Set(),
       await campaignPlaysPerMinute(c.id),
+      await eventPoolDemoVenues(db, c.id),
     );
     if (minutes.length === 0) return { status: 'NO_ELIGIBLE' };
-    const taken = minutes.slice(0, minutesWanted);
+    // One entry per seat of the match's model (2 minutes; 1 under EVT-MIN1).
+    const model = eventSeatModel(ev.seatMinutes);
+    const taken = minutes.slice(0, Math.floor(minutesWanted / model.seatMinutes));
     return {
       status: 'OK',
       source: 'SIMULATION',
       impressions: taken.reduce((sum, m) => sum + m.impressions, 0),
-      objectif: impressionsObjectif(c, eventMinutesPriceTnd(minutes, minutesWanted)),
+      objectif: impressionsObjectif(c, eventMinutesPriceTnd(minutes, minutesWanted, model)),
       venuesCount: new Set(taken.map((m) => m.screenhostId)).size,
       daysCount: null,
     };
@@ -210,7 +241,12 @@ const eventEstimate = async (
 
   const budget = budgetOf(c, budgetOverride);
   if (budget === null) return { status: 'NO_BUDGET' };
-  const pool = await assembleEventPool({ id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt });
+  const pool = await assembleEventPool({
+    id: ev.id,
+    kickoffAt: ev.kickoffAt,
+    endsAt: ev.endsAt,
+    seatMinutes: ev.seatMinutes,
+  });
   const fill = fillEventBlocs(pool, budget, cpm);
   if (fill.status === 'NO_POOL') return { status: 'NO_ELIGIBLE' };
   // D7 — reaching I_cible would need more venues than N_max: the real validation refuses.

@@ -50,7 +50,14 @@ export const isEstimableStatus = (status: string | null | undefined): boolean =>
 
 export type EstimateView =
   | { kind: 'loading'; text: string; reason: null }
-  | { kind: 'value'; text: string; reason: null; impressions: number }
+  | {
+      kind: 'value';
+      text: string;
+      reason: null;
+      impressions: number;
+      /** DISP-TOURS (R9) — the exact price for this budget; null when the api prices none. */
+      prixTnd: number | null;
+    }
   | { kind: 'none'; text: string; reason: string };
 
 export interface EstimateQueryState {
@@ -82,6 +89,26 @@ export const estimateView = (state: EstimateQueryState): EstimateView => {
     text: formatImpressions(value),
     reason: null,
     impressions: value,
+    prixTnd: data.prix_tnd ?? null,
+  };
+};
+
+/**
+ * DISP-TOURS (R9, R10) — the Validation step's « Montant estimé »: the exact price the cursor buys
+ * (149,90 for 150 visés) once the estimate prices it, the cursor's budget meanwhile; the budget
+ * aimed at is named beside it only when the two differ to the centime.
+ */
+export const estimatedAmount = (
+  budgetTnd: number | null,
+  view: EstimateView,
+): { amountTnd: number | null; budgetViseTnd: number | null } => {
+  if (budgetTnd === null) return { amountTnd: null, budgetViseTnd: null };
+  const prix = view.kind === 'value' ? view.prixTnd : null;
+  if (prix === null) return { amountTnd: budgetTnd, budgetViseTnd: null };
+  const amountTnd = Math.round(prix * 100) / 100;
+  return {
+    amountTnd,
+    budgetViseTnd: Math.round(budgetTnd * 100) === Math.round(amountTnd * 100) ? null : budgetTnd,
   };
 };
 

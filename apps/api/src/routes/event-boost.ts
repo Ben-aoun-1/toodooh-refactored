@@ -50,6 +50,12 @@ const sendRefusal = (reply: FastifyReply, refusal: EventBoostRefusal) => {
         current_status: refusal.currentStatus,
         statusCode: 409,
       });
+    case 'DEMO_NOT_BOOSTABLE':
+      return reply.status(409).send({
+        error: 'DEMO_NOT_BOOSTABLE',
+        message: 'Le booster n’est pas disponible sur un compte démo.',
+        statusCode: 409,
+      });
     case 'EVENT_ANNULE':
       return reply.status(409).send({
         error: 'EVENT_ANNULE',
@@ -141,6 +147,7 @@ export const eventBoostRoutes: FastifyPluginAsync = async (app) => {
       ...(result.minutes
         ? {
             max_minutes: result.minutes.maxMinutes,
+            seat_minutes: result.minutes.seatMinutes,
             minute_prices_tnd: result.minutes.pricesTnd,
             minute_impressions: result.minutes.impressions,
           }

@@ -1,6 +1,7 @@
 import websocket from '@fastify/websocket';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { markScreenConnected } from '../lib/installed-screen.js';
 import { handleScreenEvent } from '../lib/playout/ingest.js';
 import { computeScreenPlaylist } from '../lib/playout/playlist-service.js';
 import { createRateLimiter } from '../lib/playout/rate-limiter.js';
@@ -48,6 +49,10 @@ export const screenWsRoutes: FastifyPluginAsync = async (app) => {
     const { screenId, screenhostId } = auth;
 
     screenRegistry.add(screenId, socket);
+    // SCR-INST1 — the connected TV makes the screen « installé » now, not at its first heartbeat.
+    void markScreenConnected(screenId).catch((err: unknown) =>
+      request.log.warn({ err, screenId }, 'screen-ws: could not record the connection'),
+    );
 
     // Attach the event listeners SYNCHRONOUSLY — before the playlist push (which awaits). Otherwise a
     // message the player sends right after CONNECTED could arrive before the listener is attached and

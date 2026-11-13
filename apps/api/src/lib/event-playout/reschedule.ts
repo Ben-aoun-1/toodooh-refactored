@@ -8,8 +8,10 @@ import {
   events,
   notifications,
   screenhosts,
+  users,
 } from '../../db/schema.js';
 import { tunisDateOf } from '../campaign-dates.js';
+import { notDemoCampaignSql } from '../demo.js';
 import { releaseBlocHours, reserveBlocHours } from '../event-dispatch/dispatch.js';
 import { fenetreDiffusion } from '../fenetre-diffusion.js';
 
@@ -30,7 +32,13 @@ import { parseBlocs } from './spots.js';
 // construction (they hang off the kickoff) and the post-match ones follow the new end.
 //
 // Terminal positionings (completed / rejected / already settled) are LEFT ALONE — their money is
-// closed. Everything else is re-snapshotted and re-notified in French.
+// closed. Everything else is re-snapshotted and (unless the caller opts out) re-notified in French.
+//
+// EVT-ET1 (2026-10-27) — the extra-time extension rides this same remap with `notify: false`
+// (ruling 7.4: the ads move silently), and two flaws are fixed on the way: the holds are now
+// released ONCE per venue before every allocation is re-reserved (releasing per allocation kept
+// only the LAST positioning's hours when a venue carried several), and a REFUSE allocation keeps
+// no hold (its blocs will never air — the refusal path already released it).
 
 export const EVENT_REPORTED_TITLE = 'Événement reporté';
 export const eventReportedAdvertiserBody = (matchName: string): string =>
@@ -60,17 +68,27 @@ export const remapEventPositionings = async (
   tx: Parameters<Parameters<(typeof db)['transaction']>[0]>[0],
   event: { id: string; name: string; kickoffAt: Date; endsAt: Date },
   previous: { kickoffAt: Date; endsAt: Date },
+  options: { notify?: boolean } = {},
 ): Promise<RemapCounts> => {
+  const notify = options.notify ?? true;
   const oldGrid = fenetreDiffusion(previous.kickoffAt, previous.endsAt);
   const newGrid = fenetreDiffusion(event.kickoffAt, event.endsAt);
   const oldIndexByStart = new Map(
     oldGrid.blocs.map((bloc, index) => [bloc.start.toISOString(), index]),
   );
 
+  // DEMO-3 — a demo positioning airs on its own timeline (lib/demo-event.ts): the match's moves
+  // leave it where it is.
   const positionings = await tx
     .select({ id: campaigns.id, advertiserId: campaigns.advertiserId, status: campaigns.status })
     .from(campaigns)
-    .where(and(eq(campaigns.eventId, event.id), inArray(campaigns.status, [...LIVE_STATUSES])));
+    .where(
+      and(
+        eq(campaigns.eventId, event.id),
+        inArray(campaigns.status, [...LIVE_STATUSES]),
+        notDemoCampaignSql(),
+      ),
+    );
   if (positionings.length === 0) return { positionings: 0, allocations: 0 };
 
   // The dates the CF-S1 machinery reads are re-snapshotted from the new window.
@@ -98,6 +116,10 @@ export const remapEventPositionings = async (
     );
 
   const touchedVenues = new Set<string>();
+  const holds: {
+    screenhostId: string;
+    blocs: { start: string; end: string; impressions: number }[];
+  }[] = [];
   for (const allocation of allocations) {
     const stored = parseBlocs(allocation.blocs);
     const remapped = stored.map((bloc) => {
@@ -116,11 +138,16 @@ export const remapEventPositionings = async (
       .update(eventAllocations)
       .set({ blocs: remapped })
       .where(eq(eventAllocations.id, allocation.id));
-    // The holds move with the blocs: release the venue's old cells for this event, re-reserve.
-    await releaseBlocHours(tx, event.id, allocation.screenhostId);
-    await reserveBlocHours(tx, event.id, allocation.screenhostId, remapped);
     touchedVenues.add(allocation.screenhostId);
+    if (allocation.statut !== 'REFUSE')
+      holds.push({ screenhostId: allocation.screenhostId, blocs: remapped });
   }
+  // The holds move with the blocs: each venue's old cells for this event are released ONCE, then
+  // every live allocation re-reserves its new cells (idempotent per cell).
+  for (const venueId of touchedVenues) await releaseBlocHours(tx, event.id, venueId);
+  for (const hold of holds) await reserveBlocHours(tx, event.id, hold.screenhostId, hold.blocs);
+
+  if (!notify) return { positionings: positionings.length, allocations: allocations.length };
 
   // Notifications: every advertiser once, every affected venue OWNER once.
   await tx.insert(notifications).values(
@@ -168,10 +195,13 @@ export const voidEventPositionings = async (
   event: { id: string; name: string },
 ): Promise<EventCancellationCounts> => {
   const positionings = await tx
-    .select({ id: campaigns.id, advertiserId: campaigns.advertiserId })
+    .select({ id: campaigns.id, advertiserId: campaigns.advertiserId, isDemo: users.isDemo })
     .from(campaigns)
+    .innerJoin(users, eq(users.id, campaigns.advertiserId))
     .where(and(eq(campaigns.eventId, event.id), inArray(campaigns.status, [...LIVE_STATUSES])));
   if (positionings.length === 0) return { positionings: 0, refundedTnd: 0 };
+  // DEMO-3 — a demo positioning is voided like any other, but its venues' owners never heard of it.
+  const demoPositionings = new Set(positionings.flatMap((p) => (p.isDemo ? [p.id] : [])));
 
   const allocations = await tx
     .select()
@@ -198,7 +228,7 @@ export const voidEventPositionings = async (
       );
     }
     await releaseBlocHours(tx, event.id, allocation.screenhostId);
-    touchedVenues.add(allocation.screenhostId);
+    if (!demoPositionings.has(allocation.campaignId)) touchedVenues.add(allocation.screenhostId);
   }
 
   let refundedTnd = 0;

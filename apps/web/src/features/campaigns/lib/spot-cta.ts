@@ -1,16 +1,39 @@
-import type { CampaignCtaBody, CampaignCtaView } from '../services/campaigns.api';
+import type { CampaignCtaBody, CampaignCtaView, CtaPosition } from '../services/campaigns.api';
 
 /**
  * QR-CTA1 — the spot step's call-to-action form, pure: the link (https only) and the message
- * (≤ 20 characters, empty = « pour en savoir plus »), checked the way the api checks them
+ * (≤ 20 characters, empty = « Pour en savoir plus »), checked the way the api checks them
  * (apps/api/src/lib/spot-cta.ts), and the status line under the form.
  */
 
 export const CTA_LABEL_MAX_CHARS = 20;
 
+/**
+ * Mariem 04/11 (Foot point 1, ruling 2A) — the QR card's four corners, the advertiser's choice
+ * (the logo's place varies); the admin may move it at the spot's validation. TWIN of the api's
+ * CTA_POSITIONS (apps/api/src/lib/spot-cta-layout.ts).
+ */
+export const CTA_POSITIONS: readonly CtaPosition[] = [
+  'top_left',
+  'top_right',
+  'bottom_left',
+  'bottom_right',
+];
+export const CTA_DEFAULT_POSITION: CtaPosition = 'bottom_left';
+export const CTA_POSITION_FR: Record<CtaPosition, string> = {
+  top_left: 'En haut à gauche',
+  top_right: 'En haut à droite',
+  bottom_left: 'En bas à gauche',
+  bottom_right: 'En bas à droite',
+};
+
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export function ctaFormBody(url: string, label: string): Parsed<CampaignCtaBody> {
+export function ctaFormBody(
+  url: string,
+  label: string,
+  position: CtaPosition = CTA_DEFAULT_POSITION,
+): Parsed<CampaignCtaBody> {
   const trimmed = url.trim();
   if (!trimmed) return { ok: false, error: 'Indiquez le lien à ouvrir.' };
   let parsed: URL;
@@ -27,7 +50,7 @@ export function ctaFormBody(url: string, label: string): Parsed<CampaignCtaBody>
   if ([...message].length > CTA_LABEL_MAX_CHARS) {
     return { ok: false, error: `Le message fait ${CTA_LABEL_MAX_CHARS} caractères au plus.` };
   }
-  return { ok: true, value: { url: trimmed, label: message || null } };
+  return { ok: true, value: { url: trimmed, label: message || null, position } };
 }
 
 export type CtaTone = 'waiting' | 'ok' | 'error';
