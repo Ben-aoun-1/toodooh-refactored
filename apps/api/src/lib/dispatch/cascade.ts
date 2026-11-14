@@ -17,6 +17,7 @@ import { type DbExecutor, assemblePool } from './pool.js';
 import { type EligibleScreenhost, selection } from './selection.js';
 import { seuilImpressions } from './thresholds.js';
 import { placerToursIncrement } from './tours/placer.js';
+import { prelaunchOrdre } from './tours/prelaunch-ordre.js';
 
 const log = logger.child({ module: 'dispatch-cascade' });
 
@@ -94,7 +95,14 @@ export const runRefusalCascade = async (
   if (plan.engine === 'tours') {
     const placed = await placerToursIncrement(
       tx,
-      { plan, campaign, volumeFact: v, excludeVenueIds: excludeScreenhostIds, now: new Date() },
+      {
+        plan,
+        campaign,
+        volumeFact: v,
+        excludeVenueIds: excludeScreenhostIds,
+        now: new Date(),
+        ordre: await prelaunchOrdre(tx, campaign.id),
+      },
       trace,
     );
     const shortfall = Math.max(0, v - placed.placedFact);

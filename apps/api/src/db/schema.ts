@@ -1545,6 +1545,10 @@ export const campaigns = pgTable(
     // of a never-launched classic campaign's deletion (lib/campaign-expiry.ts).
     lastSavedAt: timestamp('last_saved_at', { withTimezone: true }).notNull().defaultNow(),
     expiryNoticeSentAt: timestamp('expiry_notice_sent_at', { withTimezone: true }),
+    // Mariem 13/11 (migration 0108) — the pre-launch lock (start − 6 h) and freeze (start − 5 min)
+    // of a classic tours campaign, stamped once each (lib/campaign-prelaunch.ts).
+    prelaunchLockedAt: timestamp('prelaunch_locked_at', { withTimezone: true }),
+    prelaunchFrozenAt: timestamp('prelaunch_frozen_at', { withTimezone: true }),
     // Admin moderation audit (activation wiring). activated_at/by stamp the admin approval that flips
     // pending → active (and triggers dispatch); rejected_at/reject_reason stamp a pending → rejected.
     // All nullable — only one branch is ever taken, and a draft/pending campaign has neither set.

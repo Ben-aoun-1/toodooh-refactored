@@ -279,6 +279,11 @@ describe('DISP-TOURS — redispatching, refusal and booster on a tours plan (rea
   });
 
   it('a refusal at A re-places its share onto B’s free hours; the rest waits for the refund', async () => {
+    // Mariem 13/11 — before the start only a Host that ACCEPTED takes more of the campaign.
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'ACCEPTE' })
+      .where(eq(campaignDispatchAllocation.screenhostId, B));
     const { plan, a } = await allocationOf(A);
     await db
       .update(campaignDispatchAllocation)

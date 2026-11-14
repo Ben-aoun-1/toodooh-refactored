@@ -103,10 +103,7 @@ export const runToursDispatch = async (
       ) {
         return { status: 'QUOTE_CHANGED' };
       }
-      if (
-        inputs.spendableTnd !== undefined &&
-        round2(calcul.prixTnd) > inputs.spendableTnd + EPS
-      ) {
+      if (inputs.spendableTnd !== undefined && round2(calcul.prixTnd) > inputs.spendableTnd + EPS) {
         return {
           status: 'INSUFFICIENT_BALANCE',
           requiredTnd: round2(calcul.prixTnd),

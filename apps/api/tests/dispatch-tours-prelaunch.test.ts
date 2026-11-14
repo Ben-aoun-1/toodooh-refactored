@@ -1,0 +1,349 @@
+import { and, eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { db } from '../src/db/client.js';
+import {
+  type NewUser,
+  businessSectors,
+  campaignDispatchAllocation,
+  campaignDispatchPlan,
+  campaigns,
+  creatives,
+  dispatchConfig,
+  notifications,
+  recharges,
+  screenhostAffluence,
+  screenhosts,
+  users,
+} from '../src/db/schema.js';
+import { activateCampaign } from '../src/lib/activation-service.js';
+import {
+  campaignStartInstant,
+  prelaunchFinalNotice,
+  prelaunchStepDue,
+  runCampaignPrelaunchTick,
+} from '../src/lib/campaign-prelaunch.js';
+import { runRefusalCascade } from '../src/lib/dispatch/cascade.js';
+
+import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
+import { seedInstalledScreen } from './helpers/installed-screen.js';
+
+// Mariem 13/11 point 2 — the pre-launch steps on a real Postgres, on dispatch-tours-placement's
+// fixture (Café A 16 h → 20 h, Café B 16 h → 22 h with its 20 h and 21 h free, 30 s spot, CPM
+// 12, F = 600 s, 260 DT, window 9 → 18 November 2026, launched on Thursday 5 November). The
+// start is Monday 9 November 00:00 in Tunis: the lock falls on Sunday 8 November at 18:00
+// (17:00 UTC), the freeze at 23:55 (22:55 UTC).
+
+const A = '00000000-0000-4000-8000-00000000000a';
+const B = '00000000-0000-4000-8000-00000000000b';
+const C = '00000000-0000-4000-8000-00000000000c';
+
+const WEEK_A = [
+  [20, 30, 25, 10],
+  [20, 25, 30, 15],
+  [15, 20, 25, 30],
+  [30, 25, 20, 10],
+  [20, 30, 35, 25],
+  [25, 35, 40, 30],
+  [30, 25, 20, 15],
+];
+const WEEK_B = [
+  [10, 15, 12, 8, 4, 3],
+  [12, 10, 15, 8, 4, 3],
+  [8, 12, 15, 10, 4, 3],
+  [15, 12, 10, 8, 4, 3],
+  [10, 15, 18, 12, 4, 3],
+  [12, 18, 20, 15, 4, 3],
+  [15, 12, 10, 8, 4, 3],
+];
+
+let seq = 0;
+const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
+  seq += 1;
+  const [u] = await db
+    .insert(users)
+    .values({
+      email: `tours-pre${seq}@example.com`,
+      contactName: `Tours ${seq}`,
+      role: 'advertiser',
+      status: 'approved',
+      ...values,
+    })
+    .returning();
+  return u?.id ?? '';
+};
+
+const seedVenue = async (
+  id: string,
+  ownerId: string,
+  sectorId: string,
+  week: number[][],
+  closing: number,
+): Promise<string> => {
+  await db.insert(screenhosts).values({
+    id,
+    name: `Café ${id.slice(-1).toUpperCase()}`,
+    ownerId,
+    businessSectorId: sectorId,
+    class: 'moyen',
+    openingHour: 16,
+    closingHour: closing,
+    broadcastCapacity: 4,
+  });
+  await db.insert(screenhostAffluence).values(
+    bothHalves(
+      week.flatMap((row, d) =>
+        row.map((estimatedImpressions, i) => ({
+          screenhostId: id,
+          dayOfWeek: d + 1,
+          hour: 16 + i,
+          estimatedImpressions,
+        })),
+      ),
+    ),
+  );
+  return seedInstalledScreen(id);
+};
+
+describe('Mariem 13/11 — the pre-launch clock (pure)', () => {
+  const none = { lockedAt: null, frozenAt: null };
+  it('starts at 00:00 in Tunis; locks at 18:00 the day before, freezes at 23:55', () => {
+    expect(campaignStartInstant('2026-11-09')).toEqual(new Date('2026-11-08T23:00:00Z'));
+    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-08T16:59:59Z'))).toBeNull();
+    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-08T17:00:00Z'))).toBe('lock');
+    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-08T22:55:00Z'))).toBe('freeze');
+  });
+  it('each step once; a late tick goes straight to the freeze', () => {
+    const locked = { lockedAt: new Date(), frozenAt: null };
+    expect(prelaunchStepDue('2026-11-09', locked, new Date('2026-11-08T18:00:00Z'))).toBeNull();
+    expect(prelaunchStepDue('2026-11-09', locked, new Date('2026-11-08T22:56:00Z'))).toBe('freeze');
+    const frozen = { lockedAt: new Date(), frozenAt: new Date() };
+    expect(prelaunchStepDue('2026-11-09', frozen, new Date('2026-11-09T01:00:00Z'))).toBeNull();
+    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-09T01:00:00Z'))).toBe('freeze');
+  });
+  it('tells the Screencaster in Mariem’s words', () => {
+    expect(
+      prelaunchFinalNotice({ name: 'Été', impressions: 12500, venues: 3, amountTnd: 150.5 }).body,
+    ).toBe(
+      'Votre campagne Été démarre dans quelques minutes. Nous vous offrons finalement 12\u202f500 impressions dans 3 établissements, pour un montant de 150,50 DT.',
+    );
+  });
+});
+
+describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (real Postgres)', () => {
+  let advertiser = '';
+  let ownerB = '';
+  let ownerC = '';
+  let sectorId = '';
+  let campaignId = '';
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-05T10:00:00Z'));
+    await resetAuthTables();
+    await db.update(dispatchConfig).set({ fMaxSeconds: 600 });
+    const [sector] = await db
+      .select({ id: businessSectors.id })
+      .from(businessSectors)
+      .where(eq(businessSectors.audience, 'owner'))
+      .limit(1);
+    sectorId = sector?.id ?? '';
+    const ownerA = await seedUser({ role: 'individual_owner' });
+    ownerB = await seedUser({ role: 'individual_owner' });
+    // C exists at launch (the launch freezes the whole network's typical week) but its owner is
+    // not validated yet: out of the launch, in once approved (ELIG-2 reads the owner live).
+    ownerC = await seedUser({ role: 'individual_owner', status: 'pending' });
+    await seedVenue(A, ownerA, sectorId, WEEK_A, 20);
+    await seedVenue(B, ownerB, sectorId, WEEK_B, 22);
+    await seedVenue(C, ownerC, sectorId, WEEK_A, 20);
+    advertiser = await seedUser();
+    await db.insert(recharges).values({
+      advertiserId: advertiser,
+      amountTnd: '5000.00',
+      status: 'confirmed',
+      reference: `TOURS-PRE-${seq}`,
+    });
+    const [creative] = await db
+      .insert(creatives)
+      .values({
+        advertiserId: advertiser,
+        creativeType: 'video',
+        storageKey: `creatives/tours-pre/${seq}`,
+        durationSeconds: 30,
+        validationStatus: 'approved',
+      })
+      .returning();
+    const [c] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: advertiser,
+        name: 'Tours prélancement',
+        campaignType: 'standard',
+        status: 'pending',
+        startDate: '2026-11-09',
+        endDate: '2026-11-18',
+        creativeId: creative?.id ?? '',
+        requestedBudget: '260.00',
+        standardCpmTnd: '12.000',
+        t10s: '0.60',
+        t20s: '0.70',
+        t30s: '0.80',
+      })
+      .returning();
+    campaignId = c?.id ?? '';
+    const [row] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+    if (!row) throw new Error('campaign missing');
+    const outcome = await activateCampaign({
+      campaign: row,
+      contentValidationStatus: 'approved',
+      creativeDurationSeconds: 30,
+      activatedBy: null,
+      fromStatus: 'pending',
+    });
+    expect(outcome.status).toBe('OK');
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    await db.update(dispatchConfig).set({ fMaxSeconds: 300 });
+  });
+
+  const LOCK = new Date('2026-11-08T17:00:00Z');
+  const FREEZE = new Date('2026-11-08T22:55:00Z');
+
+  const planAllocations = async () => {
+    const [plan] = await db
+      .select()
+      .from(campaignDispatchPlan)
+      .where(eq(campaignDispatchPlan.campaignId, campaignId));
+    if (!plan) throw new Error('plan missing');
+    const rows = await db
+      .select()
+      .from(campaignDispatchAllocation)
+      .where(eq(campaignDispatchAllocation.planId, plan.id));
+    return { plan, rows, of: (v: string) => rows.find((r) => r.screenhostId === v) };
+  };
+  const accept = (venue: string) =>
+    db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'ACCEPTE' })
+      .where(eq(campaignDispatchAllocation.screenhostId, venue));
+  const campaignRow = async () =>
+    (await db.select().from(campaigns).where(eq(campaigns.id, campaignId)))[0];
+  /** C becomes eligible: a new venue, open like A — able to take A's share at 30 DT. */
+  const newVenueC = () => db.update(users).set({ status: 'approved' }).where(eq(users.id, ownerC));
+
+  it('nothing happens before start − 6 h; at the lock a silent Host is removed and its share goes to the Host that accepted', async () => {
+    await accept(B);
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-08T16:59:00Z'))).toEqual([]);
+    const before = await planAllocations();
+    const bBefore = before.of(B)?.creneaux.length ?? 0;
+
+    const [outcome] = await runCampaignPrelaunchTick(LOCK);
+    expect(outcome).toMatchObject({ campaignId, step: 'lock', removed: 1 });
+    const after = await planAllocations();
+    expect(after.of(A)).toBeUndefined(); // the silent Host's proposal is withdrawn
+    const b = after.of(B);
+    expect(b?.statutAcceptation).toBe('ACCEPTE'); // accepted at once, whatever the amount
+    expect(b?.creneaux.length ?? 0).toBeGreaterThan(bBefore);
+    const notes = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, ownerB), eq(notifications.type, 'dispatch_slots_added')));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.body).toMatch(
+      /^Bonne nouvelle ! Vous avez bénéficié d’un redispatching d’une campagne déjà acceptée sur votre écran\. Cela vous permet de gagner \d+,\d{2} TND supplémentaires\.$/,
+    );
+    expect((await campaignRow())?.prelaunchLockedAt).toEqual(LOCK);
+    // Once only.
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-08T17:01:00Z'))).toEqual([]);
+  });
+
+  it('at the lock a NEW Host comes first (told, to accept); the accepted one keeps its share', async () => {
+    await accept(B);
+    await newVenueC();
+    const bBefore = (await planAllocations()).of(B)?.creneaux.length ?? 0;
+    await runCampaignPrelaunchTick(LOCK);
+    const after = await planAllocations();
+    expect(after.of(C)?.statutAcceptation).toBe('EN_ATTENTE');
+    expect(after.of(B)?.creneaux.length).toBe(bBefore);
+    const told = await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, ownerC),
+          eq(notifications.type, 'dispatch_pending_acceptance'),
+        ),
+      );
+    expect(told).toHaveLength(1);
+  });
+
+  it('at the freeze a Host still silent goes too, its share onto the accepted Host only; the price comes down and the Screencaster is told', async () => {
+    await accept(B);
+    await newVenueC();
+    await runCampaignPrelaunchTick(LOCK); // C proposed A's share — and never answers
+    const launched = Number((await campaignRow())?.requestedBudget);
+
+    const [outcome] = await runCampaignPrelaunchTick(FREEZE);
+    expect(outcome).toMatchObject({ step: 'freeze', removed: 1 });
+    const after = await planAllocations();
+    expect(after.of(C)).toBeUndefined();
+    expect(after.rows.map((r) => r.statutAcceptation)).toEqual(['ACCEPTE']);
+    const row = await campaignRow();
+    expect(row?.prelaunchFrozenAt).toEqual(FREEZE);
+    const amount = Number(row?.requestedBudget);
+    expect(amount).toBeLessThan(launched); // B cannot hold all of A's share: never above
+    expect(amount).toBeCloseTo(Number(after.of(B)?.revenuPrevisionnel), 2);
+    const [note] = await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, advertiser),
+          eq(notifications.type, 'campaign_prelaunch_final'),
+        ),
+      );
+    expect(note?.body).toBe(
+      `Votre campagne Tours prélancement démarre dans quelques minutes. Nous vous offrons finalement ${(after.of(B)?.iiPotentiel ?? 0).toLocaleString('fr-FR')} impressions dans 1 établissement, pour un montant de ${amount.toFixed(2).replace('.', ',')} DT.`,
+    );
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-08T22:56:00Z'))).toEqual([]);
+  });
+
+  it('a campaign started as launched (everyone accepted) is frozen silently, its price untouched', async () => {
+    await accept(A);
+    await accept(B);
+    const launched = (await campaignRow())?.requestedBudget;
+    const [outcome] = await runCampaignPrelaunchTick(FREEZE);
+    expect(outcome).toMatchObject({ step: 'freeze', removed: 0, final: { told: false } });
+    expect((await campaignRow())?.requestedBudget).toBe(launched);
+  });
+
+  it('a refusal before the start goes to a NEW Host first', async () => {
+    await accept(B);
+    await newVenueC();
+    const { plan, of } = await planAllocations();
+    const a = of(A);
+    if (!a) throw new Error('A missing');
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'REFUSE' })
+      .where(eq(campaignDispatchAllocation.id, a.id));
+    const bBefore = of(B)?.creneaux.length;
+    await db.transaction((tx) =>
+      runRefusalCascade(tx, {
+        plan,
+        campaign: {
+          id: campaignId,
+          name: 'Tours prélancement',
+          startDate: '2026-11-09',
+          endDate: '2026-11-18',
+        },
+        refused: { id: a.id, screenhostId: A, iiPotentiel: a.iiPotentiel },
+      }),
+    );
+    const after = await planAllocations();
+    expect(after.of(C)?.statutAcceptation).toBe('EN_ATTENTE');
+    expect(after.of(B)?.creneaux.length).toBe(bBefore);
+  });
+});

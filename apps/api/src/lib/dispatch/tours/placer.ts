@@ -16,7 +16,7 @@ import { type DbExecutor } from '../pool.js';
 
 import { assembleToursPool } from './assemble.js';
 import { creneauxParVenue } from './creneaux.js';
-import { redistribuer } from './redistribuer.js';
+import { type OrdreRedistribution, redistribuer } from './redistribuer.js';
 import { EPS, type Prise } from './remplir.js';
 
 // DISP-TOURS — placing MORE of a launched tours campaign (Mariem's spec R14): a loss to
@@ -40,6 +40,11 @@ export interface PlacementInput {
   now: Date;
   /** Compute only — nothing written, no lock taken (the booster's preview). */
   dryRun?: boolean;
+  /**
+   * Mariem 13/11 — before the start, new Hosts first and only the Hosts that ACCEPTED take the
+   * rest ('nouveaux_dabord'; 'engages_seuls' at start − 5 min). Default: R14's order.
+   */
+  ordre?: OrdreRedistribution;
 }
 
 export interface PlacementOutcome {
@@ -51,6 +56,14 @@ export interface PlacementOutcome {
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
 const montantText = (tnd: number): string => `${tnd.toFixed(2).replace('.', ',')} DT`;
+
+/**
+ * Mariem 13/11 + operator ruling (Youssef's wording, 13/11 21:09) — a Host that ACCEPTED the
+ * campaign and receives more of it: the créneaux are accepted at once, whatever the amount, and
+ * this is the only notice (before the start and during the campaign).
+ */
+export const slotsAddedToAcceptedBody = (montantTnd: number): string =>
+  `Bonne nouvelle ! Vous avez bénéficié d’un redispatching d’une campagne déjà acceptée sur votre écran. Cela vous permet de gagner ${montantTnd.toFixed(2).replace('.', ',')} TND supplémentaires.`;
 
 export const placerToursIncrement = async (
   tx: DbExecutor,
@@ -79,9 +92,17 @@ export const placerToursIncrement = async (
     lockOccupancy: input.dryRun !== true,
     trace,
   });
+  const ordre = input.ordre ?? 'engages_dabord';
+  // R14: every venue still in the campaign. Before the start (Mariem 13/11): only the Hosts that
+  // accepted — one still deciding gets nothing more, and is never « new » either (ownCells).
   const engagedIds = new Set(
     allocations
-      .filter((a) => a.statutAcceptation !== 'REFUSE' && !excluded.has(a.screenhostId))
+      .filter((a) =>
+        ordre === 'engages_dabord'
+          ? a.statutAcceptation !== 'REFUSE'
+          : a.statutAcceptation === 'ACCEPTE',
+      )
+      .filter((a) => !excluded.has(a.screenhostId))
       .map((a) => a.screenhostId),
   );
   const config = await getDispatchConfig();
@@ -98,10 +119,16 @@ export const placerToursIncrement = async (
     engages: pool.venues.filter((v) => engagedIds.has(v.id)),
     nouveaux: pool.venues.filter((v) => !engagedIds.has(v.id) && !ownCells.has(v.id)),
     params,
+    ordre,
   });
 
   const placedTo: PlacementOutcome['placedTo'] = [];
-  const notices: { screenhostId: string; montant: number; merged: boolean }[] = [];
+  const notices: {
+    screenhostId: string;
+    montant: number;
+    merged: boolean;
+    accepted: boolean;
+  }[] = [];
   const write = async (prises: readonly Prise[], merged: boolean): Promise<void> => {
     for (const [venueId, added] of creneauxParVenue(prises)) {
       const addedFact = added.reduce((sum, c) => sum + c.impressions, 0) * params.t;
@@ -139,6 +166,7 @@ export const placerToursIncrement = async (
         screenhostId: venueId,
         montant: ((addedFact * cpm) / 1000) * (params.pctSh / 100),
         merged,
+        accepted: existing?.statutAcceptation === 'ACCEPTE',
       });
       trace.event(
         'rattrapage_placed',
@@ -171,8 +199,10 @@ export const placerToursIncrement = async (
             ? {
                 userId: ownerId,
                 type: 'dispatch_slots_added',
-                title: 'Créneaux ajoutés à une campagne',
-                body: `La campagne « ${campaign.name} » ajoute des créneaux chez vous : ${montantText(n.montant)} de plus.`,
+                title: n.accepted ? 'Bonne nouvelle !' : 'Créneaux ajoutés à une campagne',
+                body: n.accepted
+                  ? slotsAddedToAcceptedBody(n.montant)
+                  : `La campagne « ${campaign.name} » ajoute des créneaux chez vous : ${montantText(n.montant)} de plus.`,
                 campaignId: campaign.id,
               }
             : {

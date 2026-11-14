@@ -26,34 +26,57 @@ export interface Redistribution {
   nonPlace: number;
 }
 
+/**
+ * The order the loss is placed in. 'engages_dabord' — R14 above (during the campaign, and the
+ * booster). Mariem 13/11 (« Notifications de campagne et redispatching avant le lancement »):
+ * BEFORE the start, a share left by a refusal or a Host who did not answer goes FIRST to new
+ * Hosts (same peaks, 30 DT each), the rest onto the Hosts that already accepted
+ * ('nouveaux_dabord'); at the last redispatch (start − 5 min) no new Host could answer in time,
+ * so only the accepted ones take it ('engages_seuls').
+ */
+export type OrdreRedistribution = 'engages_dabord' | 'nouveaux_dabord' | 'engages_seuls';
+
 export const redistribuer = (input: {
   perte: number;
   engages: readonly VenueInput[];
   nouveaux: readonly VenueInput[];
   params: CalculParams;
+  ordre?: OrdreRedistribution;
 }): Redistribution => {
   const { perte, params } = input;
+  const ordre = input.ordre ?? 'engages_dabord';
   const toFileVenues = (venues: readonly VenueInput[]) =>
     venues.map((v) => ({ id: v.id, sps: v.sps, heures: buildHeuresTypes(v, params) }));
+  const sumOf = (m: Map<string, number>) => [...m.values()].reduce((sum, imp) => sum + imp, 0);
 
-  const fileA = buildFile(toFileVenues(input.engages));
-  const fillA = remplir(fileA, perte, params.rPlein);
-  const prisesA = prisesDe(fileA, fillA, params.rPlein);
-  const impressionsA = impressionsParVenue(prisesA, params.rPlein);
-  const placeA = [...impressionsA.values()].reduce((sum, imp) => sum + imp, 0);
+  const surNouveaux = (volume: number): RemplissageFinal | null =>
+    volume > EPS && input.nouveaux.length > 0 && ordre !== 'engages_seuls'
+      ? remplirAvecSeuil(buildFile(toFileVenues(input.nouveaux)), volume, params)
+      : null;
+  const surEngages = (volume: number) => {
+    if (volume <= EPS || input.engages.length === 0) {
+      return { prises: [] as Prise[], impressions: new Map<string, number>() };
+    }
+    const fileA = buildFile(toFileVenues(input.engages));
+    const fillA = remplir(fileA, volume, params.rPlein);
+    const prises = prisesDe(fileA, fillA, params.rPlein);
+    return { prises, impressions: impressionsParVenue(prises, params.rPlein) };
+  };
 
-  let reste = perte - placeA;
   let nouveaux: RemplissageFinal | null = null;
-  if (reste > EPS && input.nouveaux.length > 0) {
-    const fileB = buildFile(toFileVenues(input.nouveaux));
-    nouveaux = remplirAvecSeuil(fileB, reste, params);
-    reste -= [...nouveaux.impressions.values()].reduce((sum, imp) => sum + imp, 0);
+  let engages: { prises: Prise[]; impressions: Map<string, number> };
+  let reste = perte;
+  if (ordre === 'nouveaux_dabord') {
+    nouveaux = surNouveaux(reste);
+    if (nouveaux) reste -= sumOf(nouveaux.impressions);
+    engages = surEngages(reste);
+    reste -= sumOf(engages.impressions);
+  } else {
+    engages = surEngages(reste);
+    reste -= sumOf(engages.impressions);
+    nouveaux = surNouveaux(reste);
+    if (nouveaux) reste -= sumOf(nouveaux.impressions);
   }
   const nonPlace = Math.max(0, reste);
-  return {
-    engages: { prises: prisesA, impressions: impressionsA },
-    nouveaux,
-    place: perte - nonPlace,
-    nonPlace,
-  };
+  return { engages, nouveaux, place: perte - nonPlace, nonPlace };
 };
