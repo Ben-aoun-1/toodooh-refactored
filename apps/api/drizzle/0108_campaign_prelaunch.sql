@@ -1,8 +1,9 @@
--- Mariem 13/11/2026 (« Changements à livrer avant le test », point 2) — the pre-launch steps of a
--- classic tours campaign (lib/campaign-prelaunch.ts): prelaunch_locked_at = the start − 6 h lock
--- (the Hosts that did not answer removed, their share redispatched, new Hosts first);
--- prelaunch_frozen_at = the start − 5 min freeze (the last redispatch, onto the accepted Hosts
--- only, and the recalculated price). Each stamp makes its step run once.
-ALTER TABLE "campaigns" ADD COLUMN "prelaunch_locked_at" timestamp with time zone;
+-- Mariem 13/11/2026 (« Changements à livrer avant le test », point 2) + operator 2026-11-14
+-- (« each screenhost has their own start hour ») — the pre-launch steps of a classic tours
+-- campaign run PER HOST, at the campaign's start date and that venue's opening hour
+-- (lib/campaign-prelaunch.ts): start − 6 h locks the Host's proposal, start − 5 min freezes it.
+-- late_proposal = a Host proposed after its own lock (a pre-launch redispatch): only the freeze
+-- withdraws it. prelaunch_frozen_at = the campaign's price recalculated once no Host is pending.
+ALTER TABLE "campaign_dispatch_allocation" ADD COLUMN "late_proposal" boolean DEFAULT false NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "campaigns" ADD COLUMN "prelaunch_frozen_at" timestamp with time zone;

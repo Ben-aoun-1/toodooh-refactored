@@ -1,61 +1,44 @@
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
 import {
+  type CampaignDispatchAllocation,
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaigns,
   notifications,
+  screenhosts,
 } from '../db/schema.js';
 
+import { plusCalendarDays, tunisDateOf } from './campaign-dates.js';
 import { notDemoCampaignSql } from './demo.js';
+import { hostFreezeInstant, hostLockInstant } from './dispatch/tours/host-start.js';
 import { placerToursIncrement } from './dispatch/tours/placer.js';
 import { createEngineTrace } from './engine-journal/trace.js';
 
-// Mariem 13/11/2026 (« Changements à livrer avant le démarrage du test », point 2) — the two
-// pre-launch steps of a classic campaign dispatched by the tours engine, run by a minute job:
+// Mariem 13/11/2026 (« Changements à livrer avant le démarrage du test », point 2) — the
+// pre-launch steps of a classic campaign dispatched by the tours engine, run by a minute job.
+// Operator 2026-11-14: « each screenhost has their own start hour » — the campaign starts at a
+// venue on its start date at THAT venue's opening hour (./dispatch/tours/host-start.ts), so both
+// deadlines are per Host:
 //
-//   • start − 6 h — THE LOCK. The Hosts that have not answered are removed (their proposal is
-//     withdrawn) and their share is redispatched, FIRST to new Hosts (same peaks, 30 DT each, who
-//     are told and must accept), the rest onto the Hosts that already accepted (accepted at once,
-//     whatever the amount, told « Bonne nouvelle »). A refusal before the start re-places the same
-//     way, at once (lib/dispatch/cascade.ts → ./dispatch/tours/prelaunch-ordre.ts).
-//   • start − 5 min — THE FREEZE. The Hosts proposed after the lock that still have not answered
-//     are removed too; a last redispatch puts their share onto the accepted Hosts only, and the
-//     campaign starts with its price recalculated: what the accepted Hosts hold. Operator ruling
+//   • the Host's start − 6 h — THE LOCK. Still no answer: the proposal is withdrawn and its share
+//     redispatched, FIRST to new Hosts (same peaks, 30 DT each, told and asked to accept — never
+//     one whose own freeze has passed), the rest onto the Hosts that already accepted (accepted at
+//     once, whatever the amount, told « Bonne nouvelle »). A refusal before the start re-places the
+//     same way, at once (lib/dispatch/cascade.ts → ./dispatch/tours/prelaunch-ordre.ts).
+//   • the Host's start − 5 min — THE FREEZE. A Host proposed after its own lock that still has not
+//     answered is withdrawn too, its share placed onto the Hosts that accepted only.
+//   • THE PRICE — once no Host is left pending and the first Host's freeze has passed, the
+//     campaign runs on its recalculated price: what the accepted Hosts hold. Operator ruling
 //     2026-11-14 (B = A): never above what the Screencaster launched — the engaged amount
-//     (requested_budget) only ever goes DOWN to it. When the result differs from the launch, the
-//     Screencaster is told.
+//     (requested_budget) only ever goes DOWN. When the result differs from the launch, the
+//     Screencaster is told (Mariem's text).
 //
-// « The start » is the campaign's start date at 00:00, Tunis — the instant the lifecycle turns it
-// active (the lock is 18:00 the day before, the freeze 23:55). Demo campaigns, v1 plans, event
-// positionings and campaigns whose spot still awaits its validation (pending) are left alone.
-// Each step stamps its column (migration 0108), so it runs once; both run in one transaction per
-// campaign, under the plan's FOR UPDATE lock (the cascade / E6 idiom).
-
-export const PRELAUNCH_LOCK_LEAD_MS = 6 * 60 * 60 * 1000;
-export const PRELAUNCH_FREEZE_LEAD_MS = 5 * 60 * 1000;
-
-/** The start instant of a campaign: its start date at 00:00 in Tunis (UTC+1, no DST). */
-export const campaignStartInstant = (startDate: string): Date =>
-  new Date(`${startDate}T00:00:00+01:00`);
-
-export type PrelaunchStep = 'lock' | 'freeze' | null;
-
-/** Which step is due now (pure): the freeze wins when both are late. */
-export const prelaunchStepDue = (
-  startDate: string,
-  stamps: { lockedAt: Date | null; frozenAt: Date | null },
-  now: Date,
-): PrelaunchStep => {
-  if (stamps.frozenAt !== null) return null;
-  const start = campaignStartInstant(startDate).getTime();
-  const t = now.getTime();
-  if (t >= start - PRELAUNCH_FREEZE_LEAD_MS) return 'freeze';
-  if (t >= start - PRELAUNCH_LOCK_LEAD_MS && stamps.lockedAt === null) return 'lock';
-  return null;
-};
+// Demo campaigns, v1 plans, event positionings and campaigns whose spot still awaits its
+// validation (pending) are left alone. One transaction per campaign, under the plan's FOR UPDATE
+// lock (the cascade / E6 idiom). Idempotent: a withdrawn proposal is gone, the price is stamped.
 
 /** The Screencaster's notice when the campaign starts differently from its launch (French). */
 export const prelaunchFinalNotice = (input: {
@@ -68,19 +51,32 @@ export const prelaunchFinalNotice = (input: {
   body: `Votre campagne ${input.name} démarre dans quelques minutes. Nous vous offrons finalement ${input.impressions.toLocaleString('fr-FR')} impressions dans ${input.venues} établissement${input.venues > 1 ? 's' : ''}, pour un montant de ${input.amountTnd.toFixed(2).replace('.', ',')} DT.`,
 });
 
+/** What one Host's pending proposal owes now (pure): withdrawn at its lock, or at its freeze. */
+export const hostPrelaunchStep = (
+  startDate: string,
+  openingHour: number | null,
+  alloc: Pick<CampaignDispatchAllocation, 'statutAcceptation' | 'lateProposal'>,
+  now: Date,
+): 'lock' | 'freeze' | null => {
+  if (alloc.statutAcceptation !== 'EN_ATTENTE') return null;
+  if (now >= hostFreezeInstant(startDate, openingHour)) return 'freeze';
+  if (!alloc.lateProposal && now >= hostLockInstant(startDate, openingHour)) return 'lock';
+  return null;
+};
+
 export interface PrelaunchOutcome {
   campaignId: string;
-  step: 'lock' | 'freeze';
-  removed: number;
+  locked: number;
+  frozen: number;
   volumeFact: number;
   placedFact: number;
-  /** freeze only: the recalculated figures, and whether the Screencaster was told. */
+  /** When the price was recalculated this tick. */
   final?: { impressions: number; venues: number; amountTnd: number; told: boolean };
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-const runStep = async (
+const runCampaign = async (
   campaignId: string,
   now: Date,
   log?: FastifyBaseLogger,
@@ -97,151 +93,167 @@ const runStep = async (
         .for('update', { of: campaignDispatchPlan });
       if (!row) return null;
       const { plan, campaign } = row;
-      if (campaign.status !== 'upcoming' || !campaign.startDate || !campaign.endDate) return null;
-      const step = prelaunchStepDue(
-        campaign.startDate,
-        { lockedAt: campaign.prelaunchLockedAt, frozenAt: campaign.prelaunchFrozenAt },
-        now,
-      );
-      if (step === null) return null;
+      if (
+        (campaign.status !== 'upcoming' && campaign.status !== 'active') ||
+        campaign.prelaunchFrozenAt !== null ||
+        !campaign.startDate ||
+        !campaign.endDate
+      ) {
+        return null;
+      }
+      const startDate = campaign.startDate;
+      const window = { id: campaign.id, name: campaign.name, startDate, endDate: campaign.endDate };
 
-      const allocations = await tx
-        .select()
-        .from(campaignDispatchAllocation)
-        .where(eq(campaignDispatchAllocation.planId, plan.id));
-      const silent = allocations.filter((a) => a.statutAcceptation === 'EN_ATTENTE');
-      const volumeFact = silent.reduce((sum, a) => sum + a.iiPotentiel, 0);
-      for (const a of silent) {
-        await tx.delete(campaignDispatchAllocation).where(eq(campaignDispatchAllocation.id, a.id));
+      const loadAllocations = () =>
+        tx
+          .select({ a: campaignDispatchAllocation, openingHour: screenhosts.openingHour })
+          .from(campaignDispatchAllocation)
+          .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
+          .where(eq(campaignDispatchAllocation.planId, plan.id));
+      const allocations = await loadAllocations();
+      const due = allocations.map((r) => ({
+        ...r,
+        step: hostPrelaunchStep(startDate, r.openingHour, r.a, now),
+      }));
+      const locked = due.filter((d) => d.step === 'lock');
+      const frozen = due.filter((d) => d.step === 'freeze');
+      for (const d of [...locked, ...frozen]) {
+        await tx
+          .delete(campaignDispatchAllocation)
+          .where(eq(campaignDispatchAllocation.id, d.a.id));
         trace.event(
           'refusal_received',
-          { impressions: a.iiPotentiel, noAnswer: true },
-          a.screenhostId,
+          { impressions: d.a.iiPotentiel, noAnswer: true, step: d.step },
+          d.a.screenhostId,
         );
       }
       const exclude = [
-        ...silent.map((a) => a.screenhostId),
-        ...allocations.filter((a) => a.statutAcceptation === 'REFUSE').map((a) => a.screenhostId),
+        ...locked.map((d) => d.a.screenhostId),
+        ...frozen.map((d) => d.a.screenhostId),
+        ...allocations
+          .filter((r) => r.a.statutAcceptation === 'REFUSE')
+          .map((r) => r.a.screenhostId),
       ];
-      const placed =
-        volumeFact > 0
-          ? await placerToursIncrement(
-              tx,
-              {
-                plan,
-                campaign: {
-                  id: campaign.id,
-                  name: campaign.name,
-                  startDate: campaign.startDate,
-                  endDate: campaign.endDate,
-                },
-                volumeFact,
-                excludeVenueIds: exclude,
-                now,
-                ordre: step === 'freeze' ? 'engages_seuls' : 'nouveaux_dabord',
-              },
-              trace,
-            )
-          : { placedFact: 0, nonPlaceFact: 0, placedTo: [] };
+      const volumeOf = (rows: readonly { a: CampaignDispatchAllocation }[]) =>
+        rows.reduce((sum, r) => sum + r.a.iiPotentiel, 0);
+      let placedFact = 0;
+      // The frozen Hosts' share first, onto the accepted ones only (it cannot wait for anyone).
+      if (volumeOf(frozen) > 0) {
+        const placed = await placerToursIncrement(
+          tx,
+          {
+            plan,
+            campaign: window,
+            volumeFact: volumeOf(frozen),
+            excludeVenueIds: exclude,
+            now,
+            ordre: 'engages_seuls',
+          },
+          trace,
+        );
+        placedFact += placed.placedFact;
+      }
+      if (volumeOf(locked) > 0) {
+        const placed = await placerToursIncrement(
+          tx,
+          {
+            plan,
+            campaign: window,
+            volumeFact: volumeOf(locked),
+            excludeVenueIds: exclude,
+            now,
+            ordre: 'nouveaux_dabord',
+          },
+          trace,
+        );
+        placedFact += placed.placedFact;
+      }
 
-      if (step === 'lock') {
+      // THE PRICE — every answer fixed and the campaign starting at its first Host.
+      const after = await loadAllocations();
+      const firstFreeze = Math.min(
+        ...allocations.map((r) => hostFreezeInstant(startDate, r.openingHour).getTime()),
+      );
+      const settled =
+        now.getTime() >= firstFreeze && after.every((r) => r.a.statutAcceptation !== 'EN_ATTENTE');
+      let final: PrelaunchOutcome['final'];
+      if (settled) {
+        const accepted = after.filter((r) => r.a.statutAcceptation === 'ACCEPTE').map((r) => r.a);
+        const impressions = accepted.reduce((sum, a) => sum + a.iiPotentiel, 0);
+        const launchedTnd = Number(campaign.requestedBudget ?? 0);
+        const amountTnd = Math.min(
+          launchedTnd,
+          round2(accepted.reduce((sum, a) => sum + Number(a.revenuPrevisionnel), 0)),
+        );
+        const lowered = amountTnd < launchedTnd - 0.005;
+        const told =
+          lowered || accepted.length !== plan.nRetenus || Math.abs(impressions - plan.couvert) >= 1;
         await tx
           .update(campaigns)
-          .set({ prelaunchLockedAt: now })
+          .set({
+            prelaunchFrozenAt: now,
+            ...(lowered ? { requestedBudget: amountTnd.toFixed(2) } : {}),
+          })
           .where(eq(campaigns.id, campaign.id));
-        return {
-          campaignId,
-          step,
-          removed: silent.length,
-          volumeFact,
-          placedFact: placed.placedFact,
-        };
-      }
-
-      // THE FREEZE — the campaign starts with what its accepted Hosts hold.
-      const accepted = (
-        await tx
-          .select()
-          .from(campaignDispatchAllocation)
-          .where(eq(campaignDispatchAllocation.planId, plan.id))
-      ).filter((a) => a.statutAcceptation === 'ACCEPTE');
-      const impressions = accepted.reduce((sum, a) => sum + a.iiPotentiel, 0);
-      const launchedTnd = Number(campaign.requestedBudget ?? 0);
-      const amountTnd = Math.min(
-        launchedTnd,
-        round2(accepted.reduce((sum, a) => sum + Number(a.revenuPrevisionnel), 0)),
-      );
-      const differs =
-        amountTnd < launchedTnd - 0.005 ||
-        accepted.length !== plan.nRetenus ||
-        Math.abs(impressions - plan.couvert) >= 1;
-      await tx
-        .update(campaigns)
-        .set({
-          prelaunchFrozenAt: now,
-          prelaunchLockedAt: campaign.prelaunchLockedAt ?? now,
-          ...(amountTnd < launchedTnd - 0.005 ? { requestedBudget: amountTnd.toFixed(2) } : {}),
-        })
-        .where(eq(campaigns.id, campaign.id));
-      if (differs) {
-        await tx.insert(notifications).values({
-          userId: campaign.advertiserId,
-          type: 'campaign_prelaunch_final',
-          ...prelaunchFinalNotice({
-            name: campaign.name,
-            impressions,
-            venues: accepted.length,
-            amountTnd,
-          }),
-          campaignId: campaign.id,
+        if (told) {
+          await tx.insert(notifications).values({
+            userId: campaign.advertiserId,
+            type: 'campaign_prelaunch_final',
+            ...prelaunchFinalNotice({
+              name: campaign.name,
+              impressions,
+              venues: accepted.length,
+              amountTnd,
+            }),
+            campaignId: campaign.id,
+          });
+        }
+        trace.event('prelaunch_frozen', {
+          impressions,
+          venues: accepted.length,
+          amountTnd,
+          launchedTnd,
         });
+        final = { impressions, venues: accepted.length, amountTnd, told };
       }
-      trace.event('prelaunch_frozen', {
-        impressions,
-        venues: accepted.length,
-        amountTnd,
-        launchedTnd,
-      });
+      if (locked.length === 0 && frozen.length === 0 && !final) return null;
       return {
         campaignId,
-        step,
-        removed: silent.length,
-        volumeFact,
-        placedFact: placed.placedFact,
-        final: { impressions, venues: accepted.length, amountTnd, told: differs },
+        locked: locked.length,
+        frozen: frozen.length,
+        volumeFact: volumeOf(locked) + volumeOf(frozen),
+        placedFact,
+        ...(final ? { final } : {}),
       };
     })
     .catch(async (err: unknown) => {
       await trace.finish('rolled_back', { reason: 'ERROR' });
       throw err;
     });
-  // LOG1 — journal a step that ran (nothing due = nothing to journal).
+  // LOG1 — journal a pass that acted (nothing due = nothing to journal).
   if (outcome) {
-    await trace.finish('committed', { reason: `prelaunch_${outcome.step}` });
+    await trace.finish('committed', { reason: 'prelaunch' });
     log?.info(outcome, 'campaign pre-launch step');
   }
   return outcome;
 };
 
-/** One pass over every upcoming tours campaign whose lock or freeze is due. */
+/** One pass over every classic tours campaign still before its start at some Host. */
 export const runCampaignPrelaunchTick = async (
   now: Date = new Date(),
   log?: FastifyBaseLogger,
 ): Promise<PrelaunchOutcome[]> => {
   const candidates = await db
-    .select({
-      id: campaigns.id,
-      startDate: campaigns.startDate,
-      lockedAt: campaigns.prelaunchLockedAt,
-      frozenAt: campaigns.prelaunchFrozenAt,
-    })
+    .select({ id: campaigns.id })
     .from(campaigns)
     .innerJoin(campaignDispatchPlan, eq(campaignDispatchPlan.campaignId, campaigns.id))
     .where(
       and(
-        eq(campaigns.status, 'upcoming'),
+        inArray(campaigns.status, ['upcoming', 'active']),
         isNull(campaigns.eventId),
         isNotNull(campaigns.startDate),
+        // An overnight venue opens the day after the start date: yesterday's starts still count.
+        gte(campaigns.startDate, plusCalendarDays(tunisDateOf(now), -1)),
         isNull(campaigns.prelaunchFrozenAt),
         eq(campaignDispatchPlan.engine, 'tours'),
         notDemoCampaignSql(),
@@ -249,9 +261,8 @@ export const runCampaignPrelaunchTick = async (
     );
   const outcomes: PrelaunchOutcome[] = [];
   for (const c of candidates) {
-    if (!c.startDate || prelaunchStepDue(c.startDate, c, now) === null) continue;
     try {
-      const outcome = await runStep(c.id, now, log);
+      const outcome = await runCampaign(c.id, now, log);
       if (outcome) outcomes.push(outcome);
     } catch (err) {
       log?.warn({ err, campaignId: c.id }, 'campaign pre-launch step failed');
@@ -260,7 +271,7 @@ export const runCampaignPrelaunchTick = async (
   return outcomes;
 };
 
-/** Boot tick + a 1-minute unref'd interval: the freeze lands within a minute of start − 5 min. */
+/** Boot tick + a 1-minute unref'd interval: each deadline lands within a minute. */
 export function startCampaignPrelaunchJob(log: FastifyBaseLogger): void {
   const tick = () =>
     void runCampaignPrelaunchTick(new Date(), log).catch((err: unknown) =>

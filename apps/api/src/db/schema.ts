@@ -1545,9 +1545,8 @@ export const campaigns = pgTable(
     // of a never-launched classic campaign's deletion (lib/campaign-expiry.ts).
     lastSavedAt: timestamp('last_saved_at', { withTimezone: true }).notNull().defaultNow(),
     expiryNoticeSentAt: timestamp('expiry_notice_sent_at', { withTimezone: true }),
-    // Mariem 13/11 (migration 0108) — the pre-launch lock (start − 6 h) and freeze (start − 5 min)
-    // of a classic tours campaign, stamped once each (lib/campaign-prelaunch.ts).
-    prelaunchLockedAt: timestamp('prelaunch_locked_at', { withTimezone: true }),
+    // Mariem 13/11 (migration 0108) — the campaign's price recalculated once every Host's answer
+    // is fixed (lib/campaign-prelaunch.ts); stamped once.
     prelaunchFrozenAt: timestamp('prelaunch_frozen_at', { withTimezone: true }),
     // Admin moderation audit (activation wiring). activated_at/by stamp the admin approval that flips
     // pending → active (and triggers dispatch); rejected_at/reject_reason stamp a pending → rejected.
@@ -2043,6 +2042,9 @@ export const campaignDispatchAllocation = pgTable(
     rI: integer('r_i').notNull(), // reps/hr planned at this SH
     revenuPrevisionnel: numeric('revenu_previsionnel', { precision: 14, scale: 4 }).notNull(),
     statutAcceptation: dispatchAcceptation('statut_acceptation').notNull().default('EN_ATTENTE'),
+    // Mariem 13/11 (migration 0108) — proposed after its own start − 6 h lock (a pre-launch
+    // redispatch): only the start − 5 min freeze withdraws it (lib/campaign-prelaunch.ts).
+    lateProposal: boolean('late_proposal').notNull().default(false),
     creneaux: jsonb('creneaux').$type<DispatchCreneau[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

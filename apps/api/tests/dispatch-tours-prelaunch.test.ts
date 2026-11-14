@@ -18,21 +18,21 @@ import {
 } from '../src/db/schema.js';
 import { activateCampaign } from '../src/lib/activation-service.js';
 import {
-  campaignStartInstant,
+  hostPrelaunchStep,
   prelaunchFinalNotice,
-  prelaunchStepDue,
   runCampaignPrelaunchTick,
 } from '../src/lib/campaign-prelaunch.js';
 import { runRefusalCascade } from '../src/lib/dispatch/cascade.js';
+import { hostStartInstant } from '../src/lib/dispatch/tours/host-start.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
 
 // Mariem 13/11 point 2 — the pre-launch steps on a real Postgres, on dispatch-tours-placement's
 // fixture (Café A 16 h → 20 h, Café B 16 h → 22 h with its 20 h and 21 h free, 30 s spot, CPM
-// 12, F = 600 s, 260 DT, window 9 → 18 November 2026, launched on Thursday 5 November). The
-// start is Monday 9 November 00:00 in Tunis: the lock falls on Sunday 8 November at 18:00
-// (17:00 UTC), the freeze at 23:55 (22:55 UTC).
+// 12, F = 600 s, 260 DT, window 9 → 18 November 2026, launched on Thursday 5 November). Each
+// Host starts at its own opening hour (operator 2026-11-14): every café opens at 16 h, so on
+// Monday 9 November a Host starts at 15:00 UTC, locks at 09:00 UTC and freezes at 14:55 UTC.
 
 const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
@@ -105,21 +105,28 @@ const seedVenue = async (
   return seedInstalledScreen(id);
 };
 
-describe('Mariem 13/11 — the pre-launch clock (pure)', () => {
-  const none = { lockedAt: null, frozenAt: null };
-  it('starts at 00:00 in Tunis; locks at 18:00 the day before, freezes at 23:55', () => {
-    expect(campaignStartInstant('2026-11-09')).toEqual(new Date('2026-11-08T23:00:00Z'));
-    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-08T16:59:59Z'))).toBeNull();
-    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-08T17:00:00Z'))).toBe('lock');
-    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-08T22:55:00Z'))).toBe('freeze');
+describe('Mariem 13/11 — the pre-launch clock, per Host (pure)', () => {
+  const pending = { statutAcceptation: 'EN_ATTENTE' as const, lateProposal: false };
+  it('a Host starts at its opening hour on the start date, in Tunis', () => {
+    expect(hostStartInstant('2026-11-09', 8)).toEqual(new Date('2026-11-09T07:00:00Z'));
+    expect(hostStartInstant('2026-11-09', null)).toEqual(new Date('2026-11-08T23:00:00Z'));
   });
-  it('each step once; a late tick goes straight to the freeze', () => {
-    const locked = { lockedAt: new Date(), frozenAt: null };
-    expect(prelaunchStepDue('2026-11-09', locked, new Date('2026-11-08T18:00:00Z'))).toBeNull();
-    expect(prelaunchStepDue('2026-11-09', locked, new Date('2026-11-08T22:56:00Z'))).toBe('freeze');
-    const frozen = { lockedAt: new Date(), frozenAt: new Date() };
-    expect(prelaunchStepDue('2026-11-09', frozen, new Date('2026-11-09T01:00:00Z'))).toBeNull();
-    expect(prelaunchStepDue('2026-11-09', none, new Date('2026-11-09T01:00:00Z'))).toBe('freeze');
+  it('locks at its start − 6 h, freezes at its start − 5 min', () => {
+    const at = (iso: string) => hostPrelaunchStep('2026-11-09', 8, pending, new Date(iso));
+    expect(at('2026-11-09T00:59:59Z')).toBeNull();
+    expect(at('2026-11-09T01:00:00Z')).toBe('lock');
+    expect(at('2026-11-09T06:55:00Z')).toBe('freeze');
+  });
+  it('a late proposal waits for the freeze; an answer is never withdrawn', () => {
+    const late = { statutAcceptation: 'EN_ATTENTE' as const, lateProposal: true };
+    expect(hostPrelaunchStep('2026-11-09', 8, late, new Date('2026-11-09T02:00:00Z'))).toBeNull();
+    expect(hostPrelaunchStep('2026-11-09', 8, late, new Date('2026-11-09T06:56:00Z'))).toBe(
+      'freeze',
+    );
+    const accepted = { statutAcceptation: 'ACCEPTE' as const, lateProposal: false };
+    expect(
+      hostPrelaunchStep('2026-11-09', 8, accepted, new Date('2026-11-09T06:56:00Z')),
+    ).toBeNull();
   });
   it('tells the Screencaster in Mariem’s words', () => {
     expect(
@@ -208,8 +215,8 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     await db.update(dispatchConfig).set({ fMaxSeconds: 300 });
   });
 
-  const LOCK = new Date('2026-11-08T17:00:00Z');
-  const FREEZE = new Date('2026-11-08T22:55:00Z');
+  const LOCK = new Date('2026-11-09T09:00:00Z');
+  const FREEZE = new Date('2026-11-09T14:55:00Z');
 
   const planAllocations = async () => {
     const [plan] = await db
@@ -235,12 +242,12 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
 
   it('nothing happens before start − 6 h; at the lock a silent Host is removed and its share goes to the Host that accepted', async () => {
     await accept(B);
-    expect(await runCampaignPrelaunchTick(new Date('2026-11-08T16:59:00Z'))).toEqual([]);
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-09T08:59:00Z'))).toEqual([]);
     const before = await planAllocations();
     const bBefore = before.of(B)?.creneaux.length ?? 0;
 
     const [outcome] = await runCampaignPrelaunchTick(LOCK);
-    expect(outcome).toMatchObject({ campaignId, step: 'lock', removed: 1 });
+    expect(outcome).toMatchObject({ campaignId, locked: 1, frozen: 0 });
     const after = await planAllocations();
     expect(after.of(A)).toBeUndefined(); // the silent Host's proposal is withdrawn
     const b = after.of(B);
@@ -254,9 +261,8 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect(notes[0]?.body).toMatch(
       /^Bonne nouvelle ! Vous avez bénéficié d’un redispatching d’une campagne déjà acceptée sur votre écran\. Cela vous permet de gagner \d+,\d{2} TND supplémentaires\.$/,
     );
-    expect((await campaignRow())?.prelaunchLockedAt).toEqual(LOCK);
     // Once only.
-    expect(await runCampaignPrelaunchTick(new Date('2026-11-08T17:01:00Z'))).toEqual([]);
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-09T09:01:00Z'))).toEqual([]);
   });
 
   it('at the lock a NEW Host comes first (told, to accept); the accepted one keeps its share', async () => {
@@ -286,7 +292,7 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     const launched = Number((await campaignRow())?.requestedBudget);
 
     const [outcome] = await runCampaignPrelaunchTick(FREEZE);
-    expect(outcome).toMatchObject({ step: 'freeze', removed: 1 });
+    expect(outcome).toMatchObject({ locked: 0, frozen: 1, final: { told: true } });
     const after = await planAllocations();
     expect(after.of(C)).toBeUndefined();
     expect(after.rows.map((r) => r.statutAcceptation)).toEqual(['ACCEPTE']);
@@ -307,7 +313,7 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect(note?.body).toBe(
       `Votre campagne Tours prélancement démarre dans quelques minutes. Nous vous offrons finalement ${(after.of(B)?.iiPotentiel ?? 0).toLocaleString('fr-FR')} impressions dans 1 établissement, pour un montant de ${amount.toFixed(2).replace('.', ',')} DT.`,
     );
-    expect(await runCampaignPrelaunchTick(new Date('2026-11-08T22:56:00Z'))).toEqual([]);
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-09T14:56:00Z'))).toEqual([]);
   });
 
   it('a campaign started as launched (everyone accepted) is frozen silently, its price untouched', async () => {
@@ -315,8 +321,33 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     await accept(B);
     const launched = (await campaignRow())?.requestedBudget;
     const [outcome] = await runCampaignPrelaunchTick(FREEZE);
-    expect(outcome).toMatchObject({ step: 'freeze', removed: 0, final: { told: false } });
+    expect(outcome).toMatchObject({ locked: 0, frozen: 0, final: { told: false } });
     expect((await campaignRow())?.requestedBudget).toBe(launched);
+  });
+
+  it('each Host keeps its own deadline: a Host opening later is locked later', async () => {
+    await accept(B);
+    // A opens at 18 h: it starts at 17:00 UTC and locks at 11:00 UTC.
+    await db.update(screenhosts).set({ openingHour: 18 }).where(eq(screenhosts.id, A));
+    expect(await runCampaignPrelaunchTick(LOCK)).toEqual([]);
+    expect((await planAllocations()).of(A)?.statutAcceptation).toBe('EN_ATTENTE');
+    const [outcome] = await runCampaignPrelaunchTick(new Date('2026-11-09T11:00:00Z'));
+    expect(outcome).toMatchObject({ locked: 1 });
+    expect((await planAllocations()).of(A)).toBeUndefined();
+  });
+
+  it('a new Host proposed after its own lock is withdrawn only at its freeze', async () => {
+    await accept(B);
+    await newVenueC();
+    // A opens at 20 h (locks at 13:00 UTC) — by then C (16 h) is past its own lock.
+    await db.update(screenhosts).set({ openingHour: 20 }).where(eq(screenhosts.id, A));
+    await runCampaignPrelaunchTick(new Date('2026-11-09T13:00:00Z'));
+    const c = (await planAllocations()).of(C);
+    expect(c).toMatchObject({ statutAcceptation: 'EN_ATTENTE', lateProposal: true });
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-09T13:30:00Z'))).toEqual([]);
+    const [outcome] = await runCampaignPrelaunchTick(FREEZE);
+    expect(outcome).toMatchObject({ frozen: 1 });
+    expect((await planAllocations()).of(C)).toBeUndefined();
   });
 
   it('a refusal before the start goes to a NEW Host first', async () => {

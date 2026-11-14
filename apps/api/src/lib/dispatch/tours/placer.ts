@@ -16,6 +16,7 @@ import { type DbExecutor } from '../pool.js';
 
 import { assembleToursPool } from './assemble.js';
 import { creneauxParVenue } from './creneaux.js';
+import { hostFreezeInstant, hostLockInstant } from './host-start.js';
 import { type OrdreRedistribution, redistribuer } from './redistribuer.js';
 import { EPS, type Prise } from './remplir.js';
 
@@ -114,10 +115,35 @@ export const placerToursIncrement = async (
     pctSh: plan.detail?.params.pctSh ?? config.pctSh,
     seuilShTnd: plan.detail?.params.seuilShTnd ?? SEUIL_SH_TND,
   };
+  // Mariem 13/11 — before the start, each Host has its own deadlines (./host-start.ts): a new
+  // Host whose own start − 5 min has passed can no longer answer in time, so it is never
+  // proposed; one proposed after its own start − 6 h is a LATE proposal (only the freeze
+  // withdraws it).
+  const opening = new Map<string, number | null>();
+  if (ordre !== 'engages_dabord' && pool.venues.length > 0) {
+    const rows = await tx
+      .select({ id: screenhosts.id, openingHour: screenhosts.openingHour })
+      .from(screenhosts)
+      .where(
+        inArray(
+          screenhosts.id,
+          pool.venues.map((v) => v.id),
+        ),
+      );
+    for (const row of rows) opening.set(row.id, row.openingHour);
+  }
+  const canStillAnswer = (venueId: string): boolean =>
+    ordre === 'engages_dabord' ||
+    input.now < hostFreezeInstant(campaign.startDate, opening.get(venueId) ?? null);
+  const isLateProposal = (venueId: string): boolean =>
+    ordre !== 'engages_dabord' &&
+    input.now >= hostLockInstant(campaign.startDate, opening.get(venueId) ?? null);
   const r = redistribuer({
     perte: input.volumeFact,
     engages: pool.venues.filter((v) => engagedIds.has(v.id)),
-    nouveaux: pool.venues.filter((v) => !engagedIds.has(v.id) && !ownCells.has(v.id)),
+    nouveaux: pool.venues.filter(
+      (v) => !engagedIds.has(v.id) && !ownCells.has(v.id) && canStillAnswer(v.id),
+    ),
     params,
     ordre,
   });
@@ -159,6 +185,7 @@ export const placerToursIncrement = async (
           rI: added.reduce((m, c) => Math.max(m, c.reps), 0),
           revenuPrevisionnel: String(round4((addedFact * cpm) / 1000)),
           creneaux: added,
+          lateProposal: isLateProposal(venueId),
         });
       }
       placedTo.push({ screenhost_id: venueId, added_fact: addedFact, merged });
