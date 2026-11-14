@@ -373,3 +373,80 @@
   text-align: center;
   margin-top: 18px;
 }
+/* Mes Screenhosts / Screencasters, fiches */
+.agt .vf-mt4 {
+  margin-top: 4px;
+}
+.agt .vf-mt10 {
+  margin-top: 10px;
+}
+.agt .vf-mt12 {
+  margin-top: 12px;
+}
+.agt .sec.vf-mt18 {
+  margin-top: 18px;
+}
+.agt .vf-logo-note {
+  margin: 2px 0 8px;
+}
+.agt .vf-fiche-acts {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0 18px;
+  flex-wrap: wrap;
+}
+.agt .vf-fiche-acts.vf-fiche-acts-sc {
+  margin: 14px 0 0;
+}
+.agt .att ul.vf-att-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.agt .ring b .vf-ring-of {
+  font-size: 14px;
+  color: var(--ink3);
+}
+.agt .list button.li.vf-li-btn {
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+}
+.agt .list button.li.vf-li-btn:last-child {
+  border-bottom: none;
+}
+.agt .vf-pr10 {
+  padding-right: 10px;
+}
+.agt .toolbar.vf-mt0 {
+  margin-top: 0;
+}
+.agt .vf-cell-id {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.agt .logo.vf-logo-34 {
+  width: 34px;
+  height: 34px;
+}
+.agt .shc .nm.vf-mt10 {
+  margin-top: 10px;
+}
+.agt .shcards.vf-sc-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.agt .shc .nums.vf-nums-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.agt .card.vf-sticky {
+  position: sticky;
+  top: 100px;
+}
+.agt .vf-foot-note {
+  padding: 10px 22px 14px;
+}

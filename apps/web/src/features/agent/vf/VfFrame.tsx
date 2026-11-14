@@ -54,7 +54,7 @@ export function VfLogo({
   attention = false,
 }: {
   kind: TileKind;
-  size: 32 | 60;
+  size: 32 | 34 | 60;
   title?: string;
   logoUrl?: string | null;
   attention?: boolean;

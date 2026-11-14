@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentCampaign, ShAgentCampaign } from '../services/agent-portfolio.service';
 
-import { vfCampCard, vfCategoryKey, vfDate, vfVenueSubline } from './agent-vf';
+import {
+  vfAttentionLabel,
+  vfCampCard,
+  vfCategoryKey,
+  vfDate,
+  vfParticipation,
+  vfSparkPoints,
+  vfVenueSubline,
+} from './agent-vf';
 
 const sc: AgentCampaign = {
   id: 'c1',
@@ -72,5 +80,19 @@ describe('agent VF display rules', () => {
       moneyLabel: 'Revenu',
       moneyTnd: 2.1,
     });
+  });
+
+  it('reads participation as the share of days declared available over 30 days', () => {
+    expect(vfParticipation(0)).toBe(100);
+    expect(vfParticipation(3)).toBe(90);
+    expect(vfParticipation(45)).toBe(0);
+    expect(vfParticipation(null)).toBeNull();
+  });
+
+  it('counts attention points and draws a sparkline from the known values', () => {
+    expect(vfAttentionLabel(1)).toBe('1 point d’attention');
+    expect(vfAttentionLabel(2)).toBe('2 points d’attention');
+    expect(vfSparkPoints([50, null, 100], 400, 70)).toBe('0.0,35.0 400.0,0.0');
+    expect(vfSparkPoints([80])).toBe('');
   });
 });

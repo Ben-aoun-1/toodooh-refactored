@@ -86,3 +86,29 @@ export function vfCampCard(c: AgentCampaign | ShAgentCampaign): VfCampCard {
     impressions: c.impressions,
   };
 }
+
+/**
+ * « Participation » (spec VF « Mes Screenhosts ») — the share of days the Screenhost declared
+ * available over the follow-up window (30 days): a day with only some hours blocked still counts
+ * as available. Unknown while the venue has no follow-up yet.
+ */
+export const vfParticipation = (
+  unavailableDays: number | null | undefined,
+  windowDays = 30,
+): number | null => {
+  if (unavailableDays === null || unavailableDays === undefined) return null;
+  const free = Math.max(0, windowDays - unavailableDays);
+  return Math.round((free / windowDays) * 100);
+};
+
+/** « 2 points d'attention ». */
+export const vfAttentionLabel = (n: number): string => `${n} point${n > 1 ? 's' : ''} d’attention`;
+
+/** The points of a sparkline over [0, 100], in a w × h box (prototype `spark`). */
+export const vfSparkPoints = (values: (number | null)[], w = 400, h = 70): string => {
+  const known = values.filter((v): v is number => v !== null);
+  if (known.length < 2) return '';
+  return known
+    .map((v, i) => `${((i / (known.length - 1)) * w).toFixed(1)},${(h - (v / 100) * h).toFixed(1)}`)
+    .join(' ');
+};
