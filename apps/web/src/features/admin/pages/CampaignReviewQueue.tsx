@@ -17,6 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
+import { CampaignHostDecisions } from '@/features/admin/components/CampaignHostDecisions';
 import CampaignLifecycleActions from '@/features/admin/components/CampaignLifecycleActions';
 import CampaignQrPanel from '@/features/admin/components/CampaignQrPanel';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
@@ -557,6 +558,8 @@ export default function CampaignReviewQueue() {
                   </div>
                   {/* ELIG-1 — the venues this campaign can reach, at any status. */}
                   <CampaignEligibleHosts campaignId={selected.id} />
+                  {/* Mariem 13/11 — the Hosts' answers; the Admin can answer for a Host. */}
+                  <CampaignHostDecisions campaignId={selected.id} />
                   {selected.reject_reason && (
                     <div>
                       <p className="text-sm font-medium text-gray-700">Motif de rejet:</p>
