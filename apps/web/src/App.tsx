@@ -65,6 +65,7 @@ const AgentCampaigns = lazy(() => import('@/features/agent/pages/AgentCampaigns'
 const AgentAffiliates = lazy(() => import('@/features/agent/pages/AgentAffiliates'));
 const AgentCalendar = lazy(() => import('@/features/agent/pages/AgentCalendar'));
 const AgentRevenues = lazy(() => import('@/features/agent/pages/AgentRevenues'));
+const AgentFaq = lazy(() => import('@/features/agent/pages/AgentFaq'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
 const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'));
@@ -363,6 +364,14 @@ export default function App() {
               element={
                 <AgentRoute>
                   <AgentCampaigns />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/faq"
+              element={
+                <AgentRoute>
+                  <AgentFaq />
                 </AgentRoute>
               }
             />

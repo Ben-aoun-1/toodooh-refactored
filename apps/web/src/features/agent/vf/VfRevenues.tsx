@@ -83,7 +83,7 @@ export function VfRevenues({ kind }: { kind: AgentKind }) {
           <button
             type="button"
             className="btn sm vf-push"
-            onClick={() => navigate(`${AGENT_PATHS.settings}?tab=legal`)}
+            onClick={() => navigate(`${AGENT_PATHS.settings}?tab=rib`)}
           >
             Téléverser mon RIB
           </button>

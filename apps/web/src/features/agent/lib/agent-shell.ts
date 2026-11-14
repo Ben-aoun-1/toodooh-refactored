@@ -76,6 +76,7 @@ export const AGENT_BUILT_PAGES: ReadonlySet<AgentPage> = new Set<AgentPage>([
   'calendar',
   'affiliates',
   'settings',
+  'faq',
 ]);
 
 export const agentNav = (
@@ -195,6 +196,54 @@ export const agentSupportObjectives = (kind: AgentKind): string[] => [
 
 export type SettingsTab = 'profil' | 'legal' | 'notifications' | 'securite';
 
+/**
+ * AGENT-VF (spec VF « Paramètres ») — the entries of the left panel. Each tab opens on its first
+ * entry; « Mes coordonnées bancaires » and the CGE have their own entry under their tab, and
+ * `?tab=rib` / `?tab=cge` open them directly.
+ */
+export type SettingsEntry = SettingsTab | 'rib' | 'cge';
+
+export const SETTINGS_SIDE: Record<
+  SettingsTab,
+  {
+    title: string;
+    entries: {
+      key: SettingsEntry;
+      icon: 'user' | 'doc' | 'rev' | 'bell' | 'lock';
+      label: string;
+    }[];
+  }
+> = {
+  profil: {
+    title: 'Paramètres du profil',
+    entries: [{ key: 'profil', icon: 'user', label: 'Informations sur l’agent' }],
+  },
+  legal: {
+    title: 'Paramètres agent',
+    entries: [
+      { key: 'legal', icon: 'doc', label: 'Informations légales' },
+      { key: 'rib', icon: 'rev', label: 'Mes coordonnées bancaires' },
+    ],
+  },
+  notifications: {
+    title: 'Paramètres de notifications',
+    entries: [{ key: 'notifications', icon: 'bell', label: 'Préférences' }],
+  },
+  securite: {
+    title: 'Paramètres de sécurité',
+    entries: [
+      { key: 'securite', icon: 'lock', label: 'Modifier le mot de passe' },
+      { key: 'cge', icon: 'doc', label: 'Conditions Générales d’Engagement' },
+    ],
+  },
+};
+
+export const settingsEntryOf = (raw: string | null): SettingsEntry =>
+  raw === 'rib' || raw === 'cge' ? raw : settingsTabOf(raw);
+
+export const settingsTabOfEntry = (entry: SettingsEntry): SettingsTab =>
+  entry === 'rib' ? 'legal' : entry === 'cge' ? 'securite' : entry;
+
 export const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
   { key: 'profil', label: 'Profil' },
   { key: 'legal', label: 'Informations légales' },
@@ -216,14 +265,14 @@ export interface OnboardingStepView {
 export function onboardingStepCopy(step: OnboardingStepView): {
   label: string;
   status: string;
-  tab: SettingsTab | null;
+  tab: SettingsEntry | null;
 } {
   switch (step.key) {
     case 'cge':
       return {
         label: 'Accepter les CGE',
         status: step.done ? 'Acceptées' : 'À faire',
-        tab: 'securite',
+        tab: 'cge',
       };
     case 'photo':
       return {
@@ -241,7 +290,7 @@ export function onboardingStepCopy(step: OnboardingStepView): {
       return {
         label: 'Téléverser mon RIB',
         status: step.done ? 'Validé' : step.pending ? 'En attente de validation' : 'À faire',
-        tab: 'legal',
+        tab: 'rib',
       };
   }
 }
