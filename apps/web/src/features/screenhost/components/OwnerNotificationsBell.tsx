@@ -232,8 +232,10 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                               const match = matchOfNotification(target);
                               if (match) {
                                 setDecisionMatch(match);
-                              } else if (isDecisionNotification(target) && target.campaignId) {
-                                setDecisionCampaignId(target.campaignId);
+                              } else if (isDecisionNotification(target)) {
+                                // An orphan (its campaign deleted) opens the « no longer
+                                // available » card: '' matches no campaign.
+                                setDecisionCampaignId(target.campaignId ?? '');
                               } else {
                                 navigate(item.actionPath);
                               }
@@ -285,7 +287,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
           </div>
         </div>
       ) : null}
-      {decisionCampaignId ? (
+      {decisionCampaignId !== null ? (
         <DecisionModal
           campaignId={decisionCampaignId}
           onClose={() => setDecisionCampaignId(null)}

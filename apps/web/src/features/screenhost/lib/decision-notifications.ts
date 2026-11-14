@@ -36,7 +36,18 @@ const decisionKey = (
 
 export const isDecisionNotification = (
   n: Pick<BucketableNotification, 'kind' | 'campaignId' | 'eventId' | 'screenhostId'>,
-) => decisionKey(n) !== null;
+) => decisionKey(n) !== null || isOrphanDecision(n);
+
+/**
+ * Mariem 13/11 — an accept/refuse notice whose campaign or positioning was deleted since
+ * (notifications.campaign_id is ON DELETE set null): nothing is left to decide. It sits in
+ * « Historique », and « Consulter » opens the popup's « no longer available » card instead of
+ * landing on « Mes campagnes » with nothing shown.
+ */
+export const isOrphanDecision = (
+  n: Pick<BucketableNotification, 'kind' | 'campaignId' | 'eventId' | 'screenhostId'>,
+): boolean =>
+  n.kind === DECISION_NOTIFICATION_TYPE && !n.campaignId && matchOfNotification(n) === null;
 
 /**
  * What the owner still has to decide: campaign ids (classic allocations and event shares proposed
@@ -66,6 +77,7 @@ export const notificationBucket = (
   pending: ReadonlySet<string>,
   pendingKnown: boolean,
 ): 'active' | 'history' => {
+  if (isOrphanDecision(n)) return 'history';
   const key = decisionKey(n);
   if (key !== null) {
     if (!pendingKnown) return 'active';

@@ -7,6 +7,8 @@ import {
   DECISION_NOTIFICATION_TYPE,
   campaignDurationDays,
   decisionTarget,
+  isDecisionNotification,
+  isOrphanDecision,
   notificationBucket,
   outcomeCopy,
   pendingDecisionKeys,
@@ -43,9 +45,16 @@ describe('notificationBucket — ruling 5A', () => {
     expect(notificationBucket(info('n2'), true, pending, true)).toBe('history');
   });
 
-  it('treats a decision-type row without campaign_id as an ordinary notification', () => {
+  it('files a decision notice whose campaign was deleted in history, read or not (Mariem 13/11)', () => {
     const orphan = { id: 'n3', kind: DECISION_NOTIFICATION_TYPE, campaignId: null };
     expect(notificationBucket(orphan, true, pending, true)).toBe('history');
+    expect(notificationBucket(orphan, false, pending, true)).toBe('history');
+    expect(notificationBucket(orphan, false, pending, false)).toBe('history');
+    // « Consulter » opens the popup (its « no longer available » card), never « Mes campagnes ».
+    expect(isDecisionNotification(orphan)).toBe(true);
+    expect(isOrphanDecision(orphan)).toBe(true);
+    expect(isOrphanDecision(decision('n1', 'camp-pending'))).toBe(false);
+    expect(isDecisionNotification(info('n2'))).toBe(false);
   });
 
   it('keeps a « Soir de match » notice active while its match is still to answer (Mariem 05/11)', () => {
