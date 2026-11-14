@@ -20,6 +20,8 @@ export interface OwnerCampaignAllocation {
   screenhost_id: string;
   screenhost_name: string;
   statut_acceptation: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
+  /** Who answered a classic offer (agent spec VF §10); null = nobody yet, absent on an event. */
+  decided_by?: 'owner' | 'agent' | 'admin' | null;
   ii_potentiel: number;
   /** Diffusions per hour of a classic campaign; null on an event positioning (it airs minutes). */
   r_i: number | null;

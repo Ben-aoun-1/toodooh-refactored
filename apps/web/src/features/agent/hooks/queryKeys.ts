@@ -22,4 +22,7 @@ export const agentKeys = {
   shAffiliates: () => [...agentKeys.all, 'sh-affiliates'] as const,
   followup: () => [...agentKeys.all, 'followup'] as const,
   followupSheet: (id: string) => [...agentKeys.all, 'followup', id] as const,
+
+  /** Agent spec VF §10 — one campaign offer of an affiliated Screenhost. */
+  offer: (id: string) => [...agentKeys.all, 'offer', id] as const,
 };

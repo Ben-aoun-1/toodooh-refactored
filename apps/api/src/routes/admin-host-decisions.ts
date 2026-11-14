@@ -13,7 +13,7 @@ import {
   users,
 } from '../db/schema.js';
 import { afterClassicDecision, afterEventDecision } from '../lib/allocation-decision-effects.js';
-import { decideAllocation } from '../lib/allocation-decision.js';
+import { OFFER_ALREADY_ANSWERED, decideAllocation } from '../lib/allocation-decision.js';
 import { decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { loadOwnerSharePcts, ownerShareTnd } from '../lib/owner-share.js';
 import { userLabel } from '../lib/user-label.js';
@@ -183,7 +183,12 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
     }
     const outcome =
       kind === 'campaign'
-        ? await decideAllocation({ allocationId: id, ownerId: target.ownerId, statut })
+        ? await decideAllocation({
+            allocationId: id,
+            ownerId: target.ownerId,
+            statut,
+            actor: { kind: 'admin', userId: adminId },
+          })
         : await decideEventAllocation({ allocationId: id, ownerId: target.ownerId, statut });
     if (outcome.kind === 'not_found') {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Allocation introuvable.' });
@@ -193,6 +198,11 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
         error: 'CONFLICT',
         message: 'Ce Host a déjà refusé : le refus est définitif.',
       });
+    }
+    // Agent spec VF §10 + operator 2026-11-14 — the first answer is final, for the admin too
+    // (stopping the campaign stays the way out of an acceptance).
+    if (outcome.kind === 'already_answered') {
+      return reply.status(409).send({ error: 'ALREADY_ANSWERED', message: OFFER_ALREADY_ANSWERED });
     }
     if (kind === 'campaign') {
       await afterClassicDecision(outcome.screenhostId, statut, outcome.changed, request.log);

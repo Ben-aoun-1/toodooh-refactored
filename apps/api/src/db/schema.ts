@@ -2028,6 +2028,12 @@ export interface DispatchCreneau {
   blackoutMin?: number;
 }
 
+/** Who answered a classic offer (agent spec VF §10). */
+export type AllocationDecider = 'owner' | 'agent' | 'admin';
+
+/** The decision columns of a row that returns to EN_ATTENTE (a re-consent): nobody answered. */
+export const NO_DECISION = { decidedBy: null, decidedByUserId: null, decidedAt: null } as const;
+
 export const campaignDispatchAllocation = pgTable(
   'campaign_dispatch_allocation',
   {
@@ -2045,6 +2051,13 @@ export const campaignDispatchAllocation = pgTable(
     // Mariem 13/11 (migration 0108) — proposed after its own start − 6 h lock (a pre-launch
     // redispatch): only the start − 5 min freeze withdraws it (lib/campaign-prelaunch.ts).
     lateProposal: boolean('late_proposal').notNull().default(false),
+    // Agent spec VF §10 (migration 0109) — who answered: the first answer decides and is final.
+    // NULL = not answered (or answered before 0109); a re-consent clears the three.
+    decidedBy: text('decided_by').$type<AllocationDecider>(),
+    decidedByUserId: uuid('decided_by_user_id').references((): AnyPgColumn => users.id, {
+      onDelete: 'set null',
+    }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
     creneaux: jsonb('creneaux').$type<DispatchCreneau[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -2,15 +2,16 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
-  type Campaign,
-  type DispatchCreneau,
   businessSectors,
+  type Campaign,
   campaignBoosts,
   campaignDispatchAllocation,
   campaignDispatchPlan,
+  campaigns,
   campaignTargeting,
   campaignZones,
-  campaigns,
+  type DispatchCreneau,
+  NO_DECISION,
   notifications,
   screenhosts,
   zones,
@@ -478,6 +479,7 @@ export const runBoost = async (
               revenuPrevisionnel: String(round4((totalAi * cpm) / 1000)),
               creneaux: mergedCreneaux,
               statutAcceptation: 'EN_ATTENTE',
+              ...NO_DECISION,
             })
             .where(eq(campaignDispatchAllocation.id, existing.id));
         } else {

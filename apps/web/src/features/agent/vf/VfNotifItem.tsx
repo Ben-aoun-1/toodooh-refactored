@@ -8,6 +8,7 @@ import {
   showsAppointmentActions,
   vfNotifKind,
 } from '@/features/agent/lib/agent-notifications';
+import { offerIdOfLink } from '@/features/agent/lib/agent-offers';
 import type { AgentNotification } from '@/features/agent/services/agent-notifications.service';
 import { ProposeSlotModal } from '@/features/appointments/components/ProposeSlotModal';
 import { useAppointmentMutation } from '@/features/appointments/hooks/useAppointments';
@@ -15,6 +16,7 @@ import { appointmentsService } from '@/features/appointments/services/appointmen
 import { getErrorMessage } from '@/lib/errors';
 
 import { VfIcon } from './VfIcon';
+import { VfOfferWindow } from './VfOfferWindow';
 import { useVfOverlay } from './VfOverlay';
 
 /**
@@ -30,7 +32,7 @@ export function VfNotifItem({
   onNavigate?: () => void;
 }) {
   const navigate = useNavigate();
-  const { toast } = useVfOverlay();
+  const { toast, openBig } = useVfOverlay();
   const markRead = useMarkNotificationRead();
   const [proposing, setProposing] = useState(false);
   const accept = useAppointmentMutation((id: string) => appointmentsService.accept(id));
@@ -42,7 +44,10 @@ export function VfNotifItem({
 
   const consult = () => {
     if (unread) markRead.mutate(n.id);
-    if (n.link) navigate(n.link);
+    // An offer opens its window where the agent is (spec VF §10); anything else navigates.
+    const offerId = offerIdOfLink(n.link);
+    if (offerId !== null) openBig(<VfOfferWindow offerId={offerId} />);
+    else if (n.link) navigate(n.link);
     onNavigate?.();
   };
   const act = async (p: Promise<unknown>, ok: string) => {

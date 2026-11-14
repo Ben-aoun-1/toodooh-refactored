@@ -13,6 +13,7 @@ import { startAgentAffiliationJob } from './lib/agent-affiliations.js';
 import { startAgentAppointmentJob } from './lib/agent-appointments.js';
 import { startAgentCommissionJob } from './lib/agent-commissions.js';
 import { startAgentNoticeEmailJob } from './lib/agent-notifications.js';
+import { startAgentOfferNoticeJob } from './lib/agent-offers.js';
 import { startAgentShFollowupJob } from './lib/agent-sh-followup.js';
 import { startApiFootballJob } from './lib/api-football/tracker.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
@@ -128,6 +129,7 @@ const start = async (): Promise<void> => {
     startAgentCommissionJob(app.log);
     startAgentAppointmentJob(app.log);
     startAgentNoticeEmailJob(emailSender, app.log);
+    startAgentOfferNoticeJob(app.log);
     startAgentShFollowupJob(app.log);
     // E6 — the rattrapage tick (detect manquements on ACTIVE campaigns → re-place forward while
     // the total ≥ S_min). AFTER the lifecycle job: a campaign flipped active this hour gets its

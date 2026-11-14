@@ -500,3 +500,52 @@
   cursor: pointer;
   border: none;
 }
+/* offer window (spec VF §10) */
+.agt .badge.vf-badge-orange {
+  background: #fff2e8;
+  color: var(--orange);
+}
+.agt .badge.vf-badge-red {
+  background: var(--redbg);
+  color: var(--red);
+}
+.agt .kv.vf-mt14 {
+  margin-top: 14px;
+}
+.agt .banner.vf-banner-info {
+  background: var(--porbg);
+  border-color: #dcdefd;
+  color: #2d3070;
+}
+.agt .bf.vf-bf-end {
+  justify-content: flex-end;
+}
+.agt .btn.vf-btn-w150 {
+  min-width: 150px;
+}
+.agt .btn.vf-btn-refuse {
+  min-width: 150px;
+  background: var(--redbg);
+  border-color: #f6c9cb;
+  color: var(--red);
+}
+.agt button.spotbox.vf-spot-btn {
+  width: 100%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.agt .spotbox.vf-spot-media {
+  overflow: hidden;
+}
+.agt .spotbox.vf-spot-media video,
+.agt .spotbox.vf-spot-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.agt .spotbox.vf-spot-none small {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12.5px;
+}

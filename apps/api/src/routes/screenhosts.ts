@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import {
+  type AllocationDecider,
   affluenceSource,
   businessSectors,
   campaignDispatchAllocation,
@@ -30,8 +31,9 @@ import {
   acceptedCampaignDays,
   acceptedCampaignLockMessage,
 } from '../lib/accepted-campaign-lock.js';
+import { noticeHostAnswered } from '../lib/agent-offers.js';
 import { afterClassicDecision, afterEventDecision } from '../lib/allocation-decision-effects.js';
-import { decideAllocation } from '../lib/allocation-decision.js';
+import { OFFER_ALREADY_ANSWERED, decideAllocation } from '../lib/allocation-decision.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
 import { notStoppedCampaignSql } from '../lib/campaign-stopped.js';
@@ -2025,6 +2027,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .select({
         allocationId: campaignDispatchAllocation.id,
         statut: campaignDispatchAllocation.statutAcceptation,
+        decidedBy: campaignDispatchAllocation.decidedBy,
         iiPotentiel: campaignDispatchAllocation.iiPotentiel,
         rI: campaignDispatchAllocation.rI,
         revenuPrevisionnel: campaignDispatchAllocation.revenuPrevisionnel,
@@ -2069,6 +2072,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       screenhost_id: string;
       screenhost_name: string;
       statut_acceptation: DispatchAcceptation;
+      /** Agent spec VF §10 — who answered (« Acceptée par votre agent »); null = nobody yet. */
+      decided_by: AllocationDecider | null;
       ii_potentiel: number;
       r_i: number;
       revenu_previsionnel: number;
@@ -2087,6 +2092,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         screenhost_id: r.screenhostId,
         screenhost_name: r.screenhostName,
         statut_acceptation: r.statut,
+        decided_by: r.statut === 'EN_ATTENTE' ? null : r.decidedBy,
         ii_potentiel: r.iiPotentiel,
         r_i: r.rI,
         revenu_previsionnel: ownerShareTnd(Number(r.revenuPrevisionnel), pcts),
@@ -2207,6 +2213,16 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // Agent spec VF §10 — the first answer decides (the Host's own acceptance, its agent's or
+    // the admin's answer): a second one is turned away.
+    if (outcome.kind === 'already_answered') {
+      return reply.status(409).send({
+        error: 'ALREADY_ANSWERED',
+        message: OFFER_ALREADY_ANSWERED,
+        statusCode: 409,
+        decided_by: outcome.by,
+      });
+    }
     // SPS recompute + CF-HF4 re-push (lib/allocation-decision-effects.ts, shared with the admin).
     await afterClassicDecision(
       outcome.screenhostId,
@@ -2214,6 +2230,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       outcome.changed,
       request.log,
     );
+    // The venue's agent, if it has one, learns the Host answered (he can no longer act).
+    if (outcome.changed) {
+      await noticeHostAnswered(outcome.id, statut === 'ACCEPTE').catch((err: unknown) =>
+        request.log.warn({ err, allocationId: outcome.id }, 'agent offer-result notice failed'),
+      );
+    }
     return reply.status(200).send({ id: outcome.id, statut_acceptation: outcome.statut });
   };
 

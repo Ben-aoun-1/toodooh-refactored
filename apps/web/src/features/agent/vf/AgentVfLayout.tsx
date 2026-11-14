@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast as hotToast } from 'react-hot-toast';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import ContentErrorBoundary from '@/components/ContentErrorBoundary';
 import { useAgentAccount } from '@/features/agent/hooks/useAgentAccount';
@@ -20,6 +20,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { useVfMotion } from './useVfMotion';
 import { VfBell } from './VfBell';
 import { VfIcon } from './VfIcon';
+import { VfOfferWindow } from './VfOfferWindow';
 import { VfOverlayProvider, useVfOverlay } from './VfOverlay';
 import { VfSupportModal } from './VfSupportModal';
 
@@ -52,7 +53,8 @@ function Shell({ page, children }: AgentVfLayoutProps) {
   const role = useAuthStore((s) => s.role);
   const contactName = useAuthStore((s) => s.contactName);
   const account = useAgentAccount();
-  const { openModal } = useVfOverlay();
+  const { openModal, openBig } = useVfOverlay();
+  const [params, setParams] = useSearchParams();
   const [mini, setMini] = useState(false);
   const [menu, setMenu] = useState(false);
   const view = useRef<HTMLDivElement>(null);
@@ -68,6 +70,16 @@ function Shell({ page, children }: AgentVfLayoutProps) {
     window.scrollTo(0, 0);
     setMenu(false);
   }, [location.pathname]);
+
+  // « Consulter » in the notice's email lands on `/agent?offre=<id>`: the offer window opens there.
+  const offerId = kind === 'screenhost' ? params.get('offre') : null;
+  useEffect(() => {
+    if (!offerId) return;
+    openBig(<VfOfferWindow offerId={offerId} />);
+    const rest = new URLSearchParams(params);
+    rest.delete('offre');
+    setParams(rest, { replace: true });
+  }, [offerId, openBig, params, setParams]);
 
   const askLogout = () => openModal(<LogoutModal initial={shownName.charAt(0).toUpperCase()} />);
 

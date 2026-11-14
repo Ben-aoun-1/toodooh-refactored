@@ -17,9 +17,11 @@ import { useScreenhostAllocations } from '@/features/screenhost/hooks/useScreenh
 import { useScreenhostEventAllocations } from '@/features/screenhost/hooks/useScreenhostEventAllocations';
 import {
   type DecisionOutcome,
+  agentAnswerMention,
   decisionTarget,
 } from '@/features/screenhost/lib/decision-notifications';
 import { statusUi } from '@/features/screenhost/lib/owner-campaigns.lib';
+import { ApiError } from '@/lib/api-client';
 
 type Stage = 'details' | 'confirm-refuse' | DecisionOutcome;
 
@@ -84,10 +86,17 @@ export default function DecisionModal({
         }
       }
       setStage(kind === 'accept' ? 'accepted' : 'refused');
-    } catch {
-      toast.error(
-        kind === 'accept' ? 'Impossible d’accepter la proposition' : 'Impossible de refuser',
-      );
+    } catch (err) {
+      // Agent spec VF §10 — the agent (or the Toodooh team) answered first: say so, and reload
+      // the popup into its « already answered » state.
+      if (err instanceof ApiError && err.status === 409) {
+        toast.error(err.message);
+        refreshAll();
+      } else {
+        toast.error(
+          kind === 'accept' ? 'Impossible d’accepter la proposition' : 'Impossible de refuser',
+        );
+      }
       setStage('details');
     } finally {
       setBusy(false);
@@ -120,6 +129,8 @@ export default function DecisionModal({
       : target.kind === 'campaign'
         ? target.campaign.name
         : '';
+  const agentMention =
+    target.kind === 'campaign' && !pending ? agentAnswerMention(target.campaign.allocations) : null;
   const pill = statusUi(
     pending ? 'pending' : target.kind === 'campaign' ? target.campaign.status : 'pending',
   );
@@ -139,6 +150,11 @@ export default function DecisionModal({
                 >
                   <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${pill.dot}`} />
                   {pill.label}
+                </span>
+              )}
+              {!loading && agentMention !== null && (
+                <span className="inline-flex w-fit items-center rounded-md bg-[#F1F1FE] px-1.5 py-0.5 text-xs font-medium text-brand-accent">
+                  {agentMention}
                 </span>
               )}
             </div>

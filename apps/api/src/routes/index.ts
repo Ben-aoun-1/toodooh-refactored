@@ -35,6 +35,7 @@ import { agentAppointmentRoutes } from './agent-appointments.js';
 import { agentCodeAvailabilityRoute } from './agent-code-availability.js';
 import { agentFollowupRoutes } from './agent-followup.js';
 import { agentNewsRoutes } from './agent-news.js';
+import { agentOfferRoutes } from './agent-offers.js';
 import { agentPortfolioRoutes } from './agent-portfolio.js';
 import { agentProfileRoutes } from './agent-profile.js';
 import { agentWalletRoutes } from './agent-wallet.js';
@@ -215,6 +216,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(agentAccountRoutes);
   await app.register(agentProfileRoutes);
   await app.register(agentWalletRoutes);
+  await app.register(agentOfferRoutes);
   await app.register(agentPortfolioRoutes);
   await app.register(agentAppointmentRoutes);
   await app.register(agentNewsRoutes);

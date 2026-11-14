@@ -194,3 +194,20 @@ export const eventDecisionRevenueTnd = (proposals: readonly { montant_tnd: numbe
 
 /** The popup's label for the campaign type chip (operator 2026-10-12: « Particuliers »). */
 export const DECISION_TYPE_LABEL = 'Particuliers';
+
+/**
+ * Agent spec VF §10 — the offer's popup when the Host's agent answered first: no buttons, and
+ * this mention. Null when the Host (or nobody) answered.
+ */
+export const agentAnswerMention = (
+  allocations: readonly Pick<
+    OwnerCampaign['allocations'][number],
+    'statut_acceptation' | 'decided_by'
+  >[],
+): string | null => {
+  const byAgent = allocations.filter((a) => a.decided_by === 'agent');
+  if (byAgent.length === 0) return null;
+  return byAgent.some((a) => a.statut_acceptation === 'ACCEPTE')
+    ? 'Acceptée par votre agent'
+    : 'Refusée par votre agent';
+};
