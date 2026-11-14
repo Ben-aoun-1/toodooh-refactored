@@ -47,6 +47,12 @@ export interface EventSeatModel {
   seatsPerBloc: number;
   /** A bloc's share of A_max: 3 = a third of the hour (EVT-MIN1), 1 = all of it. */
   audienceDivisor: number;
+  /**
+   * Mariem 13/11 — the pod always lasts its full length (seats per bloc × seat minutes), however
+   * many seats are sold, and the plays are SPREAD over it with the Toodooh screen between them.
+   * false = EVT-MIN1's pod of seats sold × 1 minute, spots back to back (kept by its matches).
+   */
+  spreadPod: boolean;
 }
 
 /** Mariem 04/11 — 2-minute seats, 3 per bloc, the whole A_max. */
@@ -54,6 +60,7 @@ export const EVENT_SEAT_MODEL: EventSeatModel = {
   seatMinutes: 2,
   seatsPerBloc: 3,
   audienceDivisor: 1,
+  spreadPod: true,
 };
 
 /** EVT-MIN1 — 1-minute seats, 5 per bloc, a third of A_max; kept by matches sold under it. */
@@ -61,6 +68,7 @@ export const EVENT_SEAT_MODEL_MIN1: EventSeatModel = {
   seatMinutes: 1,
   seatsPerBloc: 5,
   audienceDivisor: 3,
+  spreadPod: false,
 };
 
 /** The match's seat model, from events.seat_minutes (NULL = the 2-minute model). */
@@ -293,8 +301,9 @@ export interface EventPod {
 }
 
 /**
- * The pod window inside a bloc: avant blocs open with the pod, après blocs close with it; it
- * lasts a seat's minutes per seat aired. Zero seats = no pod.
+ * The pod window inside a bloc: avant blocs open with the pod, après blocs close with it. EVT-MIN1:
+ * it lasts a seat's minutes per seat aired; a spread model (Mariem 13/11): its full length as soon
+ * as one seat is sold. Zero seats = no pod.
  */
 export const eventPodWindow = (
   phase: 'avant' | 'apres',
@@ -304,7 +313,8 @@ export const eventPodWindow = (
   model: EventSeatModel,
 ): { start: Date; end: Date } | null => {
   if (seats <= 0) return null;
-  const lengthMs = Math.min(seats, model.seatsPerBloc) * model.seatMinutes * MINUTE_SECONDS * 1000;
+  const aired = model.spreadPod ? model.seatsPerBloc : Math.min(seats, model.seatsPerBloc);
+  const lengthMs = aired * model.seatMinutes * MINUTE_SECONDS * 1000;
   return phase === 'avant'
     ? { start: blocStart, end: new Date(blocStart.getTime() + lengthMs) }
     : { start: new Date(blocEnd.getTime() - lengthMs), end: blocEnd };
@@ -328,6 +338,7 @@ export const eventPodTimeline = (
   const aired = seats.slice(0, model.seatsPerBloc);
   const window = eventPodWindow(phase, blocStart, blocEnd, aired.length, model);
   if (!window) return null;
+  if (model.spreadPod) return spreadPodTimeline(window, aired, model);
   const left = aired.map((s) => eventPlaysPerMinute(s.slotSeconds) * model.seatMinutes);
   const slots: PodSlot[] = [];
   let cursor = window.start.getTime();
@@ -348,6 +359,50 @@ export const eventPodTimeline = (
       gapMs += (seat.slotSeconds - spotSeconds) * 1000;
       left[i] = (left[i] ?? 0) - 1;
     });
+    if (last !== null) (last as PodSlot).seconds += gapMs / 1000;
+    cursor += gapMs;
+  }
+  return { start: window.start, end: window.end, slots };
+};
+
+/**
+ * Mariem 13/11/2026 — « répartir intelligemment sur les 6 minutes disponibles ». Once every seat
+ * of the bloc is known, the pod is cut into ROUNDS (as many as the most-played seat's plays); a
+ * seat with fewer plays airs in evenly spaced rounds (Bresenham: 4 plays in 12 rounds → rounds 0,
+ * 3, 6, 9), and the time no spot uses is the Toodooh screen, shared evenly between the rounds. A
+ * single 14 s spot (8 plays) thus airs every 45 s across the 6 minutes, not 8 times in a row.
+ * Each round's last slot owns its share of the Toodooh time, so slots stay contiguous to the pod
+ * end (the PodSlotPlanner contract). Pure.
+ */
+const spreadPodTimeline = (
+  window: { start: Date; end: Date },
+  aired: readonly PodSeat[],
+  model: EventSeatModel,
+): EventPod => {
+  const plays = aired.map((s) => eventPlaysPerMinute(s.slotSeconds) * model.seatMinutes);
+  const spot = aired.map((s) => Math.min(Math.max(s.spotSeconds, 0), s.slotSeconds) * 1000);
+  const rounds = Math.max(0, ...plays);
+  const podMs = window.end.getTime() - window.start.getTime();
+  const spotMs = plays.reduce((sum, p, i) => sum + p * (spot[i] ?? 0), 0);
+  const freeMs = Math.max(0, podMs - spotMs);
+  const slots: PodSlot[] = [];
+  let cursor = window.start.getTime();
+  for (let r = 0; r < rounds; r += 1) {
+    let last: PodSlot | null = null;
+    aired.forEach((seat, i) => {
+      const p = plays[i] ?? 0;
+      if (Math.ceil(((r + 1) * p) / rounds) <= Math.ceil((r * p) / rounds)) return;
+      const ms = spot[i] ?? 0;
+      last = {
+        campaignId: seat.campaignId,
+        at: new Date(cursor),
+        spotSeconds: ms / 1000,
+        seconds: ms / 1000,
+      };
+      slots.push(last);
+      cursor += ms;
+    });
+    const gapMs = Math.round(((r + 1) * freeMs) / rounds) - Math.round((r * freeMs) / rounds);
     if (last !== null) (last as PodSlot).seconds += gapMs / 1000;
     cursor += gapMs;
   }
