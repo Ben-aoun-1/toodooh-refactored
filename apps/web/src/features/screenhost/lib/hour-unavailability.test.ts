@@ -5,6 +5,8 @@ import {
   applyHoursToggle,
   cellDateOf,
   dayStateOf,
+  lockedCampaignsOf,
+  lockedDayCopy,
   hoursChange,
   hoursRangesLabel,
   unavailableHoursOf,
@@ -63,5 +65,26 @@ describe('HOUR-UNAV1 calendar rules', () => {
   it('sends only the change, and names ranges', () => {
     expect(hoursChange([14, 15], [15, 16])).toEqual({ add: [16], remove: [14] });
     expect(hoursRangesLabel([20, 23, 0], windowHours(20, 2))).toBe('20 h–21 h, 23 h–1 h');
+  });
+});
+
+describe('Mariem 13/11 — days an accepted campaign locks', () => {
+  const view = {
+    days: [],
+    hours: [],
+    opening_hour: 8,
+    closing_hour: 18,
+    locked_days: [{ day: '2027-06-10', campaigns: ['A', 'B'] }],
+  };
+  it('lists the locking campaigns of a day, none elsewhere or on an older api', () => {
+    expect(lockedCampaignsOf('2027-06-10', view)).toEqual(['A', 'B']);
+    expect(lockedCampaignsOf('2027-06-11', view)).toEqual([]);
+    expect(lockedCampaignsOf('2027-06-10', { ...view, locked_days: undefined })).toEqual([]);
+  });
+  it('says why, in the api’s words', () => {
+    expect(lockedDayCopy(['A'])).toBe(
+      'Vous avez accepté la campagne « A » sur cette période : vous ne pouvez plus vous déclarer indisponible ce jour-là.',
+    );
+    expect(lockedDayCopy(['A', 'B'])).toContain('les campagnes « A », « B »');
   });
 });

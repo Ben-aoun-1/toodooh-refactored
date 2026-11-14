@@ -12,7 +12,22 @@ export interface UnavailabilityView {
   hours: { day: string; hour: number }[];
   opening_hour: number | null;
   closing_hour: number | null;
+  /**
+   * Mariem 13/11 — future days an ACCEPTED campaign locks: the owner can no longer declare them
+   * unavailable (api lib/accepted-campaign-lock.ts). Absent on an older api.
+   */
+  locked_days?: { day: string; campaigns: string[] }[];
 }
+
+/** The accepted campaigns locking `day` ([] = the day can be declared). */
+export const lockedCampaignsOf = (day: string, view: UnavailabilityView | undefined): string[] =>
+  view?.locked_days?.find((l) => l.day === day)?.campaigns ?? [];
+
+/** The calendar's refusal copy — the api's ACCEPTED_CAMPAIGN message, word for word. */
+export const lockedDayCopy = (names: readonly string[]): string =>
+  names.length === 1
+    ? `Vous avez accepté la campagne « ${names[0]} » sur cette période : vous ne pouvez plus vous déclarer indisponible ce jour-là.`
+    : `Vous avez accepté les campagnes ${names.map((n) => `« ${n} »`).join(', ')} sur cette période : vous ne pouvez plus vous déclarer indisponible ce jour-là.`;
 
 export type DayState = 'available' | 'partial' | 'unavailable';
 

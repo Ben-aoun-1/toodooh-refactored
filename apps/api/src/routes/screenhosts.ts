@@ -26,6 +26,10 @@ import {
   users,
   zones,
 } from '../db/schema.js';
+import {
+  acceptedCampaignDays,
+  acceptedCampaignLockMessage,
+} from '../lib/accepted-campaign-lock.js';
 import { decideAllocation } from '../lib/allocation-decision.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
@@ -552,9 +556,17 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
     // HOUR-UNAV1 — the wholly unavailable opening days (`days`, read by every client, the mobile
     // app included) plus every unavailable hour (`hours`) and the venue's window.
-    return reply
-      .status(200)
-      .send(await unavailabilityView(owned, parsedQuery.data.from, parsedQuery.data.to));
+    // Mariem 13/11 — `locked_days`: the future days an accepted campaign locks (no declaration).
+    const { from, to } = parsedQuery.data;
+    const today = tunisDateOf(new Date());
+    const locked = await acceptedCampaignDays(owned.id, from, to);
+    return reply.status(200).send({
+      ...(await unavailabilityView(owned, from, to)),
+      locked_days: [...locked]
+        .filter(([day]) => day > today)
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([day, names]) => ({ day, campaigns: names })),
+    });
   });
 
   // PUT /api/screenhosts/:id/unavailability {day, unavailable, hours?} — declare or undeclare ONE
@@ -614,6 +626,18 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
     const day = parsed.data.day;
+    // Mariem 13/11 — an accepted campaign locks its days (lib/accepted-campaign-lock.ts).
+    if (parsed.data.unavailable) {
+      const locked = (await acceptedCampaignDays(owned.id, day, day)).get(day) ?? [];
+      if (locked.length > 0) {
+        return reply.status(409).send({
+          error: 'ACCEPTED_CAMPAIGN',
+          message: acceptedCampaignLockMessage(locked),
+          day,
+          campaigns: locked,
+        });
+      }
+    }
     const redispatched = await setVenueUnavailability(
       owned.id,
       day,
