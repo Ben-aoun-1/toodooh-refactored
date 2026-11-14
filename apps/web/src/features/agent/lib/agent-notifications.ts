@@ -20,3 +20,18 @@ export const showsAppointmentActions = (n: AgentNotification) =>
   n.type === 'agent_appointment_requested' &&
   n.appointment_id !== null &&
   n.appointment_status === 'en_attente';
+
+/**
+ * AGENT-VF — the icon family of a notification, as in the prototype: an offer to answer, a point
+ * of attention, a rendez-vous, or (everything else) a campaign / revenue notice.
+ */
+export type VfNotifKind = 'offer' | 'att' | 'rdv' | 'camp';
+
+export const vfNotifKind = (type: string): VfNotifKind =>
+  type.includes('offer')
+    ? 'offer'
+    : type === 'agent_attention'
+      ? 'att'
+      : type.includes('appointment')
+        ? 'rdv'
+        : 'camp';

@@ -11,15 +11,79 @@ export type AgentKind = 'screencaster' | 'screenhost';
 export const agentKindOf = (role: string | null | undefined): AgentKind | null =>
   role === 'screencast_agent' ? 'screencaster' : role === 'screenhost_agent' ? 'screenhost' : null;
 
-export type AgentPage = 'dashboard' | 'campaigns' | 'calendar' | 'affiliates' | 'settings';
+export type AgentPage =
+  | 'dashboard'
+  | 'campaigns'
+  | 'revenues'
+  | 'calendar'
+  | 'affiliates'
+  | 'sensors'
+  | 'checklist'
+  | 'settings'
+  | 'faq';
 
 export const AGENT_PATHS: Record<AgentPage, string> = {
   dashboard: '/agent',
   campaigns: '/agent/campagnes',
+  revenues: '/agent/revenus',
   calendar: '/agent/calendrier',
   affiliates: '/agent/affilies',
+  sensors: '/agent/capteurs',
+  checklist: '/agent/checklist',
   settings: '/agent/parametres',
+  faq: '/agent/faq',
 };
+
+/** AGENT-VF — the icon of each page (sidebar and header), by the prototype's icon key. */
+export const AGENT_PAGE_ICON: Record<
+  AgentPage,
+  'dash' | 'camp' | 'rev' | 'cal' | 'sh' | 'aff' | 'chk' | 'set' | 'help'
+> = {
+  dashboard: 'dash',
+  campaigns: 'camp',
+  revenues: 'rev',
+  calendar: 'cal',
+  affiliates: 'sh',
+  sensors: 'aff',
+  checklist: 'chk',
+  settings: 'set',
+  faq: 'help',
+};
+
+/**
+ * AGENT-VF (spec VF §0 « Sidebar, dans cet ordre ») — the sidebar of each agent type. A Screenhost
+ * agent has seven entries, a Screencaster agent five. `built` narrows the list to the pages that
+ * exist, so that an entry never opens nothing while the pages are delivered one lot at a time.
+ */
+export const AGENT_NAV_ORDER: Record<AgentKind, AgentPage[]> = {
+  screencaster: ['dashboard', 'campaigns', 'revenues', 'calendar', 'affiliates'],
+  screenhost: [
+    'dashboard',
+    'campaigns',
+    'revenues',
+    'calendar',
+    'affiliates',
+    'sensors',
+    'checklist',
+  ],
+};
+
+/** The pages delivered so far (grows with each lot; the order above is the target). */
+export const AGENT_BUILT_PAGES: ReadonlySet<AgentPage> = new Set<AgentPage>([
+  'dashboard',
+  'campaigns',
+  'calendar',
+  'affiliates',
+  'settings',
+]);
+
+export const agentNav = (
+  kind: AgentKind,
+  built: ReadonlySet<AgentPage> = AGENT_BUILT_PAGES,
+): { page: AgentPage; label: string }[] =>
+  AGENT_NAV_ORDER[kind]
+    .filter((page) => built.has(page))
+    .map((page) => ({ page, label: agentNavLabel(kind, page) }));
 
 const NOUN: Record<AgentKind, string> = {
   screencaster: 'Screencasters',
@@ -28,6 +92,30 @@ const NOUN: Record<AgentKind, string> = {
 
 /** The sidebar label of the portfolio entry: « Mes Screencasters » / « Mes Screenhosts ». */
 export const affiliatesNavLabel = (kind: AgentKind): string => `Mes ${NOUN[kind]}`;
+
+/** The sidebar label of a page. */
+export function agentNavLabel(kind: AgentKind, page: AgentPage): string {
+  switch (page) {
+    case 'dashboard':
+      return 'Dashboard';
+    case 'campaigns':
+      return 'Mes campagnes';
+    case 'revenues':
+      return 'Mes revenus';
+    case 'calendar':
+      return 'Mon calendrier';
+    case 'affiliates':
+      return affiliatesNavLabel(kind);
+    case 'sensors':
+      return 'Suivi des capteurs';
+    case 'checklist':
+      return 'Checklist';
+    case 'settings':
+      return 'Paramètres';
+    case 'faq':
+      return 'Foire aux questions';
+  }
+}
 
 /** The page title and subtitle (§3 table). */
 export function agentPageHeading(
@@ -67,6 +155,29 @@ export function agentPageHeading(
       return {
         title: 'Paramètres',
         subtitle: 'Gérez vos préférences et configurez différentes options.',
+      };
+    case 'revenues':
+      return {
+        title: 'Mes revenus',
+        subtitle: 'Suivez vos commissions, vos montants à gagner et vos versements',
+      };
+    case 'sensors':
+      return {
+        title: 'Suivi des capteurs',
+        subtitle:
+          'Suivez la fréquentation de vos Screenhosts équipés d’un capteur et l’état de leurs capteurs',
+      };
+    case 'checklist':
+      return {
+        title: 'Checklist',
+        subtitle: 'Qualifiez les établissements que vous prospectez et suivez vos fiches',
+      };
+    case 'faq':
+      return {
+        title: 'Foire aux questions',
+        subtitle: `Les réponses aux questions les plus fréquentes sur votre espace Agent ${
+          sc ? 'Screencaster' : 'Screenhost'
+        }`,
       };
   }
 }

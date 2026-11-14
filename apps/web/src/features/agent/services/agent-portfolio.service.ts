@@ -18,6 +18,8 @@ export interface AgentCampaign {
   impressions: number;
   revenue_tnd: number;
   forecast_tnd: number;
+  /** « À gagner »: what is still only forecast. */
+  to_earn_tnd: number;
 }
 
 export interface AgentAffiliate {
@@ -66,6 +68,8 @@ export interface ShAgentCampaign {
   impressions: number;
   revenue_tnd: number;
   forecast_tnd: number;
+  /** « À gagner »: what is still only forecast. */
+  to_earn_tnd: number;
 }
 
 export interface ShAffiliate {
@@ -139,7 +143,13 @@ export interface AgentDashboard {
   impressions_total: number;
   impressions_variation_pct: number | null;
   rank: number | null;
-  recent_affiliates: { id: string; name: string; attention: number }[];
+  recent_affiliates: {
+    id: string;
+    name: string;
+    attention: number;
+    category: string | null;
+    status: 'en_attente_activation' | 'en_cours' | 'terminee';
+  }[];
   current_campaigns: (AgentCampaign | ShAgentCampaign)[];
 }
 

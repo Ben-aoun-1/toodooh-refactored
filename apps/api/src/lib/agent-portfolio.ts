@@ -37,6 +37,8 @@ export interface AgentCampaignView {
   impressions: number;
   revenue_tnd: number;
   forecast_tnd: number;
+  /** AGENT-VF — « À gagner »: what is still only forecast (never an acquired amount). */
+  to_earn_tnd: number;
 }
 
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
@@ -133,6 +135,11 @@ export const agentCampaigns = async (
               (s, l) => s + Number(l.status === 'acquise' ? l.acquiredTnd : l.forecastTnd),
               0,
             ),
+        ),
+        to_earn_tnd: round4(
+          own
+            .filter((l) => l.status === 'previsionnel')
+            .reduce((s, l) => s + Number(l.forecastTnd ?? 0), 0),
         ),
       } satisfies AgentCampaignView;
     })

@@ -1,0 +1,241 @@
+/* AGENT-VF — what the prototype wrote as inline `style="…"` or toggled from its script, as named
+   classes (the app writes no inline styles). Loaded AFTER agent-vf.css: same scope, same values. */
+.agt .toast.vf-show {
+  display: block;
+}
+.agt .bell i.vf-off {
+  display: none;
+}
+.agt .vf-rel {
+  position: relative;
+}
+.agt .vf-low-nav {
+  padding-top: 0;
+}
+.agt .who .chev {
+  margin-left: auto;
+  color: var(--ink3);
+}
+.agt .pop .ch.vf-pop-head {
+  padding: 14px 16px;
+}
+.agt .pop .ch.vf-pop-head h3 {
+  font-size: 14px;
+}
+.agt .vf-pop-list {
+  max-height: 420px;
+  overflow: auto;
+}
+.agt .vf-min0 {
+  min-width: 0;
+}
+.agt .notif .ni.k-offer {
+  background: #fff2e8;
+  color: var(--orange);
+}
+.agt .notif .ni.k-att {
+  background: var(--orbg);
+  color: var(--orange);
+}
+.agt .notif .ni.k-rdv {
+  background: var(--porbg);
+  color: #5a5edc;
+}
+.agt .notif .ni.k-camp {
+  background: var(--mintbg);
+  color: var(--green);
+}
+.agt .notif .acts {
+  flex-wrap: wrap;
+}
+.agt .banner.vf-faq {
+  width: 100%;
+  background: var(--mintbg);
+  border-color: #bdebd3;
+  color: var(--plant);
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+.agt .banner.vf-faq .vf-arrow {
+  margin-left: auto;
+}
+.agt .mb2.vf-logout {
+  text-align: center;
+  padding: 26px 22px 8px;
+}
+.agt .mb2.vf-logout .av {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 12px;
+  font-size: 18px;
+}
+.agt .mb2.vf-logout b {
+  font-size: 15px;
+}
+.agt .mf.vf-center {
+  justify-content: center;
+  padding-top: 14px;
+}
+/* Below 760 px the prototype simply hides the sidebar; the app keeps a way in. */
+.agt .vf-burger {
+  display: none;
+}
+@media (max-width: 760px) {
+  .agt .vf-burger {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    margin-top: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--edge);
+    background: var(--glass);
+    color: var(--ink2);
+    flex: none;
+  }
+  .agt .shell.vf-menu .side {
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 256px;
+    z-index: 70;
+    background: #fff;
+  }
+}
+/* logos, lists, windows */
+.agt .logo.vf-logo-32 {
+  width: 32px;
+  height: 32px;
+}
+.agt .logo.vf-logo-60 {
+  width: 60px;
+  height: 60px;
+}
+.agt .logo.vf-logo-img {
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.agt .logo.vf-logo-img img {
+  max-width: 80%;
+  max-height: 80%;
+  object-fit: contain;
+}
+.agt .kv .vf-span-all {
+  grid-column: 1/-1;
+}
+.agt .vf-li-id {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.agt .vf-w500 {
+  font-weight: 500;
+}
+.agt .vf-green {
+  color: var(--green);
+}
+.agt .banner.vf-banner-violet {
+  margin-top: 14px;
+  background: var(--porbg);
+  border-color: #dcdefd;
+  color: #2d3070;
+}
+/* dashboard */
+.agt .onb .vf-onb-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.agt .onb .vf-onb-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.agt .onb .vf-onb-head .muted {
+  font-size: 12px;
+}
+.agt .kpi .ic.vf-mint {
+  background: var(--mintbg);
+  color: var(--green);
+}
+.agt .kpi .ic.vf-violet {
+  background: var(--porbg);
+  color: #5a5edc;
+}
+.agt .vf-card-foot {
+  padding: 4px 22px 20px;
+}
+.agt .vf-card-foot .btn {
+  width: 100%;
+}
+.agt .list.vf-rdv {
+  padding: 8px 22px 18px;
+}
+.agt .list.vf-rdv .li {
+  gap: 10px 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.agt .vf-rdv-id {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.agt .vf-rdv-id .ni {
+  background: var(--porbg);
+  color: #5a5edc;
+  flex: none;
+}
+.agt .vf-rdv-id .nm {
+  min-width: 0;
+}
+.agt .vf-rdv-id .nm b {
+  font-weight: 500;
+  white-space: normal;
+}
+.agt .vf-rdv-acts {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: none;
+}
+.agt .vf-m0 {
+  margin: 0;
+}
+.agt .onb .bar i.vf-w-0 {
+  width: 0%;
+}
+.agt .onb .bar i.vf-w-1 {
+  width: 10%;
+}
+.agt .onb .bar i.vf-w-2 {
+  width: 20%;
+}
+.agt .onb .bar i.vf-w-3 {
+  width: 30%;
+}
+.agt .onb .bar i.vf-w-4 {
+  width: 40%;
+}
+.agt .onb .bar i.vf-w-5 {
+  width: 50%;
+}
+.agt .onb .bar i.vf-w-6 {
+  width: 60%;
+}
+.agt .onb .bar i.vf-w-7 {
+  width: 70%;
+}
+.agt .onb .bar i.vf-w-8 {
+  width: 80%;
+}
+.agt .onb .bar i.vf-w-9 {
+  width: 90%;
+}
+.agt .onb .bar i.vf-w-10 {
+  width: 100%;
+}
+.agt .card.onb.vf-gone {
+  display: none;
+}
