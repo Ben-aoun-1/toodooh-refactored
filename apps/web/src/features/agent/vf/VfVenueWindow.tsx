@@ -186,7 +186,7 @@ export function VfVenueWindow({
             <button
               type="button"
               className="btn"
-              onClick={() => go(`${AGENT_PATHS.calendar}?affilie=${v.id}`)}
+              onClick={() => go(`${AGENT_PATHS.calendar}?avec=${encodeURIComponent(v.name)}`)}
             >
               Voir ses rendez-vous
             </button>

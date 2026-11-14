@@ -88,7 +88,7 @@ export function VfCasterWindow({
             <button
               type="button"
               className="btn"
-              onClick={() => go(`${AGENT_PATHS.calendar}?affilie=${a.user_id}`)}
+              onClick={() => go(`${AGENT_PATHS.calendar}?avec=${encodeURIComponent(a.name)}`)}
             >
               Voir ses rendez-vous
             </button>

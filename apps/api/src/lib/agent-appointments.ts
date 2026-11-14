@@ -30,6 +30,13 @@ import { userLabel, userLabelById } from './user-label.js';
 /** One-hour slots offered in a day (Tunis time): 09:00 → 17:00 starts. */
 export const SLOT_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17] as const;
 
+/**
+ * AGENT-VF (spec VF « Mon calendrier ») — the hours an agent can block: every hour of the day,
+ * 0 h to 23 h. The hours an affiliate can BOOK stay SLOT_HOURS; blocking an hour outside them
+ * only matters to a rendez-vous the agent proposes himself.
+ */
+export const BLOCK_HOURS: readonly number[] = Array.from({ length: 24 }, (_, h) => h);
+
 const LIVE = ['en_attente', 'nouvel_horaire', 'confirme'] as const;
 
 /** The slot's instant (Tunisia is UTC+1 all year). */
@@ -393,8 +400,8 @@ export const cancelAppointment = async (
 
 /**
  * The agent marks future days unavailable (or available again); past days never change.
- * AGT-HOUR1 — `hours` narrows the change to those slot hours of the days. Storage stays
- * normalised: a day whose every slot hour is blocked is ONE agent_unavailable_days row; freeing
+ * AGT-HOUR1 — `hours` narrows the change to those hours of the days (0–23 since AGENT-VF).
+ * Storage stays normalised: a day whose 24 hours are blocked is ONE agent_unavailable_days row; freeing
  * some hours of a blocked day leaves its other hours as single-hour rows. Confirmed appointments
  * are kept (ruling 2026-10-27, as for whole days): only new requests are blocked, and the
  * confirmed ones in the blocked time are reported back.
@@ -410,9 +417,9 @@ export const setAvailability = async (
   const future = [...new Set(days)].filter((d) => d >= today);
   if (future.length === 0) return { changed: [], confirmed_kept: [] };
   const chosen =
-    hours === undefined ? [...SLOT_HOURS] : SLOT_HOURS.filter((h) => hours.includes(h));
+    hours === undefined ? [...BLOCK_HOURS] : BLOCK_HOURS.filter((h) => hours.includes(h));
   if (chosen.length === 0) return { changed: [], confirmed_kept: [] };
-  const whole = chosen.length === SLOT_HOURS.length;
+  const whole = chosen.length === BLOCK_HOURS.length;
 
   await db.transaction(async (tx) => {
     for (const day of future) {
@@ -431,7 +438,7 @@ export const setAvailability = async (
             eq(agentUnavailableHours.day, day),
           ),
         );
-      const before = new Set<number>(dayRow ? SLOT_HOURS : hourRows.map((r) => r.hour));
+      const before = new Set<number>(dayRow ? BLOCK_HOURS : hourRows.map((r) => r.hour));
       const after = new Set(before);
       for (const h of chosen) {
         if (available) after.delete(h);
@@ -450,7 +457,7 @@ export const setAvailability = async (
             eq(agentUnavailableHours.day, day),
           ),
         );
-      if (after.size === SLOT_HOURS.length) {
+      if (after.size === BLOCK_HOURS.length) {
         await tx.insert(agentUnavailableDays).values({ agentUserId, day });
       } else if (after.size > 0) {
         await tx

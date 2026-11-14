@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { agentAppointmentObjectives, agents } from '../db/schema.js';
 import {
+  BLOCK_HOURS,
   SLOT_HOURS,
   type TransitionResult,
   affiliateRespond,
@@ -193,6 +194,7 @@ export const agentAppointmentRoutes: FastifyPluginAsync = async (app) => {
       unavailable: cal.unavailable,
       unavailable_hours: cal.unavailableHours,
       slot_hours: SLOT_HOURS,
+      block_hours: BLOCK_HOURS,
     });
   });
 
