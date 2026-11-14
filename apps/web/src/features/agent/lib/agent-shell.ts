@@ -72,6 +72,7 @@ export const AGENT_NAV_ORDER: Record<AgentKind, AgentPage[]> = {
 export const AGENT_BUILT_PAGES: ReadonlySet<AgentPage> = new Set<AgentPage>([
   'dashboard',
   'campaigns',
+  'revenues',
   'calendar',
   'affiliates',
   'settings',

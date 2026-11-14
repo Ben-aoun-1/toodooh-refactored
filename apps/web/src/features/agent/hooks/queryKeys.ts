@@ -12,6 +12,7 @@ export const agentKeys = {
 
   /** AGT-3 / AGT-4 — wallet + payouts, the Dashboard, campaigns and affiliates. */
   wallet: () => [...agentKeys.all, 'wallet'] as const,
+  transactions: () => [...agentKeys.all, 'transactions'] as const,
   dashboard: () => [...agentKeys.all, 'dashboard'] as const,
   campaigns: () => [...agentKeys.all, 'campaigns'] as const,
   affiliates: () => [...agentKeys.all, 'affiliates'] as const,

@@ -42,6 +42,15 @@ export interface AgentWallet {
   unprepared_tnd: number;
 }
 
+/** « Mes revenus » — one campaign whose amount is acquired. */
+export interface AgentTransaction {
+  campaign_id: string;
+  campaign_name: string;
+  party_name: string;
+  credited_at: string;
+  amount_tnd: number;
+}
+
 export interface AgentPayout {
   id: string;
   month: string;
@@ -177,6 +186,9 @@ export const agentPortfolioService = {
   },
   wallet(): Promise<AgentWallet & { invoice_required: boolean; payouts: AgentPayout[] }> {
     return apiClient.get('/agent/wallet');
+  },
+  transactions(): Promise<{ transactions: AgentTransaction[] }> {
+    return apiClient.get('/agent/transactions');
   },
   uploadInvoice(payoutId: string, file: File): Promise<AgentPayout> {
     const form = new FormData();

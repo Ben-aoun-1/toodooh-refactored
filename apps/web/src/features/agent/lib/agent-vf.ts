@@ -79,7 +79,7 @@ export function vfCampCard(c: AgentCampaign | ShAgentCampaign): VfCampCard {
     party: sh ? c.advertiser_name : c.affiliate_name,
     status: c.status,
     dates: sh
-      ? `${range} · ${c.venues_touched} Screenhost touché${c.venues_touched > 1 ? 's' : ''}`
+      ? `${range} · ${c.venues_touched} Screenhost${c.venues_touched > 1 ? 's' : ''} touché${c.venues_touched > 1 ? 's' : ''}`
       : range,
     moneyLabel: over ? 'Revenu' : 'À gagner',
     moneyTnd: over ? c.revenue_tnd : c.to_earn_tnd,

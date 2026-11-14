@@ -1,5 +1,7 @@
 /* AGENT-VF — what the prototype wrote as inline `style="…"` or toggled from its script, as named
-   classes (the app writes no inline styles). Loaded AFTER agent-vf.css: same scope, same values. */
+   classes (the app writes no inline styles). Loaded AFTER agent-vf.css: same scope, same values.
+   The prototype also has a few rules that TARGET inline-styled elements (`[style]`,
+   `[style*='…']`): their effect is folded into the class that replaces the inline style here. */
 .agt .toast.vf-show {
   display: block;
 }
@@ -238,4 +240,41 @@
 }
 .agt .card.onb.vf-gone {
   display: none;
+}
+/* Mes campagnes, Mes revenus */
+.agt .vf-scroll {
+  overflow: auto;
+}
+.agt td.vf-gain {
+  color: var(--green);
+  font-weight: 600;
+}
+.agt .tag.vf-filter {
+  border: none;
+  cursor: pointer;
+}
+.agt .rev.vf-static {
+  cursor: default;
+}
+.agt .rev .vf-rev-note {
+  font-size: 12px;
+  color: #cfe9dd;
+}
+.agt .code.vf-cumul {
+  background: linear-gradient(135deg, #b9bcfb, #9195f8);
+}
+.agt .code.vf-cumul small {
+  color: #22245e;
+}
+.agt .code.vf-cumul b {
+  color: #1b1d4f;
+}
+.agt .code.vf-cumul p {
+  color: #2d3070;
+}
+.agt .vf-push {
+  margin-left: auto;
+}
+.agt .vf-cap {
+  text-transform: capitalize;
 }
