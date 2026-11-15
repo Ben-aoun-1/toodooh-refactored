@@ -3109,9 +3109,15 @@ export const eventAllocations = pgTable(
      * Mariem 05/11 (mig 0106) — how the owner is asked about this share (lib/event-host-notice):
      * NULL = waits for the match's grouped notice (kick-off − 24 h), 'grouped', 'single' (the
      * default: proposed alone, as before), 'auto' (accepted on the owner's behalf) or
-     * 'withheld' (never asked).
+     * 'withheld' (never asked). Since Mariem 15/11 only a re-placement onto a venue that accepted
+     * the match is 'auto'; 'withheld' is no longer written.
      */
     notice: text('notice').default('single'),
+    /** Mariem 15/11 (mig 0113) — who answered: the owner, his agent or an admin (NULL = owner's). */
+    decidedBy: text('decided_by').$type<AllocationDecider>(),
+    decidedByUserId: uuid('decided_by_user_id').references((): AnyPgColumn => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

@@ -6,10 +6,8 @@ import {
   offerAnsweredToast,
   offerBadge,
   offerBanner,
-  offerTypeLabel,
-  offerZoneLabel,
+  offerFacts,
 } from '@/features/agent/lib/agent-offers';
-import { vfDate } from '@/features/agent/lib/agent-vf';
 import { agentOffersService } from '@/features/agent/services/agent-offers.service';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -102,22 +100,12 @@ export function VfOfferWindow({ offerId }: { offerId: string }) {
             </div>
           </div>
           <div className="kv vf-mt14">
-            <div>
-              <small>Type de la campagne</small>
-              <b>{offerTypeLabel(o.campaign_type)}</b>
-            </div>
-            <div>
-              <small>Zone</small>
-              <b>{offerZoneLabel(o.zones)}</b>
-            </div>
-            <div>
-              <small>Début</small>
-              <b>{vfDate(o.start_date)}</b>
-            </div>
-            <div>
-              <small>Fin</small>
-              <b>{vfDate(o.end_date)}</b>
-            </div>
+            {offerFacts(o).map((f) => (
+              <div key={f.label}>
+                <small>{f.label}</small>
+                <b>{f.value}</b>
+              </div>
+            ))}
           </div>
         </div>
         <div>

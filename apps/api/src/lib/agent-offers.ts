@@ -37,8 +37,8 @@ import { loadOwnerSharePcts, ownerShareTnd } from './owner-share.js';
 // Host sees: the spot, what the Host earns, type, dates, zone), for the wording of the four
 // notices, and for the sweep that tells the agent about a new offer.
 //
-// Scope (operator default 2026-11-14, pending Mariem's answer): CLASSIC campaign offers only —
-// a match-night offer is still answered by the Host alone. An offer belongs to an agent while
+// Scope: classic campaign offers here; match-night offers in lib/agent-event-offers.ts (Mariem
+// 15/11: « toutes les campagnes reçues par le Host »), with the same view and notices. An offer belongs to an agent while
 // the venue's affiliation to him is live (neither ended nor « exclue »); a demo campaign never reaches an agent.
 
 /** The campaign statuses whose pending proposals can still be answered (B-ACC1, owner twin). */
@@ -93,17 +93,23 @@ export type OfferAnsweredBy = 'vous' | 'screenhost' | 'toodooh';
 
 export interface AgentOfferView {
   id: string;
+  /** A classic campaign offer, or a match-night share (lib/agent-event-offers.ts). */
+  kind: 'campaign' | 'event';
   campaign_id: string;
   campaign_name: string;
   campaign_type: string;
   start_date: string | null;
   end_date: string | null;
+  /** A match's kick-off (ISO); null for a classic campaign. */
+  kickoff_at: string | null;
   screenhost_id: string;
   screenhost_name: string;
   /** Zone NAMES; [] = the whole network. */
   zones: string[];
   /** What the Host earns: its share, exactly the amount the Host sees. */
   gain_tnd: number;
+  /** How many spots the answer covers (a grouped match: all its waiting spots; else 1). */
+  spots: number;
   state: OfferState;
   answered_by: OfferAnsweredBy | null;
   /** Still pending AND the campaign can still air: Accepter / Refuser are shown. */
@@ -185,15 +191,18 @@ const toViews = async (
   const today = tunisDateOf(now);
   return rows.map(({ a, campaign: c, venueName, creativeKind, creativeDuration }) => ({
     id: a.id,
+    kind: 'campaign' as const,
     campaign_id: c.id,
     campaign_name: c.name,
     campaign_type: c.campaignType,
     start_date: c.startDate,
     end_date: c.endDate,
+    kickoff_at: null,
     screenhost_id: a.screenhostId,
     screenhost_name: venueName,
     zones: zoneRows.filter((z) => z.campaignId === c.id).map((z) => z.name),
     gain_tnd: ownerShareTnd(Number(a.revenuPrevisionnel), pcts),
+    spots: 1,
     state: offerState(a.statutAcceptation),
     answered_by: offerAnsweredBy(a.statutAcceptation, a.decidedBy, a.decidedByUserId, agentUserId),
     decidable:

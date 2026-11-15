@@ -189,7 +189,12 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
             statut,
             actor: { kind: 'admin', userId: adminId },
           })
-        : await decideEventAllocation({ allocationId: id, ownerId: target.ownerId, statut });
+        : await decideEventAllocation({
+            allocationId: id,
+            ownerId: target.ownerId,
+            statut,
+            actor: { kind: 'admin', userId: adminId },
+          });
     if (outcome.kind === 'not_found') {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Allocation introuvable.' });
     }

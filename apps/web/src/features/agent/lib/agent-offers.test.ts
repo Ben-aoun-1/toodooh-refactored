@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  kickoffLabel,
   offerAnsweredToast,
   offerBadge,
+  offerFacts,
   offerBanner,
   offerIdOfLink,
   offerTypeLabel,
@@ -62,5 +64,30 @@ describe('agent spec VF §10 — the offer window', () => {
     expect(offerZoneLabel([])).toBe('Tout le réseau');
     expect(offerZoneLabel(['Grand Tunis', 'Sousse'])).toBe('Grand Tunis, Sousse');
     expect(offerTypeLabel('standard')).toBe('Particuliers');
+  });
+
+  it('a match offer shows its kick-off and the spots the answer covers (Mariem 15/11)', () => {
+    expect(offerTypeLabel('evenement')).toBe('Soir de match');
+    expect(kickoffLabel('2027-09-15T19:00:00Z')).toBe('15/09/2027 à 20h00');
+    const match = {
+      kind: 'event' as const,
+      campaign_type: 'evenement',
+      zones: [],
+      start_date: '2027-09-15',
+      end_date: '2027-09-15',
+      kickoff_at: '2027-09-15T19:00:00Z',
+      spots: 3,
+    };
+    expect(offerFacts(match)).toEqual([
+      { label: 'Type de la campagne', value: 'Soir de match' },
+      { label: 'Coup d’envoi', value: '15/09/2027 à 20h00' },
+      { label: 'Spots', value: '3 spots' },
+    ]);
+    expect(offerFacts({ ...match, spots: 1 })[2]?.value).toBe('1 spot');
+    expect(
+      offerFacts({ ...match, kind: 'campaign', campaign_type: 'standard', kickoff_at: null }).map(
+        (f) => f.label,
+      ),
+    ).toEqual(['Type de la campagne', 'Zone', 'Début', 'Fin']);
   });
 });

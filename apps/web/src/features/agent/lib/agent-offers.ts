@@ -1,5 +1,7 @@
 import type { AgentOffer } from '../services/agent-offers.service';
 
+import { vfDate } from './agent-vf';
+
 // Agent Screenhost spec VF §10 — the offer window's words, pure (verbatim from the prototype).
 
 /** The offer a notification opens (`/agent?offre=<id>`), else null. */
@@ -77,4 +79,43 @@ export const offerZoneLabel = (zones: readonly string[]): string =>
 
 /** The Host reads every classic campaign as « Particuliers »; the agent reads the same. */
 export const offerTypeLabel = (campaignType: string): string =>
-  campaignType === 'standard' ? 'Particuliers' : campaignType === 'parc' ? 'Parc TV' : campaignType;
+  campaignType === 'standard'
+    ? 'Particuliers'
+    : campaignType === 'parc'
+      ? 'Parc TV'
+      : campaignType === 'evenement'
+        ? 'Soir de match'
+        : campaignType;
+
+/** « 15/09/2027 à 20h00 » — a kick-off on the Tunis clock. */
+export const kickoffLabel = (iso: string): string => {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Tunis' });
+  const [h, m] = d
+    .toLocaleTimeString('fr-FR', { timeZone: 'Africa/Tunis', hour: '2-digit', minute: '2-digit' })
+    .split(':');
+  return `${day} à ${h ?? '00'}h${m ?? '00'}`;
+};
+
+/**
+ * The offer window's facts: type, zone and dates for a campaign; for a match (Mariem 15/11), its
+ * kick-off and the spots the answer covers.
+ */
+export const offerFacts = (
+  o: Pick<
+    AgentOffer,
+    'kind' | 'campaign_type' | 'zones' | 'start_date' | 'end_date' | 'kickoff_at' | 'spots'
+  >,
+): { label: string; value: string }[] =>
+  o.kind === 'event'
+    ? [
+        { label: 'Type de la campagne', value: offerTypeLabel(o.campaign_type) },
+        { label: 'Coup d’envoi', value: o.kickoff_at ? kickoffLabel(o.kickoff_at) : '–' },
+        { label: 'Spots', value: o.spots > 1 ? `${o.spots} spots` : '1 spot' },
+      ]
+    : [
+        { label: 'Type de la campagne', value: offerTypeLabel(o.campaign_type) },
+        { label: 'Zone', value: offerZoneLabel(o.zones) },
+        { label: 'Début', value: vfDate(o.start_date) },
+        { label: 'Fin', value: vfDate(o.end_date) },
+      ];

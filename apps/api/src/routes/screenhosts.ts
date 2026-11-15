@@ -31,6 +31,7 @@ import {
   acceptedCampaignDays,
   acceptedCampaignLockMessage,
 } from '../lib/accepted-campaign-lock.js';
+import { noticeHostAnsweredEvent } from '../lib/agent-event-offers.js';
 import { noticeHostAnswered } from '../lib/agent-offers.js';
 import { afterClassicDecision, afterEventDecision } from '../lib/allocation-decision-effects.js';
 import { OFFER_ALREADY_ANSWERED, decideAllocation } from '../lib/allocation-decision.js';
@@ -2536,8 +2537,21 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // The first answer is final (Mariem 15/11): the agent or an admin may have answered.
+    if (outcome.kind === 'already_answered') {
+      return reply.status(409).send({
+        error: 'ALREADY_ANSWERED',
+        message: OFFER_ALREADY_ANSWERED,
+        statusCode: 409,
+      });
+    }
     // FRESH-1 / EVT-STOP re-pushes (lib/allocation-decision-effects.ts, shared with the admin).
     await afterEventDecision(outcome.screenhostId, statut, outcome.changed, request.log);
+    if (outcome.changed) {
+      await noticeHostAnsweredEvent(outcome.id, statut === 'ACCEPTE').catch((err: unknown) =>
+        request.log.warn({ err }, 'agent notice after a host match answer failed'),
+      );
+    }
     return reply.status(200).send({
       id: outcome.id,
       statut,

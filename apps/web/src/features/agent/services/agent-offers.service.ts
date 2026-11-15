@@ -8,17 +8,23 @@ export type OfferAnsweredBy = 'vous' | 'screenhost' | 'toodooh';
 
 export interface AgentOffer {
   id: string;
+  /** A classic campaign, or a match-night share (Mariem 15/11). */
+  kind: 'campaign' | 'event';
   campaign_id: string;
   campaign_name: string;
   campaign_type: string;
   start_date: string | null;
   end_date: string | null;
+  /** A match's kick-off (ISO); null for a classic campaign. */
+  kickoff_at: string | null;
   screenhost_id: string;
   screenhost_name: string;
   /** Zone names; [] = the whole network. */
   zones: string[];
   /** What the Screenhost earns. */
   gain_tnd: number;
+  /** Spots the answer covers (a grouped match: all its waiting spots). */
+  spots: number;
   state: OfferState;
   answered_by: OfferAnsweredBy | null;
   /** Accepter / Refuser are offered. */
