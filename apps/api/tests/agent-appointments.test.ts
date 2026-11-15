@@ -164,7 +164,7 @@ describe('AGT-5 — agent appointments (real Postgres)', () => {
       confirmed_kept: [DAY],
     });
     expect((await appointmentsOf('agent', s.agent, NOW))[0]?.status).toBe('confirme');
-    expect(await cancelAppointment('affilie', s.a, id)).toEqual({ ok: true });
+    expect(await cancelAppointment('affilie', s.a, id)).toMatchObject({ ok: true });
     await setAvailability(s.agent, [DAY], true, NOW);
     expect(
       (

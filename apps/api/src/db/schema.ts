@@ -1198,6 +1198,8 @@ export type AgentAppointmentStatus =
   | 'annule'
   | 'expire';
 
+export type AgentAppointmentPlace = 'sur_place' | 'telephone' | 'visio';
+
 // One appointment between an agent and an affiliate (a Screencaster, or a Screenhost owner for
 // one venue). A slot (agent, day, hour) held by a live request is unique; « Passé » is derived.
 export const agentAppointments = pgTable(
@@ -1219,6 +1221,13 @@ export const agentAppointments = pgTable(
     proposedDay: date('proposed_day'),
     proposedHour: integer('proposed_hour'),
     cancelledBy: text('cancelled_by').$type<'agent' | 'affilie'>(),
+    // AGENT-VF (spec VF §13 / §9) — who asked. An agent's own request carries a quarter-hour, a
+    // place and a free subject; the affiliate's counter-proposal adds proposedMinute.
+    initiatedBy: text('initiated_by').$type<'affilie' | 'agent'>().notNull().default('affilie'),
+    minute: integer('minute').notNull().default(0),
+    proposedMinute: integer('proposed_minute'),
+    place: text('place').$type<AgentAppointmentPlace>(),
+    subject: text('subject'),
     reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1234,6 +1243,15 @@ export const agentAppointments = pgTable(
       sql`${table.status} in ('en_attente', 'nouvel_horaire', 'confirme', 'annule', 'expire')`,
     ),
     check('agent_appointments_hour', sql`${table.hour} between 0 and 23`),
+    check('agent_appointments_initiated_by', sql`${table.initiatedBy} in ('affilie', 'agent')`),
+    check(
+      'agent_appointments_minute',
+      sql`${table.minute} in (0, 15, 30, 45) AND (${table.proposedMinute} IS NULL OR ${table.proposedMinute} in (0, 15, 30, 45))`,
+    ),
+    check(
+      'agent_appointments_place',
+      sql`${table.place} IS NULL OR ${table.place} in ('sur_place', 'telephone', 'visio')`,
+    ),
   ],
 );
 

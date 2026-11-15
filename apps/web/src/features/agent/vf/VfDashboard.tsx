@@ -24,6 +24,7 @@ import { VfIcon } from './VfIcon';
 import { VfNotifItem } from './VfNotifItem';
 import { useVfOverlay } from './VfOverlay';
 import { VfRdvList } from './VfRdvList';
+import { VfRdvModal } from './VfRdvModal';
 
 const COPY: Record<
   AgentKind,
@@ -69,7 +70,7 @@ const COPY: Record<
 export function VfDashboard({ kind }: { kind: AgentKind }) {
   const copy = COPY[kind];
   const navigate = useNavigate();
-  const { openBig, toast } = useVfOverlay();
+  const { openBig, openModal, toast } = useVfOverlay();
   const dash = useAgentDashboard();
   const d = dash.data;
   const appointments = useAgentAppointments();
@@ -224,6 +225,11 @@ export function VfDashboard({ kind }: { kind: AgentKind }) {
         ) : (
           <VfRdvList rows={upcoming} />
         )}
+        <div className="vf-rdv-new">
+          <button type="button" className="btn pri" onClick={() => openModal(<VfRdvModal />)}>
+            Prendre un rendez-vous
+          </button>
+        </div>
       </div>
 
       <div className="card">

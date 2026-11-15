@@ -40,11 +40,12 @@ export const BLOCK_HOURS: readonly number[] = Array.from({ length: 24 }, (_, h) 
 const LIVE = ['en_attente', 'nouvel_horaire', 'confirme'] as const;
 
 /** The slot's instant (Tunisia is UTC+1 all year). */
-export const slotInstant = (day: string, hour: number): Date =>
-  new Date(`${day}T${String(hour).padStart(2, '0')}:00:00+01:00`);
+export const slotInstant = (day: string, hour: number, minute = 0): Date =>
+  new Date(`${day}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+01:00`);
 
 export const frDay = (day: string) => day.split('-').reverse().join('/');
-export const frHour = (hour: number) => `${String(hour).padStart(2, '0')}h00`;
+export const frHour = (hour: number, minute = 0) =>
+  `${String(hour).padStart(2, '0')}h${String(minute).padStart(2, '0')}`;
 
 export interface Referent {
   agentUserId: string;
@@ -189,9 +190,13 @@ export const slotProblem = async (
   return held.some((h) => h.id !== ignoreAppointmentId) ? 'SLOT_TAKEN' : null;
 };
 
-const isUniqueViolation = (err: unknown) => (err as { code?: string }).code === '23505';
+/** A unique-index refusal, raw or wrapped by the query layer (the driver's error is the cause). */
+export const isUniqueViolation = (err: unknown): boolean => {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === '23505' || e?.cause?.code === '23505';
+};
 
-const notify = (
+export const notify = (
   userId: string,
   type: string,
   title: string,
@@ -200,7 +205,7 @@ const notify = (
   link: string | null,
 ) => db.insert(notifications).values({ userId, type, title, body, appointmentId, link });
 
-const AGENT_LINK = '/agent/calendrier';
+export const AGENT_LINK = '/agent/calendrier';
 
 export type BookResult =
   | { ok: true; appointment: AgentAppointment }
@@ -252,13 +257,13 @@ export const requestAppointment = async (
 };
 
 export type TransitionResult =
-  | { ok: true }
+  | { ok: true; appointment?: AgentAppointment }
   | { ok: false; error: 'NOT_FOUND' | 'BAD_STATE' | SlotError };
 
-const load = async (id: string) =>
+export const loadAppointment = async (id: string) =>
   (await db.select().from(agentAppointments).where(eq(agentAppointments.id, id)).limit(1))[0];
 
-const setStatus = (
+export const setAppointmentStatus = (
   id: string,
   from: AgentAppointment['status'][],
   set: Partial<AgentAppointment>,
@@ -271,9 +276,11 @@ const setStatus = (
 
 /** Agent: accept a pending request. */
 export const agentAccept = async (agentUserId: string, id: string): Promise<TransitionResult> => {
-  const a = await load(id);
+  const a = await loadAppointment(id);
   if (!a || a.agentUserId !== agentUserId) return { ok: false, error: 'NOT_FOUND' };
-  if ((await setStatus(id, ['en_attente'], { status: 'confirme' })).length === 0) {
+  // His own request (AGENT-VF) waits for the affiliate, never for him.
+  if (a.initiatedBy !== 'affilie') return { ok: false, error: 'BAD_STATE' };
+  if ((await setAppointmentStatus(id, ['en_attente'], { status: 'confirme' })).length === 0) {
     return { ok: false, error: 'BAD_STATE' };
   }
   const agentName = await userLabelById(agentUserId);
@@ -296,12 +303,14 @@ export const agentPropose = async (
   hour: number,
   now: Date = new Date(),
 ): Promise<TransitionResult> => {
-  const a = await load(id);
+  const a = await loadAppointment(id);
   if (!a || a.agentUserId !== agentUserId) return { ok: false, error: 'NOT_FOUND' };
-  if (a.status !== 'en_attente') return { ok: false, error: 'BAD_STATE' };
+  if (a.status !== 'en_attente' || a.initiatedBy !== 'affilie') {
+    return { ok: false, error: 'BAD_STATE' };
+  }
   const problem = await slotProblem(agentUserId, day, hour, now, id);
   if (problem) return { ok: false, error: problem };
-  const done = await setStatus(id, ['en_attente'], {
+  const done = await setAppointmentStatus(id, ['en_attente'], {
     status: 'nouvel_horaire',
     proposedDay: day,
     proposedHour: hour,
@@ -325,13 +334,18 @@ export const affiliateRespond = async (
   id: string,
   accept: boolean,
 ): Promise<TransitionResult> => {
-  const a = await load(id);
+  const a = await loadAppointment(id);
   if (!a || a.affiliateUserId !== affiliateUserId) return { ok: false, error: 'NOT_FOUND' };
-  if (a.status !== 'nouvel_horaire' || !a.proposedDay || a.proposedHour === null) {
+  if (
+    a.status !== 'nouvel_horaire' ||
+    a.initiatedBy !== 'affilie' ||
+    !a.proposedDay ||
+    a.proposedHour === null
+  ) {
     return { ok: false, error: 'BAD_STATE' };
   }
   try {
-    const done = await setStatus(
+    const done = await setAppointmentStatus(
       id,
       ['nouvel_horaire'],
       accept
@@ -369,10 +383,10 @@ export const cancelAppointment = async (
   userId: string,
   id: string,
 ): Promise<TransitionResult> => {
-  const a = await load(id);
+  const a = await loadAppointment(id);
   const own = a && (by === 'agent' ? a.agentUserId : a.affiliateUserId) === userId;
   if (!a || !own) return { ok: false, error: 'NOT_FOUND' };
-  const done = await setStatus(id, [...LIVE], { status: 'annule', cancelledBy: by });
+  const done = await setAppointmentStatus(id, [...LIVE], { status: 'annule', cancelledBy: by });
   if (done.length === 0) return { ok: false, error: 'BAD_STATE' };
   if (by === 'affilie') {
     const name = await userLabelById(userId);
@@ -380,7 +394,7 @@ export const cancelAppointment = async (
       a.agentUserId,
       'agent_appointment_cancelled',
       `Rendez-vous annulé par ${name}`,
-      `Le rendez-vous du ${frDay(a.day)} à ${frHour(a.hour)} est annulé.`,
+      `Le rendez-vous du ${frDay(a.day)} à ${frHour(a.hour, a.minute)} est annulé.`,
       id,
       AGENT_LINK,
     );
@@ -389,13 +403,13 @@ export const cancelAppointment = async (
     await notify(
       a.affiliateUserId,
       'appointment_cancelled',
-      `Votre rendez-vous du ${frDay(a.day)} à ${frHour(a.hour)} a été annulé`,
+      `Votre rendez-vous du ${frDay(a.day)} à ${frHour(a.hour, a.minute)} a été annulé`,
       `${agentName} a annulé le rendez-vous. Vous pouvez en demander un autre.`,
       id,
       null,
     );
   }
-  return { ok: true };
+  return { ok: true, appointment: a };
 };
 
 /**
@@ -495,7 +509,15 @@ export interface AppointmentView {
   venue_name: string | null;
   venue_address: string | null;
   cancelled_by: 'agent' | 'affilie' | null;
+  /** AGENT-VF — who asked, the quarter-hour, and the place of an agent's own request. */
+  initiated_by: 'affilie' | 'agent';
+  minute: number;
+  proposed_minute: number | null;
+  place: AgentAppointment['place'];
 }
+
+const slotKey = (v: { day: string; hour: number; minute: number }) =>
+  `${v.day}${String(v.hour).padStart(2, '0')}${String(v.minute).padStart(2, '0')}`;
 
 /** The appointments of one side, newest slot first, with « Passé » derived. */
 export const appointmentsOf = async (
@@ -528,7 +550,7 @@ export const appointmentsOf = async (
   return rows
     .map(({ a, objective, venue }) => {
       const counterpart = side === 'agent' ? a.affiliateUserId : a.agentUserId;
-      const past = a.status === 'confirme' && slotInstant(a.day, a.hour) <= now;
+      const past = a.status === 'confirme' && slotInstant(a.day, a.hour, a.minute) <= now;
       return {
         id: a.id,
         status: past ? ('passe' as const) : a.status,
@@ -537,7 +559,7 @@ export const appointmentsOf = async (
         proposed_day: a.proposedDay,
         proposed_hour: a.proposedHour,
         message: a.message,
-        objective,
+        objective: a.subject ?? objective,
         counterpart_id: counterpart,
         counterpart_name: nameOf.get(counterpart) ?? '—',
         venue_name: venue?.name ?? null,
@@ -545,9 +567,13 @@ export const appointmentsOf = async (
           ? [venue.address, venue.city].filter(Boolean).join(', ') || null
           : null,
         cancelled_by: a.cancelledBy,
+        initiated_by: a.initiatedBy,
+        minute: a.minute,
+        proposed_minute: a.proposedMinute,
+        place: a.place,
       };
     })
-    .sort((x, y) => `${y.day}${y.hour}`.localeCompare(`${x.day}${x.hour}`));
+    .sort((x, y) => slotKey(y).localeCompare(slotKey(x)));
 };
 
 /** Expire requests left unanswered past their time; remind the agent 24 h before a Confirmé. */
@@ -558,8 +584,10 @@ export const runAgentAppointmentTick = async (now: Date = new Date()) => {
     .where(inArray(agentAppointments.status, ['en_attente', 'nouvel_horaire']));
   let expired = 0;
   for (const a of open) {
-    if (slotInstant(a.day, a.hour) > now) continue;
-    const done = await setStatus(a.id, ['en_attente', 'nouvel_horaire'], { status: 'expire' });
+    if (slotInstant(a.day, a.hour, a.minute) > now) continue;
+    const done = await setAppointmentStatus(a.id, ['en_attente', 'nouvel_horaire'], {
+      status: 'expire',
+    });
     expired += done.length;
   }
   const soon = await db
@@ -569,7 +597,7 @@ export const runAgentAppointmentTick = async (now: Date = new Date()) => {
     .where(and(eq(agentAppointments.status, 'confirme'), isNull(agentAppointments.reminderSentAt)));
   let reminded = 0;
   for (const { a, remind } of soon) {
-    const at = slotInstant(a.day, a.hour).getTime();
+    const at = slotInstant(a.day, a.hour, a.minute).getTime();
     const ms = at - now.getTime();
     if (ms <= 0 || ms > 24 * 60 * 60 * 1000) continue;
     const claimed = await db
@@ -582,8 +610,8 @@ export const runAgentAppointmentTick = async (now: Date = new Date()) => {
     await notify(
       a.agentUserId,
       'agent_appointment_reminder',
-      `Rappel : rendez-vous avec ${name} demain à ${frHour(a.hour)}`,
-      `Le ${frDay(a.day)} à ${frHour(a.hour)}.`,
+      `Rappel : rendez-vous avec ${name} demain à ${frHour(a.hour, a.minute)}`,
+      `Le ${frDay(a.day)} à ${frHour(a.hour, a.minute)}.`,
       a.id,
       AGENT_LINK,
     );

@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Users, X } from 'lucide-react';
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ReferentGate } from '@/features/appointments/components/ReferentGate';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -63,6 +63,17 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const [appointmentMessage, setAppointmentMessage] = useState('');
   const [appointmentCalendarMonth, setAppointmentCalendarMonth] = useState(() => new Date());
   const [appointmentSending, setAppointmentSending] = useState(false);
+
+  // AGENT-VF (spec VF §13 / §9) — `?rdv=1` (the bell's « Répondre » and the email's button) opens
+  // « Prendre rendez-vous »; the flag is consumed so a refresh does not reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('rdv') !== '1') return;
+    setAppointmentOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('rdv');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const openLogout = useCallback(() => setLogoutOpen(true), []);
   const openSupport = useCallback(() => setSupportOpen(true), []);

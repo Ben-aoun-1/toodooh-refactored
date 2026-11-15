@@ -27,6 +27,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { VfEmpty } from './VfEmpty';
 import { useVfOverlay } from './VfOverlay';
 import { VfRdvList } from './VfRdvList';
+import { VfRdvModal } from './VfRdvModal';
 
 const WEEK = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const EMPTY = { unavailable: [], unavailable_hours: [] };
@@ -38,7 +39,7 @@ const EMPTY = { unavailable: [], unavailable_hours: [] };
  * its À venir / Passés tabs and, coming from a fiche, a filter on one affiliate.
  */
 export function VfCalendar() {
-  const { toast } = useVfOverlay();
+  const { toast, openModal } = useVfOverlay();
   const [month, setMonth] = useState(() => format(new Date(), MONTH_FMT));
   const [selected, setSelected] = useState<string[]>([]);
   const [tab, setTab] = useState<'up' | 'past'>('up');
@@ -288,6 +289,11 @@ export function VfCalendar() {
           ) : (
             <VfRdvList rows={rows} past={tab === 'past'} />
           )}
+          <div className="vf-rdv-new">
+            <button type="button" className="btn pri" onClick={() => openModal(<VfRdvModal />)}>
+              Prendre un rendez-vous
+            </button>
+          </div>
         </div>
       </div>
     </div>

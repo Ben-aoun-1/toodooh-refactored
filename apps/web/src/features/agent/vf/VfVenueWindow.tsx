@@ -15,6 +15,7 @@ import type { FollowupSheet } from '@/features/agent/services/agent-portfolio.se
 
 import { VfFrame, VfLogo } from './VfFrame';
 import { useVfOverlay } from './VfOverlay';
+import { VfRdvModal } from './VfRdvModal';
 
 export function VfTrend({ trend }: { trend: 'up' | 'down' | 'flat' | null }) {
   if (trend === 'up') return <span className="trend up">▲ en hausse</span>;
@@ -84,7 +85,7 @@ export function VfVenueWindow({
   screenhostId: string;
   trend: 'up' | 'down' | 'flat' | null;
 }) {
-  const { closeAll } = useVfOverlay();
+  const { closeAll, openModal } = useVfOverlay();
   const navigate = useNavigate();
   const sheet = useFollowupSheet(screenhostId);
   const data: FollowupSheet | undefined = sheet.data;
@@ -189,6 +190,13 @@ export function VfVenueWindow({
               onClick={() => go(`${AGENT_PATHS.calendar}?avec=${encodeURIComponent(v.name)}`)}
             >
               Voir ses rendez-vous
+            </button>
+            <button
+              type="button"
+              className="btn pri"
+              onClick={() => openModal(<VfRdvModal presetId={v.screenhost_id} />)}
+            >
+              Prendre un rendez-vous
             </button>
           </div>
           {attention.length > 0 && (

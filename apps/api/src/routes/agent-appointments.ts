@@ -6,6 +6,18 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { agentAppointmentObjectives, agents } from '../db/schema.js';
 import {
+  RDV_MINUTES,
+  RDV_PLACES,
+  RDV_PLACE_FR,
+  RDV_SUBJECTS,
+  affiliateAcceptRequest,
+  affiliateProposeSlot,
+  agentAcceptProposedSlot,
+  agentRequestAppointment,
+  noticeRdvCancelled,
+  rdvTargets,
+} from '../lib/agent-appointment-requests.js';
+import {
   BLOCK_HOURS,
   SLOT_HOURS,
   type TransitionResult,
@@ -44,6 +56,16 @@ const requestSchema = z.object({
   ...slot,
   message: z.string().trim().max(2000).nullable().optional(),
 });
+const minute = z.union([z.literal(0), z.literal(15), z.literal(30), z.literal(45)]);
+// AGENT-VF (spec VF §13 / §9) — the agent's own request.
+const agentRequestSchema = z.object({
+  target_id: z.uuid(),
+  ...slot,
+  minute,
+  place: z.enum(['sur_place', 'telephone', 'visio']),
+  subject: z.string().trim().min(1).max(120),
+  message: z.string().trim().max(2000).nullable().optional(),
+});
 const availabilitySchema = z.object({
   days: z.array(z.iso.date()).min(1).max(62),
   available: z.boolean(),
@@ -80,9 +102,16 @@ const SLOT_MESSAGES: Record<string, string> = {
   NO_REFERENT: 'Aucun agent référent.',
   BAD_OBJECTIVE: 'Choisissez un objectif.',
   BAD_STATE: 'Ce rendez-vous a déjà été traité.',
+  NOT_YOUR_AFFILIATE: 'Ce contact ne fait pas partie de vos affiliés.',
+  BAD_SUBJECT: 'Choisissez l’objet du rendez-vous.',
   NOT_FOUND: 'Rendez-vous introuvable.',
 };
 
+/** The same errors, worded for the agent himself. */
+const AGENT_SLOT_MESSAGES: Record<string, string> = {
+  SLOT_TAKEN: 'Vous avez déjà un rendez-vous sur ce créneau.',
+  PAST_SLOT: 'Choisissez une date et une heure à venir.',
+};
 const sendTransition = (reply: FastifyReply, r: TransitionResult) =>
   r.ok
     ? reply.status(200).send({ ok: true })
@@ -176,9 +205,29 @@ export const agentAppointmentRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/appointments/:id/cancel', affiliateGuard, async (request, reply) => {
     const params = idParam.safeParse(request.params);
     if (!params.success) return invalid(reply, params.error.issues);
+    const r = await cancelAppointment('affilie', request.user?.id ?? '', params.data.id);
+    if (r.ok && r.appointment) await noticeRdvCancelled(r.appointment, 'affilie');
+    return sendTransition(reply, r);
+  });
+
+  // AGENT-VF (spec VF §13 / §9) — answer the AGENT's own request: accept it as asked, or propose
+  // another slot (the agent then accepts it or cancels).
+  app.post('/api/appointments/:id/accept', affiliateGuard, async (request, reply) => {
+    const params = idParam.safeParse(request.params);
+    if (!params.success) return invalid(reply, params.error.issues);
     return sendTransition(
       reply,
-      await cancelAppointment('affilie', request.user?.id ?? '', params.data.id),
+      await affiliateAcceptRequest(request.user?.id ?? '', params.data.id),
+    );
+  });
+  app.post('/api/appointments/:id/propose', affiliateGuard, async (request, reply) => {
+    const params = idParam.safeParse(request.params);
+    if (!params.success) return invalid(reply, params.error.issues);
+    const body = z.object({ ...slot, minute }).safeParse(request.body ?? {});
+    if (!body.success) return invalid(reply, body.error.issues);
+    return sendTransition(
+      reply,
+      await affiliateProposeSlot(request.user?.id ?? '', params.data.id, body.data),
     );
   });
 
@@ -242,10 +291,55 @@ export const agentAppointmentRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/agent/appointments/:id/cancel', agentGuard, async (request, reply) => {
     const params = idParam.safeParse(request.params);
     if (!params.success) return invalid(reply, params.error.issues);
-    return sendTransition(
-      reply,
-      await cancelAppointment('agent', request.user?.id ?? '', params.data.id),
-    );
+    const r = await cancelAppointment('agent', request.user?.id ?? '', params.data.id);
+    if (r.ok && r.appointment) await noticeRdvCancelled(r.appointment, 'agent');
+    return sendTransition(reply, r);
+  });
+
+  // AGENT-VF (spec VF §13 / §9) — « Prendre un rendez-vous »: who the agent may ask, the places
+  // and the subjects of his role.
+  app.get('/api/agent/appointments/options', agentGuard, async (request, reply) => {
+    const role =
+      request.user?.role === 'screencast_agent' ? 'screencast_agent' : 'screenhost_agent';
+    const targets = await rdvTargets(request.user?.id ?? '', role);
+    return reply.status(200).send({
+      targets: targets.map((t) => ({ id: t.id, name: t.name })),
+      places: RDV_PLACES.map((p) => ({ id: p, label: RDV_PLACE_FR[p] })),
+      subjects: RDV_SUBJECTS[role],
+      minutes: RDV_MINUTES,
+    });
+  });
+  // POST /api/agent/appointments — the agent's request: En attente de réponse.
+  app.post('/api/agent/appointments', agentGuard, async (request, reply) => {
+    const body = agentRequestSchema.safeParse(request.body ?? {});
+    if (!body.success) return invalid(reply, body.error.issues);
+    const role =
+      request.user?.role === 'screencast_agent' ? 'screencast_agent' : 'screenhost_agent';
+    const r = await agentRequestAppointment(request.user?.id ?? '', role, {
+      targetId: body.data.target_id,
+      day: body.data.day,
+      hour: body.data.hour,
+      minute: body.data.minute,
+      place: body.data.place,
+      subject: body.data.subject,
+      message: body.data.message?.trim() || null,
+    });
+    if (!r.ok) {
+      return reply
+        .status(r.error === 'NOT_YOUR_AFFILIATE' ? 404 : 409)
+        .send({ error: r.error, message: AGENT_SLOT_MESSAGES[r.error] ?? SLOT_MESSAGES[r.error] });
+    }
+    return reply.status(201).send({ id: r.appointment.id, target: r.target });
+  });
+  // POST /api/agent/appointments/:id/accept-slot — accept the slot the affiliate proposed back.
+  app.post('/api/agent/appointments/:id/accept-slot', agentGuard, async (request, reply) => {
+    const params = idParam.safeParse(request.params);
+    if (!params.success) return invalid(reply, params.error.issues);
+    const r = await agentAcceptProposedSlot(request.user?.id ?? '', params.data.id);
+    if (!r.ok && r.error === 'SLOT_TAKEN') {
+      return reply.status(409).send({ error: r.error, message: AGENT_SLOT_MESSAGES['SLOT_TAKEN'] });
+    }
+    return sendTransition(reply, r);
   });
 
   // ── hub: the appointment reasons ───────────────────────────────────────────────────────

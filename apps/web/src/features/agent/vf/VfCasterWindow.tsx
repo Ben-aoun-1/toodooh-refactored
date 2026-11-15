@@ -12,6 +12,7 @@ import { VfStatusBadge } from './VfCampCard';
 import { VfCampWindow } from './VfCampWindow';
 import { VfFrame, VfLogo } from './VfFrame';
 import { useVfOverlay } from './VfOverlay';
+import { VfRdvModal } from './VfRdvModal';
 
 /**
  * AGENT-VF (spec VF « Mes Screencasters ») — a Screencaster's fiche in the window at the centre:
@@ -25,7 +26,7 @@ export function VfCasterWindow({
   affiliate: AgentAffiliate;
   campaigns: AgentCampaign[];
 }) {
-  const { closeAll, openBig } = useVfOverlay();
+  const { closeAll, openBig, openModal } = useVfOverlay();
   const navigate = useNavigate();
   const go = (path: string) => {
     closeAll();
@@ -91,6 +92,13 @@ export function VfCasterWindow({
               onClick={() => go(`${AGENT_PATHS.calendar}?avec=${encodeURIComponent(a.name)}`)}
             >
               Voir ses rendez-vous
+            </button>
+            <button
+              type="button"
+              className="btn pri"
+              onClick={() => openModal(<VfRdvModal presetId={a.user_id} />)}
+            >
+              Prendre un rendez-vous
             </button>
           </div>
         </div>

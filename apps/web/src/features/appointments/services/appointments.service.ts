@@ -25,6 +25,31 @@ export interface AppointmentView {
   venue_name: string | null;
   venue_address: string | null;
   cancelled_by: 'agent' | 'affilie' | null;
+  /** AGENT-VF — who asked, the quarter-hour, and the place of an agent's own request. */
+  initiated_by: 'affilie' | 'agent';
+  minute: number;
+  proposed_minute: number | null;
+  place: AppointmentPlace | null;
+}
+
+export type AppointmentPlace = 'sur_place' | 'telephone' | 'visio';
+
+/** GET /api/agent/appointments/options — what « Prendre un rendez-vous » offers the agent. */
+export interface AgentRdvOptions {
+  targets: { id: string; name: string }[];
+  places: { id: AppointmentPlace; label: string }[];
+  subjects: string[];
+  minutes: number[];
+}
+
+export interface AgentRdvRequest {
+  target_id: string;
+  day: string;
+  hour: number;
+  minute: number;
+  place: AppointmentPlace;
+  subject: string;
+  message: string | null;
 }
 
 export interface Referent {
@@ -89,6 +114,22 @@ export const appointmentsService = {
   },
   propose(id: string, day: string, hour: number) {
     return apiClient.post<{ ok: true }>(`/agent/appointments/${id}/propose`, { day, hour });
+  },
+  // AGENT-VF (spec VF §13 / §9) — the agent's own request and its answers.
+  agentOptions(): Promise<AgentRdvOptions> {
+    return apiClient.get('/agent/appointments/options');
+  },
+  agentRequest(body: AgentRdvRequest) {
+    return apiClient.post<{ id: string; target: string }>('/agent/appointments', body);
+  },
+  acceptSlot(id: string) {
+    return apiClient.post<{ ok: true }>(`/agent/appointments/${id}/accept-slot`);
+  },
+  acceptRequest(id: string) {
+    return apiClient.post<{ ok: true }>(`/appointments/${id}/accept`);
+  },
+  proposeBack(id: string, slot: { day: string; hour: number; minute: number }) {
+    return apiClient.post<{ ok: true }>(`/appointments/${id}/propose`, slot);
   },
   cancelAsAgent(id: string) {
     return apiClient.post<{ ok: true }>(`/agent/appointments/${id}/cancel`);

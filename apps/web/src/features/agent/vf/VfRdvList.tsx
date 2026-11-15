@@ -4,11 +4,13 @@ import { createPortal } from 'react-dom';
 import { ProposeSlotModal } from '@/features/appointments/components/ProposeSlotModal';
 import { useAppointmentMutation } from '@/features/appointments/hooks/useAppointments';
 import {
-  APPOINTMENT_STATUS_FR,
+  PLACE_FR,
+  agentCanAcceptSlot,
   agentCanAnswer,
   canCancel,
   dayLabel,
   hourLabel,
+  statusLabel,
 } from '@/features/appointments/lib/appointments';
 import {
   type AppointmentStatus,
@@ -51,6 +53,7 @@ function Row({ appointment: a, past }: { appointment: AppointmentView; past: boo
     appointmentsService.propose(v.id, v.day, v.hour),
   );
   const cancel = useAppointmentMutation((id: string) => appointmentsService.cancelAsAgent(id));
+  const acceptSlot = useAppointmentMutation((id: string) => appointmentsService.acceptSlot(id));
   const run = async (p: Promise<unknown>, ok: string) => {
     try {
       await p;
@@ -60,12 +63,13 @@ function Row({ appointment: a, past }: { appointment: AppointmentView; past: boo
     }
   };
   const who = a.venue_name ?? a.counterpart_name;
-  const when = `${dayLabel(a.day)} à ${hourLabel(a.hour)}`;
+  const when = `${dayLabel(a.day)} à ${hourLabel(a.hour, a.minute)}`;
   const details = [
     a.objective,
+    a.place ? PLACE_FR[a.place] : null,
     a.venue_name ? a.counterpart_name : null,
     a.status === 'nouvel_horaire' && a.proposed_day && a.proposed_hour !== null
-      ? `proposé le ${dayLabel(a.proposed_day)} à ${hourLabel(a.proposed_hour)}`
+      ? `proposé le ${dayLabel(a.proposed_day)} à ${hourLabel(a.proposed_hour, a.proposed_minute ?? 0)}`
       : null,
     a.message ? `« ${a.message} »` : null,
   ].filter(Boolean);
@@ -101,7 +105,10 @@ function Row({ appointment: a, past }: { appointment: AppointmentView; past: boo
             className="btn pri"
             onClick={() => {
               closeAll();
-              void run(cancel.mutateAsync(a.id), 'Rendez-vous annulé.');
+              void run(
+                cancel.mutateAsync(a.id),
+                `Rendez-vous annulé. ${who} et l'équipe Toodooh sont prévenus.`,
+              );
             }}
           >
             Annuler le rendez-vous
@@ -124,7 +131,17 @@ function Row({ appointment: a, past }: { appointment: AppointmentView; past: boo
         </span>
       </span>
       <span className="vf-rdv-acts">
-        <span className={`badge ${BADGE[a.status]}`}>{APPOINTMENT_STATUS_FR[a.status]}</span>
+        <span className={`badge ${BADGE[a.status]}`}>{statusLabel(a)}</span>
+        {!past && agentCanAcceptSlot(a) && (
+          <button
+            type="button"
+            className="btn sm pri"
+            disabled={acceptSlot.isPending}
+            onClick={() => void run(acceptSlot.mutateAsync(a.id), 'Rendez-vous confirmé')}
+          >
+            Accepter
+          </button>
+        )}
         {!past && agentCanAnswer(a) && (
           <>
             <button
