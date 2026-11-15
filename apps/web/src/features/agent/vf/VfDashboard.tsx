@@ -16,6 +16,8 @@ import { vfCampCard, vfCategoryKey, vfVenueSubline } from '@/features/agent/lib/
 import { useAgentAppointments } from '@/features/appointments/hooks/useAppointments';
 import { splitAppointments } from '@/features/appointments/lib/appointments';
 
+import { useAgentLogos } from '../hooks/useAgentLogos';
+
 import { VfCampCard } from './VfCampCard';
 import { VfCampWindow } from './VfCampWindow';
 import { VfEmpty } from './VfEmpty';
@@ -77,6 +79,7 @@ export function VfDashboard({ kind }: { kind: AgentKind }) {
   const upcoming = splitAppointments(appointments.data?.appointments ?? []).upcoming.slice(0, 3);
   const notifications = sortNotifications(useAgentNotifications().data ?? []);
   const sh = kind === 'screenhost';
+  const logos = useAgentLogos();
 
   const copyCode = () => {
     if (!d?.code) return;
@@ -172,6 +175,8 @@ export function VfDashboard({ kind }: { kind: AgentKind }) {
                   <VfFrame
                     name={a.name}
                     kind={sh ? vfCategoryKey(a.category) : 'adv'}
+                    logoUrl={logos.of(a.id)?.url}
+                    pending={logos.of(a.id)?.status === 'en_attente'}
                     attention={a.attention > 0}
                   />
                   <b>{a.name}</b>
@@ -205,6 +210,7 @@ export function VfDashboard({ kind }: { kind: AgentKind }) {
                 <VfCampCard
                   key={c.id}
                   campaign={vfCampCard(c)}
+                  logoUrl={logos.ofCampaign(c.id)?.url}
                   onOpen={() => openBig(<VfCampWindow campaign={c} />)}
                 />
               ))}

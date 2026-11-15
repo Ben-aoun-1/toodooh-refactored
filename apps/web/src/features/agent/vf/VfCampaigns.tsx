@@ -18,6 +18,8 @@ import type {
 import { useAgentViewStore, viewOf } from '@/features/agent/stores/agent-view.store';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 
+import { useAgentLogos } from '../hooks/useAgentLogos';
+
 import { VfCampCard, VfStatusBadge } from './VfCampCard';
 import { VfCampWindow } from './VfCampWindow';
 import { VfEmpty } from './VfEmpty';
@@ -53,6 +55,7 @@ export function VfCampaigns({ kind }: { kind: AgentKind }) {
   const sh = kind === 'screenhost';
   const copy = COPY[kind];
   const { openBig } = useVfOverlay();
+  const logos = useAgentLogos();
   const userId = useAuthStore((s) => s.user?.id);
   const views = useAgentViewStore((s) => s.views);
   const setView = useAgentViewStore((s) => s.setView);
@@ -159,7 +162,12 @@ export function VfCampaigns({ kind }: { kind: AgentKind }) {
       ) : view === 'cards' ? (
         <div className="camps">
           {rows.map((c) => (
-            <VfCampCard key={c.id} campaign={vfCampCard(c)} onOpen={() => open(c)} />
+            <VfCampCard
+              key={c.id}
+              campaign={vfCampCard(c)}
+              logoUrl={logos.ofCampaign(c.id)?.url}
+              onOpen={() => open(c)}
+            />
           ))}
         </div>
       ) : (

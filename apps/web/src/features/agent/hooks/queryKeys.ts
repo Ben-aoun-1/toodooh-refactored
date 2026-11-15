@@ -25,4 +25,7 @@ export const agentKeys = {
 
   /** Agent spec VF §10 — one campaign offer of an affiliated Screenhost. */
   offer: (id: string) => [...agentKeys.all, 'offer', id] as const,
+
+  /** Agent specs VF « Logos » — the logos of the agent's affiliates and campaigns. */
+  logos: () => [...agentKeys.all, 'logos'] as const,
 };

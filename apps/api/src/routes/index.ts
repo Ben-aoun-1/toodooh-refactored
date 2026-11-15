@@ -57,6 +57,7 @@ import { emailAvailabilityRoute } from './email-availability.js';
 import { eventBoostRoutes } from './event-boost.js';
 import { eventsRoutes } from './events.js';
 import { internalRoutes } from './internal.js';
+import { logoRoutes } from './logos.js';
 import { meRoutes } from './me.js';
 import { notificationsRoutes } from './notifications.js';
 import { ownerStatementsRoutes } from './owner-statements.js';
@@ -217,6 +218,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(agentProfileRoutes);
   await app.register(agentWalletRoutes);
   await app.register(agentOfferRoutes);
+  await app.register(logoRoutes);
   await app.register(agentPortfolioRoutes);
   await app.register(agentAppointmentRoutes);
   await app.register(agentNewsRoutes);

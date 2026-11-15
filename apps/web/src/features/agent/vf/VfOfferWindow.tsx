@@ -13,6 +13,8 @@ import { vfDate } from '@/features/agent/lib/agent-vf';
 import { agentOffersService } from '@/features/agent/services/agent-offers.service';
 import { getErrorMessage } from '@/lib/errors';
 
+import { useAgentLogos } from '../hooks/useAgentLogos';
+
 import { VfLogo } from './VfFrame';
 import { VfIcon } from './VfIcon';
 import { useVfOverlay } from './VfOverlay';
@@ -30,6 +32,7 @@ const BADGE_CLASS = {
  */
 export function VfOfferWindow({ offerId }: { offerId: string }) {
   const { closeAll, toast } = useVfOverlay();
+  const logos = useAgentLogos();
   const offer = useAgentOffer(offerId);
   const answer = useAnswerAgentOffer(offerId);
   const close = (
@@ -72,7 +75,12 @@ export function VfOfferWindow({ offerId }: { offerId: string }) {
   return (
     <>
       <div className="bh">
-        <VfLogo kind="shop" size={60} title={o.screenhost_name} />
+        <VfLogo
+          kind="shop"
+          size={60}
+          title={o.screenhost_name}
+          logoUrl={logos.of(o.screenhost_id)?.url}
+        />
         <div>
           <h2>{o.campaign_name}</h2>
           <p>Offre de campagne pour {o.screenhost_name}</p>

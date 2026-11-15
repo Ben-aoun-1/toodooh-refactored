@@ -28,6 +28,8 @@ import {
 } from '@/features/agent/stores/agent-view.store';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 
+import { useAgentLogos } from '../hooks/useAgentLogos';
+
 import { VfCasterWindow } from './VfCasterWindow';
 import { VfEmpty } from './VfEmpty';
 import { VfFrame, VfLogo } from './VfFrame';
@@ -100,6 +102,7 @@ function useFicheParam(ready: boolean, open: (id: string) => boolean) {
  */
 function ShAffiliates() {
   const { openBig } = useVfOverlay();
+  const logos = useAgentLogos();
   const { view, onView } = useView();
   const affiliates = useShAgentAffiliates();
   const followup = useAgentFollowup();
@@ -158,6 +161,7 @@ function ShAffiliates() {
                           kind={vfCategoryKey(s.category)}
                           size={34}
                           title={s.name}
+                          logoUrl={logos.of(s.screenhost_id)?.url}
                           attention={s.attention.length > 0}
                         />
                         <div className="nm">
@@ -193,6 +197,8 @@ function ShAffiliates() {
                 <VfFrame
                   name={s.name}
                   kind={vfCategoryKey(s.category)}
+                  logoUrl={logos.of(s.screenhost_id)?.url}
+                  pending={logos.of(s.screenhost_id)?.status === 'en_attente'}
                   attention={s.attention.length > 0}
                 />
                 <div className="nm vf-mt10">
@@ -247,6 +253,7 @@ function ShAffiliates() {
                         kind={vfCategoryKey(catOf(f.screenhost_id))}
                         size={32}
                         title={f.name}
+                        logoUrl={logos.of(f.screenhost_id)?.url}
                         attention={f.attention.length > 0}
                       />
                       <div className="nm">
@@ -298,6 +305,7 @@ function ShAffiliates() {
  */
 function ScAffiliates() {
   const { openBig } = useVfOverlay();
+  const logos = useAgentLogos();
   const { view, onView } = useView();
   const affiliates = useAgentAffiliates();
   const campaigns = useAgentCampaigns();
@@ -351,7 +359,12 @@ function ScAffiliates() {
                 <tr className="cl" key={a.id} onClick={() => open(a.user_id)}>
                   <td>
                     <div className="vf-cell-id">
-                      <VfLogo kind="adv" size={34} title={a.name} />
+                      <VfLogo
+                        kind="adv"
+                        size={34}
+                        title={a.name}
+                        logoUrl={logos.of(a.user_id)?.url}
+                      />
                       <div className="nm">
                         <b>{a.name}</b>
                         <small>{sub(a)}</small>
@@ -372,7 +385,12 @@ function ScAffiliates() {
         <div className="shcards vf-sc-grid">
           {rows.map((a) => (
             <button type="button" className="shc" key={a.id} onClick={() => open(a.user_id)}>
-              <VfFrame name={a.name} kind="adv" />
+              <VfFrame
+                name={a.name}
+                kind="adv"
+                logoUrl={logos.of(a.user_id)?.url}
+                pending={logos.of(a.user_id)?.status === 'en_attente'}
+              />
               <div className="nm vf-mt10">
                 <b>{a.name}</b>
                 <small>{sub(a)}</small>

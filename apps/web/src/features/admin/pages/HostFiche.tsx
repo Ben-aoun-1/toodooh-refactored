@@ -11,6 +11,7 @@ import HostHistoryCard from '@/features/admin/components/host/HostHistoryCard';
 import HostLocksNotice from '@/features/admin/components/host/HostLocksNotice';
 import HostOwnerAccountCard from '@/features/admin/components/host/HostOwnerAccountCard';
 import HostVenueInfoCard from '@/features/admin/components/host/HostVenueInfoCard';
+import { AdminLogoCard } from '@/features/admin/components/logos/AdminLogoCard';
 import { useHostFiche } from '@/features/admin/hooks/useAdminHost';
 
 /**
@@ -60,6 +61,13 @@ export default function HostFiche() {
       <div className="mx-auto max-w-5xl space-y-6">
         {back}
         <HostVenueInfoCard venue={venue} />
+
+        <HostSection
+          title="Logo"
+          description="Le logo de l'établissement, tel que les agents et les annonceurs le voient."
+        >
+          <AdminLogoCard kind="screenhost" id={venue.id} />
+        </HostSection>
 
         <HostSection
           title="Horaires & éligibilité"

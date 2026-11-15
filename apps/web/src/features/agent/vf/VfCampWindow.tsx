@@ -5,6 +5,8 @@ import type {
   ShAgentCampaign,
 } from '@/features/agent/services/agent-portfolio.service';
 
+import { useAgentLogos } from '../hooks/useAgentLogos';
+
 import { VfStatusBadge } from './VfCampCard';
 import { VfLogo } from './VfFrame';
 import { VfIcon } from './VfIcon';
@@ -18,13 +20,14 @@ import { useVfOverlay } from './VfOverlay';
  */
 export function VfCampWindow({ campaign: c }: { campaign: AgentCampaign | ShAgentCampaign }) {
   const { closeAll } = useVfOverlay();
+  const logos = useAgentLogos();
   const sh = isShAgentCampaign(c);
   const party = sh ? c.advertiser_name : c.affiliate_name;
   const type = VF_TYPE_FR[c.type];
   return (
     <>
       <div className="bh">
-        <VfLogo kind="adv" size={60} />
+        <VfLogo kind="adv" size={60} logoUrl={logos.ofCampaign(c.id)?.url} />
         <div>
           <h2>{c.name}</h2>
           <p>{party}</p>
@@ -75,7 +78,7 @@ export function VfCampWindow({ campaign: c }: { campaign: AgentCampaign | ShAgen
               {c.venues.map((v) => (
                 <div className="li" key={v.id}>
                   <span className="vf-li-id">
-                    <VfLogo kind="shop" size={32} title={v.name} />
+                    <VfLogo kind="shop" size={32} title={v.name} logoUrl={logos.of(v.id)?.url} />
                     <span className="nm">
                       <b className="vf-w500">{v.name}</b>
                       <small>Screenhost affilié</small>

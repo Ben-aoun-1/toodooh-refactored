@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 
+import { useAgentLogos } from '@/features/agent/hooks/useAgentLogos';
 import { useFollowupSheet } from '@/features/agent/hooks/useAgentPortfolio';
 import { vfNum, vfPct, vfTnd } from '@/features/agent/lib/agent-format';
 import { AGENT_PATHS } from '@/features/agent/lib/agent-shell';
@@ -13,7 +14,8 @@ import {
 } from '@/features/agent/lib/agent-vf';
 import type { FollowupSheet } from '@/features/agent/services/agent-portfolio.service';
 
-import { VfFrame, VfLogo } from './VfFrame';
+import { VfLogo } from './VfFrame';
+import { VfLogoEditor } from './VfLogoEditor';
 import { useVfOverlay } from './VfOverlay';
 import { VfRdvModal } from './VfRdvModal';
 
@@ -86,6 +88,7 @@ export function VfVenueWindow({
   trend: 'up' | 'down' | 'flat' | null;
 }) {
   const { closeAll, openModal } = useVfOverlay();
+  const logos = useAgentLogos();
   const navigate = useNavigate();
   const sheet = useFollowupSheet(screenhostId);
   const data: FollowupSheet | undefined = sheet.data;
@@ -118,7 +121,13 @@ export function VfVenueWindow({
   return (
     <>
       <div className="bh">
-        <VfLogo kind={kind} size={60} title={v.name} attention={attention.length > 0} />
+        <VfLogo
+          kind={kind}
+          size={60}
+          title={v.name}
+          logoUrl={logos.of(v.screenhost_id)?.url}
+          attention={attention.length > 0}
+        />
         <div>
           <h2>{v.name}</h2>
           <p>{vfVenueSubline(v)}</p>
@@ -141,13 +150,12 @@ export function VfVenueWindow({
       </div>
       <div className="bb">
         <div>
-          <div className="logoedit">
-            <VfFrame name={v.name} kind={kind} attention={attention.length > 0} />
-            <div>
-              <b className="vf-b13">Logo de l&apos;établissement</b>
-              <div className="tiny vf-logo-note">Aucun logo pour le moment.</div>
-            </div>
-          </div>
+          <VfLogoEditor
+            subjectId={v.screenhost_id}
+            name={v.name}
+            kind={kind}
+            attention={attention.length > 0}
+          />
           <div className="kv">
             <div>
               <small>Revenus générés</small>

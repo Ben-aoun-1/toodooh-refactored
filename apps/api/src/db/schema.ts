@@ -1257,6 +1257,49 @@ export const agentAppointments = pgTable(
 
 export type AgentAppointment = typeof agentAppointments.$inferSelect;
 
+// Mariem 12/11/2026 (agent specs VF « Logos ») — the logo of a venue (Screenhost) or of an account
+// (Screencaster). One validated and one pending row per subject (partial unique indexes); an
+// agent's upload is 'en_attente' until an admin decides; a replaced row is kept as 'remplace'.
+export type LogoStatus = 'en_attente' | 'valide' | 'refuse' | 'remplace';
+
+export const logos = pgTable(
+  'logos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    subjectKind: text('subject_kind').$type<'screenhost' | 'advertiser'>().notNull(),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    storageKey: text('storage_key').notNull(),
+    contentType: text('content_type').notNull(),
+    status: text('status').$type<LogoStatus>().notNull(),
+    uploadedBy: uuid('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
+    uploadedByRole: text('uploaded_by_role').$type<'agent' | 'owner' | 'admin'>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    refusalReason: text('refusal_reason'),
+  },
+  (table) => [
+    uniqueIndex('logos_screenhost_live_uq')
+      .on(table.screenhostId, table.status)
+      .where(
+        sql`${table.screenhostId} IS NOT NULL AND ${table.status} in ('en_attente', 'valide')`,
+      ),
+    uniqueIndex('logos_user_live_uq')
+      .on(table.userId, table.status)
+      .where(sql`${table.userId} IS NOT NULL AND ${table.status} in ('en_attente', 'valide')`),
+    index('logos_status_idx').on(table.status),
+    check(
+      'logos_subject',
+      sql`(${table.subjectKind} = 'screenhost' AND ${table.screenhostId} IS NOT NULL AND ${table.userId} IS NULL) OR (${table.subjectKind} = 'advertiser' AND ${table.userId} IS NOT NULL AND ${table.screenhostId} IS NULL)`,
+    ),
+    check('logos_status', sql`${table.status} in ('en_attente', 'valide', 'refuse', 'remplace')`),
+    check('logos_uploaded_by_role', sql`${table.uploadedByRole} in ('agent', 'owner', 'admin')`),
+  ],
+);
+
+export type Logo = typeof logos.$inferSelect;
+
 // AGT-7 (Agent Screenhost spec v1.0 §6 « Suivi de mes Screenhosts ») — one row per venue and day,
 // computed by the daily follow-up job from the engine's sources. The score and its four rates
 // are the engine's own (lib/sps-score); the 30-day trend and the 90-day curve read these rows.

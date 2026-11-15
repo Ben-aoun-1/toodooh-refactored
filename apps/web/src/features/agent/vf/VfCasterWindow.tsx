@@ -8,9 +8,12 @@ import type {
   AgentCampaign,
 } from '@/features/agent/services/agent-portfolio.service';
 
+import { useAgentLogos } from '../hooks/useAgentLogos';
+
 import { VfStatusBadge } from './VfCampCard';
 import { VfCampWindow } from './VfCampWindow';
-import { VfFrame, VfLogo } from './VfFrame';
+import { VfLogo } from './VfFrame';
+import { VfLogoEditor } from './VfLogoEditor';
 import { useVfOverlay } from './VfOverlay';
 import { VfRdvModal } from './VfRdvModal';
 
@@ -27,6 +30,7 @@ export function VfCasterWindow({
   campaigns: AgentCampaign[];
 }) {
   const { closeAll, openBig, openModal } = useVfOverlay();
+  const logos = useAgentLogos();
   const navigate = useNavigate();
   const go = (path: string) => {
     closeAll();
@@ -35,7 +39,7 @@ export function VfCasterWindow({
   return (
     <>
       <div className="bh">
-        <VfLogo kind="adv" size={60} title={a.name} />
+        <VfLogo kind="adv" size={60} title={a.name} logoUrl={logos.of(a.user_id)?.url} />
         <div>
           <h2>{a.name}</h2>
           <p>Screencaster affilié</p>
@@ -53,13 +57,7 @@ export function VfCasterWindow({
       </div>
       <div className="bb">
         <div>
-          <div className="logoedit">
-            <VfFrame name={a.name} kind="adv" />
-            <div>
-              <b className="vf-b13">Logo du Screencaster</b>
-              <div className="tiny vf-logo-note">Aucun logo pour le moment.</div>
-            </div>
-          </div>
+          <VfLogoEditor subjectId={a.user_id} name={a.name} kind="adv" />
           <div className="kv">
             <div>
               <small>Revenus générés</small>

@@ -7,6 +7,7 @@ import {
   FlaskConical,
   Gamepad2,
   LayoutDashboard,
+  Image as ImageIcon,
   LifeBuoy,
   LogOut,
   MapPin,
@@ -377,6 +378,17 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                   >
                     <Presentation className="mr-3 h-5 w-5" />
                     Démo
+                  </button>
+                  <button
+                    onClick={() => navigate('/admin-logos')}
+                    className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                      location.pathname === '/admin-logos'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
+                    }`}
+                  >
+                    <ImageIcon className="mr-3 h-5 w-5" />
+                    Logos
                   </button>
                   <button
                     onClick={() => navigate('/admin-agents')}

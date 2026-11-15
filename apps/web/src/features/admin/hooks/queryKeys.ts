@@ -16,6 +16,10 @@ export const adminKeys = {
   /** SUP-1 — the admin « Support » queue (GET /api/admin/support?status=). */
   support: (status: string) => [...adminKeys.all, 'support', status] as const,
   supportAll: () => [...adminKeys.all, 'support'] as const,
+  /** Agent specs VF « Logos » — the pending queue and one subject's validated logo. */
+  logosAll: () => [...adminKeys.all, 'logos'] as const,
+  logosPending: () => [...adminKeys.all, 'logos', 'pending'] as const,
+  logo: (kind: string, id: string) => [...adminKeys.all, 'logos', kind, id] as const,
 
   /** ADM-BELL1 — the admin notification-bell feed (GET /api/notifications, session-scoped). */
   notifications: (userId: string) => [...adminKeys.all, 'notifications', userId] as const,
