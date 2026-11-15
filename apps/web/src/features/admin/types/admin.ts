@@ -52,6 +52,17 @@ export interface CreateInternalAccountInput {
   covered_zone?: string;
   commission_pct?: number;
   certified_at?: string;
+  /** Spec VF §15 — the agent's identity card, both sides, stored by stageAgentCin first. */
+  cin_recto?: StagedCin;
+  cin_verso?: StagedCin;
+}
+
+/** A CIN side stored ahead of the account's creation (POST /api/admin/agent-cin). */
+export interface StagedCin {
+  key: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
 }
 
 export interface InternalAccount {

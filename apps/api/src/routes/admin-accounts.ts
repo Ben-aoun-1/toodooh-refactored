@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 
+import multipart from '@fastify/multipart';
 import { hashPassword } from 'better-auth/crypto';
 import { fromNodeHeaders } from 'better-auth/node';
 import { desc, eq, inArray } from 'drizzle-orm';
@@ -8,15 +10,17 @@ import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { accounts, agents, users } from '../db/schema.js';
+import { accounts, agents, userDocuments, users } from '../db/schema.js';
 import { env } from '../env.js';
 import { generateUniqueAgentCode, type AgentCodePrefix } from '../lib/agent-code.js';
 import { parkAgentInvite, takeAgentInvite } from '../lib/agent-invite.js';
 import { agentOnboarding, currentCge, isAgentRole } from '../lib/agent-sheet.js';
 import { generateTempPassword } from '../lib/generate-password.js';
+import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
 import { pushAgentToHub } from '../lib/wedooh-sync.js';
 import { logger } from '../logger.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
+import { storage } from '../storage/s3-storage.js';
 import { validatePhone } from '../validation/phone.js';
 
 // The two agent roles get an issued referral code (held in agents.code), PREFIXED by the agent
@@ -57,8 +61,10 @@ const staffGuard = { preHandler: [requireAuth, requireRole('admin', 'superadmin'
 // above the 10-char public-signup floor — is enforced whenever a password is present.
 // AGT-1 (agent specs v1.0 §2, « Créer un Agent ») — an agent is created with its full sheet:
 // first and last name, phone, address, governorate, covered zone and certification date are
-// required; the tax number too for a Screencaster agent (optional for a Screenhost agent); the
-// commission rate defaults to the engine's when omitted. contact_name stays the admin role's
+// required; the commission rate defaults to the engine's when omitted.
+// Spec VF §15 / §10 (Mariem 12/11/2026) — the tax number is optional for BOTH agent roles, and
+// the identity card is mandatory, both sides: each side is stored first (POST
+// /api/admin/agent-cin) and the creation names the two stored files. contact_name stays the admin role's
 // field; for an agent it is derived from the first and last name.
 const AGENT_REQUIRED = [
   'first_name',
@@ -71,6 +77,15 @@ const AGENT_REQUIRED = [
   'covered_zone',
   'certified_at',
 ] as const;
+
+/** Where a future agent's CIN sides wait for the creation that names them. */
+const CIN_STAGING_PREFIX = 'agent-cin/';
+const stagedCin = z.object({
+  key: z.string().startsWith(CIN_STAGING_PREFIX).max(200),
+  filename: z.string().max(255),
+  mime_type: z.string().max(100),
+  size_bytes: z.number().int().min(1).max(MAX_DOCUMENT_BYTES),
+});
 
 const createAccountSchema = z
   .object({
@@ -95,6 +110,8 @@ const createAccountSchema = z
     covered_zone: z.string().trim().min(1).max(200).optional(),
     commission_pct: z.number().min(0).max(100).multipleOf(0.01).optional(),
     certified_at: z.iso.date().optional(),
+    cin_recto: stagedCin.optional(),
+    cin_verso: stagedCin.optional(),
   })
   .refine((d) => d.role !== 'admin' || d.password !== undefined, {
     message: 'Password is required for the admin role',
@@ -115,12 +132,14 @@ const createAccountSchema = z
         });
       }
     }
-    if (d.role === 'screencast_agent' && d.tax_number === undefined) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['tax_number'],
-        message: 'tax_number is required for a Screencaster agent',
-      });
+    for (const side of ['cin_recto', 'cin_verso'] as const) {
+      if (d[side] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [side],
+          message: 'La CIN recto et la CIN verso sont obligatoires pour un agent.',
+        });
+      }
     }
   });
 
@@ -221,6 +240,44 @@ const sendAgentWelcomeEmail = async (params: {
 };
 
 export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
+  await app.register(multipart, { limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1, fields: 0 } });
+
+  // POST /api/admin/agent-cin — store one side of a future agent's identity card (image or PDF,
+  // 5 Mo). Staff only; the object stays private and is read through presigned URLs.
+  app.post('/api/admin/agent-cin', staffGuard, async (request, reply) => {
+    const data = await request.file();
+    if (!data) {
+      return reply.status(400).send({ error: 'INVALID_INPUT', message: 'Fichier requis.' });
+    }
+    let body: Buffer;
+    try {
+      body = await data.toBuffer();
+    } catch {
+      return reply
+        .status(413)
+        .send({ error: 'PAYLOAD_TOO_LARGE', message: 'Fichier trop lourd (5 Mo maximum).' });
+    }
+    if (!ALLOWED_DOCUMENT_MIME.has(data.mimetype)) {
+      return reply.status(400).send({
+        error: 'UNSUPPORTED_FILE',
+        message: 'Formats acceptés : image (PNG, JPEG) ou PDF.',
+      });
+    }
+    const key = `${CIN_STAGING_PREFIX}${randomUUID()}`;
+    const up = await storage.upload({ key, body, contentType: data.mimetype });
+    if ('error' in up) {
+      return reply
+        .status(502)
+        .send({ error: 'STORAGE_ERROR', message: 'Enregistrement impossible. Réessayez.' });
+    }
+    return reply.status(201).send({
+      key,
+      filename: data.filename,
+      mime_type: data.mimetype,
+      size_bytes: body.length,
+    });
+  });
+
   app.post('/api/admin/accounts', staffGuard, async (request, reply) => {
     const parsed = createAccountSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -366,6 +423,26 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
           certifiedAt: agentSheet.certified_at ?? null,
           accountStatus: cgeInForce ? 'en_attente' : 'actif',
         });
+        // Spec VF §15 — the two CIN sides become the agent's own documents (cin, 1 = recto,
+        // 2 = verso), the slots his profile reads.
+        const sides = [agentSheet.cin_recto, agentSheet.cin_verso];
+        await tx.insert(userDocuments).values(
+          sides.flatMap((doc, i) =>
+            doc
+              ? [
+                  {
+                    userId: user.id,
+                    category: 'cin' as const,
+                    position: i + 1,
+                    storageKey: doc.key,
+                    originalFilename: doc.filename,
+                    mimeType: doc.mime_type,
+                    sizeBytes: doc.size_bytes,
+                  },
+                ]
+              : [],
+          ),
+        );
       }
       return { user, agentCode };
     });

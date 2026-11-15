@@ -16,13 +16,18 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import { AgentSheetFields } from '@/features/admin/components/agents/AgentSheetFields';
+import {
+  type AgentCinFiles,
+  AgentSheetFields,
+} from '@/features/admin/components/agents/AgentSheetFields';
 import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
 import {
   type AgentSheetForm,
   EMPTY_AGENT_SHEET,
   agentSheetPayload,
+  cinProblem,
 } from '@/features/admin/lib/agent-sheet';
+import { adminService } from '@/features/admin/services/admin.service';
 import type { InternalAccount, InternalAccountRole } from '@/features/admin/types/admin';
 import { apiErrorMessage } from '@/features/auth/services/auth-errors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -102,6 +107,10 @@ export default function CreateAdmin() {
   );
   // AGT-1 — the agent sheet (agent roles only).
   const [agentSheet, setAgentSheet] = useState<AgentSheetForm>(EMPTY_AGENT_SHEET);
+  // Spec VF §15 — the agent's CIN, both sides, mandatory. `cinKey` remounts the file inputs
+  // after a creation (a file input cannot be cleared by value).
+  const [cin, setCin] = useState<AgentCinFiles>({ recto: null, verso: null });
+  const [cinKey, setCinKey] = useState(0);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -158,8 +167,23 @@ export default function CreateAdmin() {
       return;
     }
 
+    const isAgentRole = formData.role !== 'admin';
+    const cinError = isAgentRole ? cinProblem(cin.recto, cin.verso) : null;
+    if (cinError) {
+      toast.error(cinError);
+      return;
+    }
+
     setLoading(true);
     try {
+      // The two sides are stored first; the creation then names them (and refuses without).
+      const cinDocs =
+        isAgentRole && cin.recto && cin.verso
+          ? {
+              cin_recto: await adminService.stageAgentCin(cin.recto),
+              cin_verso: await adminService.stageAgentCin(cin.verso),
+            }
+          : {};
       // contact_name is the single name field the apps/api endpoint stores; compose it from the
       // first/last inputs. role/status/verification are server-controlled (created approved +
       // verified). Agent roles OMIT the password so the server system-generates it (and emails a
@@ -173,6 +197,7 @@ export default function CreateAdmin() {
               first_name: formData.first_name.trim(),
               last_name: formData.last_name.trim(),
               ...sheet.value,
+              ...cinDocs,
             }
           : {
               contact_name: `${formData.first_name} ${formData.last_name}`.trim(),
@@ -195,6 +220,8 @@ export default function CreateAdmin() {
         role: defaultRole,
       });
       setAgentSheet(EMPTY_AGENT_SHEET);
+      setCin({ recto: null, verso: null });
+      setCinKey((k) => k + 1);
     } catch (error) {
       // EMAIL-AG1 (2026-09-12): a duplicate address is a 409 EMAIL_TAKEN — say so in French
       // instead of the raw api text.
@@ -433,7 +460,13 @@ export default function CreateAdmin() {
             </div>
 
             {formData.role !== 'admin' && (
-              <AgentSheetFields value={agentSheet} onChange={setAgentSheet} role={formData.role} />
+              <AgentSheetFields
+                key={cinKey}
+                value={agentSheet}
+                onChange={setAgentSheet}
+                cin={cin}
+                onCin={setCin}
+              />
             )}
 
             {isAgentRole ? (
