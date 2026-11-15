@@ -576,3 +576,346 @@
   display: inline-block;
   cursor: pointer;
 }
+/* « Suivi des capteurs » (spec VF §12) */
+.agt .grid4.vf-kpi3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.agt .grid4 .kpi.vf-kpi-plain {
+  background: #fff;
+  border-color: var(--edge);
+  color: var(--ink);
+  box-shadow: var(--lift);
+}
+.agt .grid4 .kpi.vf-kpi-plain small {
+  color: var(--ink2);
+}
+.agt .kpi b.vf-ink2 {
+  color: var(--ink2);
+}
+.agt .kpi b.vf-green {
+  color: var(--green);
+}
+.agt .kpi b.vf-orange {
+  color: var(--orange);
+}
+.agt .vf-mb16 {
+  margin-bottom: 16px;
+}
+.agt .vf-sensor-tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.agt .vt button.vf-vt-pad {
+  padding: 8px 14px;
+}
+.agt .vt button.vf-vt-auto {
+  width: auto;
+  padding: 0 12px;
+}
+.agt .vf-sensor-q {
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  padding: 11px 18px;
+  background: #fff;
+  font-size: 13.5px;
+  min-width: 260px;
+}
+.agt .vf-sensor-q:focus {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgba(145, 149, 248, 0.2);
+}
+.agt .vf-sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+.agt .vf-sensor-none {
+  grid-column: 1 / -1;
+  padding: 24px;
+  text-align: center;
+}
+.agt .shc .nums.vf-nums-1 {
+  grid-template-columns: 1fr;
+}
+.agt .shc .nums b.vf-b20 {
+  font-size: 20px;
+}
+.agt .vf-cap-line {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.agt .vf-cap-on {
+  color: var(--green);
+}
+.agt .vf-cap-off {
+  color: var(--orange);
+}
+.agt .bb.vf-bb-1 {
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+.agt .vf-kpi4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.agt .big .kpi.vf-kpi-sm {
+  padding: 14px;
+}
+.agt .big .kpi.vf-kpi-sm b {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.agt .vf-wifi-line {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.agt .vf-heat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.agt table.vf-heat {
+  min-width: 560px;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 3px;
+}
+.agt table.vf-heat th {
+  background: none;
+  text-align: center;
+  padding: 4px;
+}
+.agt table.vf-heat td {
+  border: none;
+}
+.agt table.vf-heat td.vf-heat-h {
+  padding: 2px 6px;
+  font-size: 10.5px;
+  color: var(--ink2);
+}
+.agt table.vf-heat td.vf-heat-c {
+  padding: 4px 0;
+  text-align: center;
+  font-size: 10.5px;
+  border-radius: 5px;
+  color: var(--ink);
+  transition: transform 0.15s;
+}
+.agt table.vf-heat td.vf-heat-c:hover {
+  transform: scale(1.18);
+}
+.agt table.vf-heat td.vf-heat-0 {
+  background: #f5f8f7;
+}
+.agt table.vf-heat td.vf-heat-1 {
+  background: rgba(29, 158, 117, 0.14);
+}
+.agt table.vf-heat td.vf-heat-2 {
+  background: rgba(29, 158, 117, 0.3);
+}
+.agt table.vf-heat td.vf-heat-3 {
+  background: rgba(29, 158, 117, 0.48);
+}
+.agt table.vf-heat td.vf-heat-4 {
+  background: rgba(29, 158, 117, 0.68);
+  color: #fff;
+}
+.agt table.vf-heat td.vf-heat-5 {
+  background: rgba(29, 158, 117, 0.88);
+  color: #fff;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .agt .shc .vf-cap-on {
+    animation: tdBlink 2.4s ease-in-out infinite;
+  }
+}
+@media (max-width: 700px) {
+  .agt .vf-kpi4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* « Assigner mes capteurs » (spec VF §14): the prototype's hub screen */
+.agt .hubscr {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: auto;
+  background: #fff;
+}
+.agt .hub {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 22px 24px 60px;
+}
+.agt .hbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0 22px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 26px;
+}
+.agt .hbar img {
+  height: 30px;
+}
+.agt .hbar .sp {
+  flex: 1;
+}
+.agt .backb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--edge);
+  background: #fff;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+}
+.agt .backb:hover {
+  background: var(--soft);
+}
+.agt .hh h1 {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--deep);
+}
+.agt .hh p {
+  margin: 0 0 18px;
+  color: var(--ink2);
+}
+.agt .tools {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.agt .tools input,
+.agt .vf-pick-q {
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  padding: 10px 16px;
+  min-width: 240px;
+  background: #fff;
+}
+.agt .vf-pick-q {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.agt .vf-pick-list {
+  max-height: 320px;
+  overflow: auto;
+}
+.agt .shopt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: #fff;
+}
+.agt .shopt:hover {
+  background: var(--soft);
+}
+.agt .shopt.on {
+  border-color: var(--green);
+  background: var(--mintbg);
+}
+.agt .shopt b {
+  font-weight: 500;
+  display: block;
+}
+.agt .shopt small {
+  color: var(--ink2);
+  font-size: 11.5px;
+}
+.agt .shopt .rd {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--ink3);
+  flex: none;
+}
+.agt .shopt.on .rd {
+  border: 5px solid var(--green);
+}
+.agt .b-gr {
+  background: #f4f5f4;
+  color: var(--ink2);
+}
+.agt .vf-ink3 {
+  color: var(--ink3);
+}
+.agt .vf-right {
+  text-align: right;
+}
+.agt td.vf-assign-none {
+  text-align: center;
+  color: var(--ink2);
+  padding: 28px;
+}
+.agt .hubscr ~ .ov {
+  z-index: 210;
+}
+.agt .hubscr ~ .modal {
+  z-index: 220;
+}
+.agt .hubscr ~ .toast {
+  z-index: 230;
+}
+@media (max-width: 700px) {
+  .agt .hide-s {
+    display: none;
+  }
+  .agt .tools input {
+    min-width: 0;
+    flex: 1;
+  }
+}
+/* fiche: the « Aucun capteur assigné » block (spec VF §14) */
+.agt .vf-nocap {
+  background: var(--porbg);
+  border: 1px solid #dcdefd;
+  color: #2d3070;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin: 14px 0 0;
+}
+.agt .vf-nocap b {
+  display: block;
+  margin-bottom: 4px;
+}
+.agt .vf-nocap p {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+}

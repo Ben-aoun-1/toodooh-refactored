@@ -108,6 +108,7 @@ export function VfVenueWindow({
   const e = data.engagement;
   const kind = vfCategoryKey(v.category);
   const active = v.status !== 'en_attente_activation';
+  const assignPath = `${AGENT_PATHS.sensors}/assigner?screenhost=${v.screenhost_id}`;
   const attention = e?.attention.map((a) => a.label) ?? v.attention;
   const sps = e?.sps === null || e?.sps === undefined ? null : Math.round(e.sps);
   const go = (path: string) => {
@@ -184,6 +185,18 @@ export function VfVenueWindow({
               </div>
             )}
           </div>
+          {!active && v.status !== 'terminee' && (
+            <div className="vf-nocap">
+              <b>Aucun capteur assigné</b>
+              <p>
+                Une fois le capteur installé chez ce Screenhost, assignez-le pour que ses données
+                d&apos;affluence remontent.
+              </p>
+              <button type="button" className="btn pri" onClick={() => go(assignPath)}>
+                Assigner un capteur
+              </button>
+            </div>
+          )}
           <div className="vf-fiche-acts">
             <button
               type="button"
@@ -206,6 +219,11 @@ export function VfVenueWindow({
             >
               Prendre un rendez-vous
             </button>
+            {active && v.status !== 'terminee' && (
+              <button type="button" className="btn" onClick={() => go(assignPath)}>
+                Assigner un autre capteur
+              </button>
+            )}
           </div>
           {attention.length > 0 && (
             <div className="sec">

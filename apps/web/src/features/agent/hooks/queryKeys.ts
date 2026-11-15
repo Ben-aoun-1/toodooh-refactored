@@ -28,4 +28,9 @@ export const agentKeys = {
 
   /** Agent specs VF « Logos » — the logos of the agent's affiliates and campaigns. */
   logos: () => [...agentKeys.all, 'logos'] as const,
+
+  /** Agent Screenhost spec VF §12 / §14 — sensor follow-up and assignment. */
+  sensors: () => [...agentKeys.all, 'sensors'] as const,
+  sensorVenue: (id: string) => [...agentKeys.all, 'sensors', 'venue', id] as const,
+  sensorAssignment: () => [...agentKeys.all, 'sensors', 'assignment'] as const,
 };
