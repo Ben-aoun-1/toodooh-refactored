@@ -14,14 +14,12 @@ import {
   screenhosts,
   users,
 } from '../src/db/schema.js';
+import { slotsAddedToAcceptedBody } from '../src/lib/dispatch/tours/placer.js';
 import {
-  EVENT_GROUPED_NOTICE_MIN_TND,
   EVENT_MATCH_NOTICE_TYPE,
   EVENT_NOTICE_LEAD_MS,
   EVENT_PROPOSAL_TITLE,
-  EVENT_SINGLE_NOTICE_MIN_TND,
   eventMatchNoticeBody,
-  groupedNotice,
   groupedNoticeAt,
   noticeNewEventShares,
   placementNotice,
@@ -37,10 +35,10 @@ import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
 // Mariem 05/11/2026 — « Notifications Screenhost pour les soirs de match » (lib/event-host-notice):
-// a venue's owner is asked match by match — one « Soir de match » notice 24 h before kick-off
-// (≥ 20 DT of the owner's share), a late share alone (≥ 10 DT), under the minimum accepted on the
-// owner's behalf unless the owner refused the match (operator ruling 1C), and a re-placement on a
-// venue that accepted the match airs without a new question.
+// a venue's owner is asked match by match — one « Soir de match » notice 24 h before kick-off, a
+// late share alone, and a re-placement on a venue that accepted the match airs without a new
+// question (« Bonne nouvelle »). Mariem 15/11: whatever the amount, a share is never accepted on
+// the owner's behalf any more (the 20 / 10 DT minimums of ruling 1C are gone).
 
 const KICKOFF = new Date('2027-09-15T20:00:00+01:00');
 const ENDS = new Date('2027-09-15T22:00:00+01:00');
@@ -53,9 +51,7 @@ describe('the match-night notice rules (pure)', () => {
     expect(groupedNoticeAt(KICKOFF).getTime()).toBe(KICKOFF.getTime() - EVENT_NOTICE_LEAD_MS);
     for (const origin of ['booking', 'redispatch'] as const) {
       for (const stance of ['open', 'accepted', 'refused'] as const) {
-        expect(
-          placementNotice({ now: EARLY, kickoffAt: KICKOFF, ownerShareTnd: 500, stance, origin }),
-        ).toBe('wait');
+        expect(placementNotice({ now: EARLY, kickoffAt: KICKOFF, stance, origin })).toBe('wait');
       }
     }
     // From the notice time on, a share is late.
@@ -63,47 +59,26 @@ describe('the match-night notice rules (pure)', () => {
       placementNotice({
         now: groupedNoticeAt(KICKOFF),
         kickoffAt: KICKOFF,
-        ownerShareTnd: 50,
         stance: 'open',
         origin: 'booking',
       }),
     ).toBe('single');
   });
 
-  it('a late share is proposed alone from 10 DT; under it, accepted for the owner unless refused', () => {
-    const late = (ownerShareTnd: number, stance: 'open' | 'accepted' | 'refused') =>
-      placementNotice({ now: LATE, kickoffAt: KICKOFF, ownerShareTnd, stance, origin: 'booking' });
-    expect(late(EVENT_SINGLE_NOTICE_MIN_TND, 'open')).toBe('single');
-    expect(late(EVENT_SINGLE_NOTICE_MIN_TND, 'refused')).toBe('single');
-    expect(late(EVENT_SINGLE_NOTICE_MIN_TND, 'accepted')).toBe('single');
-    expect(late(9.999, 'open')).toBe('auto');
-    expect(late(9.999, 'accepted')).toBe('auto');
-    expect(late(9.999, 'refused')).toBe('withheld');
+  it('a late share is always proposed to the owner, whatever its amount (Mariem 15/11)', () => {
+    for (const stance of ['open', 'accepted', 'refused'] as const) {
+      expect(placementNotice({ now: LATE, kickoffAt: KICKOFF, stance, origin: 'booking' })).toBe(
+        'single',
+      );
+    }
   });
 
-  it('a late re-placement on a venue that accepted the match airs without a question (ruling 1C)', () => {
-    const redispatch = (ownerShareTnd: number, stance: 'open' | 'accepted' | 'refused') =>
-      placementNotice({
-        now: LATE,
-        kickoffAt: KICKOFF,
-        ownerShareTnd,
-        stance,
-        origin: 'redispatch',
-      });
-    expect(redispatch(80, 'accepted')).toBe('auto');
-    expect(redispatch(80, 'open')).toBe('single');
-    expect(redispatch(80, 'refused')).toBe('single');
-    expect(redispatch(5, 'refused')).toBe('withheld');
-  });
-
-  it('the grouped notice goes out from 20 DT; under it, accepted for the owner unless refused', () => {
-    expect(
-      groupedNotice({ totalOwnerShareTnd: EVENT_GROUPED_NOTICE_MIN_TND, stance: 'open' }),
-    ).toBe('grouped');
-    expect(groupedNotice({ totalOwnerShareTnd: 19.999, stance: 'open' })).toBe('auto');
-    expect(groupedNotice({ totalOwnerShareTnd: 19.999, stance: 'accepted' })).toBe('auto');
-    expect(groupedNotice({ totalOwnerShareTnd: 19.999, stance: 'refused' })).toBe('withheld');
-    expect(groupedNotice({ totalOwnerShareTnd: 64.8, stance: 'refused' })).toBe('grouped');
+  it('a late re-placement on a venue that accepted the match airs without a question', () => {
+    const redispatch = (stance: 'open' | 'accepted' | 'refused') =>
+      placementNotice({ now: LATE, kickoffAt: KICKOFF, stance, origin: 'redispatch' });
+    expect(redispatch('accepted')).toBe('auto');
+    expect(redispatch('open')).toBe('single');
+    expect(redispatch('refused')).toBe('single');
   });
 
   it('only an owner’s own answer sets their stance on a match', () => {
@@ -317,7 +292,7 @@ describe('the match-night notices (real Postgres)', () => {
       expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
     });
 
-    it('late from 10 DT: proposed alone, at once, with the per-campaign notification', async () => {
+    it('late: proposed alone, at once, with the per-campaign notification', async () => {
       const venue = await seedVenue();
       const eventId = await seedMatch();
       const p = await seedPositioning(eventId);
@@ -342,11 +317,11 @@ describe('the match-night notices (real Postgres)', () => {
       expect(notifs[0]?.campaignId).toBe(p.id);
     });
 
-    it('late under 10 DT: accepted on the owner’s behalf, no notification (ruling 1C)', async () => {
+    it('late and small (1 DT): still proposed to the owner, never accepted for him (Mariem 15/11)', async () => {
       const venue = await seedVenue();
       const eventId = await seedMatch();
       const p = await seedPositioning(eventId);
-      const montant = montantForShare(5);
+      const montant = montantForShare(1);
       const id = await seedShare(p.id, venue.id, montant);
       await noticeNewEventShares(db, {
         positioning: p,
@@ -358,13 +333,15 @@ describe('the match-night notices (real Postgres)', () => {
         now: LATE,
       });
       const share = await shareOf(id);
-      expect(share?.notice).toBe('auto');
-      expect(share?.statut).toBe('ACCEPTE');
-      expect(share?.decidedAt).not.toBeNull();
-      expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
+      expect(share?.notice).toBe('single');
+      expect(share?.statut).toBe('EN_ATTENTE');
+      expect(share?.decidedAt).toBeNull();
+      const notifs = await notificationsOf(venue.ownerId);
+      expect(notifs).toHaveLength(1);
+      expect(notifs[0]?.type).toBe('dispatch_pending_acceptance');
     });
 
-    it('late under 10 DT on a venue whose owner refused the match: withheld, never accepted', async () => {
+    it('late on a venue whose owner refused the match: asked again', async () => {
       const venue = await seedVenue();
       const eventId = await seedMatch();
       const refused = await seedPositioning(eventId);
@@ -382,9 +359,9 @@ describe('the match-night notices (real Postgres)', () => {
         now: LATE,
       });
       const share = await shareOf(id);
-      expect(share?.notice).toBe('withheld');
+      expect(share?.notice).toBe('single');
       expect(share?.statut).toBe('EN_ATTENTE');
-      expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
+      expect(await notificationsOf(venue.ownerId)).toHaveLength(1);
     });
 
     it('a late re-placement on a venue whose owner accepted the match airs without a question', async () => {
@@ -407,7 +384,12 @@ describe('the match-night notices (real Postgres)', () => {
       const share = await shareOf(id);
       expect(share?.notice).toBe('auto');
       expect(share?.statut).toBe('ACCEPTE');
-      expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
+      const notifs = await notificationsOf(venue.ownerId);
+      expect(notifs).toHaveLength(1);
+      expect(notifs[0]?.type).toBe('dispatch_slots_added');
+      expect(notifs[0]?.title).toBe('Bonne nouvelle !');
+      expect(notifs[0]?.body).toBe(slotsAddedToAcceptedBody(ownerShare(montant)));
+      expect(notifs[0]?.campaignId).toBe(p.id);
     });
 
     it('a share accepted on the owner’s behalf does not count as the owner accepting the match', async () => {
@@ -452,7 +434,6 @@ describe('the match-night notices (real Postgres)', () => {
       expect(mine).toEqual({
         eventId,
         screenhostId: venue.id,
-        notice: 'grouped',
         shares: 3,
         totalOwnerShareTnd: total,
       });
@@ -475,19 +456,21 @@ describe('the match-night notices (real Postgres)', () => {
       expect(await notificationsOf(venue.ownerId)).toHaveLength(1);
     });
 
-    it('under 20 DT: no notice, the shares are accepted on the owner’s behalf', async () => {
+    it('a small total (1 DT): the notice still goes out, nothing is accepted for the owner', async () => {
       const venue = await seedVenue();
       const eventId = await seedMatch();
       const p = await seedPositioning(eventId);
-      const id = await seedShare(p.id, venue.id, montantForShare(19));
+      const id = await seedShare(p.id, venue.id, montantForShare(1));
       await runEventGroupedNotices(NOTICE_TIME);
       const share = await shareOf(id);
-      expect(share?.notice).toBe('auto');
-      expect(share?.statut).toBe('ACCEPTE');
-      expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
+      expect(share?.notice).toBe('grouped');
+      expect(share?.statut).toBe('EN_ATTENTE');
+      const notifs = await notificationsOf(venue.ownerId);
+      expect(notifs).toHaveLength(1);
+      expect(notifs[0]?.type).toBe(EVENT_MATCH_NOTICE_TYPE);
     });
 
-    it('under 20 DT on a venue whose owner refused the match: withheld', async () => {
+    it('on a venue whose owner refused the match: asked again', async () => {
       const venue = await seedVenue();
       const eventId = await seedMatch();
       const refused = await seedPositioning(eventId);
@@ -496,9 +479,9 @@ describe('the match-night notices (real Postgres)', () => {
       const id = await seedShare(p.id, venue.id, montantForShare(5));
       await runEventGroupedNotices(NOTICE_TIME);
       const share = await shareOf(id);
-      expect(share?.notice).toBe('withheld');
+      expect(share?.notice).toBe('grouped');
       expect(share?.statut).toBe('EN_ATTENTE');
-      expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
+      expect(await notificationsOf(venue.ownerId)).toHaveLength(1);
     });
 
     it('each venue of a fleet owner gets its own notice; shares already asked, demo, cancelled or ended matches are left alone', async () => {

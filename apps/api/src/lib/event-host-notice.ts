@@ -6,6 +6,7 @@ import { campaigns, eventAllocations, events, notifications, screenhosts } from 
 
 import { notStoppedCampaignSql } from './campaign-stopped.js';
 import { notDemoEventAllocationSql } from './demo.js';
+import { slotsAddedToAcceptedBody } from './dispatch/tours/placer.js';
 import { loadOwnerSharePcts, ownerShareTnd } from './owner-share.js';
 
 // Mariem 05/11/2026 — « Notifications Screenhost pour les soirs de match » (spec + mockup
@@ -13,24 +14,25 @@ import { loadOwnerSharePcts, ownerShareTnd } from './owner-share.js';
 //
 //   • a share placed more than 24 h before kick-off waits; 24 h before kick-off the venue's owner
 //     gets ONE « Soir de match » notice for that match, listing every waiting share, with the
-//     owner's total for the match — if that total reaches 20 DT;
-//   • a share placed later is proposed alone, at once, with the per-campaign popup — from 10 DT;
-//   • under the minimum the owner is not asked: the share airs, accepted on the owner's behalf
-//     (operator ruling 1C) — unless the owner refused that match, then it is never asked
-//     ('withheld': it never airs, settlement refunds it);
+//     owner's total for the match;
+//   • a share placed later is proposed alone, at once, with the per-campaign popup;
 //   • a share RE-PLACED (another venue refused) on a venue whose owner already accepted that
-//     match airs without a new question (operator ruling 1C, 2026-11-05).
+//     match airs without a new question, and the owner is told « Bonne nouvelle » (the classic
+//     rule of Mariem 13/11, Youssef's wording).
+//
+// Mariem 15/11/2026 (« toutes les campagnes des matchs sont acceptées automatiquement, sans
+// intervention de l'Admin ni du Host, et ce dernier ne reçoit aucune notification »; operator
+// « change it as Mariem asked »): no share is ever accepted on the owner's behalf any more,
+// whatever its amount — the 20 DT / 10 DT minimums of 05/11 (ruling 1C) are gone. The owner, his
+// agent or the Admin (« Réponses des Hosts ») answers; a share still waiting at the end of the
+// window never aired and settlement refunds it, as before. 'auto' and 'withheld' rows written
+// before 15/11 stay as they are.
 //
 // The amounts are the OWNER's share (lib/owner-share), the figure the popup shows (ruling 2A).
 // ONE home: every event placement (lib/event-dispatch) and the sweep below go through it.
 
 /** The grouped notice goes out this long before kick-off. */
 export const EVENT_NOTICE_LEAD_MS = 24 * 60 * 60 * 1000;
-/** The owner's total for the match below which the grouped notice is not sent. */
-export const EVENT_GROUPED_NOTICE_MIN_TND = 20;
-/** The owner's share below which a late share is not proposed. */
-export const EVENT_SINGLE_NOTICE_MIN_TND = 10;
-
 export const EVENT_MATCH_NOTICE_TYPE = 'event_match_pending_acceptance';
 export const EVENT_MATCH_NOTICE_TITLE = 'Soir de match en attente de votre réponse';
 
@@ -44,9 +46,11 @@ export const eventMatchNoticeBody = (matchName: string, spots: number, totalTnd:
 export type VenueMatchStance = 'accepted' | 'refused' | 'open';
 /** A booking (a positioning or its boost) or a re-placement after another venue's refusal. */
 export type ShareOrigin = 'booking' | 'redispatch';
-/** What a share gets at its placement; 'wait' = the grouped notice will ask. */
-export type PlacementNotice = 'wait' | 'single' | 'auto' | 'withheld';
-export type GroupedNotice = 'grouped' | 'auto' | 'withheld';
+/**
+ * What a share gets at its placement; 'wait' = the grouped notice will ask, 'auto' = a
+ * re-placement on a venue whose owner accepted the match (« Bonne nouvelle »).
+ */
+export type PlacementNotice = 'wait' | 'single' | 'auto';
 
 export const groupedNoticeAt = (kickoffAt: Date): Date =>
   new Date(kickoffAt.getTime() - EVENT_NOTICE_LEAD_MS);
@@ -77,22 +81,12 @@ export const venueMatchStance = (
 export const placementNotice = (input: {
   now: Date;
   kickoffAt: Date;
-  ownerShareTnd: number;
   stance: VenueMatchStance;
   origin: ShareOrigin;
 }): PlacementNotice => {
   if (input.now.getTime() < groupedNoticeAt(input.kickoffAt).getTime()) return 'wait';
   if (input.origin === 'redispatch' && input.stance === 'accepted') return 'auto';
-  if (input.ownerShareTnd >= EVENT_SINGLE_NOTICE_MIN_TND) return 'single';
-  return input.stance === 'refused' ? 'withheld' : 'auto';
-};
-
-export const groupedNotice = (input: {
-  totalOwnerShareTnd: number;
-  stance: VenueMatchStance;
-}): GroupedNotice => {
-  if (input.totalOwnerShareTnd >= EVENT_GROUPED_NOTICE_MIN_TND) return 'grouped';
-  return input.stance === 'refused' ? 'withheld' : 'auto';
+  return 'single';
 };
 
 /** Millime-exact Σ of owner shares. */
@@ -168,11 +162,12 @@ export const noticeNewEventShares = async (
     input.shares.map((s) => s.allocationId),
   );
   const proposedTo = new Set<string>();
+  // « Bonne nouvelle »: the owner's added earnings, summed per owner for this positioning.
+  const addedFor = new Map<string, number>();
   for (const share of input.shares) {
     const notice = placementNotice({
       now,
       kickoffAt: input.event.kickoffAt,
-      ownerShareTnd: ownerShareTnd(share.montantTnd, pcts),
       stance: stances.get(share.screenhostId) ?? 'open',
       origin: input.origin,
     });
@@ -182,18 +177,28 @@ export const noticeNewEventShares = async (
       .set(notice === 'auto' ? { notice, statut: 'ACCEPTE', decidedAt: now } : { notice })
       .where(eq(eventAllocations.id, share.allocationId));
     if (notice === 'single') proposedTo.add(share.ownerId);
+    else {
+      const added = ownerShareTnd(share.montantTnd, pcts);
+      addedFor.set(share.ownerId, sumTnd([addedFor.get(share.ownerId) ?? 0, added]));
+    }
   }
-  if (proposedTo.size > 0) {
-    await executor.insert(notifications).values(
-      [...proposedTo].map((ownerId) => ({
-        userId: ownerId,
-        type: 'dispatch_pending_acceptance',
-        title: EVENT_PROPOSAL_TITLE,
-        body: eventProposalBody(input.positioning.name),
-        campaignId: input.positioning.id,
-      })),
-    );
-  }
+  const rows = [
+    ...[...proposedTo].map((ownerId) => ({
+      userId: ownerId,
+      type: 'dispatch_pending_acceptance',
+      title: EVENT_PROPOSAL_TITLE,
+      body: eventProposalBody(input.positioning.name),
+      campaignId: input.positioning.id,
+    })),
+    ...[...addedFor].map(([ownerId, added]) => ({
+      userId: ownerId,
+      type: 'dispatch_slots_added',
+      title: 'Bonne nouvelle !',
+      body: slotsAddedToAcceptedBody(added),
+      campaignId: input.positioning.id,
+    })),
+  ];
+  if (rows.length > 0) await executor.insert(notifications).values(rows);
 };
 
 // §11.1 — the per-campaign proposal copy (French, ONE home; re-exported by lib/event-dispatch).
@@ -204,15 +209,14 @@ export const eventProposalBody = (matchName: string): string =>
 export interface GroupedNoticeOutcome {
   eventId: string;
   screenhostId: string;
-  notice: GroupedNotice;
   shares: number;
   totalOwnerShareTnd: number;
 }
 
 /**
  * The sweep: for every match whose notice time has come and which has not ended, each venue's
- * waiting shares are settled together — one « Soir de match » notice to the owner, accepted on
- * the owner's behalf, or withheld. Each venue is handled in its own transaction, its waiting rows
+ * waiting shares are asked together — one « Soir de match » notice to the owner, whatever the
+ * total (Mariem 15/11). Each venue is handled in its own transaction, its waiting rows
  * locked and re-read, so two sweeps never notify twice.
  */
 export const runEventGroupedNotices = async (
@@ -266,36 +270,24 @@ export const runEventGroupedNotices = async (
       if (!first || first.ownerId === null) return null;
       const ids = waiting.map((w) => w.id);
       const total = sumTnd(waiting.map((w) => ownerShareTnd(Number(w.montantTnd), pcts)));
-      const stance =
-        (await stanceByVenue(tx, eventId, [screenhostId], ids)).get(screenhostId) ?? 'open';
-      const notice = groupedNotice({ totalOwnerShareTnd: total, stance });
       await tx
         .update(eventAllocations)
-        .set(notice === 'auto' ? { notice, statut: 'ACCEPTE', decidedAt: now } : { notice })
+        .set({ notice: 'grouped' })
         .where(inArray(eventAllocations.id, ids));
-      if (notice === 'grouped') {
-        await tx.insert(notifications).values({
-          userId: first.ownerId,
-          type: EVENT_MATCH_NOTICE_TYPE,
-          title: EVENT_MATCH_NOTICE_TITLE,
-          body: eventMatchNoticeBody(first.matchName, ids.length, total),
-          eventId,
-          screenhostId,
-        });
-      }
-      return { eventId, screenhostId, notice, shares: ids.length, totalOwnerShareTnd: total };
+      await tx.insert(notifications).values({
+        userId: first.ownerId,
+        type: EVENT_MATCH_NOTICE_TYPE,
+        title: EVENT_MATCH_NOTICE_TITLE,
+        body: eventMatchNoticeBody(first.matchName, ids.length, total),
+        eventId,
+        screenhostId,
+      });
+      return { eventId, screenhostId, shares: ids.length, totalOwnerShareTnd: total };
     });
     if (outcome) outcomes.push(outcome);
   }
   if (outcomes.length > 0) {
-    log?.info(
-      {
-        grouped: outcomes.filter((o) => o.notice === 'grouped').length,
-        auto: outcomes.filter((o) => o.notice === 'auto').length,
-        withheld: outcomes.filter((o) => o.notice === 'withheld').length,
-      },
-      'match-night notices settled',
-    );
+    log?.info({ grouped: outcomes.length }, 'match-night notices sent');
   }
   return outcomes;
 };
