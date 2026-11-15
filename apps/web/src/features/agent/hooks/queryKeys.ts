@@ -33,4 +33,8 @@ export const agentKeys = {
   sensors: () => [...agentKeys.all, 'sensors'] as const,
   sensorVenue: (id: string) => [...agentKeys.all, 'sensors', 'venue', id] as const,
   sensorAssignment: () => [...agentKeys.all, 'sensors', 'assignment'] as const,
+
+  /** Agent Screenhost spec VF §11 — the qualification fiches. */
+  checklists: () => [...agentKeys.all, 'checklists'] as const,
+  checklist: (id: string) => [...agentKeys.all, 'checklist', id] as const,
 };

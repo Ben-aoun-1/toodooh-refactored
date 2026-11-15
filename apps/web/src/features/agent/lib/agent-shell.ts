@@ -76,6 +76,7 @@ export const AGENT_BUILT_PAGES: ReadonlySet<AgentPage> = new Set<AgentPage>([
   'calendar',
   'affiliates',
   'sensors',
+  'checklist',
   'settings',
   'faq',
 ]);

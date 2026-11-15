@@ -919,6 +919,75 @@
   margin: 0 0 10px;
   font-size: 12.5px;
 }
+/* Checklist (spec VF §11) */
+.agt .rev.vf-chk-hero {
+  cursor: default;
+}
+.agt .rev b.vf-chk-b {
+  font-family: var(--display);
+  font-size: clamp(26px, 2.6vw, 36px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 500;
+  margin: 12px 0 10px;
+}
+.agt .rev span.vf-chk-s {
+  font-size: 14px;
+  max-width: 44ch;
+  color: #cfe9dd;
+  display: block;
+  margin-bottom: 14px;
+}
+.agt .hero2 .grid2.vf-chk-kpis {
+  gap: 16px;
+  grid-auto-rows: 1fr;
+}
+.agt .vf-mt16 {
+  margin-top: 16px;
+}
+.agt .banner.vf-mt14b {
+  margin-top: 14px;
+}
+.agt .vf-chk-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.agt .grid2.vf-chk-fields {
+  gap: 0 14px;
+}
+.agt .grid2.vf-chk-fields .f.vf-span-all {
+  grid-column: 1 / -1;
+}
+.agt .f.vf-mt10 {
+  margin-top: 10px;
+}
+.agt .banner.vf-banner-elim {
+  margin-top: 16px;
+  background: var(--redbg);
+  border-color: #f6c9cb;
+  color: #8e1e22;
+}
+.agt .vf-chk-badges {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.agt .ctitle.vf-mt12 {
+  margin-top: 12px;
+}
+.agt .muted.vf-chk-line {
+  margin-top: -6px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .agt .cform .copt,
+  .agt .cform .cq {
+    animation: tdRise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
 /* the file input of a logo editor never shows: the label is the button */
 .agt .btn.vf-logo-pick input[type='file'] {
   display: none !important;

@@ -1300,6 +1300,59 @@ export const logos = pgTable(
 
 export type Logo = typeof logos.$inferSelect;
 
+// Mariem 12/11/2026 (Agent Screenhost spec VF §11) — a qualification fiche: the agent's answers,
+// the proposed result computed at sending, and the manager's final decision (taken in the Hub).
+export type AgentChecklistStatus = 'draft' | 'sent' | 'validated' | 'refused';
+
+export interface ChecklistResultDetail {
+  motifs: string[];
+  cond: string[];
+  verif: string[];
+  sig: string[];
+}
+
+export const agentChecklists = pgTable(
+  'agent_checklists',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id').references(() => users.id, { onDelete: 'set null' }),
+    agentName: text('agent_name'),
+    agentCode: text('agent_code'),
+    status: text('status').$type<AgentChecklistStatus>().notNull().default('draft'),
+    answers: jsonb('answers').$type<Record<string, string | string[]>>().notNull().default({}),
+    wifiPasswordEncrypted: text('wifi_password_encrypted'),
+    name: text('name'),
+    category: text('category'),
+    governorate: text('governorate'),
+    delegation: text('delegation'),
+    agentOpinion: text('agent_opinion').$type<'oui' | 'non'>(),
+    result: text('result').$type<'elig' | 'non' | 'inc'>(),
+    resultDetail: jsonb('result_detail').$type<ChecklistResultDetail>(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decidedByHubUserId: integer('decided_by_hub_user_id'),
+    decidedByName: text('decided_by_name'),
+    managerComment: text('manager_comment'),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_checklists_agent_idx').on(table.agentUserId),
+    index('agent_checklists_status_idx').on(table.status),
+    check(
+      'agent_checklists_status',
+      sql`${table.status} in ('draft', 'sent', 'validated', 'refused')`,
+    ),
+    check(
+      'agent_checklists_result',
+      sql`${table.result} IS NULL OR ${table.result} in ('elig', 'non', 'inc')`,
+    ),
+  ],
+);
+
+export type AgentChecklist = typeof agentChecklists.$inferSelect;
+
 // AGT-7 (Agent Screenhost spec v1.0 §6 « Suivi de mes Screenhosts ») — one row per venue and day,
 // computed by the daily follow-up job from the engine's sources. The score and its four rates
 // are the engine's own (lib/sps-score); the 30-day trend and the 90-day curve read these rows.

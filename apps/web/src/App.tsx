@@ -67,6 +67,7 @@ const AgentCalendar = lazy(() => import('@/features/agent/pages/AgentCalendar'))
 const AgentRevenues = lazy(() => import('@/features/agent/pages/AgentRevenues'));
 const AgentFaq = lazy(() => import('@/features/agent/pages/AgentFaq'));
 const AgentSensors = lazy(() => import('@/features/agent/pages/AgentSensors'));
+const AgentChecklist = lazy(() => import('@/features/agent/pages/AgentChecklist'));
 const AgentAssignSensors = lazy(() => import('@/features/agent/pages/AgentAssignSensors'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
@@ -375,6 +376,14 @@ export default function App() {
               element={
                 <AgentRoute>
                   <AgentFaq />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/checklist"
+              element={
+                <AgentRoute>
+                  <AgentChecklist />
                 </AgentRoute>
               }
             />
