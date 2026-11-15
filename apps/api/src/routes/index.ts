@@ -10,6 +10,7 @@ import { adminCampaignCtaRoutes } from './admin-campaign-cta.js';
 import { adminCampaignDeleteRoutes } from './admin-campaign-delete.js';
 import { adminCampaignStopRoutes } from './admin-campaign-stop.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
+import { adminChecklistRoutes } from './admin-checklists.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminDemoRoutes } from './admin-demo.js';
 import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
@@ -223,6 +224,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(logoRoutes);
   await app.register(agentSensorRoutes);
   await app.register(agentChecklistRoutes);
+  await app.register(adminChecklistRoutes);
   await app.register(agentPortfolioRoutes);
   await app.register(agentAppointmentRoutes);
   await app.register(agentNewsRoutes);

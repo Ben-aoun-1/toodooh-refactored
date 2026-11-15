@@ -18,6 +18,10 @@ export const adminKeys = {
   supportAll: () => [...adminKeys.all, 'support'] as const,
   /** Agent specs VF « Logos » — the pending queue and one subject's validated logo. */
   logosAll: () => [...adminKeys.all, 'logos'] as const,
+  checklistsAll: () => [...adminKeys.all, 'checklists'] as const,
+  checklists: () => [...adminKeys.all, 'checklists', 'list'] as const,
+  checklistOfHost: (screenhostId: string) =>
+    [...adminKeys.all, 'checklists', 'host', screenhostId] as const,
   logosPending: () => [...adminKeys.all, 'logos', 'pending'] as const,
   logo: (kind: string, id: string) => [...adminKeys.all, 'logos', kind, id] as const,
 

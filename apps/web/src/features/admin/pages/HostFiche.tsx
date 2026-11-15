@@ -5,6 +5,7 @@ import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminUserEligibilitySlot from '@/features/admin/components/AdminUserEligibilitySlot';
 import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
 import AdminVenueDeclarationForm from '@/features/admin/components/AdminVenueDeclarationForm';
+import { HostChecklistCard } from '@/features/admin/components/checklists/HostChecklistCard';
 import HostCalendarSection from '@/features/admin/components/host/HostCalendarSection';
 import { HostSection } from '@/features/admin/components/host/HostField';
 import HostHistoryCard from '@/features/admin/components/host/HostHistoryCard';
@@ -67,6 +68,13 @@ export default function HostFiche() {
           description="Le logo de l'établissement, tel que les agents et les annonceurs le voient."
         >
           <AdminLogoCard kind="screenhost" id={venue.id} />
+        </HostSection>
+
+        <HostSection
+          title="Checklist de qualification"
+          description="La fiche remplie par l'agent avant l'inscription, et la décision du manager."
+        >
+          <HostChecklistCard screenhostId={venue.id} />
         </HostSection>
 
         <HostSection
