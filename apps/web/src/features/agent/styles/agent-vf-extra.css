@@ -919,3 +919,7 @@
   margin: 0 0 10px;
   font-size: 12.5px;
 }
+/* the file input of a logo editor never shows: the label is the button */
+.agt .btn.vf-logo-pick input[type='file'] {
+  display: none !important;
+}
