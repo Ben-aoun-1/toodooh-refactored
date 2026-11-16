@@ -320,16 +320,42 @@ describe('DISP-TOURS — redispatching (scenarios 12, 13)', () => {
     };
     const r = redistribuer({ perte: 1188, engages: [bFree], nouveaux: [], params: PARAMS });
     expect([...r.engages.impressions.keys()]).toEqual(['cafe_B']);
-    const placedB = r.engages.impressions.get('cafe_B') ?? 0;
-    expect(placedB).toBeLessThanOrEqual(1188);
-    // Indivisible passages: what stays unplaced is under one passage of the tranche.
-    const tranche = r.engages.prises[0]?.tranche;
-    expect(1188 - placedB).toBeLessThan((tranche?.v ?? 0) / PARAMS.rPlein);
+    // Mariem 16/11 (« couverture partielle… خصك الكل ») — the loss is placed WHOLE: the partial
+    // tranche airs ⌈k⌉ passages, valued on the exact k, so B earns exactly the 1 188 impressions.
+    close(r.engages.impressions.get('cafe_B') ?? 0, 1188);
+    close(r.nonPlace, 0);
+    const tail = r.engages.prises.at(-1);
+    expect(Number.isInteger(tail?.passages)).toBe(true);
+    expect(tail?.passages ?? 0).toBeGreaterThanOrEqual(tail?.valeur ?? 0);
+    expect(tail?.passages ?? 0).toBeLessThanOrEqual(PARAMS.rPlein);
+    // The créneaux carry the same value (what settlement pays the Host on), in whole
+    // impressions: under half an impression per tail cell of rounding.
+    const cells = creneauxParVenue(r.engages.prises).get('cafe_B') ?? [];
+    expect(cells.every((c) => Number.isInteger(c.impressions))).toBe(true);
+    expect(
+      Math.abs(cells.reduce((sum, c) => sum + c.impressions, 0) * PARAMS.t - 1188),
+    ).toBeLessThan(cells.length * 0.5 * PARAMS.t + 1e-6);
     expect(
       r.engages.prises.every((p) =>
         p.tranche.heures.every((h) => h.dates.every((d) => d >= '2026-11-11')),
       ),
     ).toBe(true);
+  });
+
+  it('Mariem 16/11 — a redispatch onto new venues covers the share whole too', () => {
+    const r = redistribuer({
+      perte: 6000,
+      engages: [],
+      nouveaux: [cafeB(REMAINING)],
+      params: PARAMS,
+    });
+    close(r.place, 6000);
+    close(r.nonPlace, 0);
+  });
+
+  it('the launch fill is unchanged: R8 keeps ⌊k⌋, no fractional tail', () => {
+    const launched = calculer(POOL, 150, PARAMS);
+    expect(launched.final.prises.every((p) => p.valeur === undefined)).toBe(true);
   });
 
   it('the R11 helper keeps retained venues at or above 30 DT after a refill', () => {

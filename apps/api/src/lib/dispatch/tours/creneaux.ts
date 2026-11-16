@@ -21,7 +21,12 @@ export const creneauxDe = (prises: readonly Prise[]): TourCreneau[] => {
           date,
           hour: h.hour,
           reps: prise.passages,
-          impressions: h.affluence * prise.passages,
+          // Mariem 16/11 — a redispatch tail (valeur) is valued on its exact k, kept in
+          // whole impressions like every stored créneau (settlement counts integers).
+          impressions:
+            prise.valeur === undefined
+              ? h.affluence * prise.passages
+              : Math.round(h.affluence * prise.valeur),
           tour: prise.tranche.tour,
         });
       }

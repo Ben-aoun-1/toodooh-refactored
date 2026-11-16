@@ -46,6 +46,8 @@ export interface PlacementInput {
    * rest ('nouveaux_dabord'; 'engages_seuls' at start − 5 min). Default: R14's order.
    */
   ordre?: OrdreRedistribution;
+  /** false = the booster (a purchase, R8's ⌊k⌋); default: the share is placed whole. */
+  couvrant?: boolean;
 }
 
 export interface PlacementOutcome {
@@ -146,6 +148,7 @@ export const placerToursIncrement = async (
     ),
     params,
     ordre,
+    ...(input.couvrant === undefined ? {} : { couvrant: input.couvrant }),
   });
 
   const placedTo: PlacementOutcome['placedTo'] = [];
@@ -246,5 +249,7 @@ export const placerToursIncrement = async (
     }
   }
   const placedFact = placedTo.reduce((sum, p) => sum + p.added_fact, 0);
-  return { placedFact, nonPlaceFact: Math.max(0, input.volumeFact - placedFact), placedTo };
+  // The engine's own figure: a whole-share tail rounds its créneaux to whole impressions, so
+  // volume − placed can show a fraction of an impression that is not a real shortfall.
+  return { placedFact, nonPlaceFact: r.nonPlace > EPS ? r.nonPlace : 0, placedTo };
 };
