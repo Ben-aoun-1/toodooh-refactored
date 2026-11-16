@@ -25,6 +25,8 @@ import {
 import {
   cellDateOf,
   dayStateOf,
+  lockedCampaignsOf,
+  lockedDayCopy,
   unavailableHoursOf,
   windowHours,
 } from '@/features/screenhost/lib/hour-unavailability';
@@ -140,6 +142,13 @@ export default function OwnerCalendarDevices() {
 
   const handleSelectDay = (iso: string) => {
     if (!isDayToggleable(iso, todayIso) || toggle.isPending) return;
+    // Mariem 13/11 — an accepted campaign locks its days; a day with declared hours still opens,
+    // so the owner can free them.
+    const locked = lockedCampaignsOf(iso, view);
+    if (locked.length > 0 && dayStateOf(iso, view) === 'available') {
+      toast.error(lockedDayCopy(locked));
+      return;
+    }
     setSelectedDay((d) => (d === iso ? null : iso));
   };
 

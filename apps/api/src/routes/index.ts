@@ -16,6 +16,7 @@ import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
 import { adminEngineJournalRoutes } from './admin-engine-journal.js';
 import { adminEventsRoutes } from './admin-events.js';
 import { adminFacturesRoutes } from './admin-factures.js';
+import { adminHostDecisionRoutes } from './admin-host-decisions.js';
 import { adminHostRoutes } from './admin-host.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
@@ -171,6 +172,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // the dispatch → playout → proof-of-play chain run end-to-end.
   await app.register(adminCampaignsRoutes);
   await app.register(adminCampaignCtaRoutes);
+  await app.register(adminHostDecisionRoutes);
   await app.register(adminCampaignStopRoutes);
   await app.register(adminCampaignDeleteRoutes);
   await app.register(adminAccountDeactivationRoutes);

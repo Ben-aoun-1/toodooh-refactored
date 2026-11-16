@@ -16,6 +16,7 @@ import { startAgentNoticeEmailJob } from './lib/agent-notifications.js';
 import { startAgentShFollowupJob } from './lib/agent-sh-followup.js';
 import { startApiFootballJob } from './lib/api-football/tracker.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
+import { startCampaignPrelaunchJob } from './lib/campaign-prelaunch.js';
 import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
 import { startDemoAirJob } from './lib/demo-air.js';
 import { startEventHostNoticeJob } from './lib/event-host-notice.js';
@@ -132,6 +133,8 @@ const start = async (): Promise<void> => {
     // the total ≥ S_min). AFTER the lifecycle job: a campaign flipped active this hour gets its
     // first redispatch look in the same boot sequence.
     startCampaignRedispatchJob(app.log);
+    // Mariem 13/11 — the pre-launch lock (start − 6 h) and freeze (start − 5 min), every minute.
+    startCampaignPrelaunchJob(app.log);
     // FCT2 — month-end billing: the monthly consolidated invoices (proof-verified consumption)
     // + the venue relevés de reversement, previous CLOSED Tunis month, UNIQUE-idempotent.
     startMonthlyBillingJob(app.log);

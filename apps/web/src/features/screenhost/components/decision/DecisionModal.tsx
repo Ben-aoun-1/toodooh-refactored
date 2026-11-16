@@ -161,7 +161,8 @@ export default function DecisionModal({
               <CampaignDecisionDetails campaign={target.campaign} />
             ) : (
               <p className="py-10 text-center text-sm text-[#5C5C5C]">
-                Cette proposition a déjà été traitée.
+                Cette proposition n’est plus d’actualité : elle a déjà été traitée ou la campagne a
+                été retirée.
               </p>
             )}
           </div>

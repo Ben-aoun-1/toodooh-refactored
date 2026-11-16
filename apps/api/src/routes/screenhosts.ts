@@ -26,6 +26,11 @@ import {
   users,
   zones,
 } from '../db/schema.js';
+import {
+  acceptedCampaignDays,
+  acceptedCampaignLockMessage,
+} from '../lib/accepted-campaign-lock.js';
+import { afterClassicDecision, afterEventDecision } from '../lib/allocation-decision-effects.js';
 import { decideAllocation } from '../lib/allocation-decision.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
@@ -45,7 +50,6 @@ import { loadOwnerSharePcts, ownerShareTnd } from '../lib/owner-share.js';
 import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
 import { proofInstantSql } from '../lib/playout/proof-instant.js';
-import { pushPlaylistToAllConnected, pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { buildPistes } from '../lib/report/pistes.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
@@ -53,7 +57,7 @@ import { renderPdf } from '../lib/report/render.js';
 import { renderReportHtml } from '../lib/report/template.js';
 import { venueSlug } from '../lib/slug.js';
 import { airedCreativeTypeSql, airedStorageKeySql } from '../lib/spot-cta.js';
-import { computeSps, recomputeVenueSps, spsComputable } from '../lib/sps-score.js';
+import { computeSps, spsComputable } from '../lib/sps-score.js';
 import { unavailabilityView } from '../lib/unavailable-hours.js';
 import { setVenueUnavailability } from '../lib/venue-unavailability.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
@@ -552,9 +556,17 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
     // HOUR-UNAV1 — the wholly unavailable opening days (`days`, read by every client, the mobile
     // app included) plus every unavailable hour (`hours`) and the venue's window.
-    return reply
-      .status(200)
-      .send(await unavailabilityView(owned, parsedQuery.data.from, parsedQuery.data.to));
+    // Mariem 13/11 — `locked_days`: the future days an accepted campaign locks (no declaration).
+    const { from, to } = parsedQuery.data;
+    const today = tunisDateOf(new Date());
+    const locked = await acceptedCampaignDays(owned.id, from, to);
+    return reply.status(200).send({
+      ...(await unavailabilityView(owned, from, to)),
+      locked_days: [...locked]
+        .filter(([day]) => day > today)
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([day, names]) => ({ day, campaigns: names })),
+    });
   });
 
   // PUT /api/screenhosts/:id/unavailability {day, unavailable, hours?} — declare or undeclare ONE
@@ -614,6 +626,18 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
     const day = parsed.data.day;
+    // Mariem 13/11 — an accepted campaign locks its days (lib/accepted-campaign-lock.ts).
+    if (parsed.data.unavailable) {
+      const locked = (await acceptedCampaignDays(owned.id, day, day)).get(day) ?? [];
+      if (locked.length > 0) {
+        return reply.status(409).send({
+          error: 'ACCEPTED_CAMPAIGN',
+          message: acceptedCampaignLockMessage(locked),
+          day,
+          campaigns: locked,
+        });
+      }
+    }
     const redispatched = await setVenueUnavailability(
       owned.id,
       day,
@@ -2183,28 +2207,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
-    if (outcome.changed) {
-      try {
-        await recomputeVenueSps(outcome.screenhostId);
-      } catch (err) {
-        request.log.warn(
-          { err, screenhostId: outcome.screenhostId },
-          'SPS on-decision recompute failed',
-        );
-      }
-    }
-    // CF-HF4 — an ACCEPTE flip makes content airable NOW: re-push the venue's playlist to its
-    // connected screens (no reconnect wait). Failure-warn: a dead socket never breaks the flip.
-    if (outcome.changed && statut === 'ACCEPTE') {
-      try {
-        await pushPlaylistToVenue(outcome.screenhostId, request.log);
-      } catch (err) {
-        request.log.warn(
-          { err, screenhostId: outcome.screenhostId },
-          'playlist re-push on accept failed',
-        );
-      }
-    }
+    // SPS recompute + CF-HF4 re-push (lib/allocation-decision-effects.ts, shared with the admin).
+    await afterClassicDecision(
+      outcome.screenhostId,
+      statut === 'ACCEPTE' ? 'ACCEPTE' : 'REFUSE',
+      outcome.changed,
+      request.log,
+    );
     return reply.status(200).send({ id: outcome.id, statut_acceptation: outcome.statut });
   };
 
@@ -2505,26 +2514,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
-    // FRESH-1 — the classic accept's CF-HF4 re-push, for events: an ACCEPTE made while one of
-    // the allocation's blocs is airing makes the spot airable NOW (the bloc pusher only fires at
-    // edges). Outside a bloc the re-push sends the unchanged playlist — harmless. Failure-warn.
-    if (outcome.changed && statut === 'ACCEPTE') {
-      try {
-        await pushPlaylistToVenue(outcome.screenhostId, request.log);
-      } catch (err) {
-        request.log.warn(
-          { err, screenhostId: outcome.screenhostId },
-          'playlist re-push on event accept failed',
-        );
-      }
-    }
-    // EVT-STOP — a REFUSE releases the venue's blocs (the cascade may re-place them): the
-    // network's blackout set may have changed, so every connected venue re-pushes.
-    if (outcome.changed && statut === 'REFUSE') {
-      await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
-        request.log.warn({ err }, 'network playlist re-push failed'),
-      );
-    }
+    // FRESH-1 / EVT-STOP re-pushes (lib/allocation-decision-effects.ts, shared with the admin).
+    await afterEventDecision(outcome.screenhostId, statut, outcome.changed, request.log);
     return reply.status(200).send({
       id: outcome.id,
       statut,

@@ -17,6 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
+import { CampaignHostDecisions } from '@/features/admin/components/CampaignHostDecisions';
 import CampaignLifecycleActions from '@/features/admin/components/CampaignLifecycleActions';
 import CampaignQrPanel from '@/features/admin/components/CampaignQrPanel';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
@@ -43,8 +44,10 @@ import {
   PHASE_LABELS,
   eventDetail,
   eventLabel,
+  isIdleRun,
   formatTunis,
   outcomeChip,
+  runLabel,
   type EnginePhaseFilter,
 } from '@/features/admin/lib/engine-journal';
 import { REVERSEMENT_ROW_LABELS, reversementDisplayRows } from '@/features/admin/lib/reversements';
@@ -557,6 +560,8 @@ export default function CampaignReviewQueue() {
                   </div>
                   {/* ELIG-1 — the venues this campaign can reach, at any status. */}
                   <CampaignEligibleHosts campaignId={selected.id} />
+                  {/* Mariem 13/11 — the Hosts' answers; the Admin can answer for a Host. */}
+                  <CampaignHostDecisions campaignId={selected.id} />
                   {selected.reject_reason && (
                     <div>
                       <p className="text-sm font-medium text-gray-700">Motif de rejet:</p>
@@ -644,48 +649,52 @@ export default function CampaignReviewQueue() {
                       <p className="text-sm text-gray-500">{ENGINE_JOURNAL_EMPTY_STATE}</p>
                     ) : (
                       <div className="space-y-2">
-                        {journal.runs.map((run) => (
-                          <details
-                            key={run.run_id}
-                            className="rounded-lg border border-gray-200 bg-white p-2"
-                          >
-                            <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
-                              <span className="flex items-center gap-2 min-w-0">
-                                <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 text-xs font-medium text-brand-deep">
-                                  {PHASE_LABELS[run.phase]}
+                        {journal.runs
+                          .filter((run) => !isIdleRun(run))
+                          .map((run) => (
+                            <details
+                              key={run.run_id}
+                              className="rounded-lg border border-gray-200 bg-white p-2"
+                            >
+                              <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 text-xs font-medium text-brand-deep">
+                                    {runLabel(run)}
+                                  </span>
+                                  <span className="truncate text-xs text-gray-500">
+                                    {formatTunis(run.started_at)}
+                                  </span>
                                 </span>
-                                <span className="truncate text-xs text-gray-500">
-                                  {formatTunis(run.started_at)}
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    run.outcome === 'committed'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}
+                                >
+                                  {outcomeChip(run)}
                                 </span>
-                              </span>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                  run.outcome === 'committed'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-red-100 text-red-700'
-                                }`}
-                              >
-                                {outcomeChip(run)}
-                              </span>
-                            </summary>
-                            <ul className="mt-2 space-y-1 border-t border-gray-100 pt-2">
-                              {run.events.map((ev, i) => (
-                                <li key={i} className="text-xs text-gray-700">
-                                  <span className="font-medium">{eventLabel(ev)}</span>
-                                  {ev.screenhost_name && (
-                                    <span className="text-gray-500"> — {ev.screenhost_name}</span>
-                                  )}
-                                  {eventDetail(ev) && (
-                                    <span className="text-gray-500"> · {eventDetail(ev)}</span>
-                                  )}
-                                </li>
-                              ))}
-                              {run.events.length === 0 && (
-                                <li className="text-xs text-gray-400">Aucun événement détaillé.</li>
-                              )}
-                            </ul>
-                          </details>
-                        ))}
+                              </summary>
+                              <ul className="mt-2 space-y-1 border-t border-gray-100 pt-2">
+                                {run.events.map((ev, i) => (
+                                  <li key={i} className="text-xs text-gray-700">
+                                    <span className="font-medium">{eventLabel(ev)}</span>
+                                    {ev.screenhost_name && (
+                                      <span className="text-gray-500"> — {ev.screenhost_name}</span>
+                                    )}
+                                    {eventDetail(ev) && (
+                                      <span className="text-gray-500"> · {eventDetail(ev)}</span>
+                                    )}
+                                  </li>
+                                ))}
+                                {run.events.length === 0 && (
+                                  <li className="text-xs text-gray-400">
+                                    Aucun événement détaillé.
+                                  </li>
+                                )}
+                              </ul>
+                            </details>
+                          ))}
                         {journal.total_runs > journal.runs.length && (
                           <p className="text-xs text-gray-400">
                             {journal.runs.length} exécutions affichées sur {journal.total_runs}.

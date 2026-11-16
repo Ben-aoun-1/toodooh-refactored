@@ -47,9 +47,19 @@ const fakeVenue = (id: string, amaxPph: number, blocStarts: string[]) => ({
 
 describe('Mariem 04/11 — the 2-minute seat model (pure)', () => {
   it('a match without a mark sells 2-minute seats, 3 per bloc; a marked one keeps EVT-MIN1', () => {
-    expect(eventSeatModel(null)).toEqual({ seatMinutes: 2, seatsPerBloc: 3, audienceDivisor: 1 });
+    expect(eventSeatModel(null)).toEqual({
+      seatMinutes: 2,
+      seatsPerBloc: 3,
+      audienceDivisor: 1,
+      spreadPod: true,
+    });
     expect(eventSeatModel(2)).toBe(MODEL);
-    expect(eventSeatModel(1)).toEqual({ seatMinutes: 1, seatsPerBloc: 5, audienceDivisor: 3 });
+    expect(eventSeatModel(1)).toEqual({
+      seatMinutes: 1,
+      seatsPerBloc: 5,
+      audienceDivisor: 3,
+      spreadPod: false,
+    });
   });
 
   it('A_max × R × blocs: a seat holds the whole A_max, R its plays in the 2 minutes', () => {
@@ -100,7 +110,7 @@ describe('Mariem 04/11 — the 2-minute seat model (pure)', () => {
     expect(takeEventMinutes(list, 10, 1000, MODEL)).toEqual({ status: 'NOT_ENOUGH', available: 8 });
   });
 
-  it('the pod: 2 minutes a seat, 6 at most — avant opens the bloc, après closes it', () => {
+  it('the pod lasts its full 6 minutes from one seat on — avant opens the bloc, après closes it', () => {
     const start = at('2027-06-10T18:00:00Z');
     const end = at('2027-06-10T18:20:00Z');
     expect(eventPodWindow('avant', start, end, 3, MODEL)).toEqual({
@@ -108,9 +118,10 @@ describe('Mariem 04/11 — the 2-minute seat model (pure)', () => {
       end: at('2027-06-10T18:06:00Z'),
     });
     expect(eventPodWindow('apres', start, end, 1, MODEL)).toEqual({
-      start: at('2027-06-10T18:18:00Z'),
+      start: at('2027-06-10T18:14:00Z'),
       end,
     });
+    expect(eventPodWindow('avant', start, end, 0, MODEL)).toBeNull();
     expect(eventPodWindow('avant', start, end, 5, MODEL)?.end).toEqual(at('2027-06-10T18:06:00Z'));
   });
 
@@ -137,6 +148,58 @@ describe('Mariem 04/11 — the 2-minute seat model (pure)', () => {
       expect(s.at.getTime() + s.seconds * 1000).toBe(next.getTime());
     });
     expect(pod?.end).toEqual(at('2027-06-10T18:06:00Z'));
+  });
+
+  it('Mariem 13/11 — one 14 s spot alone airs its 8 plays every 45 s over the 6 minutes', () => {
+    const start = at('2027-06-10T18:00:00Z');
+    const pod = eventPodTimeline(
+      'avant',
+      start,
+      at('2027-06-10T18:20:00Z'),
+      [{ campaignId: 'A', slotSeconds: 15, spotSeconds: 14 }],
+      MODEL,
+    );
+    expect(pod?.slots.map((s) => (s.at.getTime() - start.getTime()) / 1000)).toEqual([
+      0, 45, 90, 135, 180, 225, 270, 315,
+    ]);
+    expect(pod?.slots.every((s) => s.spotSeconds === 14 && s.seconds === 45)).toBe(true);
+    expect(pod?.end).toEqual(at('2027-06-10T18:06:00Z'));
+  });
+
+  it('seats with fewer plays are spread across the rounds, never bunched at the start', () => {
+    const start = at('2027-06-10T18:00:00Z');
+    const pod = eventPodTimeline(
+      'apres',
+      at('2027-06-10T17:40:00Z'),
+      start,
+      [
+        { campaignId: 'A', slotSeconds: 10, spotSeconds: 10 }, // 12 plays
+        { campaignId: 'B', slotSeconds: 30, spotSeconds: 30 }, // 4 plays
+      ],
+      MODEL,
+    );
+    const bRounds = pod?.slots
+      .filter((s) => s.campaignId === 'B')
+      .map((s) => pod.slots.filter((x) => x.campaignId === 'A' && x.at < s.at).length);
+    expect(bRounds).toEqual([1, 4, 7, 10]); // B airs in rounds 0, 3, 6, 9, after that round's A
+    expect(pod?.start).toEqual(at('2027-06-10T17:54:00Z'));
+    pod?.slots.forEach((s, i) => {
+      const next = pod.slots[i + 1]?.at ?? pod.end;
+      expect(s.at.getTime() + s.seconds * 1000).toBe(next.getTime());
+    });
+  });
+
+  it('EVT-MIN1 matches keep their pod of sold minutes, spots back to back', () => {
+    const start = at('2027-06-10T18:00:00Z');
+    const pod = eventPodTimeline(
+      'avant',
+      start,
+      at('2027-06-10T18:20:00Z'),
+      [{ campaignId: 'A', slotSeconds: 15, spotSeconds: 14 }],
+      EVENT_SEAT_MODEL_MIN1,
+    );
+    expect(pod?.end).toEqual(at('2027-06-10T18:01:00Z'));
+    expect(pod?.slots.map((s) => s.seconds)).toEqual([15, 15, 15, 15]);
   });
 });
 

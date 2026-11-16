@@ -73,6 +73,8 @@ export const adminKeys = {
   /** E7 — one campaign's settlement reversement breakdown (`adminCampaignsService.getReversements`). */
   campaignReversements: (id: string) => [...adminKeys.all, 'campaignReversements', id] as const,
   campaignEligibleHosts: (id: string) => [...adminKeys.all, 'campaignEligibleHosts', id] as const,
+  /** Mariem 13/11 — every Host of a campaign and its answer (`adminHostDecisionsService.list`). */
+  campaignHostDecisions: (id: string) => [...adminKeys.all, 'campaignHostDecisions', id] as const,
   /** LOG1 — one campaign's engine journal, keyed by the phase filter (`getEngineJournal`). */
   campaignEngineJournal: (id: string, phase: string) =>
     [...adminKeys.all, 'campaignEngineJournal', id, phase] as const,

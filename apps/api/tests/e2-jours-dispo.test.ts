@@ -462,7 +462,7 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
           rI: 16,
           revenuPrevisionnel: '200',
           creneaux: frozen,
-          statutAcceptation: 'ACCEPTE',
+          statutAcceptation: 'EN_ATTENTE',
         })
         .returning();
 
@@ -501,7 +501,7 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
       expect(after?.creneaux.every((cr) => cr.date === D1)).toBe(true);
       expect(after?.creneaux).toHaveLength(frozen.length - d2Slots.length);
       expect(after?.iiPotentiel).toBe(20_000 - (body.redispatched[0]?.v_fact ?? 0));
-      expect(after?.statutAcceptation).toBe('ACCEPTE'); // the kept days need no re-consent
+      expect(after?.statutAcceptation).toBe('EN_ATTENTE'); // still the owner's to answer for the kept days
 
       // B received the moved share, EN_ATTENTE, never on A’s declared day is irrelevant for B —
       // but B’s créneaux are inside the window and B was notified.
@@ -581,7 +581,7 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
         rI: 16,
         revenuPrevisionnel: '200',
         creneaux: frozen,
-        statutAcceptation: 'ACCEPTE',
+        statutAcceptation: 'EN_ATTENTE',
       });
       mockSession(A.ownerId);
       const res = await app.inject({

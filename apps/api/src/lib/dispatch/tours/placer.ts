@@ -16,7 +16,8 @@ import { type DbExecutor } from '../pool.js';
 
 import { assembleToursPool } from './assemble.js';
 import { creneauxParVenue } from './creneaux.js';
-import { redistribuer } from './redistribuer.js';
+import { hostFreezeInstant, hostLockInstant } from './host-start.js';
+import { type OrdreRedistribution, redistribuer } from './redistribuer.js';
 import { EPS, type Prise } from './remplir.js';
 
 // DISP-TOURS — placing MORE of a launched tours campaign (Mariem's spec R14): a loss to
@@ -40,6 +41,11 @@ export interface PlacementInput {
   now: Date;
   /** Compute only — nothing written, no lock taken (the booster's preview). */
   dryRun?: boolean;
+  /**
+   * Mariem 13/11 — before the start, new Hosts first and only the Hosts that ACCEPTED take the
+   * rest ('nouveaux_dabord'; 'engages_seuls' at start − 5 min). Default: R14's order.
+   */
+  ordre?: OrdreRedistribution;
 }
 
 export interface PlacementOutcome {
@@ -51,6 +57,14 @@ export interface PlacementOutcome {
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
 const montantText = (tnd: number): string => `${tnd.toFixed(2).replace('.', ',')} DT`;
+
+/**
+ * Mariem 13/11 + operator ruling (Youssef's wording, 13/11 21:09) — a Host that ACCEPTED the
+ * campaign and receives more of it: the créneaux are accepted at once, whatever the amount, and
+ * this is the only notice (before the start and during the campaign).
+ */
+export const slotsAddedToAcceptedBody = (montantTnd: number): string =>
+  `Bonne nouvelle ! Vous avez bénéficié d’un redispatching d’une campagne déjà acceptée sur votre écran. Cela vous permet de gagner ${montantTnd.toFixed(2).replace('.', ',')} TND supplémentaires.`;
 
 export const placerToursIncrement = async (
   tx: DbExecutor,
@@ -79,9 +93,17 @@ export const placerToursIncrement = async (
     lockOccupancy: input.dryRun !== true,
     trace,
   });
+  const ordre = input.ordre ?? 'engages_dabord';
+  // R14: every venue still in the campaign. Before the start (Mariem 13/11): only the Hosts that
+  // accepted — one still deciding gets nothing more, and is never « new » either (ownCells).
   const engagedIds = new Set(
     allocations
-      .filter((a) => a.statutAcceptation !== 'REFUSE' && !excluded.has(a.screenhostId))
+      .filter((a) =>
+        ordre === 'engages_dabord'
+          ? a.statutAcceptation !== 'REFUSE'
+          : a.statutAcceptation === 'ACCEPTE',
+      )
+      .filter((a) => !excluded.has(a.screenhostId))
       .map((a) => a.screenhostId),
   );
   const config = await getDispatchConfig();
@@ -93,15 +115,46 @@ export const placerToursIncrement = async (
     pctSh: plan.detail?.params.pctSh ?? config.pctSh,
     seuilShTnd: plan.detail?.params.seuilShTnd ?? SEUIL_SH_TND,
   };
+  // Mariem 13/11 — before the start, each Host has its own deadlines (./host-start.ts): a new
+  // Host whose own start − 5 min has passed can no longer answer in time, so it is never
+  // proposed; one proposed after its own start − 6 h is a LATE proposal (only the freeze
+  // withdraws it).
+  const opening = new Map<string, number | null>();
+  if (ordre !== 'engages_dabord' && pool.venues.length > 0) {
+    const rows = await tx
+      .select({ id: screenhosts.id, openingHour: screenhosts.openingHour })
+      .from(screenhosts)
+      .where(
+        inArray(
+          screenhosts.id,
+          pool.venues.map((v) => v.id),
+        ),
+      );
+    for (const row of rows) opening.set(row.id, row.openingHour);
+  }
+  const canStillAnswer = (venueId: string): boolean =>
+    ordre === 'engages_dabord' ||
+    input.now < hostFreezeInstant(campaign.startDate, opening.get(venueId) ?? null);
+  const isLateProposal = (venueId: string): boolean =>
+    ordre !== 'engages_dabord' &&
+    input.now >= hostLockInstant(campaign.startDate, opening.get(venueId) ?? null);
   const r = redistribuer({
     perte: input.volumeFact,
     engages: pool.venues.filter((v) => engagedIds.has(v.id)),
-    nouveaux: pool.venues.filter((v) => !engagedIds.has(v.id) && !ownCells.has(v.id)),
+    nouveaux: pool.venues.filter(
+      (v) => !engagedIds.has(v.id) && !ownCells.has(v.id) && canStillAnswer(v.id),
+    ),
     params,
+    ordre,
   });
 
   const placedTo: PlacementOutcome['placedTo'] = [];
-  const notices: { screenhostId: string; montant: number; merged: boolean }[] = [];
+  const notices: {
+    screenhostId: string;
+    montant: number;
+    merged: boolean;
+    accepted: boolean;
+  }[] = [];
   const write = async (prises: readonly Prise[], merged: boolean): Promise<void> => {
     for (const [venueId, added] of creneauxParVenue(prises)) {
       const addedFact = added.reduce((sum, c) => sum + c.impressions, 0) * params.t;
@@ -132,6 +185,8 @@ export const placerToursIncrement = async (
           rI: added.reduce((m, c) => Math.max(m, c.reps), 0),
           revenuPrevisionnel: String(round4((addedFact * cpm) / 1000)),
           creneaux: added,
+          lateProposal: isLateProposal(venueId),
+          createdAt: input.now,
         });
       }
       placedTo.push({ screenhost_id: venueId, added_fact: addedFact, merged });
@@ -139,6 +194,7 @@ export const placerToursIncrement = async (
         screenhostId: venueId,
         montant: ((addedFact * cpm) / 1000) * (params.pctSh / 100),
         merged,
+        accepted: existing?.statutAcceptation === 'ACCEPTE',
       });
       trace.event(
         'rattrapage_placed',
@@ -171,8 +227,10 @@ export const placerToursIncrement = async (
             ? {
                 userId: ownerId,
                 type: 'dispatch_slots_added',
-                title: 'Créneaux ajoutés à une campagne',
-                body: `La campagne « ${campaign.name} » ajoute des créneaux chez vous : ${montantText(n.montant)} de plus.`,
+                title: n.accepted ? 'Bonne nouvelle !' : 'Créneaux ajoutés à une campagne',
+                body: n.accepted
+                  ? slotsAddedToAcceptedBody(n.montant)
+                  : `La campagne « ${campaign.name} » ajoute des créneaux chez vous : ${montantText(n.montant)} de plus.`,
                 campaignId: campaign.id,
               }
             : {

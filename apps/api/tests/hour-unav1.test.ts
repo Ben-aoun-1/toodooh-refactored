@@ -297,7 +297,7 @@ describe('HOUR-UNAV1 on the database', () => {
         rI: 10,
         revenuPrevisionnel: '60',
         creneaux: frozen,
-        statutAcceptation: 'ACCEPTE',
+        statutAcceptation: 'EN_ATTENTE',
       })
       .returning();
 
@@ -314,6 +314,92 @@ describe('HOUR-UNAV1 on the database', () => {
       .where(eq(campaignDispatchAllocation.id, alloc?.id ?? ''));
     expect(after?.creneaux.map((cr) => cr.hour)).toEqual([8, 9, 12, 13, 14, 15, 16, 17]);
     expect(after?.iiPotentiel).toBe(4800);
+  });
+
+  it('Mariem 13/11 — an ACCEPTED campaign locks its days: no declaration, the read lists them', async () => {
+    const venue = await seedVenue(await ownerSectorId());
+    const D1 = futureMonday(10);
+    const D2 = plusCalendarDays(D1, 1);
+    const advertiserId = await seedUser({ role: 'advertiser' });
+    const [c] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId,
+        name: 'Campagne acceptée',
+        campaignType: 'standard',
+        status: 'upcoming',
+        startDate: D1,
+        endDate: D2,
+      })
+      .returning();
+    const [plan] = await db
+      .insert(campaignDispatchPlan)
+      .values({
+        campaignId: c?.id ?? '',
+        iCible: 10_000,
+        cpm: '10',
+        sSpotSeconds: 10,
+        tTierCoef: '0.6',
+        seuilDiffusable: 2000,
+        sMin: '20',
+        gJour: '3.3333',
+        fMaxSeconds: 300,
+        rMinEfficace: 2,
+        couvert: 10_000,
+        nMin: 1,
+        nMax: 10,
+        nRetenus: 1,
+      })
+      .returning();
+    const [alloc] = await db
+      .insert(campaignDispatchAllocation)
+      .values({
+        planId: plan?.id ?? '',
+        screenhostId: venue.shId,
+        iiPotentiel: 6000,
+        rI: 10,
+        revenuPrevisionnel: '60',
+        creneaux: [{ date: D1, hour: 10, reps: 10, impressions: 1000 }],
+        statutAcceptation: 'ACCEPTE',
+      })
+      .returning();
+
+    mockSession(venue.ownerId);
+    // Every day of the campaign is locked — even one with no créneau at this venue.
+    for (const day of [D1, D2]) {
+      const refused = await put(venue.shId, { day, unavailable: true, hours: [15] });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toMatchObject({
+        error: 'ACCEPTED_CAMPAIGN',
+        campaigns: ['Campagne acceptée'],
+        message: expect.stringContaining('« Campagne acceptée »'),
+      });
+    }
+    expect(await hourRows(venue.shId)).toEqual([]);
+    const [kept] = await db
+      .select()
+      .from(campaignDispatchAllocation)
+      .where(eq(campaignDispatchAllocation.id, alloc?.id ?? ''));
+    expect(kept?.creneaux).toHaveLength(1);
+    const view = (
+      await app.inject({
+        method: 'GET',
+        url: `/api/screenhosts/${venue.shId}/unavailability?from=${D1}&to=${D2}`,
+      })
+    ).json<{ locked_days: { day: string; campaigns: string[] }[] }>();
+    expect(view.locked_days).toEqual([
+      { day: D1, campaigns: ['Campagne acceptée'] },
+      { day: D2, campaigns: ['Campagne acceptée'] },
+    ]);
+    // Undeclaring stays free; a stopped or refused campaign no longer locks.
+    expect((await put(venue.shId, { day: D1, unavailable: false })).statusCode).toBe(200);
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'REFUSE' })
+      .where(eq(campaignDispatchAllocation.id, alloc?.id ?? ''));
+    expect((await put(venue.shId, { day: D2, unavailable: true, hours: [15] })).statusCode).toBe(
+      200,
+    );
   });
 
   it('ruling 8.2 — a sold event slot in the declared hours leaves the venue (re-placed); its other slots stay', async () => {
@@ -359,7 +445,7 @@ describe('HOUR-UNAV1 on the database', () => {
         blocs,
         impressionsTotal: 600,
         montantTnd: '60.000',
-        statut: 'ACCEPTE',
+        statut: 'EN_ATTENTE',
         decidedAt: new Date(),
       })
       .returning();
@@ -378,7 +464,11 @@ describe('HOUR-UNAV1 on the database', () => {
     expect((after?.blocs as { start: string }[]).map((b) => b.start)).toEqual(
       grid.slice(0, 3).map((b) => b.start.toISOString()),
     );
-    expect(after).toMatchObject({ statut: 'ACCEPTE', impressionsTotal: 300, montantTnd: '30.000' });
+    expect(after).toMatchObject({
+      statut: 'EN_ATTENTE',
+      impressionsTotal: 300,
+      montantTnd: '30.000',
+    });
     // The venue's hold for the event follows: only the « avant » hour (13 h) is still held.
     const holds =
       await sql`select hour from hour_reservations where event_id = ${ev?.id ?? ''} and screenhost_id = ${venue.shId}`;
