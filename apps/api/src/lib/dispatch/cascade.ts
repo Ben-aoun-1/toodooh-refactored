@@ -106,7 +106,7 @@ export const runRefusalCascade = async (
       },
       trace,
     );
-    const shortfall = Math.max(0, v - placed.placedFact);
+    const shortfall = placed.nonPlaceFact;
     if (shortfall > 0) trace.event('partial_coverage', { shortfall, engine: 'tours' });
     return {
       v,

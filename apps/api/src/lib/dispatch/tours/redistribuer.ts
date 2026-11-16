@@ -2,7 +2,14 @@ import { type RemplissageFinal, remplirAvecSeuil } from './anti-miette.js';
 import { type CalculParams } from './calculer.js';
 import { buildFile } from './file.js';
 import { type VenueInput, buildHeuresTypes } from './heures-types.js';
-import { EPS, type Prise, impressionsParVenue, prisesCouvrantes, remplir } from './remplir.js';
+import {
+  EPS,
+  type Prise,
+  impressionsParVenue,
+  prisesCouvrantes,
+  prisesDe,
+  remplir,
+} from './remplir.js';
 
 // DISP-TOURS — REDISPATCH placement, PURE (Mariem's spec R14). A spot that did not air (screen
 // off, outage…) is a loss valued on the FROZEN state (the missed créneaux' impressions); it is
@@ -51,18 +58,22 @@ export const redistribuer = (input: {
   nouveaux: readonly VenueInput[];
   params: CalculParams;
   ordre?: OrdreRedistribution;
+  /**
+   * Mariem 16/11 — a loss or a refused share is placed WHOLE (remplir.ts prisesCouvrantes).
+   * false = R8's ⌊k⌋: the booster, a purchase priced to its budget, never exceeds it.
+   */
+  couvrant?: boolean;
 }): Redistribution => {
   const { perte, params } = input;
   const ordre = input.ordre ?? 'engages_dabord';
+  const couvrant = input.couvrant !== false;
   const toFileVenues = (venues: readonly VenueInput[]) =>
     venues.map((v) => ({ id: v.id, sps: v.sps, heures: buildHeuresTypes(v, params) }));
   const sumOf = (m: Map<string, number>) => [...m.values()].reduce((sum, imp) => sum + imp, 0);
 
   const surNouveaux = (volume: number): RemplissageFinal | null =>
     volume > EPS && input.nouveaux.length > 0 && ordre !== 'engages_seuls'
-      ? remplirAvecSeuil(buildFile(toFileVenues(input.nouveaux)), volume, params, {
-          couvrant: true,
-        })
+      ? remplirAvecSeuil(buildFile(toFileVenues(input.nouveaux)), volume, params, { couvrant })
       : null;
   const surEngages = (volume: number) => {
     if (volume <= EPS || input.engages.length === 0) {
@@ -71,7 +82,9 @@ export const redistribuer = (input: {
     const fileA = buildFile(toFileVenues(input.engages));
     const fillA = remplir(fileA, volume, params.rPlein);
     // Mariem 16/11 — the share is placed whole (« couverture partielle… خصك الكل »).
-    const prises = prisesCouvrantes(fileA, fillA, volume, params.rPlein);
+    const prises = couvrant
+      ? prisesCouvrantes(fileA, fillA, volume, params.rPlein)
+      : prisesDe(fileA, fillA, params.rPlein);
     return { prises, impressions: impressionsParVenue(prises, params.rPlein) };
   };
 

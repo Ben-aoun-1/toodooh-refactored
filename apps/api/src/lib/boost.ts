@@ -308,6 +308,7 @@ export const runBoost = async (
             excludeVenueIds: refuserIds,
             now,
             dryRun: true,
+            couvrant: false, // a purchase: R8's ⌊k⌋, never above the budget
           },
           trace,
         );
@@ -345,6 +346,7 @@ export const runBoost = async (
             volumeFact: (amount * 1000) / cpm,
             excludeVenueIds: refuserIds,
             now,
+            couvrant: false, // a purchase: R8's ⌊k⌋, never above the budget
           },
           trace,
         );
