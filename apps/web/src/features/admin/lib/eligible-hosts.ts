@@ -86,6 +86,8 @@ export interface ToursFicheVenue {
   impressions: number;
   montant_tnd: number;
   statut: ToursVenueStatut;
+  /** Mariem 16/11 — a launched campaign: the Host's answer now (absent = never proposed). */
+  reponse?: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE' | 'SANS_REPONSE' | 'RESERVE';
   tours: { tour: number; passages: number }[];
   week: {
     day_of_week: number;
@@ -156,6 +158,8 @@ export const ALLOCATION_STATUT_LABEL: Record<string, string> = {
   EN_ATTENTE: 'Proposé — en attente',
   ACCEPTE: 'Proposé — accepté',
   REFUSE: 'Proposé — refusé',
+  // Mariem 16/11 — withdrawn by the engine at its start − 6 h / − 5 min, never a refusal.
+  SANS_REPONSE: 'Proposé — sans réponse, retiré',
   // DISP-TOURS Q1 — places held at « Lancer »; proposed to the owner once the spot is validated.
   RESERVE: 'Réservé — spot en validation',
 };

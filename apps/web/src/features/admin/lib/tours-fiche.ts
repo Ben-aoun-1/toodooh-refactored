@@ -31,13 +31,35 @@ export const STATUT: Record<
   exclu_plein: { label: 'Exclu < 30 TND', tone: 'red' },
 };
 
+type Tone = 'green' | 'blue' | 'gray' | 'amber' | 'red';
+
+/** Mariem 16/11 — a launched campaign's row shows the Host's answer as it is now. */
+export const REPONSE: Record<
+  NonNullable<ToursFicheVenue['reponse']>,
+  { label: string; tone: Tone }
+> = {
+  EN_ATTENTE: { label: 'En attente', tone: 'amber' },
+  ACCEPTE: { label: 'Acceptée', tone: 'green' },
+  REFUSE: { label: 'Refusée', tone: 'red' },
+  SANS_REPONSE: { label: 'Sans réponse : retirée', tone: 'gray' },
+  RESERVE: { label: 'Réservée', tone: 'blue' },
+};
+
+/** The row's status pill: the Host's answer once proposed, else the calculation's verdict. */
+export const venueStatus = (v: ToursFicheVenue): { label: string; tone: Tone } =>
+  v.reponse ? REPONSE[v.reponse] : STATUT[v.statut];
+
 /** Why a venue is out of the campaign, in one sentence (the row's detail). */
 export const statutDetail = (v: ToursFicheVenue): string | null =>
-  v.statut === 'retire_budget'
-    ? 'Sous 30 TND au budget choisi : retiré, ses impressions sont allées aux établissements retenus.'
-    : v.statut === 'exclu_plein'
-      ? `Sous 30 TND même rempli (${tnd(v.plein_montant_tnd)} au maximum) : jamais proposé.`
-      : null;
+  v.reponse === 'REFUSE'
+    ? 'A refusé : ses impressions ont été replacées sur les autres établissements.'
+    : v.reponse === 'SANS_REPONSE'
+      ? 'Sans réponse à son échéance (H − 6 h ou H − 5 min) : proposition retirée, ses impressions ont été replacées.'
+      : v.statut === 'retire_budget' && v.reponse === undefined
+        ? 'Sous 30 TND au budget choisi : retiré, ses impressions sont allées aux établissements retenus.'
+        : v.statut === 'exclu_plein'
+          ? `Sous 30 TND même rempli (${tnd(v.plein_montant_tnd)} au maximum) : jamais proposé.`
+          : null;
 
 const DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
