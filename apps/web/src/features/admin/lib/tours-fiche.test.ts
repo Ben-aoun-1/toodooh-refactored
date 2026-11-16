@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ToursFicheVenue } from './eligible-hosts';
-import { journalLine, statutDetail, toursRecus, weekGrid } from './tours-fiche';
+import { journalLine, statutDetail, toursRecus, venueStatus, weekGrid } from './tours-fiche';
 
 /** fr-FR groups thousands with a narrow no-break space. */
 const plain = (s: string): string => s.replace(/[\u202f\u00a0]/g, ' ');
@@ -70,5 +70,35 @@ describe('DISP-TOURS — the admin fiche texts', () => {
         ms: 0,
       }).text,
     ).toBe('Objectif : OK · prix exact : OK · aucun host sous 30 TND : échec.');
+  });
+});
+
+describe('Mariem 16/11 — a launched campaign shows each Host’s answer now', () => {
+  const base = {
+    id: 'v',
+    name: 'resto',
+    sector: null,
+    class: null,
+    sps: 1,
+    ordre: 1,
+    plein_impressions: 1,
+    plein_montant_tnd: 1,
+    impressions: 0,
+    montant_tnd: 0,
+    statut: 'retenu' as const,
+    tours: [],
+    week: [],
+  };
+  it('the answer wins over the calculation verdict', () => {
+    expect(venueStatus({ ...base, reponse: 'REFUSE' }).label).toBe('Refusée');
+    expect(venueStatus({ ...base, reponse: 'SANS_REPONSE' }).label).toBe('Sans réponse : retirée');
+    expect(venueStatus({ ...base, statut: 'retire_budget', reponse: 'EN_ATTENTE' }).label).toBe(
+      'En attente',
+    );
+    expect(venueStatus(base).label).toBe('Retenu');
+  });
+  it('a refused or withdrawn Host says where its impressions went', () => {
+    expect(statutDetail({ ...base, reponse: 'REFUSE' })).toMatch(/replacées/);
+    expect(statutDetail({ ...base, statut: 'retire_budget', reponse: 'ACCEPTE' })).toBeNull();
   });
 });

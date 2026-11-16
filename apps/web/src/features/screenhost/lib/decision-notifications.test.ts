@@ -5,6 +5,7 @@ import type { PendingEventAllocation } from '@/features/screenhost/services/scre
 
 import {
   DECISION_NOTIFICATION_TYPE,
+  opensCampaignPopup,
   campaignDurationDays,
   decisionTarget,
   isDecisionNotification,
@@ -177,5 +178,19 @@ describe('refuseQuestion', () => {
     expect(refuseQuestion('campaign')).toBe('Êtes-vous sûr de vouloir refuser cette campagne ?');
     expect(refuseQuestion('event')).toBe('Êtes-vous sûr de vouloir refuser cet événement ?');
     expect(refuseQuestion('match')).toBe('Êtes-vous sûr de vouloir refuser ce match ?');
+  });
+});
+
+describe('Mariem 16/11 — answered-for-you notices open the campaign popup, read-only', () => {
+  it('« acceptée pour vous », the agent’s answer and « Bonne nouvelle » open the popup', () => {
+    for (const kind of [
+      'admin_decided_for_host',
+      'agent_decided_for_host',
+      'dispatch_slots_added',
+    ]) {
+      expect(opensCampaignPopup({ kind, campaignId: 'c1' })).toBe(true);
+      expect(opensCampaignPopup({ kind, campaignId: null })).toBe(false);
+    }
+    expect(opensCampaignPopup({ kind: 'monthly_report_ready', campaignId: 'c1' })).toBe(false);
   });
 });

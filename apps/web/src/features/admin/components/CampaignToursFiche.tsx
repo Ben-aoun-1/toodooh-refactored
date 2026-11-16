@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ToursWeekGrid } from '@/features/admin/components/ToursWeekGrid';
 import type { ToursFiche } from '@/features/admin/lib/eligible-hosts';
 import {
-  STATUT,
+  venueStatus,
   calculHint,
   imp,
   journalLine,
@@ -94,9 +94,9 @@ export function CampaignToursFiche({ fiche }: { fiche: ToursFiche }) {
                   </td>
                   <td className="py-1">
                     <span
-                      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE[STATUT[v.statut].tone] ?? ''}`}
+                      className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE[venueStatus(v).tone] ?? ''}`}
                     >
-                      {STATUT[v.statut].label}
+                      {venueStatus(v).label}
                     </span>
                   </td>
                 </tr>

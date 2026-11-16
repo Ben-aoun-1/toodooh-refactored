@@ -11,6 +11,8 @@ import { type ToursFicheVenue, type ToursFicheWire } from '../../campaign-eligib
 export interface LiveAllocation {
   screenhostId: string;
   statut: string;
+  /** Who answered ('system' = withdrawn without an answer); absent where not recorded. */
+  decidedBy?: string | null;
   /** Qualified impressions (ii_potentiel). */
   impressions: number;
   /** HT value (revenu_previsionnel), before the Screenhost share. */
@@ -19,6 +21,22 @@ export interface LiveAllocation {
 }
 
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
+
+const reponseOf = (a: LiveAllocation): NonNullable<ToursFicheVenue['reponse']> => {
+  if (a.statut === 'REFUSE') return a.decidedBy === 'system' ? 'SANS_REPONSE' : 'REFUSE';
+  if (a.statut === 'ACCEPTE' || a.statut === 'RESERVE') return a.statut;
+  return 'EN_ATTENTE';
+};
+
+/** « Tours reçus » from the stored créneaux: each tour with its passages (the max of its hours). */
+const liveTours = (creneaux: LiveAllocation['creneaux']): ToursFicheVenue['tours'] => {
+  const byTour = new Map<number, number>();
+  for (const c of creneaux) {
+    const tour = c.tour ?? 1;
+    byTour.set(tour, Math.max(byTour.get(tour) ?? 0, c.reps));
+  }
+  return [...byTour].sort(([a], [b]) => a - b).map(([tour, passages]) => ({ tour, passages }));
+};
 
 /** The week grid of one venue from its stored créneaux (the frozen cells kept for the rest). */
 const liveWeek = (
@@ -63,14 +81,24 @@ export const withLiveAllocations = (
   const byVenue = new Map(allocations.map((a) => [a.screenhostId, a]));
   const live = (v: ToursFicheVenue, a: LiveAllocation | undefined): ToursFicheVenue => {
     if (!a) return v;
+    const reponse = reponseOf(a);
     if (a.statut === 'REFUSE') {
-      return { ...v, impressions: 0, montant_tnd: 0, week: liveWeek(v.week, []) };
+      return {
+        ...v,
+        reponse,
+        impressions: 0,
+        montant_tnd: 0,
+        tours: [],
+        week: liveWeek(v.week, []),
+      };
     }
     return {
       ...v,
       statut: 'retenu',
+      reponse,
       impressions: round4(a.impressions),
       montant_tnd: round4(a.revenuTnd * pct),
+      tours: liveTours(a.creneaux),
       week: liveWeek(v.week, a.creneaux),
     };
   };

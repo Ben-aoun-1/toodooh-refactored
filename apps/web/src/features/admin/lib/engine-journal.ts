@@ -46,6 +46,7 @@ export const EMITTED_EVENT_TYPES = [
   'residue_kept',
   'perimeter_added',
   'prelaunch_frozen',
+  'prelaunch_topup',
 ] as const;
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -65,6 +66,7 @@ export const EVENT_LABELS: Record<string, string> = {
   residue_kept: 'Résidu conservé (plateforme)',
   perimeter_added: 'Périmètre étendu',
   prelaunch_frozen: 'Lancement figé (prix final)',
+  prelaunch_topup: 'Acceptation : reliquat replacé',
 };
 
 export const EXCLUSION_REASON_LABELS: Record<string, string> = {

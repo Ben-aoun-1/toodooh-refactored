@@ -17,6 +17,7 @@ import {
   users,
 } from '../src/db/schema.js';
 import { activateCampaign } from '../src/lib/activation-service.js';
+import { decideAllocation } from '../src/lib/allocation-decision.js';
 import {
   hostPrelaunchStep,
   prelaunchFinalNotice,
@@ -24,6 +25,7 @@ import {
 } from '../src/lib/campaign-prelaunch.js';
 import { runRefusalCascade } from '../src/lib/dispatch/cascade.js';
 import { hostStartInstant } from '../src/lib/dispatch/tours/host-start.js';
+import { prelaunchOutstanding } from '../src/lib/dispatch/tours/prelaunch-topup.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
@@ -407,6 +409,124 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
       .from(notifications)
       .where(and(eq(notifications.userId, ownerB), eq(notifications.type, 'dispatch_slots_added')));
     expect(notes).toHaveLength(1);
+  });
+
+  it('Mariem 16/11 — a Host proposed inside its 6 h window that refuses: only the accepted Hosts take it', async () => {
+    await newVenueC();
+    const run = async (late: boolean) => {
+      const { plan, of } = await planAllocations();
+      const a = of(A);
+      if (!a) throw new Error('A missing');
+      await db
+        .update(campaignDispatchAllocation)
+        .set({ statutAcceptation: 'REFUSE', lateProposal: late })
+        .where(eq(campaignDispatchAllocation.id, a.id));
+      await db.transaction((tx) =>
+        runRefusalCascade(tx, {
+          plan,
+          campaign: {
+            id: campaignId,
+            name: 'Tours prélancement',
+            startDate: '2026-11-09',
+            endDate: '2026-11-18',
+          },
+          refused: { id: a.id, screenhostId: A, iiPotentiel: a.iiPotentiel },
+        }),
+      );
+      return (await planAllocations()).of(C);
+    };
+    // B has not accepted: no accepted Host can take A's share, and no new Host is offered it.
+    expect(await run(true)).toBeUndefined();
+  });
+
+  it('Mariem 16/11 — a regular refusal (no accepted Host) is offered to a new Host', async () => {
+    await newVenueC();
+    const { plan, of } = await planAllocations();
+    const a = of(A);
+    if (!a) throw new Error('A missing');
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'REFUSE' })
+      .where(eq(campaignDispatchAllocation.id, a.id));
+    await db.transaction((tx) =>
+      runRefusalCascade(tx, {
+        plan,
+        campaign: {
+          id: campaignId,
+          name: 'Tours prélancement',
+          startDate: '2026-11-09',
+          endDate: '2026-11-18',
+        },
+        refused: { id: a.id, screenhostId: A, iiPotentiel: a.iiPotentiel },
+      }),
+    );
+    expect((await planAllocations()).of(C)?.statutAcceptation).toBe('EN_ATTENTE');
+  });
+
+  it('ruling 16/11 A — a Host that accepts after a refusal takes back what the refusal left unplaced', async () => {
+    const ownerOf = async (venue: string) =>
+      (
+        await db
+          .select({ o: screenhosts.ownerId })
+          .from(screenhosts)
+          .where(eq(screenhosts.id, venue))
+      )[0]?.o ?? '';
+    const before = await planAllocations();
+    const a = before.of(A);
+    const b = before.of(B);
+    if (!a || !b) throw new Error('A or B missing');
+    // A refuses while nobody has accepted yet (and no new Host exists): its share stays unplaced.
+    const refused = await decideAllocation({
+      allocationId: a.id,
+      ownerId: await ownerOf(A),
+      statut: 'REFUSE',
+    });
+    expect(refused.kind).toBe('ok');
+    const mid = await planAllocations();
+    const outstandingBefore = await prelaunchOutstanding(db, mid.plan);
+    expect(outstandingBefore).toBeGreaterThanOrEqual(a.iiPotentiel - 1);
+    expect(mid.of(B)?.iiPotentiel).toBe(b.iiPotentiel);
+    // B accepts afterwards: it is topped up from A's share, up to its free hours.
+    const accepted = await decideAllocation({
+      allocationId: b.id,
+      ownerId: ownerB,
+      statut: 'ACCEPTE',
+    });
+    expect(accepted.kind).toBe('ok');
+    const after = await planAllocations();
+    expect(after.of(B)?.statutAcceptation).toBe('ACCEPTE');
+    expect(after.of(B)?.iiPotentiel ?? 0).toBeGreaterThan(b.iiPotentiel);
+    const outstandingAfter = await prelaunchOutstanding(db, after.plan);
+    expect(outstandingAfter).toBeLessThan(outstandingBefore);
+    // Never more than what was sold.
+    const held = after.rows
+      .filter((r) => r.statutAcceptation !== 'REFUSE')
+      .reduce((sum, r) => sum + r.iiPotentiel, 0);
+    expect(held).toBeLessThanOrEqual((after.plan.detail?.iAlloue ?? 0) + 1);
+    const notes = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, ownerB), eq(notifications.type, 'dispatch_slots_added')));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.title).toBe('Bonne nouvelle !');
+  });
+
+  it('ruling 16/11 A — after the freeze an acceptance takes nothing more', async () => {
+    const before = await planAllocations();
+    const b = before.of(B);
+    if (!b) throw new Error('B missing');
+    await db
+      .update(campaigns)
+      .set({ prelaunchFrozenAt: new Date() })
+      .where(eq(campaigns.id, campaignId));
+    const a = before.of(A);
+    if (!a) throw new Error('A missing');
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'REFUSE' })
+      .where(eq(campaignDispatchAllocation.id, a.id));
+    await decideAllocation({ allocationId: b.id, ownerId: ownerB, statut: 'ACCEPTE' });
+    expect((await planAllocations()).of(B)?.iiPotentiel).toBe(b.iiPotentiel);
   });
 
   it('Mariem 16/11 — a Host launched after its own lock is not withdrawn at once', async () => {
