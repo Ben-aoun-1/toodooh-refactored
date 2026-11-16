@@ -328,9 +328,13 @@ describe('DISP-TOURS — redispatching (scenarios 12, 13)', () => {
     expect(Number.isInteger(tail?.passages)).toBe(true);
     expect(tail?.passages ?? 0).toBeGreaterThanOrEqual(tail?.valeur ?? 0);
     expect(tail?.passages ?? 0).toBeLessThanOrEqual(PARAMS.rPlein);
-    // The créneaux carry the same value (what settlement pays the Host on).
+    // The créneaux carry the same value (what settlement pays the Host on), in whole
+    // impressions: under half an impression per tail cell of rounding.
     const cells = creneauxParVenue(r.engages.prises).get('cafe_B') ?? [];
-    close(cells.reduce((sum, c) => sum + c.impressions, 0) * PARAMS.t, 1188);
+    expect(cells.every((c) => Number.isInteger(c.impressions))).toBe(true);
+    expect(
+      Math.abs(cells.reduce((sum, c) => sum + c.impressions, 0) * PARAMS.t - 1188),
+    ).toBeLessThan(cells.length * 0.5 * PARAMS.t + 1e-6);
     expect(
       r.engages.prises.every((p) =>
         p.tranche.heures.every((h) => h.dates.every((d) => d >= '2026-11-11')),
