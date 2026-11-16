@@ -45,6 +45,13 @@ export const remplir = (file: readonly Tranche[], iCible: number, rPlein: number
 export interface Prise {
   tranche: Tranche;
   passages: number;
+  /**
+   * Mariem 16/11 (« couverture partielle… خصك الكل ») — a REDISPATCHED share is placed whole: the
+   * partial tranche airs ⌈k⌉ passages but is valued on the exact fractional k that completes the
+   * share, so the Host earns exactly the share and the Screencaster pays nothing more. Absent =
+   * `passages` (the launch fill, R8's ⌊k⌋, unchanged).
+   */
+  valeur?: number;
 }
 
 /** The tranches a fill takes, in file order (the partial one last). */
@@ -55,9 +62,32 @@ export const prisesDe = (file: readonly Tranche[], fill: Remplissage, rPlein: nu
   return prises;
 };
 
+/**
+ * Mariem 16/11 — the prises of a REDISPATCH fill that covers the share WHOLE: R8's partial
+ * tranche, plus what ⌊k⌋ left over, as one tail prise of ⌈k_exact⌉ passages valued k_exact. Only
+ * when the file has room (a file too short stays short: what cannot be placed is refunded).
+ */
+export const prisesCouvrantes = (
+  file: readonly Tranche[],
+  fill: Remplissage,
+  iCible: number,
+  rPlein: number,
+): Prise[] => {
+  const prises = prisesDe(file, fill, rPlein);
+  const cut = file[fill.cut];
+  if (!cut || cut.v <= EPS) return prises;
+  const avant = fill.cut > 0 ? (file[fill.cut - 1]?.cum ?? 0) : 0;
+  const reste = iCible - avant;
+  const exact = Math.min(rPlein, (reste * rPlein) / cut.v);
+  if (exact - fill.k <= EPS) return prises;
+  const entieres = fill.k > 0 ? prises.slice(0, -1) : prises;
+  const passages = Math.min(rPlein, Math.ceil(exact - EPS));
+  return [...entieres, { tranche: cut, passages, valeur: exact }];
+};
+
 /** IMPRESSIONS(tranche, passages) = V × passages ÷ R_plein (qualified impressions). */
 export const impressionsDe = (prise: Prise, rPlein: number): number =>
-  (prise.tranche.v * prise.passages) / rPlein;
+  (prise.tranche.v * (prise.valeur ?? prise.passages)) / rPlein;
 
 /** Σ qualified impressions per venue over the taken tranches. */
 export const impressionsParVenue = (

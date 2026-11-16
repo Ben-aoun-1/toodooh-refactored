@@ -21,7 +21,7 @@ export const creneauxDe = (prises: readonly Prise[]): TourCreneau[] => {
           date,
           hour: h.hour,
           reps: prise.passages,
-          impressions: h.affluence * prise.passages,
+          impressions: h.affluence * (prise.valeur ?? prise.passages),
           tour: prise.tranche.tour,
         });
       }
