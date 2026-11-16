@@ -73,6 +73,15 @@ describe('actionFor (bell CTA routing by type)', () => {
 });
 
 describe('detailFor (REV3 — the refusal motif reaches the bell)', () => {
+  it('Mariem 16/11 — « Bonne nouvelle ! » and the « pour vous » notices show their sentence', () => {
+    const body =
+      'Bonne nouvelle ! Vous avez bénéficié d’un redispatching d’une campagne déjà acceptée sur votre écran. Cela vous permet de gagner 16,75 TND supplémentaires.';
+    expect(detailFor(notif('dispatch_slots_added', body))).toBe(body);
+    expect(detailFor(notif('admin_decided_for_host', 'L’équipe Toodooh a accepté…'))).toBe(
+      'L’équipe Toodooh a accepté…',
+    );
+  });
+
   it('a refused facture surfaces its body, which is where the motif lives', () => {
     // « Facture refusée » alone is a dead end: the owner cannot fix what they cannot see.
     const body = 'Votre facture de juillet 2026 a été refusée. Motif : Cachet manquant.';

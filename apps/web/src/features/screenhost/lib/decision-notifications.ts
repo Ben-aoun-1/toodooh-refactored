@@ -197,7 +197,8 @@ export const DECISION_TYPE_LABEL = 'Particuliers';
 
 /**
  * Agent spec VF §10 — the offer's popup when the Host's agent answered first: no buttons, and
- * this mention. Null when the Host (or nobody) answered.
+ * this mention. Mariem 16/11 — the same when the Toodooh team answered for the Host. Null when
+ * the Host (or nobody) answered.
  */
 export const agentAnswerMention = (
   allocations: readonly Pick<
@@ -205,9 +206,29 @@ export const agentAnswerMention = (
     'statut_acceptation' | 'decided_by'
   >[],
 ): string | null => {
-  const byAgent = allocations.filter((a) => a.decided_by === 'agent');
-  if (byAgent.length === 0) return null;
-  return byAgent.some((a) => a.statut_acceptation === 'ACCEPTE')
-    ? 'Acceptée par votre agent'
-    : 'Refusée par votre agent';
+  for (const [by, who] of [
+    ['agent', 'votre agent'],
+    ['admin', 'l’équipe Toodooh'],
+  ] as const) {
+    const rows = allocations.filter((a) => a.decided_by === by);
+    if (rows.length === 0) continue;
+    return rows.some((a) => a.statut_acceptation === 'ACCEPTE')
+      ? `Acceptée par ${who}`
+      : `Refusée par ${who}`;
+  }
+  return null;
 };
+
+/**
+ * Mariem 16/11 — notices about a campaign already answered (accepted or refused for the Host by
+ * the Toodooh team or the agent, or « Bonne nouvelle » hours added to an accepted one): « Consulter »
+ * opens the campaign's popup, read-only (no buttons once nothing is pending).
+ */
+export const CAMPAIGN_POPUP_NOTICE_TYPES: ReadonlySet<string> = new Set([
+  'admin_decided_for_host',
+  'agent_decided_for_host',
+  'dispatch_slots_added',
+]);
+
+export const opensCampaignPopup = (n: Pick<BucketableNotification, 'kind' | 'campaignId'>) =>
+  CAMPAIGN_POPUP_NOTICE_TYPES.has(n.kind) && n.campaignId !== null;

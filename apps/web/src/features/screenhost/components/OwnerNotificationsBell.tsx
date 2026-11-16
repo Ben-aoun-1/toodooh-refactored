@@ -10,6 +10,7 @@ import { useScreenhostEventAllocations } from '@/features/screenhost/hooks/useSc
 import { useScreenhostEventMatches } from '@/features/screenhost/hooks/useScreenhostEventMatches';
 import {
   isDecisionNotification,
+  opensCampaignPopup,
   pendingDecisionKeys,
   splitNotifications,
 } from '@/features/screenhost/lib/decision-notifications';
@@ -232,7 +233,10 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                               const match = matchOfNotification(target);
                               if (match) {
                                 setDecisionMatch(match);
-                              } else if (isDecisionNotification(target)) {
+                              } else if (
+                                isDecisionNotification(target) ||
+                                opensCampaignPopup(target)
+                              ) {
                                 // An orphan (its campaign deleted) opens the « no longer
                                 // available » card: '' matches no campaign.
                                 setDecisionCampaignId(target.campaignId ?? '');

@@ -69,6 +69,15 @@ export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath
   return { actionLabel: 'Consulter', actionPath: '/owner-campaigns' };
 };
 
+// Mariem 16/11 — « Bonne nouvelle ! » alone says nothing: its body is the sentence (what the
+// redispatch adds); so are the « acceptée / refusée pour vous » notices.
+const DETAIL_TYPES: ReadonlySet<string> = new Set([
+  'screenhost_facture_refused',
+  'dispatch_slots_added',
+  'admin_decided_for_host',
+  'agent_decided_for_host',
+]);
+
 /**
  * The second line the bell shows, for types whose BODY carries information the title cannot.
  *
@@ -78,7 +87,7 @@ export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath
  * which is a separate product decision. Adding a type here is one line.
  */
 export const detailFor = (n: ApiNotification): string | undefined =>
-  n.type === 'screenhost_facture_refused' ? (n.body ?? undefined) || undefined : undefined;
+  DETAIL_TYPES.has(n.type) ? (n.body ?? undefined) || undefined : undefined;
 
 const toFeed = (rows: ApiNotification[]): NotificationFeed<string> => ({
   items: rows.map((n) => ({
