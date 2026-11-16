@@ -30,6 +30,7 @@ import { usesToursEngine } from './dispatch/engine-switch.js';
 import { planFromPool } from './dispatch/plan-outcome.js';
 import { assemblePool } from './dispatch/pool.js';
 import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
+import { withLiveAllocations } from './dispatch/tours/fiche-live.js';
 import type { EngineTrace } from './engine-journal/trace.js';
 import { isEventSwitchOn } from './event-pricing/event-switch.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
@@ -383,17 +384,36 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
             { id: row.id, startDate: row.startDate, endDate: row.endDate },
             { s: spotSeconds, t: tStd, cpm: cpmStd, budgetTnd: budgetStd },
           );
-    const tours = toursFiche(detail, plan ? 'plan' : 'live', labels);
     const allocations = plan
       ? await db
           .select({
             screenhostId: campaignDispatchAllocation.screenhostId,
             statut: campaignDispatchAllocation.statutAcceptation,
             impressions: campaignDispatchAllocation.iiPotentiel,
+            revenu: campaignDispatchAllocation.revenuPrevisionnel,
+            creneaux: campaignDispatchAllocation.creneaux,
           })
           .from(campaignDispatchAllocation)
           .where(eq(campaignDispatchAllocation.planId, plan.id))
       : [];
+    // Mariem 16/11 — a launched plan's fiche shows its allocations as they are NOW (redispatch).
+    const frozen = toursFiche(detail, plan ? 'plan' : 'live', labels);
+    const tours = plan
+      ? withLiveAllocations(
+          frozen,
+          allocations.map((a) => ({
+            screenhostId: a.screenhostId,
+            statut: a.statut,
+            impressions: a.impressions,
+            revenuTnd: Number(a.revenu),
+            creneaux: a.creneaux,
+          })),
+          (id) => {
+            const l = labels.get(id);
+            return { name: l?.name ?? id, sector: l?.sector ?? null, class: l?.class ?? null };
+          },
+        )
+      : frozen;
     const allocationByVenue = new Map(allocations.map((a) => [a.screenhostId, a]));
     const eligible: EligibleHost[] = tours.venues.map((v) => {
       const allocation = allocationByVenue.get(v.id);
