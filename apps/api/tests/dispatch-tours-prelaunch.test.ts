@@ -106,7 +106,12 @@ const seedVenue = async (
 };
 
 describe('Mariem 13/11 — the pre-launch clock, per Host (pure)', () => {
-  const pending = { statutAcceptation: 'EN_ATTENTE' as const, lateProposal: false };
+  const proposedAt = new Date('2026-11-05T10:00:00Z');
+  const pending = {
+    statutAcceptation: 'EN_ATTENTE' as const,
+    lateProposal: false,
+    createdAt: proposedAt,
+  };
   it('a Host starts at its opening hour on the start date, in Tunis', () => {
     expect(hostStartInstant('2026-11-09', 8)).toEqual(new Date('2026-11-09T07:00:00Z'));
     expect(hostStartInstant('2026-11-09', null)).toEqual(new Date('2026-11-08T23:00:00Z'));
@@ -118,15 +123,30 @@ describe('Mariem 13/11 — the pre-launch clock, per Host (pure)', () => {
     expect(at('2026-11-09T06:55:00Z')).toBe('freeze');
   });
   it('a late proposal waits for the freeze; an answer is never withdrawn', () => {
-    const late = { statutAcceptation: 'EN_ATTENTE' as const, lateProposal: true };
+    const late = {
+      statutAcceptation: 'EN_ATTENTE' as const,
+      lateProposal: true,
+      createdAt: proposedAt,
+    };
     expect(hostPrelaunchStep('2026-11-09', 8, late, new Date('2026-11-09T02:00:00Z'))).toBeNull();
     expect(hostPrelaunchStep('2026-11-09', 8, late, new Date('2026-11-09T06:56:00Z'))).toBe(
       'freeze',
     );
-    const accepted = { statutAcceptation: 'ACCEPTE' as const, lateProposal: false };
+    const accepted = {
+      statutAcceptation: 'ACCEPTE' as const,
+      lateProposal: false,
+      createdAt: proposedAt,
+    };
     expect(
       hostPrelaunchStep('2026-11-09', 8, accepted, new Date('2026-11-09T06:56:00Z')),
     ).toBeNull();
+  });
+  it('Mariem 16/11 — a Host proposed after its own lock (launched the evening before) waits for the freeze', () => {
+    // Opens at 00 h on the 9th: locks on the 8th at 18:00 Tunis; the campaign is launched at 19:20.
+    const launched = { ...pending, createdAt: new Date('2026-11-08T18:20:00Z') };
+    const at = (iso: string) => hostPrelaunchStep('2026-11-09', 0, launched, new Date(iso));
+    expect(at('2026-11-08T18:21:00Z')).toBeNull();
+    expect(at('2026-11-08T22:55:00Z')).toBe('freeze');
   });
   it('tells the Screencaster in Mariem’s words', () => {
     expect(
@@ -249,7 +269,8 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     const [outcome] = await runCampaignPrelaunchTick(LOCK);
     expect(outcome).toMatchObject({ campaignId, locked: 1, frozen: 0 });
     const after = await planAllocations();
-    expect(after.of(A)).toBeUndefined(); // the silent Host's proposal is withdrawn
+    // The silent Host's proposal is withdrawn, its trace kept (Mariem 16/11).
+    expect(after.of(A)).toMatchObject({ statutAcceptation: 'REFUSE', decidedBy: 'system' });
     const b = after.of(B);
     expect(b?.statutAcceptation).toBe('ACCEPTE'); // accepted at once, whatever the amount
     expect(b?.creneaux.length ?? 0).toBeGreaterThan(bBefore);
@@ -294,8 +315,9 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     const [outcome] = await runCampaignPrelaunchTick(FREEZE);
     expect(outcome).toMatchObject({ locked: 0, frozen: 1, final: { told: true } });
     const after = await planAllocations();
-    expect(after.of(C)).toBeUndefined();
-    expect(after.rows.map((r) => r.statutAcceptation)).toEqual(['ACCEPTE']);
+    expect(after.of(C)).toMatchObject({ statutAcceptation: 'REFUSE', decidedBy: 'system' });
+    expect(after.rows.filter((r) => r.statutAcceptation === 'ACCEPTE')).toHaveLength(1);
+    expect(after.rows.some((r) => r.statutAcceptation === 'EN_ATTENTE')).toBe(false);
     const row = await campaignRow();
     expect(row?.prelaunchFrozenAt).toEqual(FREEZE);
     const amount = Number(row?.requestedBudget);
@@ -333,7 +355,10 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect((await planAllocations()).of(A)?.statutAcceptation).toBe('EN_ATTENTE');
     const [outcome] = await runCampaignPrelaunchTick(new Date('2026-11-09T11:00:00Z'));
     expect(outcome).toMatchObject({ locked: 1 });
-    expect((await planAllocations()).of(A)).toBeUndefined();
+    expect((await planAllocations()).of(A)).toMatchObject({
+      statutAcceptation: 'REFUSE',
+      decidedBy: 'system',
+    });
   });
 
   it('a new Host proposed after its own lock is withdrawn only at its freeze', async () => {
@@ -347,10 +372,13 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect(await runCampaignPrelaunchTick(new Date('2026-11-09T13:30:00Z'))).toEqual([]);
     const [outcome] = await runCampaignPrelaunchTick(FREEZE);
     expect(outcome).toMatchObject({ frozen: 1 });
-    expect((await planAllocations()).of(C)).toBeUndefined();
+    expect((await planAllocations()).of(C)).toMatchObject({
+      statutAcceptation: 'REFUSE',
+      decidedBy: 'system',
+    });
   });
 
-  it('a refusal before the start goes to a NEW Host first', async () => {
+  it('Mariem 16/11 — a refusal before the start goes onto the Host that ACCEPTED first', async () => {
     await accept(B);
     await newVenueC();
     const { plan, of } = await planAllocations();
@@ -374,7 +402,53 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
       }),
     );
     const after = await planAllocations();
-    expect(after.of(C)?.statutAcceptation).toBe('EN_ATTENTE');
-    expect(after.of(B)?.creneaux.length).toBe(bBefore);
+    expect(after.of(B)?.statutAcceptation).toBe('ACCEPTE');
+    expect(after.of(B)?.creneaux.length ?? 0).toBeGreaterThan(bBefore ?? 0);
+    const notes = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, ownerB), eq(notifications.type, 'dispatch_slots_added')));
+    expect(notes).toHaveLength(1);
+  });
+
+  it('Mariem 16/11 — a Host launched after its own lock is not withdrawn at once', async () => {
+    await accept(B);
+    // A was proposed after its lock (09:00 UTC): only the freeze can withdraw it.
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ createdAt: new Date('2026-11-09T10:00:00Z') })
+      .where(eq(campaignDispatchAllocation.screenhostId, A));
+    expect(await runCampaignPrelaunchTick(new Date('2026-11-09T10:01:00Z'))).toEqual([]);
+    expect((await planAllocations()).of(A)?.statutAcceptation).toBe('EN_ATTENTE');
+    const [outcome] = await runCampaignPrelaunchTick(FREEZE);
+    expect(outcome).toMatchObject({ frozen: 1 });
+  });
+
+  it('Mariem 16/11 — a Host withdrawn for no answer is never proposed the campaign again', async () => {
+    await accept(B);
+    await runCampaignPrelaunchTick(LOCK); // A silent → withdrawn
+    const { plan, of } = await planAllocations();
+    const b = of(B);
+    if (!b) throw new Error('B missing');
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'REFUSE' })
+      .where(eq(campaignDispatchAllocation.id, b.id));
+    await newVenueC();
+    await db.transaction((tx) =>
+      runRefusalCascade(tx, {
+        plan,
+        campaign: {
+          id: campaignId,
+          name: 'Tours prélancement',
+          startDate: '2026-11-09',
+          endDate: '2026-11-18',
+        },
+        refused: { id: b.id, screenhostId: B, iiPotentiel: b.iiPotentiel },
+      }),
+    );
+    const after = await planAllocations();
+    // Still the system's withdrawal: never re-proposed as a « new » Host.
+    expect(after.of(A)).toMatchObject({ statutAcceptation: 'REFUSE', decidedBy: 'system' });
   });
 });

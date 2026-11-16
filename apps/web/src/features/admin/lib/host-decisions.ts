@@ -12,6 +12,39 @@ export const HOST_DECISION_LABEL: Record<HostDecisionStatut, string> = {
   RESERVE: 'Réservée (spot en validation)',
 };
 
+const BY: Record<'owner' | 'agent' | 'admin', string> = {
+  owner: 'par le Host',
+  agent: 'par l’agent',
+  admin: 'par l’admin',
+};
+
+const tunisStamp = (iso: string): string =>
+  new Date(iso).toLocaleString('fr-FR', {
+    timeZone: 'Africa/Tunis',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+/**
+ * Mariem 16/11 — « le traçage doit être clair »: the status with who answered and when; a Host
+ * withdrawn for not answering by its own deadline reads « Sans réponse », never « Refusée ».
+ */
+export const hostDecisionTrace = (
+  row: Pick<HostDecisionRow, 'statut' | 'decided_by' | 'decided_at'>,
+): string => {
+  const when = row.decided_at ? ` · ${tunisStamp(row.decided_at)}` : '';
+  if (row.statut === 'REFUSE' && row.decided_by === 'system') {
+    return `Sans réponse : proposition retirée${when}`;
+  }
+  const by =
+    row.decided_by && row.decided_by !== 'system' && row.statut !== 'EN_ATTENTE'
+      ? ` ${BY[row.decided_by]}`
+      : '';
+  return `${HOST_DECISION_LABEL[row.statut]}${by}${when}`;
+};
+
 /** Only a share still awaiting its Host can be answered (a refusal is definitive). */
 export const canAnswerForHost = (row: Pick<HostDecisionRow, 'statut'>): boolean =>
   row.statut === 'EN_ATTENTE';

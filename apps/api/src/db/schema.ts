@@ -2143,7 +2143,8 @@ export interface DispatchCreneau {
 }
 
 /** Who answered a classic offer (agent spec VF §10). */
-export type AllocationDecider = 'owner' | 'agent' | 'admin';
+// 'system' (Mariem 16/11) — no answer by the Host's deadline: withdrawn by lib/campaign-prelaunch.ts.
+export type AllocationDecider = 'owner' | 'agent' | 'admin' | 'system';
 
 /** The decision columns of a row that returns to EN_ATTENTE (a re-consent): nobody answered. */
 export const NO_DECISION = { decidedBy: null, decidedByUserId: null, decidedAt: null } as const;

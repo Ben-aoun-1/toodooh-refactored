@@ -5,6 +5,7 @@ import type { HostDecisionRow } from '@/features/admin/services/admin-host-decis
 import {
   canAnswerForHost,
   hostDecisionSummary,
+  hostDecisionTrace,
   refuseForHostQuestion,
   sortHostDecisions,
 } from './host-decisions';
@@ -46,6 +47,27 @@ describe('Mariem 13/11 — the Admin answers for a Host', () => {
   it('warns that a refusal is definitive', () => {
     expect(refuseForHostQuestion('Café Nord')).toBe(
       'Refuser pour Café Nord ? Ce refus est définitif : la part sera proposée à d’autres Hosts.',
+    );
+  });
+});
+
+describe('Mariem 16/11 — hostDecisionTrace', () => {
+  it('names a silence « Sans réponse », and who answered otherwise', () => {
+    expect(hostDecisionTrace({ statut: 'REFUSE', decided_by: 'system', decided_at: null })).toBe(
+      'Sans réponse : proposition retirée',
+    );
+    expect(hostDecisionTrace({ statut: 'REFUSE', decided_by: 'admin', decided_at: null })).toBe(
+      'Refusée par l’admin',
+    );
+    expect(
+      hostDecisionTrace({
+        statut: 'ACCEPTE',
+        decided_by: 'agent',
+        decided_at: '2026-11-16T13:56:00Z',
+      }),
+    ).toBe('Acceptée par l’agent · 16/11 14:56');
+    expect(hostDecisionTrace({ statut: 'EN_ATTENTE', decided_by: null, decided_at: null })).toBe(
+      'En attente',
     );
   });
 });

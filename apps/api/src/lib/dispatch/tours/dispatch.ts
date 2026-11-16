@@ -170,6 +170,8 @@ export const runToursDispatch = async (
             rI: own.reduce((m, c) => Math.max(m, c.reps), 0),
             revenuPrevisionnel: String(round4((v.impressions * inputs.cpm) / 1000)),
             creneaux: own,
+            // The proposal instant (the pre-launch lock reads it — lib/campaign-prelaunch.ts).
+            createdAt: new Date(),
             ...(inputs.reserve === true ? { statutAcceptation: 'RESERVE' as const } : {}),
           };
         }),

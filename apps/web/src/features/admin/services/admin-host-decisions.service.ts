@@ -13,6 +13,8 @@ export interface HostDecisionRow {
   owner_label: string | null;
   statut: HostDecisionStatut;
   decided_at: string | null;
+  /** Mariem 16/11 — who answered; 'system' = withdrawn, no answer by the Host's deadline. */
+  decided_by?: 'owner' | 'agent' | 'admin' | 'system' | null;
   /** What the Host earns on this share (TND, the owner's part). */
   owner_share_tnd: number;
 }

@@ -85,6 +85,7 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
                 screenhostName: screenhosts.name,
                 statut: eventAllocations.statut,
                 decidedAt: eventAllocations.decidedAt,
+                decidedBy: eventAllocations.decidedBy,
                 montantTnd: eventAllocations.montantTnd,
                 owner,
               })
@@ -101,6 +102,8 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
                 screenhostId: screenhosts.id,
                 screenhostName: screenhosts.name,
                 statut: campaignDispatchAllocation.statutAcceptation,
+                decidedAt: campaignDispatchAllocation.decidedAt,
+                decidedBy: campaignDispatchAllocation.decidedBy,
                 revenu: campaignDispatchAllocation.revenuPrevisionnel,
                 owner,
               })
@@ -116,7 +119,6 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
           ).map((r) => ({
             ...r,
             kind: 'campaign' as const,
-            decidedAt: null,
             value: Number(r.revenu),
           }));
     return reply.status(200).send({
@@ -131,6 +133,8 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
         owner_label: r.owner?.id ? userLabel(r.owner) : null,
         statut: r.statut,
         decided_at: r.statut === 'EN_ATTENTE' ? null : r.decidedAt,
+        // Mariem 16/11 — « le traçage doit être clair »: who answered (system = no answer in time).
+        decided_by: r.statut === 'EN_ATTENTE' ? null : r.decidedBy,
         owner_share_tnd: ownerShareTnd(r.value, pcts),
       })),
     });
