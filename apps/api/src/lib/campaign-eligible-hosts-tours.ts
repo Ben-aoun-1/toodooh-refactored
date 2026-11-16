@@ -21,6 +21,11 @@ export interface ToursFicheVenue {
   impressions: number;
   montant_tnd: number;
   statut: ToursPlanDetail['venues'][number]['statut'];
+  /**
+   * Mariem 16/11 — a launched campaign: the Host's answer NOW (absent = never proposed).
+   * SANS_REPONSE = withdrawn by the engine at its start − 6 h / − 5 min.
+   */
+  reponse?: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE' | 'SANS_REPONSE' | 'RESERVE';
   tours: { tour: number; passages: number }[];
   week: {
     day_of_week: number;

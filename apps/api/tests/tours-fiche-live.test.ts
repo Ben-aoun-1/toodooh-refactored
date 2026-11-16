@@ -58,6 +58,24 @@ const fiche = (): ToursFicheWire => ({
 const names = (id: string) => ({ name: id, sector: null, class: null });
 
 describe('withLiveAllocations', () => {
+  it('a Host withdrawn without an answer reads « SANS_REPONSE », not a refusal', () => {
+    const live = withLiveAllocations(
+      fiche(),
+      [
+        {
+          screenhostId: 'resto',
+          statut: 'REFUSE',
+          decidedBy: 'system',
+          impressions: 1,
+          revenuTnd: 1,
+          creneaux: [],
+        },
+      ],
+      names,
+    );
+    expect(live.venues.find((v) => v.id === 'resto')?.reponse).toBe('SANS_REPONSE');
+  });
+
   it('a refused Host is emptied; a Host that took more shows its new hours; a new Host appears', () => {
     // 2026-11-17 is a Tuesday (ISO 2).
     const live = withLiveAllocations(
@@ -99,6 +117,13 @@ describe('withLiveAllocations', () => {
     );
     const by = new Map(live.venues.map((v) => [v.id, v]));
     expect(by.get('resto')?.impressions).toBe(0);
+    expect(by.get('resto')?.reponse).toBe('REFUSE');
+    expect(by.get('toodooh')?.reponse).toBe('ACCEPTE');
+    expect(by.get('toodooh')?.tours).toEqual([
+      { tour: 1, passages: 33 },
+      { tour: 2, passages: 33 },
+    ]);
+    expect(by.get('amine')?.reponse).toBe('EN_ATTENTE');
     expect(by.get('resto')?.week.every((c) => c.tour === null)).toBe(true);
     expect(by.get('toodooh')?.impressions).toBe(11019);
     expect(by.get('toodooh')?.montant_tnd).toBeCloseTo(55.095, 4);

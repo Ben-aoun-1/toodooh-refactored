@@ -392,6 +392,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
             impressions: campaignDispatchAllocation.iiPotentiel,
             revenu: campaignDispatchAllocation.revenuPrevisionnel,
             creneaux: campaignDispatchAllocation.creneaux,
+            decidedBy: campaignDispatchAllocation.decidedBy,
           })
           .from(campaignDispatchAllocation)
           .where(eq(campaignDispatchAllocation.planId, plan.id))
@@ -404,6 +405,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
           allocations.map((a) => ({
             screenhostId: a.screenhostId,
             statut: a.statut,
+            decidedBy: a.decidedBy,
             impressions: a.impressions,
             revenuTnd: Number(a.revenu),
             creneaux: a.creneaux,
@@ -432,7 +434,14 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
         capacity: Math.round(v.plein_impressions),
         days_available: null,
         allocation: allocation
-          ? { statut: allocation.statut, impressions: allocation.impressions }
+          ? {
+              // Mariem 16/11 — a Host withdrawn without an answer is not « refusé ».
+              statut:
+                allocation.statut === 'REFUSE' && allocation.decidedBy === 'system'
+                  ? 'SANS_REPONSE'
+                  : allocation.statut,
+              impressions: allocation.impressions,
+            }
           : null,
         share: Math.round(v.impressions),
       };
