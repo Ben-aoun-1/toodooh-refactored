@@ -194,3 +194,16 @@ export const eventDecisionRevenueTnd = (proposals: readonly { montant_tnd: numbe
 
 /** The popup's label for the campaign type chip (operator 2026-10-12: « Particuliers »). */
 export const DECISION_TYPE_LABEL = 'Particuliers';
+/**
+ * Mariem 16/11 — notices about a campaign already answered (accepted or refused for the Host by
+ * the Toodooh team or the agent, or « Bonne nouvelle » hours added to an accepted one): « Consulter »
+ * opens the campaign's popup, read-only (no buttons once nothing is pending).
+ */
+export const CAMPAIGN_POPUP_NOTICE_TYPES: ReadonlySet<string> = new Set([
+  'admin_decided_for_host',
+  'agent_decided_for_host',
+  'dispatch_slots_added',
+]);
+
+export const opensCampaignPopup = (n: Pick<BucketableNotification, 'kind' | 'campaignId'>) =>
+  CAMPAIGN_POPUP_NOTICE_TYPES.has(n.kind) && n.campaignId !== null;
