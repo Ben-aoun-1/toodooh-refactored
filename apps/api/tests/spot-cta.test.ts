@@ -237,6 +237,24 @@ describe('QR-CTA1 — a spot’s call to action (real Postgres)', () => {
       status: string;
     }>();
     expect(got).toMatchObject({ scans: 1, status: 'ready' });
+
+    // QR-SCAN1 — each scan keeps an opaque per-day key, never the IP or the browser string: the
+    // same phone twice shares one key, another phone gets its own.
+    const phone = { 'x-real-ip': '197.0.0.7', 'user-agent': 'PhoneA' };
+    await app.inject({ method: 'GET', url: `/q/${code}`, headers: phone });
+    await app.inject({ method: 'GET', url: `/q/${code}`, headers: phone });
+    await app.inject({
+      method: 'GET',
+      url: `/q/${code}`,
+      headers: { ...phone, 'x-real-ip': '197.0.0.8' },
+    });
+    const rows = await db.select().from(ctaScans);
+    expect(rows).toHaveLength(4);
+    const keys = rows.map((r) => r.visitorHash);
+    expect(keys.every((k) => typeof k === 'string' && /^[0-9a-f]{32}$/.test(k))).toBe(true);
+    expect(new Set(keys).size).toBe(3); // the first scan, PhoneA (twice), the other IP
+    expect(JSON.stringify(rows)).not.toContain('197.0.0');
+    expect(JSON.stringify(rows)).not.toContain('PhoneA');
   });
 
   it('a draft’s QR redirects without counting; an unknown code goes home', async () => {

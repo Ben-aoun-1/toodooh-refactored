@@ -3307,6 +3307,8 @@ export const ctaScans = pgTable(
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
     scannedAt: timestamp('scanned_at', { withTimezone: true }).notNull().defaultNow(),
+    // QR-SCAN1 — opaque per-day visitor key (lib/qr-scans.ts); null on rows before migration 0114.
+    visitorHash: text('visitor_hash'),
   },
   (t) => [index('cta_scans_campaign_scanned_idx').on(t.campaignId, t.scannedAt)],
 );

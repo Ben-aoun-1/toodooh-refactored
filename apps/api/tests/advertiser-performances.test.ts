@@ -14,6 +14,7 @@ import {
   campaignScreenhostPayout,
   campaigns,
   creatives,
+  ctaScans,
   eventAllocations,
   events,
   notifications,
@@ -470,7 +471,19 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
         audience: 100,
         plays: 3,
         venues: 2,
+        qr_scans: null, // no QR code on this campaign
       });
+
+      // QR-SCAN1 — with a QR code, the live card counts its scans so far.
+      await db
+        .update(campaigns)
+        .set({ ctaUrl: 'https://example.tn', ctaCode: 'live2345' })
+        .where(eq(campaigns.id, live.id));
+      await db.insert(ctaScans).values([{ campaignId: live.id }, { campaignId: live.id }]);
+      const after = (await get(`${BASE}/live`)).json<{
+        campaigns: { qr_scans: number | null }[];
+      }>();
+      expect(after.campaigns[0]?.qr_scans).toBe(2);
     });
 
     it('a live campaign with proofs but no affluence grid reports audience null — not zero', async () => {
@@ -670,6 +683,58 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
       expect(single.overview.impressions).toBe(300);
     });
 
+    it('QR-SCAN1 — the QR scans: total, unique per day, rate per 1 000, Tunis day and hour; null without a QR', async () => {
+      const me = await seedUser();
+      const { a, b } = await seedTwoClosed(me);
+      await db
+        .update(campaigns)
+        .set({ ctaUrl: 'https://boutique.example.tn', ctaCode: 'qrsc2345' })
+        .where(eq(campaigns.id, a.id));
+      await db.insert(ctaScans).values([
+        // 10/02 21:30 Tunis twice by the same phone, once by another, once before migration 0114.
+        { campaignId: a.id, scannedAt: new Date('2026-02-10T20:30:00Z'), visitorHash: 'v1' },
+        { campaignId: a.id, scannedAt: new Date('2026-02-10T20:40:00Z'), visitorHash: 'v1' },
+        { campaignId: a.id, scannedAt: new Date('2026-02-10T20:45:00Z'), visitorHash: 'v2' },
+        { campaignId: a.id, scannedAt: new Date('2026-02-10T23:10:00Z'), visitorHash: null },
+        // The next Tunis day the same phone counts again (the key changes every day).
+        { campaignId: a.id, scannedAt: new Date('2026-02-11T08:00:00Z'), visitorHash: 'v1' },
+      ]);
+      mockSession(me);
+
+      const one = (await get(`${BASE}/analysis?campaign_id=${a.id}`)).json<{
+        qr: {
+          campaign_count: number;
+          scans: number;
+          unique_visitors: number;
+          per_1000_impressions: number | null;
+          by_day: { date: string; scans: number }[];
+          by_hour: { hour: number; scans: number }[];
+        } | null;
+      }>();
+      expect(one.qr).toMatchObject({
+        campaign_count: 1,
+        scans: 5,
+        unique_visitors: 4, // v1 + v2 + the keyless one on the 10th, v1 again on the 11th
+        per_1000_impressions: 0.5, // 5 scans / 10 000 impressions
+        by_day: [
+          { date: '2026-02-10', scans: 3 },
+          { date: '2026-02-11', scans: 2 }, // 00:10 Tunis is already the 11th
+        ],
+      });
+      expect(one.qr?.by_hour).toHaveLength(24);
+      expect(one.qr?.by_hour[21]).toEqual({ hour: 21, scans: 3 });
+      expect(one.qr?.by_hour[0]).toEqual({ hour: 0, scans: 1 });
+
+      // A campaign without a QR code has no QR section; the period keeps only the QR campaigns.
+      expect(
+        (await get(`${BASE}/analysis?campaign_id=${b.id}`)).json<{ qr: unknown }>().qr,
+      ).toBeNull();
+      const all = (await get(`${BASE}/analysis`)).json<{
+        qr: { campaign_count: number; per_1000_impressions: number } | null;
+      }>();
+      expect(all.qr).toMatchObject({ campaign_count: 1, per_1000_impressions: 0.5 });
+    });
+
     it('a foreign or unknown campaign_id is a 404; bad dates are 400', async () => {
       const me = await seedUser();
       const other = await seedUser();
@@ -763,6 +828,33 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
       expect(text).not.toMatch(/personnes touch/i);
       expect(text).not.toMatch(/partition des revenus|reversement/i);
       expect(text).not.toMatch(/SECTION 05|recommandation/i);
+      // No QR code on this campaign → no QR sheet.
+      expect(text).not.toContain('Scans du QR');
+    });
+
+    it('QR-SCAN1 — a campaign with a QR code gets the « Scans du QR code » sheet', async () => {
+      const me = await seedUser({ businessName: 'Marque QR' });
+      const venue = await seedVenue();
+      const c = await seedCampaign(me, [venue.id], { name: 'Promo QR' });
+      await closeCampaign(c.id, {
+        reconciledAt: new Date('2026-02-10T10:00:00Z'),
+        spend: 100,
+        payouts: [{ venueId: venue.id, delivered: 4000 }],
+      });
+      await db
+        .update(campaigns)
+        .set({ ctaUrl: 'https://example.tn', ctaCode: 'pdfq2345' })
+        .where(eq(campaigns.id, c.id));
+      await db.insert(ctaScans).values([
+        { campaignId: c.id, scannedAt: new Date('2026-02-09T18:15:00Z'), visitorHash: 'x' },
+        { campaignId: c.id, scannedAt: new Date('2026-02-09T18:20:00Z'), visitorHash: 'x' },
+      ]);
+      mockSession(me);
+      const text = pdfText((await get(`${BASE}/campaigns/${c.id}/report.pdf`)).rawPayload);
+      expect(text).toContain('Scans du QR code');
+      expect(text).toContain('Personnes uniques');
+      expect(text).toContain('09/02/2026');
+      expect(text).toContain('19 h');
     });
   });
 

@@ -1,10 +1,11 @@
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, QrCode } from 'lucide-react';
 import { useState } from 'react';
 
 import { formatIntFr } from '@/features/screenhost/lib/performance-derive';
 import { formatDateFr } from '@/features/screenhost/lib/performance-period';
 
 import { LIVE_EMPTY, liveFold, voirPlusLabel } from '../../lib/performances-derive';
+import { scansLabel } from '../../lib/qr-scans-display';
 import type { LiveCampaignWire } from '../../services/performances.service';
 
 import { SectionHeading } from './shared';
@@ -82,6 +83,12 @@ export function LiveCampaignsSection({ campaigns }: { campaigns: LiveCampaignWir
                     </dt>
                   </div>
                 </dl>
+                {c.qr_scans !== null ? (
+                  <div className="mt-3 flex items-center gap-1.5 text-[12.5px] text-perf-grey">
+                    <QrCode className="h-3.5 w-3.5 text-perf-green" aria-hidden />
+                    QR code : {scansLabel(c.qr_scans)}
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>

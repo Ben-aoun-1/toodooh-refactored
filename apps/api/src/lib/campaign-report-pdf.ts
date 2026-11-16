@@ -8,6 +8,7 @@ import {
   docSubhead,
   renderDocHtml,
 } from './pdf-doc/document.js';
+import { type QrScanSummary } from './qr-scans.js';
 import { renderPdf } from './report/render.js';
 
 // SC-P (Annexe A Q4, working hypothesis) — the per-campaign « rapport de clôture »: sections 01–04
@@ -39,6 +40,8 @@ export const natureLabel = (nature: 'normal' | 'event'): string =>
 export interface CampaignReportData {
   campaign: ClosedCampaign;
   sections: AnalysisSections;
+  /** QR-SCAN1 — the QR code's scans; null/absent = the campaign has no QR code (no sheet). */
+  qr?: QrScanSummary | null;
   advertiserName: string;
   generatedAt: Date;
 }
@@ -94,6 +97,61 @@ export const campaignReportSectionNums = (
         (k !== 'zones' || flags.screencasterPerfZones),
     ).map((k, i) => [k, `Section ${String(i + 1).padStart(2, '0')}`]),
   );
+
+/** Above this many days the per-day bars would overflow the sheet: the busiest days are kept. */
+const QR_MAX_DAY_ROWS = 20;
+
+/** QR-SCAN1 — « Scans du QR code »: the figures, then the days and the hours of the scans. */
+export const qrScansSection = (q: QrScanSummary): string => {
+  const kpis = docKpis([
+    { label: 'Scans du QR code', value: fmtInt(q.scans) },
+    { label: 'Personnes uniques', value: fmtInt(q.uniqueVisitors) },
+    {
+      label: 'Scans pour 1 000 impressions',
+      value: q.per1000Impressions === null ? '—' : q.per1000Impressions.toLocaleString('fr-FR'),
+    },
+  ]);
+  if (q.scans === 0) {
+    return kpis + docNote("Votre QR code n'a pas encore été scanné pendant la diffusion.");
+  }
+  const days =
+    q.byDay.length > QR_MAX_DAY_ROWS
+      ? [...q.byDay]
+          .sort((a, b) => b.scans - a.scans)
+          .slice(0, QR_MAX_DAY_ROWS)
+          .sort((a, b) => (a.date < b.date ? -1 : 1))
+      : q.byDay;
+  const dayMax = Math.max(1, ...days.map((d) => d.scans));
+  const hours = q.byHour.filter((h) => h.scans > 0);
+  const hourMax = Math.max(1, ...hours.map((h) => h.scans));
+  const scansWord = (n: number) => `${fmtInt(n)} scan${n > 1 ? 's' : ''}`;
+  return (
+    kpis +
+    docSubhead(
+      q.byDay.length > QR_MAX_DAY_ROWS
+        ? `Les ${QR_MAX_DAY_ROWS} jours les plus actifs`
+        : 'Par jour',
+    ) +
+    docBars(
+      days.map((d) => ({
+        label: fmtDate(d.date),
+        value: scansWord(d.scans),
+        ratio: d.scans / dayMax,
+      })),
+    ) +
+    docSubhead('Par heure') +
+    docBars(
+      hours.map((h) => ({
+        label: `${String(h.hour).padStart(2, '0')} h – ${String(h.hour + 1).padStart(2, '0')} h`,
+        value: scansWord(h.scans),
+        ratio: h.scans / hourMax,
+      })),
+    ) +
+    docNote(
+      'Une personne est comptée une fois par jour. Aucune donnée personnelle n’est conservée : ni adresse, ni téléphone.',
+    )
+  );
+};
 
 export const buildCampaignReportHtml = (data: CampaignReportData): string => {
   const { campaign: c, sections: s } = data;
@@ -171,6 +229,16 @@ export const buildCampaignReportHtml = (data: CampaignReportData): string => {
               shareBars(s.zones, 'impressions', 5),
             )
           : ''),
+      ...(data.qr
+        ? [
+            docSection(
+              'QR code',
+              'Scans du QR code',
+              'Les visites de votre lien depuis le QR code affiché pendant votre spot.',
+              qrScansSection(data.qr),
+            ),
+          ]
+        : []),
     ],
     footerNote: 'Mes performances · montants hors taxes',
   });
