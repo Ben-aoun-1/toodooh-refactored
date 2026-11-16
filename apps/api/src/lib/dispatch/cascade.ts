@@ -94,6 +94,15 @@ export const runRefusalCascade = async (
   // campaign first, then new ones at 30 DT, on the remaining créneaux. What cannot be placed is
   // refunded by the settlement (a tours plan always refunds the undelivered — reconcile-service).
   if (plan.engine === 'tours') {
+    // Mariem 16/11 — a Host proposed inside its 6 h window (a late proposal) that refuses: its
+    // share goes back onto the Hosts that ACCEPTED only, like a silence at start − 5 min.
+    const base = await prelaunchOrdre(tx, campaign.id);
+    const [refusedRow] = await tx
+      .select({ lateProposal: campaignDispatchAllocation.lateProposal })
+      .from(campaignDispatchAllocation)
+      .where(eq(campaignDispatchAllocation.id, refused.id))
+      .limit(1);
+    const ordre = base !== 'engages_dabord' && refusedRow?.lateProposal ? 'engages_seuls' : base;
     const placed = await placerToursIncrement(
       tx,
       {
@@ -102,7 +111,7 @@ export const runRefusalCascade = async (
         volumeFact: v,
         excludeVenueIds: excludeScreenhostIds,
         now: new Date(),
-        ordre: await prelaunchOrdre(tx, campaign.id),
+        ordre,
       },
       trace,
     );
