@@ -12,6 +12,7 @@ import {
 
 import { notifyAdmins } from './admin-notifications.js';
 import { runRefusalCascade } from './dispatch/cascade.js';
+import { topUpOnAcceptance } from './dispatch/tours/prelaunch-topup.js';
 import { createEngineTrace } from './engine-journal/trace.js';
 
 // ONE home for « the owner answers a proposal » (extracted verbatim from
@@ -53,6 +54,8 @@ export type AllocationDecisionOutcome =
       campaignName: string;
       changed: boolean;
     };
+
+const statutIsAcceptance = (s: DispatchAcceptation): boolean => s === 'ACCEPTE';
 
 export const decideAllocation = async (input: {
   allocationId: string;
@@ -168,6 +171,31 @@ export const decideAllocation = async (input: {
           });
         }
       }
+      // Operator ruling 16/11 (A) — an acceptance before the freeze takes back what a refusal or a
+      // withdrawal left unplaced (./dispatch/tours/prelaunch-topup.ts).
+      if (
+        statut === 'ACCEPTE' &&
+        (row.campaignStatus === 'upcoming' || row.campaignStatus === 'active') &&
+        row.campaignStart !== null &&
+        row.campaignEnd !== null
+      ) {
+        const trace = createEngineTrace('cascade', row.campaignId);
+        const placed = await topUpOnAcceptance(
+          tx,
+          {
+            plan: row.plan,
+            campaign: {
+              id: row.campaignId,
+              name: row.campaignName,
+              startDate: row.campaignStart,
+              endDate: row.campaignEnd,
+            },
+            ...(input.now ? { now: input.now } : {}),
+          },
+          trace,
+        );
+        if (placed) cascadeTrace.current = trace;
+      }
       return {
         kind: 'ok',
         id: row.allocation.id,
@@ -182,6 +210,11 @@ export const decideAllocation = async (input: {
       await cascadeTrace.current?.finish('rolled_back', { reason: 'ERROR' });
       throw err;
     });
-  if (cascadeTrace.current) await cascadeTrace.current.finish('committed', {});
+  if (cascadeTrace.current) {
+    await cascadeTrace.current.finish(
+      'committed',
+      statutIsAcceptance(input.statut) ? { reason: 'prelaunch' } : {},
+    );
+  }
   return outcome;
 };
