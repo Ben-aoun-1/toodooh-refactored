@@ -41,6 +41,7 @@ describe('label coverage — every emitted event_type has a French label', () =>
         'residue_kept',
         'perimeter_added',
         'prelaunch_frozen',
+        'prelaunch_topup',
       ].sort(),
     );
   });
