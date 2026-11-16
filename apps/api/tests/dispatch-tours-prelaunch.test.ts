@@ -409,6 +409,58 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect(notes).toHaveLength(1);
   });
 
+  it('Mariem 16/11 — a Host proposed inside its 6 h window that refuses: only the accepted Hosts take it', async () => {
+    await newVenueC();
+    const run = async (late: boolean) => {
+      const { plan, of } = await planAllocations();
+      const a = of(A);
+      if (!a) throw new Error('A missing');
+      await db
+        .update(campaignDispatchAllocation)
+        .set({ statutAcceptation: 'REFUSE', lateProposal: late })
+        .where(eq(campaignDispatchAllocation.id, a.id));
+      await db.transaction((tx) =>
+        runRefusalCascade(tx, {
+          plan,
+          campaign: {
+            id: campaignId,
+            name: 'Tours prélancement',
+            startDate: '2026-11-09',
+            endDate: '2026-11-18',
+          },
+          refused: { id: a.id, screenhostId: A, iiPotentiel: a.iiPotentiel },
+        }),
+      );
+      return (await planAllocations()).of(C);
+    };
+    // B has not accepted: no accepted Host can take A's share, and no new Host is offered it.
+    expect(await run(true)).toBeUndefined();
+  });
+
+  it('Mariem 16/11 — a regular refusal (no accepted Host) is offered to a new Host', async () => {
+    await newVenueC();
+    const { plan, of } = await planAllocations();
+    const a = of(A);
+    if (!a) throw new Error('A missing');
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: 'REFUSE' })
+      .where(eq(campaignDispatchAllocation.id, a.id));
+    await db.transaction((tx) =>
+      runRefusalCascade(tx, {
+        plan,
+        campaign: {
+          id: campaignId,
+          name: 'Tours prélancement',
+          startDate: '2026-11-09',
+          endDate: '2026-11-18',
+        },
+        refused: { id: a.id, screenhostId: A, iiPotentiel: a.iiPotentiel },
+      }),
+    );
+    expect((await planAllocations()).of(C)?.statutAcceptation).toBe('EN_ATTENTE');
+  });
+
   it('Mariem 16/11 — a Host launched after its own lock is not withdrawn at once', async () => {
     await accept(B);
     // A was proposed after its lock (09:00 UTC): only the freeze can withdraw it.
