@@ -45,6 +45,7 @@ export const EMITTED_EVENT_TYPES = [
   'refund_issued',
   'residue_kept',
   'perimeter_added',
+  'prelaunch_frozen',
 ] as const;
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -63,6 +64,7 @@ export const EVENT_LABELS: Record<string, string> = {
   refund_issued: 'Remboursement émis',
   residue_kept: 'Résidu conservé (plateforme)',
   perimeter_added: 'Périmètre étendu',
+  prelaunch_frozen: 'Lancement figé (prix final)',
 };
 
 export const EXCLUSION_REASON_LABELS: Record<string, string> = {
@@ -114,6 +116,12 @@ export const ENGINE_JOURNAL_EMPTY_STATE = 'Aucune exécution du moteur pour cett
 /** The event's French label; venue_excluded composes its reason. Unknown types fall back raw. */
 export const eventLabel = (event: EngineJournalEvent): string => {
   const base = EVENT_LABELS[event.event_type] ?? event.event_type;
+  // Mariem 16/11 — a silence is not a refusal: the pre-launch withdrawals say so.
+  if (event.event_type === 'refusal_received' && event.payload['noAnswer'] === true) {
+    return event.payload['step'] === 'freeze'
+      ? 'Sans réponse à H − 5 min : proposition retirée'
+      : 'Sans réponse à H − 6 h : proposition retirée';
+  }
   if (event.event_type === 'venue_excluded') {
     const reason = typeof event.payload['reason'] === 'string' ? event.payload['reason'] : '';
     const reasonLabel = EXCLUSION_REASON_LABELS[reason] ?? reason;
@@ -160,8 +168,27 @@ export const eventDetail = (event: EngineJournalEvent): string => {
     );
   }
   if (typeof p['slots'] === 'number') parts.push(`${p['slots']} créneau(x)`);
+  if (typeof p['shortfall'] === 'number') {
+    parts.push(`${Math.round(p['shortfall']).toLocaleString('fr-FR')} imp. non replacées`);
+  }
+  if (typeof p['venues'] === 'number') parts.push(`${p['venues']} établissement(s) au lancement`);
   return parts.join(' · ');
 };
+
+/** The run's chip: a pre-launch pass reads « Avant lancement », not « Cascade ». */
+export const runLabel = (run: Pick<EngineJournalRun, 'phase' | 'summary'>): string =>
+  run.phase === 'cascade' && run.summary['reason'] === 'prelaunch'
+    ? 'Avant lancement'
+    : PHASE_LABELS[run.phase];
+
+/**
+ * Mariem 16/11 — the hourly redispatch check that found nothing to re-place (nothing missed)
+ * is not an action: hidden, so the journal shows only what the engine did.
+ */
+export const isIdleRun = (run: Pick<EngineJournalRun, 'phase' | 'summary'>): boolean =>
+  run.phase === 'redispatch' &&
+  run.summary['result'] === 'BELOW_THRESHOLD' &&
+  run.summary['totalValueTnd'] === 0;
 
 /** Horodatage in Africa/Tunis, fr-FR — independent of the operator's browser zone. */
 export const formatTunis = (iso: string): string =>

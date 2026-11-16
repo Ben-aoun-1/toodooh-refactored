@@ -186,6 +186,7 @@ export const placerToursIncrement = async (
           revenuPrevisionnel: String(round4((addedFact * cpm) / 1000)),
           creneaux: added,
           lateProposal: isLateProposal(venueId),
+          createdAt: input.now,
         });
       }
       placedTo.push({ screenhost_id: venueId, added_fact: addedFact, merged });

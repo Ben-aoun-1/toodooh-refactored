@@ -8,8 +8,10 @@ import {
   PHASE_LABELS,
   eventDetail,
   eventLabel,
+  isIdleRun,
   formatTunis,
   outcomeChip,
+  runLabel,
 } from './engine-journal';
 
 // LOG1 — the timeline's pure display model. The label map is PINNED against the api's emitted
@@ -38,6 +40,7 @@ describe('label coverage — every emitted event_type has a French label', () =>
         'refund_issued',
         'residue_kept',
         'perimeter_added',
+        'prelaunch_frozen',
       ].sort(),
     );
   });
@@ -202,5 +205,38 @@ describe('phase labels + chrome', () => {
   it('renders the horodatage in Africa/Tunis regardless of the browser zone', () => {
     // 2026-07-01T10:00:00Z = 11:00 in Africa/Tunis (UTC+1).
     expect(formatTunis('2026-07-01T10:00:00.000Z')).toMatch(/11:00/);
+  });
+});
+
+describe('Mariem 16/11 — a clear trace of the pre-launch', () => {
+  const ev = (payload: Record<string, unknown>) => ({
+    event_type: 'refusal_received',
+    screenhost_id: null,
+    screenhost_name: null,
+    payload,
+  });
+  it('a silence is not a refusal', () => {
+    expect(eventLabel(ev({ impressions: 10 }))).toBe('Refus reçu');
+    expect(eventLabel(ev({ noAnswer: true, step: 'lock' }))).toBe(
+      'Sans réponse à H − 6 h : proposition retirée',
+    );
+    expect(eventLabel(ev({ noAnswer: true, step: 'freeze' }))).toBe(
+      'Sans réponse à H − 5 min : proposition retirée',
+    );
+  });
+  it('a pre-launch pass reads « Avant lancement »; the idle hourly check is hidden', () => {
+    expect(runLabel({ phase: 'cascade', summary: { reason: 'prelaunch' } })).toBe(
+      'Avant lancement',
+    );
+    expect(runLabel({ phase: 'cascade', summary: {} })).toBe('Cascade');
+    expect(
+      isIdleRun({ phase: 'redispatch', summary: { result: 'BELOW_THRESHOLD', totalValueTnd: 0 } }),
+    ).toBe(true);
+    expect(
+      isIdleRun({
+        phase: 'redispatch',
+        summary: { result: 'BELOW_THRESHOLD', totalValueTnd: 9.44 },
+      }),
+    ).toBe(false);
   });
 });

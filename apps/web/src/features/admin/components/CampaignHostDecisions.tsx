@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 
 import { useDecideForHost, useHostDecisions } from '@/features/admin/hooks/useHostDecisions';
 import {
-  HOST_DECISION_LABEL,
+  hostDecisionTrace,
   canAnswerForHost,
   hostDecisionSummary,
   refuseForHostQuestion,
@@ -99,7 +99,7 @@ export function CampaignHostDecisions({ campaignId }: { campaignId: string }) {
                     <span
                       className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${PILL[row.statut]}`}
                     >
-                      {HOST_DECISION_LABEL[row.statut]}
+                      {hostDecisionTrace(row)}
                     </span>
                     {canAnswerForHost(row) && confirming !== row.allocation_id && (
                       <div className="flex gap-2">

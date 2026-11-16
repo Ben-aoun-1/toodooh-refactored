@@ -33,8 +33,17 @@ export interface Redistribution {
  * Hosts (same peaks, 30 DT each), the rest onto the Hosts that already accepted
  * ('nouveaux_dabord'); at the last redispatch (start − 5 min) no new Host could answer in time,
  * so only the accepted ones take it ('engages_seuls').
+ *
+ * Mariem 16/11 — a REFUSAL (a click) is not a silence: before the start, the refused share goes
+ * at once onto the Hosts that ACCEPTED (« les établissements qui ont déjà la campagne »), new
+ * Hosts only for what they cannot hold ('acceptes_dabord'). Only a Host silent at its start − 6 h
+ * opens the campaign to new Hosts first ('nouveaux_dabord').
  */
-export type OrdreRedistribution = 'engages_dabord' | 'nouveaux_dabord' | 'engages_seuls';
+export type OrdreRedistribution =
+  | 'engages_dabord'
+  | 'acceptes_dabord'
+  | 'nouveaux_dabord'
+  | 'engages_seuls';
 
 export const redistribuer = (input: {
   perte: number;

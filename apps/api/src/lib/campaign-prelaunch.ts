@@ -55,12 +55,16 @@ export const prelaunchFinalNotice = (input: {
 export const hostPrelaunchStep = (
   startDate: string,
   openingHour: number | null,
-  alloc: Pick<CampaignDispatchAllocation, 'statutAcceptation' | 'lateProposal'>,
+  alloc: Pick<CampaignDispatchAllocation, 'statutAcceptation' | 'lateProposal' | 'createdAt'>,
   now: Date,
 ): 'lock' | 'freeze' | null => {
   if (alloc.statutAcceptation !== 'EN_ATTENTE') return null;
   if (now >= hostFreezeInstant(startDate, openingHour)) return 'freeze';
-  if (!alloc.lateProposal && now >= hostLockInstant(startDate, openingHour)) return 'lock';
+  const lock = hostLockInstant(startDate, openingHour);
+  // Mariem 16/11 — a Host proposed after its own lock (a campaign launched the evening before,
+  // a venue opening at midnight) had no 6 hours to answer: only the freeze withdraws it.
+  const late = alloc.lateProposal || alloc.createdAt >= lock;
+  if (!late && now >= lock) return 'lock';
   return null;
 };
 
@@ -117,9 +121,12 @@ const runCampaign = async (
       }));
       const locked = due.filter((d) => d.step === 'lock');
       const frozen = due.filter((d) => d.step === 'freeze');
+      // Mariem 16/11 — « il n'a fait aucune action »: the proposal is withdrawn but its row stays
+      // (REFUSE; the engine journal records it as « Sans réponse ») so the admin can trace it and it is never proposed again.
       for (const d of [...locked, ...frozen]) {
         await tx
-          .delete(campaignDispatchAllocation)
+          .update(campaignDispatchAllocation)
+          .set({ statutAcceptation: 'REFUSE' })
           .where(eq(campaignDispatchAllocation.id, d.a.id));
         trace.event(
           'refusal_received',

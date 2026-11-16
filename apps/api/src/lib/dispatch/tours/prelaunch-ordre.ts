@@ -7,10 +7,11 @@ import { type DbExecutor } from '../pool.js';
 import { type OrdreRedistribution } from './redistribuer.js';
 
 /**
- * Mariem 13/11 — the order a refused share is re-placed in. Until the campaign's pre-launch is
- * over (prelaunch_frozen_at: every Host's answer fixed, lib/campaign-prelaunch.ts) new Hosts come
- * first and only the Hosts that accepted take the rest — each Host's own deadlines are applied by
- * the placer (./host-start.ts). Once it is over, R14's order (« comportement actuel conservé »).
+ * The order a REFUSED share is re-placed in. Until the campaign's pre-launch is over
+ * (prelaunch_frozen_at: every Host's answer fixed, lib/campaign-prelaunch.ts) — Mariem 16/11 —
+ * the Hosts that accepted take it first, new Hosts the rest; each Host's own deadlines are
+ * applied by the placer (./host-start.ts). Once it is over, R14's order (« comportement actuel
+ * conservé »).
  */
 export const prelaunchOrdre = async (
   tx: DbExecutor,
@@ -27,10 +28,10 @@ export const prelaunchOrdre = async (
     .where(eq(campaigns.id, campaignId))
     .limit(1);
   if (!row || row.frozenAt !== null || row.startDate === null) return 'engages_dabord';
-  if (row.status === 'upcoming') return 'nouveaux_dabord';
+  if (row.status === 'upcoming') return 'acceptes_dabord';
   // Active since its start date: still before a late-opening Host's start that day (an
   // overnight venue opens the day after) — never a campaign that started earlier.
   return row.status === 'active' && row.startDate >= plusCalendarDays(tunisDateOf(now), -1)
-    ? 'nouveaux_dabord'
+    ? 'acceptes_dabord'
     : 'engages_dabord';
 };
