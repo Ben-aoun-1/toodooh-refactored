@@ -157,7 +157,6 @@ export const decideAllocation = async (input: {
               startDate: row.campaignStart,
               endDate: row.campaignEnd,
             },
-            ...(input.now ? { now: input.now } : {}),
           },
           trace,
         );
