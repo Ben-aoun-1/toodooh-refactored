@@ -2,7 +2,7 @@ import { type RemplissageFinal, remplirAvecSeuil } from './anti-miette.js';
 import { type CalculParams } from './calculer.js';
 import { buildFile } from './file.js';
 import { type VenueInput, buildHeuresTypes } from './heures-types.js';
-import { EPS, type Prise, impressionsParVenue, prisesDe, remplir } from './remplir.js';
+import { EPS, type Prise, impressionsParVenue, prisesCouvrantes, remplir } from './remplir.js';
 
 // DISP-TOURS — REDISPATCH placement, PURE (Mariem's spec R14). A spot that did not air (screen
 // off, outage…) is a loss valued on the FROZEN state (the missed créneaux' impressions); it is
@@ -60,7 +60,9 @@ export const redistribuer = (input: {
 
   const surNouveaux = (volume: number): RemplissageFinal | null =>
     volume > EPS && input.nouveaux.length > 0 && ordre !== 'engages_seuls'
-      ? remplirAvecSeuil(buildFile(toFileVenues(input.nouveaux)), volume, params)
+      ? remplirAvecSeuil(buildFile(toFileVenues(input.nouveaux)), volume, params, {
+          couvrant: true,
+        })
       : null;
   const surEngages = (volume: number) => {
     if (volume <= EPS || input.engages.length === 0) {
@@ -68,7 +70,8 @@ export const redistribuer = (input: {
     }
     const fileA = buildFile(toFileVenues(input.engages));
     const fillA = remplir(fileA, volume, params.rPlein);
-    const prises = prisesDe(fileA, fillA, params.rPlein);
+    // Mariem 16/11 — the share is placed whole (« couverture partielle… خصك الكل »).
+    const prises = prisesCouvrantes(fileA, fillA, volume, params.rPlein);
     return { prises, impressions: impressionsParVenue(prises, params.rPlein) };
   };
 

@@ -4,6 +4,7 @@ import {
   type Prise,
   type Remplissage,
   impressionsParVenue,
+  prisesCouvrantes,
   prisesDe,
   remplir,
 } from './remplir.js';
@@ -63,9 +64,15 @@ export const remplirAvecSeuil = (
   file: readonly Tranche[],
   iCible: number,
   params: SeuilParams,
+  /** Mariem 16/11 — a redispatch covers the share whole (remplir.ts prisesCouvrantes). */
+  opts: { couvrant?: boolean } = {},
 ): RemplissageFinal => {
+  const prisesOf = (f: readonly Tranche[], r: Remplissage): Prise[] =>
+    opts.couvrant === true
+      ? prisesCouvrantes(f, r, iCible, params.rPlein)
+      : prisesDe(f, r, params.rPlein);
   const fill = remplir(file, iCible, params.rPlein);
-  const prises = prisesDe(file, fill, params.rPlein);
+  const prises = prisesOf(file, fill);
   const impressions = impressionsParVenue(prises, params.rPlein);
   const retires: RetraitMiette[] = [...impressions]
     .filter(([, imp]) => sousSeuil(imp, params))
@@ -81,7 +88,7 @@ export const remplirAvecSeuil = (
       .map(({ tour, venueId, heures, v }) => ({ tour, venueId, heures, v })),
   );
   const fill2 = remplir(file2, iCible, params.rPlein); // FILE2 too short = all of FILE2
-  const prises2 = prisesDe(file2, fill2, params.rPlein);
+  const prises2 = prisesOf(file2, fill2);
   return {
     file: file2,
     fill: fill2,
