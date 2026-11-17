@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ToursFicheVenue } from './eligible-hosts';
-import { journalLine, statutDetail, toursRecus, venueStatus, weekGrid } from './tours-fiche';
+import {
+  journalLine,
+  matchCutLine,
+  matchCutTitle,
+  statutDetail,
+  toursRecus,
+  venueStatus,
+  weekGrid,
+} from './tours-fiche';
 
 /** fr-FR groups thousands with a narrow no-break space. */
 const plain = (s: string): string => s.replace(/[\u202f\u00a0]/g, ' ');
@@ -100,5 +108,27 @@ describe('Mariem 16/11 — a launched campaign shows each Host’s answer now', 
   it('a refused or withdrawn Host says where its impressions went', () => {
     expect(statutDetail({ ...base, reponse: 'REFUSE' })).toMatch(/replacées/);
     expect(statutDetail({ ...base, statut: 'retire_budget', reponse: 'ACCEPTE' })).toBeNull();
+  });
+});
+
+describe('Mariem 17/11 — a match created after the launch shows on the heat map', () => {
+  const cell = { day_of_week: 2, hour: 20, affluence: 30, n: 2, tour: 1, passages: 30 };
+  it('a cell cut on every date, on some dates, or not at all', () => {
+    expect(matchCutTitle({ ...cell, match: 2 })).toBe('Coupée par un match : le spot ne passe pas');
+    expect(matchCutTitle({ ...cell, match: 1 })).toBe('Coupée par un match 1 date(s) sur 2');
+    expect(matchCutTitle(cell)).toBeNull();
+  });
+  it('the venue line counts the cut hours', () => {
+    expect(matchCutLine(venue({ week: [cell] }))).toBeNull();
+    expect(
+      matchCutLine(
+        venue({
+          week: [
+            { ...cell, match: 2 },
+            { ...cell, hour: 21, match: 1 },
+          ],
+        }),
+      ),
+    ).toMatch(/^3 heures coupées par un match/);
   });
 });

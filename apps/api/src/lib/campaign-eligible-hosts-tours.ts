@@ -34,6 +34,12 @@ export interface ToursFicheVenue {
     n: number;
     tour: number | null;
     passages: number | null;
+    /**
+     * Mariem 17/11 — how many of the cell's dates a confirmed match cuts (its window, kickoff
+     * − 1 h → end + 1 h, on a venue that shows matches): classic does not air there. Only on a
+     * launched plan, where a match created after the launch still holds frozen hours.
+     */
+    match?: number;
   }[];
 }
 

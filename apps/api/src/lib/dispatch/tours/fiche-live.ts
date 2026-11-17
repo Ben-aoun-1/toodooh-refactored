@@ -42,18 +42,24 @@ const liveTours = (creneaux: LiveAllocation['creneaux']): ToursFicheVenue['tours
 const liveWeek = (
   frozen: ToursFicheVenue['week'],
   creneaux: LiveAllocation['creneaux'],
+  /** 'date:hour' → blacked-out minutes of a confirmed match (this venue's). */
+  matchCut: ReadonlyMap<string, number> = new Map(),
 ): ToursFicheVenue['week'] => {
   type Cell = ToursFicheVenue['week'][number];
   const cells = new Map<string, Cell>(
     frozen.map((c) => [`${c.day_of_week}:${c.hour}`, { ...c, tour: null, passages: null }]),
   );
   const datesByCell = new Map<string, Set<string>>();
+  const cutByCell = new Map<string, Set<string>>();
   for (const c of creneaux) {
     const dayOfWeek = getISODay(parseISO(c.date));
     const key = `${dayOfWeek}:${c.hour}`;
     const dates = datesByCell.get(key) ?? new Set<string>();
     dates.add(c.date);
     datesByCell.set(key, dates);
+    const cut = cutByCell.get(key) ?? new Set<string>();
+    if ((matchCut.get(`${c.date}:${c.hour}`) ?? 0) > 0) cut.add(c.date);
+    cutByCell.set(key, cut);
     const cell: Cell = cells.get(key) ?? {
       day_of_week: dayOfWeek,
       hour: c.hour,
@@ -67,6 +73,7 @@ const liveWeek = (
       n: Math.max(cell.n, dates.size),
       tour: cell.tour === null ? (c.tour ?? 1) : Math.min(cell.tour, c.tour ?? cell.tour),
       passages: Math.max(cell.passages ?? 0, c.reps),
+      ...(cut.size > 0 ? { match: cut.size } : {}),
     });
   }
   return [...cells.values()].sort((a, b) => a.day_of_week - b.day_of_week || a.hour - b.hour);
@@ -76,6 +83,11 @@ export const withLiveAllocations = (
   fiche: ToursFicheWire,
   allocations: readonly LiveAllocation[],
   nameOf: (id: string) => { name: string; sector: string | null; class: string | null },
+  /**
+   * Mariem 17/11 — per venue, 'date:hour' → minutes a confirmed match blacks out
+   * (event-blackout's blackoutMinutesByVenueCell): a match created after the launch shows.
+   */
+  matchCut: ReadonlyMap<string, ReadonlyMap<string, number>> = new Map(),
 ): ToursFicheWire => {
   const pct = fiche.params.pct_sh / 100;
   const byVenue = new Map(allocations.map((a) => [a.screenhostId, a]));
@@ -99,7 +111,7 @@ export const withLiveAllocations = (
       impressions: round4(a.impressions),
       montant_tnd: round4(a.revenuTnd * pct),
       tours: liveTours(a.creneaux),
-      week: liveWeek(v.week, a.creneaux),
+      week: liveWeek(v.week, a.creneaux, matchCut.get(a.screenhostId)),
     };
   };
   const known = new Set(fiche.venues.map((v) => v.id));

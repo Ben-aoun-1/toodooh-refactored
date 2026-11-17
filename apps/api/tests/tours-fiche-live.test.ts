@@ -135,4 +135,31 @@ describe('withLiveAllocations', () => {
     ]);
     expect(live.i_alloue).toBe(11019 + 7184 + 500);
   });
+
+  it('Mariem 17/11 — a match created after the launch marks the hours it cuts', () => {
+    const live = withLiveAllocations(
+      fiche(),
+      [
+        {
+          screenhostId: 'toodooh',
+          statut: 'ACCEPTE',
+          impressions: 1056,
+          revenuTnd: 10.56,
+          creneaux: [
+            // Two Tuesdays at 10 h; the match window covers the first only. 11 h is untouched.
+            { date: '2026-11-17', hour: 10, reps: 33, impressions: 330, tour: 1 },
+            { date: '2026-11-24', hour: 10, reps: 33, impressions: 330, tour: 1 },
+            { date: '2026-11-17', hour: 11, reps: 33, impressions: 396, tour: 2 },
+          ],
+        },
+      ],
+      names,
+      new Map([['toodooh', new Map([['2026-11-17:10', 60]])]]),
+    );
+    const week = live.venues.find((v) => v.id === 'toodooh')?.week ?? [];
+    expect(week.find((c) => c.hour === 10)).toMatchObject({ n: 2, match: 1 });
+    expect(week.find((c) => c.hour === 11)?.match).toBeUndefined();
+    // A venue without a cut map is unchanged.
+    expect(live.venues.find((v) => v.id === 'resto')?.week.some((c) => c.match)).toBe(false);
+  });
 });

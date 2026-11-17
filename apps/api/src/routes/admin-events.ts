@@ -278,6 +278,13 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
       return reply
         .status(500)
         .send({ error: 'INTERNAL', message: "L'événement n'a pas pu être créé." });
+    // Mariem 17/11 — a confirmed match created after a campaign started blacks out classic in its
+    // window: every connected TV gets its new blackouts now (an offline TV keeps 48 h of them).
+    if (!created.dateTbc && !created.timeTbc) {
+      await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
+        request.log.warn({ err }, 'network playlist re-push failed'),
+      );
+    }
     return reply.status(201).send(await adminEventWire(created, new Date()));
   });
 
@@ -356,7 +363,10 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
       return next;
     });
     if (!updated) return sendNotFound(reply);
-    if (datesMoved) {
+    // Mariem 17/11 — confirming (or un-confirming) the date/time adds or removes a blackout window:
+    // the TVs learn it now, not only at the window's edge (an offline TV would never learn it).
+    const confirmationChanged = updated.dateTbc !== row.dateTbc || updated.timeTbc !== row.timeTbc;
+    if (datesMoved || confirmationChanged) {
       await pushPlaylistToAllConnected(request.log).catch((err: unknown) =>
         request.log.warn({ err }, 'network playlist re-push failed'),
       );
