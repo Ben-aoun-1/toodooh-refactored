@@ -96,6 +96,8 @@ export interface ToursFicheVenue {
     n: number;
     tour: number | null;
     passages: number | null;
+    /** Mariem 17/11 — the cell's dates a confirmed match cuts (classic does not air there). */
+    match?: number;
   }[];
 }
 

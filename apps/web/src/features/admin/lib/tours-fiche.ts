@@ -135,3 +135,26 @@ export const calculHint = (f: ToursFiche): string => {
   const when = `${at.toLocaleDateString('fr-FR', { timeZone: 'Africa/Tunis' })} à ${at.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Tunis', hour: '2-digit', minute: '2-digit' })}`;
   return `${f.source === 'plan' ? 'Calcul figé au lancement' : 'Calcul à l’instant (non lancée)'}, le ${when} · spot ${f.params.s} s · F ${f.params.f_max_seconds} s · ${f.params.r_plein} passages/h · T ${nf(f.params.t, 2)} · CPM ${nf(f.params.cpm, 2)} TND · plafond ${tnd(f.c_max_tnd)} pour ${imp(f.i_max)} impressions.`;
 };
+
+/**
+ * Mariem 17/11 — a match created after the launch cuts frozen hours: classic does not air in its
+ * window (kickoff − 1 h → end + 1 h) on a venue that shows matches. The cell's tooltip, or null.
+ */
+export const matchCutTitle = (cell: ToursFicheVenue['week'][number]): string | null => {
+  const cut = cell.match ?? 0;
+  if (cut <= 0) return null;
+  return cut >= cell.n
+    ? 'Coupée par un match : le spot ne passe pas'
+    : `Coupée par un match ${cut} date(s) sur ${cell.n}`;
+};
+
+/** The hours (dates × hours) a match cuts on this venue's week. */
+export const matchCutHours = (v: ToursFicheVenue): number =>
+  v.week.reduce((sum, c) => sum + (c.match ?? 0), 0);
+
+/** « 3 heures coupées par un match », or null when none. */
+export const matchCutLine = (v: ToursFicheVenue): string | null => {
+  const h = matchCutHours(v);
+  if (h === 0) return null;
+  return `${h} heure${h > 1 ? 's' : ''} coupée${h > 1 ? 's' : ''} par un match : le spot ne passe pas pendant le match (1 h avant le coup d’envoi jusqu’à 1 h après la fin).`;
+};

@@ -1,5 +1,5 @@
 import type { ToursFicheVenue } from '@/features/admin/lib/eligible-hosts';
-import { weekGrid } from '@/features/admin/lib/tours-fiche';
+import { matchCutLine, matchCutTitle, weekGrid } from '@/features/admin/lib/tours-fiche';
 
 // DISP-TOURS — bloc 3 of the admin fiche (Mariem's spec §3.3): one venue's typical week, weekdays
 // in columns (with their number of dates in the period), hours in rows. Each cell shows the
@@ -13,8 +13,19 @@ const TOUR_CELL = [
   'bg-amber-100 text-gray-900',
 ];
 
-const cellClass = (tour: number | null, n: number): string => {
+const MATCH_CELL = 'bg-indigo-100 text-indigo-900 ring-2 ring-brand-accent line-through';
+const MATCH_PARTIAL_RING = 'ring-2 ring-brand-accent';
+
+const cellClass = (tour: number | null, n: number, match = 0): string => {
   if (n === 0) return 'bg-gray-100 text-gray-300';
+  if (match >= n) return MATCH_CELL;
+  if (match > 0) {
+    const base =
+      tour === null
+        ? 'bg-white text-gray-700'
+        : (TOUR_CELL[Math.min(tour, TOUR_CELL.length) - 1] ?? '');
+    return `${base} ${MATCH_PARTIAL_RING}`;
+  }
   if (tour === null) return 'bg-white text-gray-700 border border-gray-200';
   return TOUR_CELL[Math.min(tour, TOUR_CELL.length) - 1] ?? 'bg-amber-100 text-gray-900';
 };
@@ -48,13 +59,14 @@ export function ToursWeekGrid({ venue, rPlein }: { venue: ToursFicheVenue; rPlei
                   return (
                     <td
                       key={d.dayOfWeek}
-                      className={`rounded-md px-2 py-1 font-bold tabular-nums ${cellClass(c.tour, c.n)}`}
+                      className={`rounded-md px-2 py-1 font-bold tabular-nums ${cellClass(c.tour, c.n, c.match)}`}
                       title={
-                        c.tour === null
+                        matchCutTitle(c) ??
+                        (c.tour === null
                           ? c.n === 0
                             ? 'Indisponible, fermé ou complet'
                             : 'Non prise'
-                          : `Tour ${c.tour} · ${c.passages ?? rPlein} passages/h · ${c.n} date(s)`
+                          : `Tour ${c.tour} · ${c.passages ?? rPlein} passages/h · ${c.n} date(s)`)
                       }
                     >
                       {c.affluence}
@@ -69,6 +81,9 @@ export function ToursWeekGrid({ venue, rPlein }: { venue: ToursFicheVenue; rPlei
           </tbody>
         </table>
       </div>
+      {matchCutLine(venue) && (
+        <p className="mt-2 text-xs font-medium text-indigo-900">{matchCutLine(venue)}</p>
+      )}
       <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded bg-orange-400" /> Tour 1 : 2 heures de pic
@@ -82,6 +97,10 @@ export function ToursWeekGrid({ venue, rPlein }: { venue: ToursFicheVenue; rPlei
         <span className="inline-flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded bg-gray-100" /> Indisponible, fermé ou
           complet
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded bg-indigo-100 ring-2 ring-brand-accent" />{' '}
+          Coupée par un match
         </span>
         <span>(n) = passages/h d’une tranche partielle · ×2 = 2 dates de ce jour</span>
       </div>

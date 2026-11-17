@@ -32,6 +32,7 @@ import { assemblePool } from './dispatch/pool.js';
 import { seuilImpressions, tForDuration } from './dispatch/thresholds.js';
 import { withLiveAllocations } from './dispatch/tours/fiche-live.js';
 import type { EngineTrace } from './engine-journal/trace.js';
+import { blackoutMinutesByVenueCell } from './event-blackout.js';
 import { isEventSwitchOn } from './event-pricing/event-switch.js';
 import { computeEventCmax } from './event-pricing/pricing.js';
 import { campaignPlaysPerMinute } from './event-pricing/spot.js';
@@ -398,6 +399,14 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       : [];
     // Mariem 16/11 — a launched plan's fiche shows its allocations as they are NOW (redispatch).
     const frozen = toursFiche(detail, plan ? 'plan' : 'live', labels);
+    // Mariem 17/11 — the hours a confirmed match cuts NOW (a match created after the launch).
+    const matchCut = plan
+      ? await blackoutMinutesByVenueCell(
+          allocations
+            .filter((a) => a.statut !== 'REFUSE')
+            .map((a) => ({ screenhostId: a.screenhostId, creneaux: a.creneaux })),
+        )
+      : new Map<string, Map<string, number>>();
     const tours = plan
       ? withLiveAllocations(
           frozen,
@@ -412,6 +421,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
             const l = labels.get(id);
             return { name: l?.name ?? id, sector: l?.sector ?? null, class: l?.class ?? null };
           },
+          matchCut,
         )
       : frozen;
     const allocationByVenue = new Map(allocations.map((a) => [a.screenhostId, a]));
