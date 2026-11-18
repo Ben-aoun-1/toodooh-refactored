@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminFleetService } from '@/features/admin/services/admin-fleet.service';
 
@@ -22,4 +22,24 @@ export function useFleetScreen(screenId: string | null) {
     enabled: screenId !== null,
     refetchInterval: FLEET_REFRESH_MS,
   });
+}
+
+/** FLEET-2 — the remote actions; the panel refreshes a few seconds later to show the answer. */
+export function useFleetRemote(screenId: string) {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: adminKeys.fleetScreen(screenId) });
+    }, 3000);
+  };
+  return {
+    restart: useMutation({
+      mutationFn: () => adminFleetService.restart(screenId),
+      onSuccess: refresh,
+    }),
+    requestStatus: useMutation({
+      mutationFn: () => adminFleetService.requestStatus(screenId),
+      onSuccess: refresh,
+    }),
+  };
 }

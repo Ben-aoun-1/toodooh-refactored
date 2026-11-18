@@ -1,5 +1,6 @@
 import { Loader2, Radio, X } from 'lucide-react';
 
+import FleetHealthSection from '@/features/admin/components/FleetHealthSection';
 import { useFleetScreen } from '@/features/admin/hooks/useFleet';
 import {
   HOUR_TONE_CLASS,
@@ -185,10 +186,9 @@ export default function FleetScreenPanel({
               )}
             </section>
 
-            <p className="text-xs text-gray-400">
-              Actualisé toutes les 30 secondes. La santé de la TV (version, autorisations,
-              redémarrages) arrivera avec la prochaine version de l’application TV.
-            </p>
+            <FleetHealthSection s={s} now={now} />
+
+            <p className="text-xs text-gray-400">Actualisé toutes les 30 secondes.</p>
           </div>
         )}
       </aside>
