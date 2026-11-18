@@ -262,7 +262,7 @@ describe('RechargeManagement wiring (source pins — apps/web has no render harn
   });
 
   it('the Type column names legacy rows like the filter does (adminRechargeTypeLabel)', () => {
-    expect(page).toContain('adminRechargeTypeLabel(recharge.method)');
+    expect(page).toContain('adminRechargeTypeLabel(recharge.method, recharge.reference)');
     expect(page).not.toContain('methodLabel(');
   });
 
@@ -279,7 +279,7 @@ describe('RechargeDetailsModal wiring (source pins)', () => {
   );
 
   it('the Type line names legacy rows like the table and the filter', () => {
-    expect(modal).toContain('adminRechargeTypeLabel(recharge.method)');
+    expect(modal).toContain('adminRechargeTypeLabel(recharge.method, recharge.reference)');
     expect(modal).not.toContain('methodLabel(');
   });
 

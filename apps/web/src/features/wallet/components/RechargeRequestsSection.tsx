@@ -47,7 +47,9 @@ export default function RechargeRequestsSection({
                 className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
               >
                 <td className="px-5 py-3 text-sm font-medium text-gray-900">{r.reference}</td>
-                <td className="px-5 py-3 text-sm text-gray-600">{methodLabel(r.method)}</td>
+                <td className="px-5 py-3 text-sm text-gray-600">
+                  {methodLabel(r.method, r.reference)}
+                </td>
                 <td className="px-5 py-3 text-sm font-semibold text-gray-900 tabular-nums">
                   {r.amount_tnd.toLocaleString('fr-FR')} TND
                 </td>

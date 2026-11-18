@@ -70,7 +70,7 @@ export default function RechargeDetailsModal({
             <div>
               <span className="text-sm font-medium text-gray-600">Type</span>
               <p className="text-sm font-semibold text-gray-900">
-                {adminRechargeTypeLabel(recharge.method)}
+                {adminRechargeTypeLabel(recharge.method, recharge.reference)}
               </p>
             </div>
             <div>
