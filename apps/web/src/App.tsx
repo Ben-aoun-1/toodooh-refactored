@@ -73,6 +73,7 @@ const CampaignReviewQueue = lazy(() => import('@/features/admin/pages/CampaignRe
 const CreateAdmin = lazy(() => import('@/features/admin/pages/CreateAdmin'));
 const AdminManagement = lazy(() => import('@/features/admin/pages/AdminManagement'));
 const ScreenManagement = lazy(() => import('@/features/admin/pages/ScreenManagement'));
+const FleetMonitoring = lazy(() => import('@/features/admin/pages/FleetMonitoring'));
 const HostFiche = lazy(() => import('@/features/admin/pages/HostFiche'));
 const ScreenhostFactureManagement = lazy(
   () => import('@/features/admin/pages/ScreenhostFactureManagement'),
@@ -681,6 +682,14 @@ export default function App() {
                 /* ADM-FIX1 — un admin y voit les agents (la liste du personnel reste superadmin). */
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <AdminManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-fleet"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <FleetMonitoring />
                 </AdminRoute>
               }
             />
