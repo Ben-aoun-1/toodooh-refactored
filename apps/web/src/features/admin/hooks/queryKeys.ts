@@ -66,6 +66,9 @@ export const adminKeys = {
   /** FCT2 — one advertiser's wallet-adjustment audit trail (US-FCT-9). */
   walletAdjustments: (advertiserId: string) =>
     [...adminKeys.all, 'walletAdjustments', advertiserId] as const,
+  /** FLEET-1 — « Parc d'écrans » (the list) and one screen in detail. */
+  fleet: () => [...adminKeys.all, 'fleet'] as const,
+  fleetScreen: (screenId: string) => [...adminKeys.all, 'fleet', screenId] as const,
   /** ADM-CREDIT1 — one screencaster's solde, shown in « Créditer le compte ». */
   advertiserWallet: (advertiserId: string) =>
     [...adminKeys.all, 'advertiserWallet', advertiserId] as const,
