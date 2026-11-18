@@ -3,8 +3,14 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { notifications, users, walletAdjustments } from '../db/schema.js';
-import { MAX_RECHARGE_TND } from '../lib/recharges.js';
+import { type Recharge, notifications, recharges, users, walletAdjustments } from '../db/schema.js';
+import {
+  ADMIN_PAYMENT_MODES,
+  adminPaymentNotification,
+  adminPaymentReference,
+  isValidAdminPaymentAmount,
+} from '../lib/admin-payment.js';
+import { isUniqueViolation, walletSpendable } from '../lib/recharges.js';
 import {
   adjustmentNotification,
   adminAdjustmentView,
@@ -54,7 +60,7 @@ export const adminWalletRoutes: FastifyPluginAsync = async (app) => {
       return invalidField(
         reply,
         'amount_tnd',
-        `amount must be non-zero, have at most 2 decimals, and be within ±${MAX_RECHARGE_TND}`,
+        'amount must be non-zero and have at most 2 decimals',
       );
     }
     const adminId = request.user?.id;
@@ -107,4 +113,103 @@ export const adminWalletRoutes: FastifyPluginAsync = async (app) => {
       .orderBy(desc(walletAdjustments.createdAt));
     return reply.status(200).send(rows.map(adminAdjustmentView));
   });
+
+  // ADM-CREDIT1 — GET /api/admin/advertisers/:id/wallet: the screencaster's solde as the funded
+  // gates see it (total, engaged, spendable), shown in the « Créditer le compte » modal.
+  app.get('/api/admin/advertisers/:id/wallet', adminGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+    const target = await advertiserById(parsed.data.id);
+    if (!target)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such advertiser.' });
+    const w = await walletSpendable(target.id);
+    return reply.status(200).send({
+      balance_tnd: w.balance_tnd,
+      engaged_tnd: w.engaged_tnd,
+      spendable_tnd: w.spendable_tnd,
+      currency: 'TND',
+    });
+  });
+
+  // ADM-CREDIT1 — POST /api/admin/advertisers/:id/payment-received {amount_tnd, mode, note?}:
+  // money the screencaster paid outside the platform, recorded as a recharge CONFIRMED at once by
+  // this admin (confirmed_by/at), reference ADM-<mode>-…, notified to the screencaster in the same
+  // transaction. No ceiling, no minimum (ruling) — only > 0 and the column's capacity.
+  app.post('/api/admin/advertisers/:id/payment-received', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return invalidField(reply, 'id', 'must be a uuid');
+    const parsedBody = paymentBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      const issue = parsedBody.error.issues[0];
+      return invalidField(reply, String(issue?.path[0] ?? 'body'), issue?.message ?? 'invalid');
+    }
+    const { amount_tnd: amount, mode } = parsedBody.data;
+    const note = parsedBody.data.note?.trim() || null;
+    if (!isValidAdminPaymentAmount(amount)) {
+      return invalidField(reply, 'amount_tnd', 'amount must be > 0 with at most 2 decimals');
+    }
+    const adminId = request.user?.id;
+    if (!adminId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const target = await advertiserById(parsedParams.data.id);
+    if (!target)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such advertiser.' });
+
+    let row: Recharge | undefined;
+    for (let attempt = 0; attempt < 5 && row === undefined; attempt += 1) {
+      try {
+        row = await db.transaction(async (tx) => {
+          const now = new Date();
+          const [inserted] = await tx
+            .insert(recharges)
+            .values({
+              advertiserId: target.id,
+              amountTnd: amount.toFixed(2),
+              reference: adminPaymentReference(mode),
+              status: 'confirmed',
+              confirmedBy: adminId,
+              confirmedAt: now,
+            })
+            .returning();
+          if (!inserted) return undefined;
+          await tx.insert(notifications).values(adminPaymentNotification(inserted, mode, note));
+          return inserted;
+        });
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+      }
+    }
+    if (!row) {
+      return reply
+        .status(500)
+        .send({ error: 'INTERNAL_ERROR', message: 'Payment record write failed.' });
+    }
+    return reply.status(201).send({
+      id: row.id,
+      reference: row.reference,
+      amount_tnd: Number(row.amountTnd),
+      mode,
+      status: row.status,
+      confirmed_at: row.confirmedAt,
+    });
+  });
+};
+
+const paymentBodySchema = z.object({
+  amount_tnd: z.number(),
+  mode: z.enum(ADMIN_PAYMENT_MODES),
+  note: z.string().max(500).optional(),
+});
+
+/** The screencaster account an admin credits (404 for anyone else). */
+const advertiserById = async (id: string): Promise<{ id: string } | undefined> => {
+  const [target] = await db
+    .select({ id: users.id, role: users.role })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
+  return target && target.role === 'advertiser' ? { id: target.id } : undefined;
 };

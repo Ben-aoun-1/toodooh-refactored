@@ -22,21 +22,25 @@ import {
   Wifi,
   Ban,
   SlidersHorizontal,
+  Wallet,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
+import AdjustWalletModal from '@/features/admin/components/AdjustWalletModal';
 import AdminBankAuditSlot from '@/features/admin/components/AdminBankAuditSlot';
 import AdminDeactivateUserModal from '@/features/admin/components/AdminDeactivateUserModal';
 import AdminDeleteAccountModal from '@/features/admin/components/AdminDeleteAccountModal';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminUserEligibilitySlot from '@/features/admin/components/AdminUserEligibilitySlot';
 import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
+import CreditAccountModal from '@/features/admin/components/CreditAccountModal';
 import UserDocumentReviewGroup from '@/features/admin/components/UserDocumentReviewGroup';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import { useUserDocuments, useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
 import { canDeactivate, canReactivate } from '@/features/admin/lib/account-deactivation';
+import { canCreditAccount } from '@/features/admin/lib/admin-credit';
 import { declaredScreensTotalLabel } from '@/features/admin/lib/venue-screens';
 import { adminUserService, type AdminUser } from '@/features/admin/services/admin-user.service';
 import { apiErrorMessage } from '@/features/auth/services/auth-errors';
@@ -92,6 +96,9 @@ export default function UserManagement() {
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   // DEACT-1 — the account being deactivated or reactivated (one window, both directions).
   const [deactivateTarget, setDeactivateTarget] = useState<AdminUser | null>(null);
+  // ADM-CREDIT1 — « Créditer le compte » (screencasters), then optionally « Crédit offert ».
+  const [creditTarget, setCreditTarget] = useState<AdminUser | null>(null);
+  const [giftTarget, setGiftTarget] = useState<AdminUser | null>(null);
   const [banNotes, setBanNotes] = useState('');
   const [submittingBan, setSubmittingBan] = useState(false);
   // 409 prior-state modal (G2 D-G2-4) — set to the conflicted user's id; the queue is refetched
@@ -514,6 +521,16 @@ export default function UserManagement() {
                           title="Bannir (fraude)"
                         >
                           <Ban className="h-4 w-4" />
+                        </button>
+                      )}
+
+                      {canCreditAccount(user) && (
+                        <button
+                          onClick={() => setCreditTarget(user)}
+                          className="text-emerald-700 hover:text-emerald-900"
+                          title="Créditer le compte"
+                        >
+                          <Wallet className="h-4 w-4" />
                         </button>
                       )}
 
@@ -1086,6 +1103,24 @@ export default function UserManagement() {
           }
         />
       )}
+      {creditTarget && (
+        <CreditAccountModal
+          advertiserId={creditTarget.id}
+          advertiserName={accountName(creditTarget)}
+          onClose={() => setCreditTarget(null)}
+          onOfferCredit={() => {
+            setGiftTarget(creditTarget);
+            setCreditTarget(null);
+          }}
+        />
+      )}
+      {giftTarget && (
+        <AdjustWalletModal
+          advertiserId={giftTarget.id}
+          advertiserName={accountName(giftTarget)}
+          onClose={() => setGiftTarget(null)}
+        />
+      )}
       {deactivateTarget && (
         <AdminDeactivateUserModal
           user={{
@@ -1203,3 +1238,7 @@ export default function UserManagement() {
     </AdminLayout>
   );
 }
+
+/** The name an admin modal shows for an account (business first for a screencaster). */
+const accountName = (u: AdminUser): string =>
+  [u.business_name, u.contact_name].find((n) => n && n !== 'N/A') ?? u.email;

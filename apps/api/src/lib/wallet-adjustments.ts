@@ -1,18 +1,15 @@
 import type { NewNotification, WalletAdjustment } from '../db/schema.js';
 
-import { MAX_RECHARGE_TND } from './recharges.js';
+import { isValidAdminAdjustmentAmount } from './admin-payment.js';
 
 // FCT2 (US-FCT-9) — the admin wallet adjustment's pure half: amount rules, wire projections and
 // the French notification copy. The balance seam itself lives in lib/recharges.ts walletBalance
 // (the third SUM term); the route (routes/admin-wallet.ts) inserts row + notification atomically.
 
-// A valid SIGNED adjustment: finite, NON-ZERO, at most 2 decimals, within the recharge sanity
-// bound in magnitude (an adjustment larger than the biggest possible top-up is a fat-finger).
+// A valid SIGNED adjustment: finite, NON-ZERO, at most 2 decimals. ADM-CREDIT1 (operator 18/11)
+// — no ceiling any more: only the column's capacity bounds it (lib/admin-payment.ts).
 export const isValidAdjustmentAmount = (amount: number): boolean =>
-  Number.isFinite(amount) &&
-  amount !== 0 &&
-  Math.abs(amount) <= MAX_RECHARGE_TND &&
-  Number(amount.toFixed(2)) === amount;
+  isValidAdminAdjustmentAmount(amount);
 
 /** «+150.00» / «−150.00» — the signed display the notification and the audit share. */
 export const signedTnd = (amount: number): string =>

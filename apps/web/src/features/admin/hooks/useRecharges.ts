@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   adminRechargesService,
+  type AdminPaymentMode,
   type AdminRecharge,
 } from '@/features/admin/services/admin-recharges.service';
 import { advertiserKeys } from '@/features/advertiser/hooks/queryKeys';
@@ -158,6 +159,34 @@ export function useAdjustWallet() {
       void queryClient.invalidateQueries({
         queryKey: adminKeys.walletAdjustments(created.advertiser_id),
       });
+      void queryClient.invalidateQueries({
+        queryKey: adminKeys.advertiserWallet(created.advertiser_id),
+      });
+    },
+  });
+}
+
+/** ADM-CREDIT1 — the screencaster's solde in « Créditer le compte » (always fresh). */
+export function useAdvertiserWallet(advertiserId: string) {
+  return useQuery({
+    queryKey: adminKeys.advertiserWallet(advertiserId),
+    queryFn: () => adminRechargesService.advertiserWallet(advertiserId),
+    staleTime: 0,
+  });
+}
+
+/** ADM-CREDIT1 — « Paiement reçu »: credits like a confirmed recharge (same invalidations). */
+export function useRecordPayment(advertiserId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { amountTnd: number; mode: AdminPaymentMode; note: string }) =>
+      adminRechargesService.recordPayment(advertiserId, input.amountTnd, input.mode, input.note),
+    onSuccess: () => {
+      for (const key of rechargeDecisionInvalidationKeys(advertiserId)) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+      void queryClient.invalidateQueries({ queryKey: adminKeys.rechargesAll() });
+      void queryClient.invalidateQueries({ queryKey: adminKeys.advertiserWallet(advertiserId) });
     },
   });
 }

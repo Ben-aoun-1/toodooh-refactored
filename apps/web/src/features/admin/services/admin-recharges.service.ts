@@ -63,6 +63,26 @@ export interface AdminWalletAdjustment {
   created_at: string;
 }
 
+/** ADM-CREDIT1 — the screencaster's solde as the funded gates see it. */
+export interface AdminAdvertiserWallet {
+  balance_tnd: number;
+  engaged_tnd: number;
+  spendable_tnd: number;
+  currency: 'TND';
+}
+
+/** ADM-CREDIT1 — a « Paiement reçu » recorded by the admin (a recharge confirmed at once). */
+export interface AdminRecordedPayment {
+  id: string;
+  reference: string;
+  amount_tnd: number;
+  mode: AdminPaymentMode;
+  status: 'confirmed';
+  confirmed_at: string;
+}
+
+export type AdminPaymentMode = 'especes' | 'cheque' | 'virement';
+
 export type DocumentDisplayMode = 'image' | 'pdf';
 
 export const documentDisplayMode = (mime: string | null): DocumentDisplayMode =>
@@ -152,6 +172,22 @@ export const adminRechargesService = {
   },
 
   // FCT2 — the audit trail for one advertiser, newest first.
+  async advertiserWallet(advertiserId: string): Promise<AdminAdvertiserWallet> {
+    return apiClient.get<AdminAdvertiserWallet>(`/admin/advertisers/${advertiserId}/wallet`);
+  },
+
+  async recordPayment(
+    advertiserId: string,
+    amountTnd: number,
+    mode: AdminPaymentMode,
+    note: string,
+  ): Promise<AdminRecordedPayment> {
+    return apiClient.post<AdminRecordedPayment>(
+      `/admin/advertisers/${advertiserId}/payment-received`,
+      { amount_tnd: amountTnd, mode, ...(note ? { note } : {}) },
+    );
+  },
+
   async walletAdjustments(advertiserId: string): Promise<AdminWalletAdjustment[]> {
     return apiClient.get<AdminWalletAdjustment[]>(
       `/admin/advertisers/${advertiserId}/wallet-adjustments`,
