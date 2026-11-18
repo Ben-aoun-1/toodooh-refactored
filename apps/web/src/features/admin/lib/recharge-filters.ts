@@ -3,6 +3,7 @@ import {
   RECHARGE_TYPES,
   RECHARGE_TYPE_LABELS,
   adminStatusFilterLabels,
+  adminPaymentLabel,
   methodLabel,
   rechargeTypeOf,
   statusLabel,
@@ -75,8 +76,12 @@ export const withRechargeType = (
  * row keeps its method label. Admin-side on purpose: the screencaster's MyRecharges shares
  * methodLabel and keeps its « — ».
  */
-export const adminRechargeTypeLabel = (method: RechargeMethod | null): string =>
-  method === null ? RECHARGE_TYPE_LABELS.FCT : methodLabel(method);
+export const adminRechargeTypeLabel = (
+  method: RechargeMethod | null,
+  reference?: string | null,
+): string =>
+  adminPaymentLabel(reference) ??
+  (method === null ? RECHARGE_TYPE_LABELS.FCT : methodLabel(method));
 
 /** The type <select> value, narrowed without a cast; an unknown value reads as « Tous les types ». */
 export const parseRechargeTypeFilter = (value: string): RechargeTypeFilter =>

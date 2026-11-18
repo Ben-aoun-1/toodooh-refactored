@@ -13,7 +13,8 @@ import {
   users,
   walletAdjustments,
 } from '../src/db/schema.js';
-import { makeReference } from '../src/lib/recharges.js';
+import { adminPaymentModeOf } from '../src/lib/admin-payment.js';
+import { makeReference, walletBalance } from '../src/lib/recharges.js';
 import { isValidAdjustmentAmount, signedTnd } from '../src/lib/wallet-adjustments.js';
 import { adminWalletRoutes } from '../src/routes/admin-wallet.js';
 import { rechargesRoutes } from '../src/routes/recharges.js';
@@ -58,8 +59,10 @@ describe('signed amount rules (pure)', () => {
     expect(isValidAdjustmentAmount(-30.25)).toBe(true);
     expect(isValidAdjustmentAmount(0)).toBe(false);
     expect(isValidAdjustmentAmount(10.123)).toBe(false);
-    expect(isValidAdjustmentAmount(1_000_001)).toBe(false);
-    expect(isValidAdjustmentAmount(-1_000_001)).toBe(false);
+    // ADM-CREDIT1 (operator 18/11) — no ceiling: only the numeric(12,2) column bounds it.
+    expect(isValidAdjustmentAmount(1_000_001)).toBe(true);
+    expect(isValidAdjustmentAmount(-1_000_001)).toBe(true);
+    expect(isValidAdjustmentAmount(10_000_000_000)).toBe(false);
     expect(isValidAdjustmentAmount(Number.NaN)).toBe(false);
   });
 
@@ -190,7 +193,8 @@ describe('wallet adjustments (admin + balance seam, real Postgres)', () => {
     const advertiser = await seedUser();
     const admin = await seedUser({ role: 'admin' });
     mockSession(admin);
-    for (const amount of [0, 10.123, 1_000_001, -1_000_001]) {
+    // ADM-CREDIT1 — no ceiling: only the numeric(12,2) column bounds the magnitude.
+    for (const amount of [0, 10.123, 10_000_000_000, -10_000_000_000]) {
       expect((await adjust(advertiser, { amount_tnd: amount, reason: 'x' })).statusCode).toBe(400);
     }
     expect(await db.$count(walletAdjustments)).toBe(0);
@@ -235,5 +239,88 @@ describe('wallet adjustments (admin + balance seam, real Postgres)', () => {
     expect(mine).toHaveLength(2);
     expect(mine[0]).toMatchObject({ amount_tnd: -5, reason: 'Second' });
     expect(mine[0]).not.toHaveProperty('admin_id');
+  });
+
+  describe('ADM-CREDIT1 — « Paiement reçu » and the solde the admin sees', () => {
+    const pay = (id: string, payload: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: `/api/admin/advertisers/${id}/payment-received`, payload });
+
+    it('records a recharge CONFIRMED at once by the admin, credits the balance, notifies in French', async () => {
+      const advertiser = await seedUser();
+      const admin = await seedUser({ role: 'admin' });
+      mockSession(admin);
+
+      const res = await pay(advertiser, {
+        amount_tnd: 1_250_000.5,
+        mode: 'especes',
+        note: 'Reçu n° 42',
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json<{
+        reference: string;
+        status: string;
+        amount_tnd: number;
+        mode: string;
+      }>();
+      expect(body).toMatchObject({ status: 'confirmed', amount_tnd: 1_250_000.5, mode: 'especes' });
+      expect(body.reference).toMatch(/^ADM-ESP-[A-Z0-9]{8}$/);
+      expect(adminPaymentModeOf(body.reference)).toBe('especes');
+
+      const [row] = await db.select().from(recharges).where(eq(recharges.advertiserId, advertiser));
+      expect(row).toMatchObject({
+        status: 'confirmed',
+        confirmedBy: admin,
+        method: null,
+        amountTnd: '1250000.50',
+      });
+      expect(row?.confirmedAt).not.toBeNull();
+      expect((await walletBalance(advertiser)).balance_tnd).toBe(1_250_000.5);
+
+      const [notif] = await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, advertiser));
+      expect(notif).toMatchObject({
+        type: 'recharge_credited',
+        title: 'Paiement reçu, compte crédité',
+      });
+      expect(notif?.body).toContain('par espèces');
+      expect(notif?.body).toContain(body.reference);
+      expect(notif?.body).toContain('Reçu n° 42');
+
+      // The admin's solde read: what the funded gates see.
+      const w = await app.inject({
+        method: 'GET',
+        url: `/api/admin/advertisers/${advertiser}/wallet`,
+      });
+      expect(w.statusCode).toBe(200);
+      expect(w.json()).toMatchObject({
+        balance_tnd: 1_250_000.5,
+        engaged_tnd: 0,
+        spendable_tnd: 1_250_000.5,
+      });
+    });
+
+    it('no minimum, but never zero, negative, >2 decimals or a bad mode; only screencasters', async () => {
+      const advertiser = await seedUser();
+      const owner = await seedUser({ role: 'individual_owner' });
+      const admin = await seedUser({ role: 'admin' });
+      mockSession(admin);
+      expect((await pay(advertiser, { amount_tnd: 0.01, mode: 'cheque' })).statusCode).toBe(201);
+      for (const amount_tnd of [0, -5, 10.123, 10_000_000_000]) {
+        expect((await pay(advertiser, { amount_tnd, mode: 'cheque' })).statusCode).toBe(400);
+      }
+      expect((await pay(advertiser, { amount_tnd: 10, mode: 'carte' })).statusCode).toBe(400);
+      expect((await pay(owner, { amount_tnd: 10, mode: 'virement' })).statusCode).toBe(404);
+      expect((await pay(randomUUID(), { amount_tnd: 10, mode: 'virement' })).statusCode).toBe(404);
+      expect(await db.$count(recharges)).toBe(1);
+    });
+
+    it('a non-admin cannot record a payment', async () => {
+      const advertiser = await seedUser();
+      mockSession(advertiser, 'advertiser');
+      expect((await pay(advertiser, { amount_tnd: 10, mode: 'virement' })).statusCode).toBe(403);
+      expect(await db.$count(recharges)).toBe(0);
+    });
   });
 });

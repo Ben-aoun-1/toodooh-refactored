@@ -33,9 +33,25 @@ export const METHOD_LABELS: Record<RechargeMethod, string> = {
   bon_de_commande: 'Bon de commande',
 };
 
+/**
+ * ADM-CREDIT1 — a payment the admin recorded (« Paiement reçu »): its mode rides the reference
+ * prefix (api lib/admin-payment.ts, twin — no migration). « Paiement reçu · Espèces », or null for
+ * a recharge the screencaster made himself.
+ */
+const ADMIN_PAYMENT_MODE_LABELS: Record<string, string> = {
+  ESP: 'Espèces',
+  CHQ: 'Chèque',
+  VIR: 'Virement',
+};
+export const adminPaymentLabel = (reference: string | null | undefined): string | null => {
+  const m = reference ? /^ADM-(ESP|CHQ|VIR)-/.exec(reference) : null;
+  const mode = m?.[1] ? ADMIN_PAYMENT_MODE_LABELS[m[1]] : undefined;
+  return mode ? `Paiement reçu · ${mode}` : null;
+};
+
 /** The screencaster's Type column — legacy rows (method NULL) render « — », as-found. */
-export const methodLabel = (method: RechargeMethod | null): string =>
-  method === null ? '—' : METHOD_LABELS[method];
+export const methodLabel = (method: RechargeMethod | null, reference?: string | null): string =>
+  adminPaymentLabel(reference) ?? (method === null ? '—' : METHOD_LABELS[method]);
 
 // The per-method status label matrix (US-FCT-8) — the v2 sets REPLACE En attente/Validée for
 // method rows; legacy rows keep their as-found labels. One lookup so every chip site agrees.
