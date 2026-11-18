@@ -3,7 +3,8 @@ import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../../db/client.js';
-import { proofOfPlay, screens } from '../../db/schema.js';
+import { proofOfPlay, screenWsEvents, screens } from '../../db/schema.js';
+import { sanitizeDeviceReport, sanitizeStatusReport, toStored } from '../fleet/health.js';
 
 import { resolveAirableVideo } from './playlist-service.js';
 import { proofPlayedAt } from './proof-instant.js';
@@ -105,7 +106,8 @@ const recordProof = async (
 
 // Handle one parsed screen→server event. HEARTBEAT → liveness; VIDEO_STARTED/VIDEO_ENDED →
 // proof-of-play (VIDEO_ENDED carries played_duration_ms — the binary "it aired" proof), returning its
-// outcome for the PROOF_ACK; PLAYBACK_ERROR / STATUS_REPORT / other → logged. `receivedAt` is the
+// outcome for the PROOF_ACK; FLEET-2: DEVICE_REPORT / STATUS_REPORT → stored on the screen,
+// PLAYBACK_ERROR → screen_ws_events; other → logged. `receivedAt` is the
 // server's receipt instant (injectable for deterministic tests).
 export const handleScreenEvent = async (
   msg: ScreenEventMessage,
@@ -120,6 +122,29 @@ export const handleScreenEvent = async (
     case 'VIDEO_STARTED':
     case 'VIDEO_ENDED':
       return recordProof(msg, ctx, msg.event, log, receivedAt);
+    // FLEET-2 — the TV's own report and its player state, for « Santé de la TV ».
+    case 'DEVICE_REPORT':
+      await db
+        .update(screens)
+        .set({ deviceReport: toStored(sanitizeDeviceReport(msg.data)), deviceReportAt: receivedAt })
+        .where(eq(screens.id, ctx.screenId));
+      return null;
+    case 'STATUS_REPORT':
+      await db
+        .update(screens)
+        .set({ statusReport: toStored(sanitizeStatusReport(msg.data)), statusReportAt: receivedAt })
+        .where(eq(screens.id, ctx.screenId));
+      return null;
+    case 'PLAYBACK_ERROR': {
+      const error = msg.data['error'];
+      await db.insert(screenWsEvents).values({
+        screenId: ctx.screenId,
+        kind: 'playback_error',
+        detail: typeof error === 'string' ? error.slice(0, 300) : null,
+        at: receivedAt,
+      });
+      return null;
+    }
     default:
       log.info({ event: msg.event, screenId: ctx.screenId }, 'screen-ws event');
       return null;

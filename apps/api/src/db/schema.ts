@@ -1511,6 +1511,11 @@ export const screens = pgTable(
     // asking "is this screen alive right now" must read last_seen_at, not this column.
     pairedAt: timestamp('paired_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    // FLEET-2 — the TV app's own report (lib/fleet/health.ts) and the player state on request.
+    deviceReport: jsonb('device_report').$type<Record<string, unknown>>(),
+    deviceReportAt: timestamp('device_report_at', { withTimezone: true }),
+    statusReport: jsonb('status_report').$type<Record<string, unknown>>(),
+    statusReportAt: timestamp('status_report_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -1521,6 +1526,28 @@ export const screens = pgTable(
 );
 
 export type Screen = typeof screens.$inferSelect;
+
+// ── screen_ws_events (FLEET-2) — a TV's connection history + the admin's remote actions ──────────
+// Connections and disconnections of the /ws/screen socket, playback errors the TV reports, and the
+// admin's « Reconnecter » / « Demander un état ». Kept 14 days per screen (pruned at connection).
+export const screenWsEvents = pgTable(
+  'screen_ws_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // No FK on purpose (migration 0115): a late disconnect insert must never lock screens.
+    screenId: uuid('screen_id').notNull(),
+    kind: text('kind')
+      .$type<
+        'connect' | 'disconnect' | 'playback_error' | 'restart_requested' | 'status_requested'
+      >()
+      .notNull(),
+    detail: text('detail'),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('screen_ws_events_screen_at_idx').on(t.screenId, t.at)],
+);
+
+export type ScreenWsEvent = typeof screenWsEvents.$inferSelect;
 export type NewScreen = typeof screens.$inferInsert;
 
 // ── multi-document model (F-docs Commit 1) ────────────────────────────────────────────

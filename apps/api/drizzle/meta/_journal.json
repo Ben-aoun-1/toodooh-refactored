@@ -806,6 +806,13 @@
       "when": 1794850000000,
       "tag": "0114_cta_scan_visitor",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1795050000000,
+      "tag": "0115_screen_health",
+      "breakpoints": true
     }
   ]
 }

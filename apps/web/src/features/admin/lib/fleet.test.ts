@@ -28,6 +28,9 @@ const screen = (over: Partial<FleetScreenWire> = {}): FleetScreenWire => ({
   now: { planned_reps: 6, campaigns: [{ id: 'c1', name: 'Toodooh Test', reps: 6 }] },
   last_proof: { at: ago(4), campaign_name: 'Toodooh Test' },
   today: { planned_total: 52, planned_so_far: 45, aired: 38 },
+  device: null,
+  device_report_at: null,
+  issues: [],
   ...over,
 });
 

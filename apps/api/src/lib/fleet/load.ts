@@ -8,6 +8,7 @@ import {
   campaigns,
   creatives,
   proofOfPlay,
+  screenWsEvents,
   screenhosts,
   screens,
   zones,
@@ -22,6 +23,14 @@ import { airableAllocationConditions } from '../playout/active-allocations.js';
 import { isWindowActive } from '../playout/playlist.js';
 import { screenRegistry } from '../playout/registry.js';
 
+import {
+  type DeviceReport,
+  type HealthIssue,
+  type StatusReport,
+  healthIssues,
+  readDeviceReport,
+  readStatusReport,
+} from './health.js';
 import { type HourPlan, type PlanRow, dayPlan, plannedRunStart } from './plan.js';
 import { type FleetStatus, fleetStatus, isOpenAt } from './status.js';
 
@@ -46,9 +55,18 @@ export interface FleetScreen {
   now: { plannedReps: number; campaigns: HourPlan['campaigns'] };
   lastProof: { at: Date; campaignName: string | null } | null;
   today: { plannedTotal: number; plannedSoFar: number; aired: number };
+  /** FLEET-2 — what the TV app reports about itself (null = an app older than 1.5.6). */
+  device: DeviceReport | null;
+  deviceReportAt: Date | null;
+  issues: HealthIssue[];
 }
 
 export interface FleetScreenDetail extends FleetScreen {
+  /** The player state the TV sent when last asked (« Demander un état »). */
+  player: StatusReport | null;
+  playerReportAt: Date | null;
+  /** The last 24 h of connections, disconnections, errors and remote actions, newest first. */
+  events: { kind: string; detail: string | null; at: Date }[];
   hours: {
     hour: number;
     planned: number;
@@ -140,6 +158,10 @@ const loadScreens = async (screenId?: string) =>
       zone: zones.name,
       openingHour: screenhosts.openingHour,
       closingHour: screenhosts.closingHour,
+      deviceReport: screens.deviceReport,
+      deviceReportAt: screens.deviceReportAt,
+      statusReport: screens.statusReport,
+      statusReportAt: screens.statusReportAt,
     })
     .from(screens)
     .innerJoin(screenhosts, eq(screenhosts.id, screens.screenhostId))
@@ -256,6 +278,9 @@ const assemble = async (screenRows: readonly ScreenRow[], now: Date): Promise<As
         now: { plannedReps: plannedRepsNow, campaigns: matchNow ? [] : (current?.campaigns ?? []) },
         lastProof,
         today: { plannedTotal, plannedSoFar, aired },
+        device: readDeviceReport(s.deviceReport),
+        deviceReportAt: s.deviceReportAt,
+        issues: healthIssues(readDeviceReport(s.deviceReport)),
       },
       plan,
       blackoutByHour,
@@ -324,8 +349,23 @@ export const loadFleetScreen = async (
           )
           .groupBy(proofOfPlay.campaignId);
   const totalByCampaign = new Map(totals.map((t) => [t.campaignId, t.n]));
+  const events = await db
+    .select({ kind: screenWsEvents.kind, detail: screenWsEvents.detail, at: screenWsEvents.at })
+    .from(screenWsEvents)
+    .where(
+      and(
+        eq(screenWsEvents.screenId, screenId),
+        gte(screenWsEvents.at, new Date(now.getTime() - 24 * 3_600_000)),
+      ),
+    )
+    .orderBy(sql`${screenWsEvents.at} desc`)
+    .limit(60);
+  const row = rows[0];
   return {
     ...a.screen,
+    player: readStatusReport(row?.statusReport ?? null),
+    playerReportAt: row?.statusReportAt ?? null,
+    events,
     hours: a.plan.map((h) => ({
       hour: h.hour,
       planned: h.reps,

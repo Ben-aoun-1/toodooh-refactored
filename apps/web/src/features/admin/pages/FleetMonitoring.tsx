@@ -1,4 +1,4 @@
-import { Loader2, Search } from 'lucide-react';
+import { AlertTriangle, Loader2, Search } from 'lucide-react';
 import { useState } from 'react';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
@@ -16,6 +16,7 @@ import {
   todayRatio,
   zonesOf,
 } from '@/features/admin/lib/fleet';
+import { ISSUE_LABEL, isBlockingIssue } from '@/features/admin/lib/fleet-health';
 import type { FleetStatus } from '@/features/admin/services/admin-fleet.service';
 
 /**
@@ -131,6 +132,15 @@ export default function FleetMonitoring() {
                         {s.venue.name} · {s.name}
                       </div>
                       <div className="text-xs text-gray-500">{s.venue.zone ?? 'Sans zone'}</div>
+                      {s.issues.filter((i) => i !== 'unknown_version').length > 0 && (
+                        <div
+                          className={`mt-1 inline-flex items-center gap-1 text-xs ${s.issues.some(isBlockingIssue) ? 'text-red-700' : 'text-amber-700'}`}
+                          title={s.issues.map((i) => ISSUE_LABEL[i]).join(' · ')}
+                        >
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          {ISSUE_LABEL[s.issues.find(isBlockingIssue) ?? s.issues[0] ?? 'outdated']}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span
