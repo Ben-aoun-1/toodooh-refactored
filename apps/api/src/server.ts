@@ -28,6 +28,7 @@ import { startPushOutboxJob } from './lib/push/push-outbox.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
 import { startCtaBurnJob } from './lib/spot-cta-job.js';
+import { startOverlayJob } from './lib/spot-overlay-job.js';
 import { startSpsRecomputeJob } from './lib/sps-score.js';
 import { isWebpConversionEnabled } from './lib/webp-to-png.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
@@ -121,6 +122,7 @@ const start = async (): Promise<void> => {
     startDemoAirJob(app.log);
     // QR-CTA1 — burns the call-to-action QR into a copy of each spot that has a link.
     startCtaBurnJob(app.log);
+    startOverlayJob(app.log);
     // DEL-1 — sends pending account deletions to the hub until it confirms.
     startHubDeletionJob(app.log);
     // AGT-2 — agent affiliations: attach new venues, activate, remind, end.

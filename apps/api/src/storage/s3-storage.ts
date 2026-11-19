@@ -4,6 +4,7 @@ import {
   GetBucketPolicyCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
@@ -196,6 +197,18 @@ export class S3Storage implements StorageProvider {
       const error = err instanceof Error ? err.message : 'unknown storage error';
       log.error({ key: params.key, error }, 'storage delete failed');
       return { error };
+    }
+  }
+
+  async exists(params: { key: string }): Promise<boolean | null> {
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: params.key }));
+      return true;
+    } catch (err) {
+      const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+      if (status === 404) return false;
+      log.warn({ key: params.key, err }, 'storage head failed');
+      return null;
     }
   }
 

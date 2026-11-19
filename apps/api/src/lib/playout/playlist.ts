@@ -58,6 +58,11 @@ export interface PlaylistSource {
   blackouts?: readonly { start: Date; end: Date }[];
   /** EVT-MIN1 — a minutes-model event spot's exact pod slots. */
   slots?: readonly { at: Date; seconds: number }[];
+  /**
+   * OVL-LIGHT — the light copy a TV plays in surimpression (decoded in software); absent until it
+   * exists. The TV ignores unknown fields: older apps keep playing `url`.
+   */
+  overlayUrl?: string;
 }
 
 // A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule), with "today"
@@ -98,6 +103,7 @@ export const buildPlaylist = (
       ? { creative_type: source.creativeType === 'photo' ? ('image' as const) : ('video' as const) }
       : {}),
     ...(source.validUntil !== undefined ? { valid_until: source.validUntil.toISOString() } : {}),
+    ...(source.overlayUrl !== undefined ? { overlay_url: source.overlayUrl } : {}),
     ...(source.blackouts !== undefined && source.blackouts.length > 0
       ? {
           blackouts: source.blackouts.map((b) => ({
