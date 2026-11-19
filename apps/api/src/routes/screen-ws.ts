@@ -1,6 +1,7 @@
 import websocket from '@fastify/websocket';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { recordConnect, recordWsEvent } from '../lib/fleet/ws-events.js';
 import { markScreenConnected } from '../lib/installed-screen.js';
 import { handleScreenEvent } from '../lib/playout/ingest.js';
 import { computeScreenPlaylist } from '../lib/playout/playlist-service.js';
@@ -53,6 +54,10 @@ export const screenWsRoutes: FastifyPluginAsync = async (app) => {
     void markScreenConnected(screenId).catch((err: unknown) =>
       request.log.warn({ err, screenId }, 'screen-ws: could not record the connection'),
     );
+    // FLEET-2 — the connection history « Santé de la TV » shows.
+    void recordConnect(screenId).catch((err: unknown) =>
+      request.log.warn({ err, screenId }, 'screen-ws: could not record the connect event'),
+    );
 
     // Attach the event listeners SYNCHRONOUSLY — before the playlist push (which awaits). Otherwise a
     // message the player sends right after CONNECTED could arrive before the listener is attached and
@@ -92,7 +97,16 @@ export const screenWsRoutes: FastifyPluginAsync = async (app) => {
         })
         .catch((err: unknown) => request.log.warn({ err }, 'screen-ws: event handler error'));
     });
-    const cleanup = (): void => screenRegistry.remove(screenId, socket);
+    let closed = false;
+    const cleanup = (): void => {
+      screenRegistry.remove(screenId, socket);
+      // 'close' and 'error' can both fire: one disconnect event per socket.
+      if (closed) return;
+      closed = true;
+      void recordWsEvent(screenId, 'disconnect').catch((err: unknown) =>
+        request.log.warn({ err, screenId }, 'screen-ws: could not record the disconnect event'),
+      );
+    };
     socket.on('close', cleanup);
     socket.on('error', cleanup);
 

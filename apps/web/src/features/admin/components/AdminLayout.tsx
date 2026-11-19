@@ -20,6 +20,7 @@ import {
   UserPlus,
   Users,
   X,
+  Activity,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -225,6 +226,17 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                   >
                     <MapPin className="mr-3 h-5 w-5" />
                     Zones géographiques
+                  </button>
+                  <button
+                    onClick={() => navigate('/admin-fleet')}
+                    className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                      location.pathname === '/admin-fleet'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
+                    }`}
+                  >
+                    <Activity className="mr-3 h-5 w-5" />
+                    Parc d’écrans
                   </button>
                   <button
                     onClick={() => navigate('/admin-screens')}

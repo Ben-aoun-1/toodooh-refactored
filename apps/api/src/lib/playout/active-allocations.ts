@@ -48,6 +48,20 @@ export interface ActiveAllocation {
 // computeScreenPlaylist (what to send) and the proof-of-play ingest (what to record) BOTH call this,
 // so a screen only ever records proof for content the server authorized it to air. Pass campaignId
 // to resolve a single campaign (proof ingest); omit for the full list (playlist push).
+/**
+ * The airability predicate of an allocation (the query joins campaigns, creatives and screenhosts):
+ * ONE home — the playlist, the proof ingest and the admin fleet monitor (lib/fleet) all read it.
+ */
+export const airableAllocationConditions = (now: Date) => [
+  eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
+  eq(campaigns.status, 'active'),
+  eq(creatives.validationStatus, 'approved'),
+  or(isNull(campaigns.airsAt), lte(campaigns.airsAt, now)),
+  ctaAirableSql(),
+  // DEACT-1 — a deactivated owner's venues stop airing at once (ruling 2026-10-28).
+  ownerNotDeactivatedSql(),
+];
+
 export const activeAllocationsForScreenhost = async (
   screenhostId: string,
   now: Date,
@@ -57,13 +71,7 @@ export const activeAllocationsForScreenhost = async (
 ): Promise<ActiveAllocation[]> => {
   const conditions = [
     eq(campaignDispatchAllocation.screenhostId, screenhostId),
-    eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
-    eq(campaigns.status, 'active'),
-    eq(creatives.validationStatus, 'approved'),
-    or(isNull(campaigns.airsAt), lte(campaigns.airsAt, now)),
-    ctaAirableSql(),
-    // DEACT-1 — a deactivated owner's venues stop airing at once (ruling 2026-10-28).
-    ownerNotDeactivatedSql(),
+    ...airableAllocationConditions(now),
   ];
   if (campaignId !== undefined) conditions.push(eq(campaigns.id, campaignId));
 

@@ -16,6 +16,7 @@ import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
 import { adminEngineJournalRoutes } from './admin-engine-journal.js';
 import { adminEventsRoutes } from './admin-events.js';
 import { adminFacturesRoutes } from './admin-factures.js';
+import { adminFleetRoutes } from './admin-fleet.js';
 import { adminHostDecisionRoutes } from './admin-host-decisions.js';
 import { adminHostRoutes } from './admin-host.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
@@ -165,6 +166,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminRechargesRoutes);
   // FCT2 — the admin wallet adjustment (signed, audited, reason-required) + its audit trail.
   await app.register(adminWalletRoutes);
+  await app.register(adminFleetRoutes);
   // DEMO-1 — the admin « Démo » page.
   await app.register(adminDemoRoutes);
   // ACTIVATION WIRING — admin campaign moderation: the review queue + activate (gate on pending +
