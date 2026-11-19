@@ -8,6 +8,7 @@ import {
   windowsForVenue,
 } from '../event-blackout.js';
 import { activeEventSpots } from '../event-playout/spots.js';
+import { overlayKeyFor, overlayRegistry } from '../spot-overlay.js';
 
 import { activeAllocationsForScreenhost } from './active-allocations.js';
 import { type PlaylistMessage, type PlaylistSource, buildPlaylist } from './playlist.js';
@@ -43,6 +44,17 @@ export const computeScreenPlaylist = async (
     : await activeAllocationsForScreenhost(screenhostId, now, undefined, { includeOffHours: true });
 
   const sources: PlaylistSource[] = [];
+  // OVL-LIGHT — the light surimpression copy of a VIDEO spot, once it exists (presigned like url).
+  const overlayUrlOf = async (
+    storageKey: string,
+    creativeType: string,
+  ): Promise<string | undefined> => {
+    if (creativeType === 'photo') return undefined;
+    const key = overlayKeyFor(storageKey);
+    if (!overlayRegistry.isReady(key)) return undefined;
+    const signed = await storage.getPresignedUrl({ key });
+    return 'error' in signed ? undefined : signed.url;
+  };
   for (const allocation of allocations) {
     const presigned = await storage.getPresignedUrl({ key: allocation.storageKey });
     if ('error' in presigned) continue; // a presign failure skips one entry, never breaks the push
@@ -59,6 +71,7 @@ export const computeScreenPlaylist = async (
       blackouts: allocation.offWindows
         ? mergeBlackouts([...windows, ...allocation.offWindows])
         : windows,
+      overlayUrl: await overlayUrlOf(allocation.storageKey, allocation.creativeType),
     });
   }
 
@@ -75,6 +88,7 @@ export const computeScreenPlaylist = async (
       creativeType: spot.creativeType === 'photo' ? 'photo' : 'video',
       validUntil: spot.validUntil,
       ...(spot.slots ? { slots: spot.slots } : {}),
+      overlayUrl: await overlayUrlOf(spot.storageKey, spot.creativeType),
     });
   }
   // EVT-MIN1 — the server clock rides the message (only when a pod slot is in it, so every other

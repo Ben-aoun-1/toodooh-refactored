@@ -15,6 +15,8 @@ export interface StorageProvider {
   // PDFs). Presigning stays the pattern for browser-directed downloads; this is for api-streamed
   // bodies where the route enforces ownership.
   download(params: { key: string }): Promise<DownloadResult>;
+  // OVL-LIGHT — does the object exist? (HEAD; false on « not found », null on another failure.)
+  exists(params: { key: string }): Promise<boolean | null>;
   // Z2 (Option 1): idempotently grant ANONYMOUS s3:GetObject to the `zones/*` prefix only, so the
   // public catalog imagery renders via a durable /storage/<key> URL while private prefixes
   // (rne/, cin/) stay deny-by-default. Merges into any pre-existing bucket policy (full-replace API).
