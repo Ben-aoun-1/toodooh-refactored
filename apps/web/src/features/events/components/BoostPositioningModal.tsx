@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, Loader2, Lock, Rocket, Wallet, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { CART_BUDGET_STEP_TND } from '@/features/campaigns/hooks/new-campaign/cart-budget';
 import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
 import { useZones } from '@/features/campaigns/hooks/useZones';
 import { CAMPAIGN_BUDGET_FLOOR_TND, isBudgetAccepted } from '@/features/campaigns/lib/cmax-budget';
+import { minutesStartAtMax, sliderStartAtMax } from '@/features/campaigns/lib/slider-start';
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { eventBoostApi } from '@/features/events/services/event-boost.api';
 import { getErrorMessage } from '@/lib/errors';
@@ -99,6 +100,18 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
   const seat = previewQuery.data?.seat_minutes ?? 1;
   const minutePrices = previewQuery.data?.minute_prices_tnd ?? [];
   const minuteImpressions = previewQuery.data?.minute_impressions ?? [];
+
+  // 20/11 (operator) — the cursor starts at the maximum once it is known.
+  const loadedMaxMinutes = previewQuery.data?.max_minutes;
+  useEffect(() => {
+    if (minutesMode) {
+      const start = minutesStartAtMax(minutes, loadedMaxMinutes, seat);
+      if (start !== null) setMinutes(start);
+    } else {
+      const start = sliderStartAtMax(amount, ceiling, CAMPAIGN_BUDGET_FLOOR_TND);
+      if (start !== null) setAmount(start);
+    }
+  }, [minutesMode, minutes, loadedMaxMinutes, seat, amount, ceiling]);
 
   const apply = useMutation({
     mutationFn: () =>
