@@ -13,6 +13,7 @@ import {
 } from '../../db/schema.js';
 import { env } from '../../env.js';
 import { ownerApprovedSql } from '../approved-owner.js';
+import { realVenueSql } from '../demo.js';
 import { type BlocDiffusion, fenetreDiffusion } from '../fenetre-diffusion.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 import { venueHasInstalledScreenSql } from '../installed-screen.js';
@@ -442,7 +443,9 @@ export const eventEligibleVenues = async (
         ownerApprovedSql(),
         venueHasInstalledScreenSql(),
         ...(demoVenues === null
-          ? [eventSwitchOnSql(), eq(businessSectors.eventEligible, true)]
+          ? // A REAL match campaign: never a venue in demo mode (realVenueSql — the classic
+            // pool's rule; a real venue switched to demo mode on 19/11 was still counted here).
+            [eventSwitchOnSql(), eq(businessSectors.eventEligible, true), realVenueSql()]
           : [inArray(screenhosts.id, [...demoVenues])]),
       ),
     );
