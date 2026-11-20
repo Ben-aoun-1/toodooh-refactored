@@ -46,7 +46,8 @@ const haloStyle = (wholeNetwork: boolean): L.PathOptions => ({
 
 // A numbered pin with a pulse; green-filled once a zone is picked. MAP-DOTS (Mejri 21/10): no
 // tooltip and no popup on a pin — the number only counts the dots.
-const pinIcon = (n: number, wholeNetwork: boolean): L.DivIcon =>
+// 20/11 (operator) — the pins carry no number any more: « 1, 2, 3 » read as venue counts.
+const pinIcon = (wholeNetwork: boolean): L.DivIcon =>
   L.divIcon({
     className: '',
     iconSize: [28, 28],
@@ -55,7 +56,7 @@ const pinIcon = (n: number, wholeNetwork: boolean): L.DivIcon =>
       wholeNetwork
         ? 'border-pitch-leaf bg-white text-pitch-ink'
         : 'border-white bg-pitch-grass text-pitch-ink'
-    } absolute inset-[3px] flex items-center justify-center rounded-full border-2 text-[11px] font-semibold shadow-md">${n}</div></div>`,
+    } absolute inset-[3px] rounded-full border-2 shadow-md"></div></div>`,
   });
 
 // Re-framing never animates: a zoom animation ends on a leaflet timer that outlives map.remove()
@@ -71,7 +72,7 @@ const fitToVenues = (map: L.Map, venues: CoverageVenue[]): void => {
 
 /**
  * The Foot parcours' coverage map (Mariem's mockup): the eligible venues of GET /:id/coverage as
- * pulsing numbered pins with a halo, frosted zoom buttons, the caption at the bottom left. Same
+ * pulsing pins with a halo, frosted zoom buttons, the caption at the bottom left. Same
  * contract as the wizard's map: OSM tiles (lib/map-tiles), the stacking classes of
  * lib/map-layering, a container absolutely inset (MAP-6), re-measured on every resize (MAP-1).
  */
@@ -135,9 +136,9 @@ export default function FootCoverageMap({
         ...haloStyle(wholeNetwork),
       }).addTo(layer);
     }
-    spread.forEach((venue, i) => {
+    spread.forEach((venue) => {
       L.marker([venue.latitude, venue.longitude], {
-        icon: pinIcon(i + 1, wholeNetwork),
+        icon: pinIcon(wholeNetwork),
         keyboard: false,
         interactive: false,
       }).addTo(layer);
