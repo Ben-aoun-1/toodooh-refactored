@@ -38,6 +38,7 @@ import { useCampaignTargeting } from '@/features/campaigns/targeting/hooks/useCa
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
 import { tndLabel } from '@/lib/money';
 
+import BudgetAmountInput from './BudgetAmountInput';
 import CreativePreviewTile from './CreativePreviewTile';
 
 interface StepCartProps {
@@ -351,42 +352,15 @@ export default function StepCart({
                 </div>
               )}
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="min-w-0">
-                  <label
-                    htmlFor="cart-budget-min"
-                    className="mb-1 block text-xs font-medium text-gray-500"
-                  >
-                    Montant minimum (TND)
-                  </label>
-                  <input
-                    id="cart-budget-min"
-                    type="text"
-                    readOnly
-                    aria-readonly="true"
-                    tabIndex={-1}
-                    value={`Min: ${tnd.format(CART_BUDGET_MIN_TND)} TND`}
-                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label
-                    htmlFor="cart-budget-max"
-                    className="mb-1 block text-xs font-medium text-gray-500"
-                  >
-                    Montant maximum (TND)
-                  </label>
-                  <input
-                    id="cart-budget-max"
-                    type="text"
-                    readOnly
-                    aria-readonly="true"
-                    tabIndex={-1}
-                    value={`Max: ${cMaxTnd === undefined ? '…' : `${tnd.format(cMaxTnd)} TND`}`}
-                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400"
-                  />
-                </div>
-              </div>
+              <BudgetAmountInput
+                value={value}
+                maxTnd={cMaxTnd}
+                disabled={cMaxTnd === undefined || zeroInventory}
+                onChange={(next) => {
+                  setPullbackNotice(false);
+                  setRequestedBudget(next);
+                }}
+              />
             </div>
 
             {approvedNotice && (
