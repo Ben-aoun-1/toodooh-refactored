@@ -1,7 +1,9 @@
 import { useQueries } from '@tanstack/react-query';
 import { Banknote, Loader2, ShoppingCart } from 'lucide-react';
+import { useEffect } from 'react';
 
 import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
+import { sliderStartAtMax } from '@/features/campaigns/lib/slider-start';
 import { campaignsApi } from '@/features/campaigns/services/campaigns.api';
 import { tndLabel } from '@/lib/money';
 
@@ -93,6 +95,18 @@ export default function EventGroupRecapStep({
     const parts = distributeEventMinutes(next, maxes, groupSeat);
     setMinutes(Object.fromEntries(lines.map((l, i) => [l.campaignId, parts[i] ?? 0])));
   };
+  // 20/11 (operator) — nothing chosen yet: the big slider starts at the maximum, spread over the
+  // matches like a drag to the end would.
+  const noneChosen = values.every((v) => v === null);
+  const groupStart = loaded && noneChosen ? sliderStartAtMax(null, bounds.max, bigMin - 1) : null;
+  useEffect(() => {
+    if (groupStart === null) return;
+    const parts = distributeEventMinutes(groupStart, maxes, groupSeat);
+    setMinutes(Object.fromEntries(lines.map((l, i) => [l.campaignId, parts[i] ?? 0])));
+    // maxes/lines are re-created each render; groupStart only turns non-null once they are loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupStart]);
+
   const setOne = (campaignId: string, next: number) =>
     setMinutes({ ...minutes, [campaignId]: next });
 

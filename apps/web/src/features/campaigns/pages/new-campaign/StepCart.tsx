@@ -31,6 +31,7 @@ import {
   isInventoryInsufficient,
 } from '@/features/campaigns/lib/cmax-budget';
 import { estimatedAmount } from '@/features/campaigns/lib/impressions-estimate';
+import { sliderStartAtMax } from '@/features/campaigns/lib/slider-start';
 import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
@@ -117,6 +118,12 @@ export default function StepCart({
       setRequestedBudget(next);
       setPullbackNotice(true);
     }
+  }, [cMaxTnd, value, setRequestedBudget]);
+
+  // 20/11 (operator) — the cursor starts at the maximum once it is known (was « — », CF-U1).
+  useEffect(() => {
+    const start = sliderStartAtMax(value, cMaxTnd, CART_BUDGET_MIN_TND);
+    if (start !== null) setRequestedBudget(start);
   }, [cMaxTnd, value, setRequestedBudget]);
 
   const chips = targeting.rows.length ? targeting.rows.map(toChipLabel) : ['Toutes catégories'];

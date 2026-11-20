@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import ImpressionsEstimateText from '@/features/campaigns/components/ImpressionsEstimateText';
 import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
 import { useImpressionsEstimate } from '@/features/campaigns/hooks/useImpressionsEstimate';
+import { minutesStartAtMax } from '@/features/campaigns/lib/slider-start';
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
 import { tndLabel } from '@/lib/money';
 
@@ -83,6 +84,12 @@ export default function EventRecapStep({
       setEventMinutes(next);
       setPullbackNotice(true);
     }
+  }, [maxMinutes, seat, value, setEventMinutes]);
+
+  // 20/11 (operator) — the minutes start at the maximum once it is known.
+  useEffect(() => {
+    const start = minutesStartAtMax(value, maxMinutes, seat);
+    if (start !== null) setEventMinutes(start);
   }, [maxMinutes, seat, value, setEventMinutes]);
 
   const approvedNotice = approvedSpotNotice(spotValidationStatus ?? undefined);
