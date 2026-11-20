@@ -278,6 +278,22 @@ describe('CAP-EVT1 — the capacity is the event switch (real Postgres)', () => 
       expect((await assembleEventPool(ref)).map((x) => x.screenhostId)).toEqual([v.on]);
     });
 
+    it('19/11 — a REAL venue switched to demo mode leaves the real match pool, stays open to demos', async () => {
+      const v = await seedSwitchPair();
+      const ref = await eventRef();
+      await db.update(screenhosts).set({ broadcastCapacity: 1 }).where(eq(screenhosts.id, v.off));
+      await db.update(screenhosts).set({ demoOnly: true }).where(eq(screenhosts.id, v.off));
+
+      // A real match campaign: the demo-mode venue is neither counted, priced nor dispatched to.
+      expect((await eventEligibleVenues(ref)).map((x) => x.id)).toEqual([v.on]);
+      expect((await computeEventCmax(ref, EVENT_CPM, new Set(), 1)).eligibleCount).toBe(1);
+      expect((await assembleEventPool(ref)).map((x) => x.screenhostId)).toEqual([v.on]);
+      // A demo match campaign still reaches it (the demo venue set).
+      expect(
+        (await eventEligibleVenues(ref, new Set(), new Set([v.off]))).map((x) => x.id),
+      ).toEqual([v.off]);
+    });
+
     it('setting a capacity (1) turns the switch on: the venue joins the event pool', async () => {
       const v = await seedSwitchPair();
       const ref = await eventRef();
