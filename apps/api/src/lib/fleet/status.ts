@@ -4,9 +4,9 @@
 // socket, proofs). Phase 1 needs no new APK: every TV already sends heartbeats and proofs.
 
 export type FleetStatus =
-  /** Connected, ads planned this hour, a proof recently. */
+  /** Connected, ads planned this hour (or a match's ad page on air), a proof recently. */
   | 'diffuse'
-  /** Connected, nothing planned now (or a match holds the hour). Normal. */
+  /** Connected, nothing planned now (or a match between two of its ad pages). Normal. */
   | 'rien_prevu'
   /** Connected, ads planned, but no proof for longer than the planned rhythm allows. */
   | 'muet'
@@ -36,7 +36,34 @@ export interface StatusInput {
   lastProofAt: Date | null;
   /** Inside the venue's declared opening hours (false when undeclared). */
   openNow: boolean;
+  /**
+   * FLEET-3 — a confirmed match holds the venue: classic is paused and only the match's ad pages
+   * air. `pod` is the page on air or just ended (null between pages, or when the venue has none).
+   */
+  match?: { pod: { start: Date; end: Date } | null } | null;
 }
+
+/** A page's first pass is due at its opening: this long without it and the TV missed the start. */
+export const POD_GRACE_MS = 90 * 1000;
+
+/**
+ * FLEET-3 — an ONLINE screen during a match. While a page is on air a pass since its opening
+ * means « diffuse »; none after {@link POD_GRACE_MS} means « muet ». Once the page has ended, a
+ * screen that aired it has nothing planned until the next one; one that aired none of it stays
+ * « muet » for as long as the page is remembered (lib/fleet/event-pods.ts).
+ */
+export const matchStatus = (
+  now: Date,
+  pod: { start: Date; end: Date } | null,
+  lastProofAt: Date | null,
+): FleetStatus => {
+  if (pod === null) return 'rien_prevu';
+  const aired = lastProofAt !== null && lastProofAt.getTime() >= pod.start.getTime();
+  if (now.getTime() < pod.end.getTime()) {
+    return aired || now.getTime() - pod.start.getTime() <= POD_GRACE_MS ? 'diffuse' : 'muet';
+  }
+  return aired ? 'rien_prevu' : 'muet';
+};
 
 /** How long a planned screen may stay without a proof before it reads « muet ». */
 export const silentAfterMs = (plannedReps: number): number =>
@@ -53,6 +80,7 @@ export const fleetStatus = (i: StatusInput): FleetStatus => {
     if (i.lastSeenAt === null && i.pairedAt === null) return 'jamais';
     return i.plannedRepsNow > 0 || i.openNow ? 'hors_ligne_ouverture' : 'hors_ligne';
   }
+  if (i.match) return matchStatus(i.now, i.match.pod, i.lastProofAt);
   if (i.plannedRepsNow <= 0) return 'rien_prevu';
   const limit = silentAfterMs(i.plannedRepsNow);
   const now = i.now.getTime();

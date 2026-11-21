@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,10 +6,13 @@ import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
+  businessSectors,
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaigns,
   creatives,
+  eventAllocations,
+  events,
   proofOfPlay,
   screenhosts,
   screens,
@@ -196,6 +200,123 @@ describe('FLEET-1 — the fleet reads (real Postgres)', () => {
       expect.objectContaining({ id: w.campaignId, plannedToday: 15, airedToday: 3, airedTotal: 4 }),
     ]);
     expect(await loadFleetScreen('00000000-0000-0000-0000-000000000000', NOW)).toBeNull();
+  });
+
+  // FLEET-3 — a match 12:00–14:00 Tunis holds the venue from 11:00. A positioning has ONE ad
+  // page, opening with the 11:20 bloc: before it the screens wait, during it they must air.
+  it('a match: the screens follow the ad pages, not the paused campaigns', async () => {
+    const w = await world();
+    const [sector] = await db
+      .select({ id: businessSectors.id })
+      .from(businessSectors)
+      .where(eq(businessSectors.eventEligible, true))
+      .limit(1);
+    const [venue] = await db
+      .select({ id: screens.screenhostId })
+      .from(screens)
+      .where(eq(screens.id, w.a1));
+    const venueA = venue?.id ?? '';
+    await db
+      .update(screenhosts)
+      .set({ businessSectorId: sector?.id, broadcastCapacity: 4 })
+      .where(eq(screenhosts.id, venueA));
+    const [ev] = await db
+      .insert(events)
+      .values({
+        name: 'Match',
+        type: 'sport',
+        kickoffAt: tunis(12, 0),
+        endsAt: tunis(14, 0),
+        source: 'official',
+      })
+      .returning();
+    const advertiser = await seedUser();
+    const [creative] = await db
+      .insert(creatives)
+      .values({
+        advertiserId: advertiser,
+        creativeType: 'video',
+        storageKey: 'creatives/fleet-event',
+        durationSeconds: 20,
+        validationStatus: 'approved',
+      })
+      .returning();
+    const [positioning] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: advertiser,
+        name: 'Orange match',
+        campaignType: 'event',
+        status: 'active',
+        startDate: '2026-03-10',
+        endDate: '2026-03-10',
+        requestedBudget: '300.00',
+        eventId: ev?.id,
+        eventMinutes: 2,
+        creativeId: creative?.id,
+      })
+      .returning();
+    const eventId = positioning?.id ?? '';
+    await db.insert(eventAllocations).values({
+      campaignId: eventId,
+      screenhostId: venueA,
+      blocs: [
+        {
+          start: tunis(11, 20).toISOString(),
+          end: tunis(11, 40).toISOString(),
+          impressions: 2000,
+        },
+      ],
+      impressionsTotal: 2000,
+      montantTnd: '30.000',
+      statut: 'ACCEPTE',
+    });
+    const seen = async (at: Date) =>
+      db.update(screens).set({ lastSeenAt: at }).where(eq(screens.screenhostId, venueA));
+
+    // 11:10 — the match holds the venue, the page opens at 11:20.
+    await seen(tunis(11, 10));
+    const before = new Map((await loadFleet(tunis(11, 10))).map((s) => [s.id, s]));
+    expect(before.get(w.a1)).toMatchObject({
+      status: 'rien_prevu',
+      matchNow: true,
+      match: { podStart: null, podLive: false, nextPodAt: tunis(11, 20) },
+      now: { plannedReps: 0, campaigns: [{ id: eventId, name: 'Orange match' }] },
+    });
+
+    // 11:23 — the page is on air: A1 sent a pass at 11:21, A2 none.
+    await seen(tunis(11, 23));
+    await db.insert(proofOfPlay).values({
+      screenId: w.a1,
+      screenhostId: venueA,
+      campaignId: eventId,
+      creativeId: creative?.id ?? '',
+      videoIdAsSent: eventId,
+      eventType: 'VIDEO_STARTED',
+      receivedAt: tunis(11, 21),
+    });
+    const during = new Map((await loadFleet(tunis(11, 23))).map((s) => [s.id, s]));
+    const a1 = during.get(w.a1);
+    expect(a1).toMatchObject({
+      status: 'diffuse',
+      matchNow: true,
+      match: { podStart: tunis(11, 20), podLive: true, nextPodAt: null },
+      now: { campaigns: [{ id: eventId, name: 'Orange match' }] },
+      lastProof: { campaignName: 'Orange match' },
+    });
+    const passes = a1?.now.plannedReps ?? 0;
+    expect(passes).toBeGreaterThan(0);
+    expect(during.get(w.a2)?.status).toBe('muet');
+
+    // The day counts the page's passes in the match hour, and no classic pass there.
+    const d = await loadFleetScreen(w.a1, tunis(11, 23));
+    expect(d?.hours[11]).toMatchObject({ planned: passes, blackoutMinutes: 60 });
+    expect(d?.hours[11]?.campaigns.map((c) => c.id)).toEqual([eventId]);
+    expect(d?.hours[10]).toMatchObject({ planned: 6 });
+    expect(d?.campaigns.find((c) => c.id === eventId)).toMatchObject({
+      plannedToday: passes,
+      airedToday: 1,
+    });
   });
 
   it('admin only; 400 on a bad id, 404 on an unknown screen', async () => {
