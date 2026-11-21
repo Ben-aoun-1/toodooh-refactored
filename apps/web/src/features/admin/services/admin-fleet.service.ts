@@ -26,6 +26,13 @@ export interface FleetScreenWire {
   paired_at: string | null;
   open_now: boolean;
   match_now: boolean;
+  /** FLEET-3 — the match's ad pages here, while a match holds the venue (null outside one). */
+  match: {
+    pod_start: string | null;
+    pod_end: string | null;
+    pod_live: boolean;
+    next_pod_at: string | null;
+  } | null;
   now: { planned_reps: number; campaigns: FleetCampaignNow[] };
   last_proof: { at: string; campaign_name: string | null } | null;
   today: { planned_total: number; planned_so_far: number; aired: number };

@@ -8,6 +8,7 @@ import {
   STATUS_META,
   type HourTone,
   hourTone,
+  matchSentence,
   sinceLabel,
   statusSentence,
 } from '@/features/admin/lib/fleet';
@@ -97,22 +98,26 @@ export default function FleetScreenPanel({
             <section>
               <h3 className="mb-2 text-sm font-semibold text-gray-900">Maintenant</h3>
               {s.match_now ? (
-                <p className="rounded-lg bg-brand-accent/10 p-3 text-sm text-brand-deep">
-                  Match en cours : les campagnes classiques sont en pause sur cet écran.
+                <p className="mb-2 rounded-lg bg-brand-accent/10 p-3 text-sm text-brand-deep">
+                  {matchSentence(s)}. Les campagnes classiques sont en pause sur cet écran.
                 </p>
-              ) : s.now.campaigns.length === 0 ? (
-                <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
-                  Aucune campagne prévue à cette heure.
-                </p>
-              ) : (
+              ) : null}
+              {s.now.campaigns.length > 0 ? (
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100">
                   {s.now.campaigns.map((c) => (
                     <li key={c.id} className="flex justify-between p-3 text-sm">
                       <span className="font-medium text-gray-900">{c.name}</span>
-                      <span className="text-gray-600">{c.reps} passages cette heure</span>
+                      <span className="text-gray-600">
+                        {c.reps}{' '}
+                        {s.match_now ? 'passages dans la page pub' : 'passages cette heure'}
+                      </span>
                     </li>
                   ))}
                 </ul>
+              ) : s.match_now ? null : (
+                <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+                  Aucune campagne prévue à cette heure.
+                </p>
               )}
             </section>
 

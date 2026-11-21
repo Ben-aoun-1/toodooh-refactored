@@ -47,6 +47,14 @@ const screenView = (s: FleetScreen) => ({
   paired_at: iso(s.pairedAt),
   open_now: s.openNow,
   match_now: s.matchNow,
+  match: s.match
+    ? {
+        pod_start: iso(s.match.podStart),
+        pod_end: iso(s.match.podEnd),
+        pod_live: s.match.podLive,
+        next_pod_at: iso(s.match.nextPodAt),
+      }
+    : null,
   now: { planned_reps: s.now.plannedReps, campaigns: s.now.campaigns },
   last_proof: s.lastProof
     ? { at: s.lastProof.at.toISOString(), campaign_name: s.lastProof.campaignName }
