@@ -325,6 +325,41 @@ describe('FLEET-1 — the fleet reads (real Postgres)', () => {
       .where(eq(campaigns.id, eventId));
     const after = await loadFleetScreen(w.a1, tunis(16, 0));
     expect(after?.hours[11]).toMatchObject({ planned: passes });
+    // A positioning booked earlier but closed before the match takes no seat from it.
+    const [ghost] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: advertiser,
+        name: 'Stopped',
+        campaignType: 'event',
+        status: 'completed',
+        startDate: '2026-03-10',
+        endDate: '2026-03-10',
+        requestedBudget: '300.00',
+        eventId: ev?.id,
+        eventMinutes: 2,
+        creativeId: creative?.id,
+        updatedAt: tunis(9, 0),
+      })
+      .returning();
+    await db.insert(eventAllocations).values({
+      campaignId: ghost?.id ?? '',
+      screenhostId: venueA,
+      blocs: [
+        {
+          start: tunis(11, 20).toISOString(),
+          end: tunis(11, 40).toISOString(),
+          impressions: 2000,
+        },
+      ],
+      impressionsTotal: 2000,
+      montantTnd: '30.000',
+      statut: 'ACCEPTE',
+      createdAt: tunis(8, 0),
+    });
+    const settled = await loadFleetScreen(w.a1, tunis(16, 0));
+    expect(settled?.hours[11]).toMatchObject({ planned: passes });
+    expect(settled?.hours[11]?.campaigns.map((c) => c.id)).toEqual([eventId]);
     // Closed BEFORE the page opened (a stop): the page was never handed to the TVs.
     await db
       .update(campaigns)
