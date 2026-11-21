@@ -4,16 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import statIcon5 from '@/assets/stats/5.png';
 import type { LastCampaign } from '@/features/advertiser/hooks/useLastCampaigns';
 import CampaignPrevues from '@/features/campaigns/components/CampaignPrevues';
+import { canBoostCampaign } from '@/features/campaigns/lib/boost-rules';
+import { canResumeCampaign } from '@/features/campaigns/lib/campaign-actions';
+import { campaignStatusUi } from '@/features/campaigns/lib/campaign-status';
 import { tndOrDash } from '@/lib/money';
-
-const STATUS_MAP: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  draft: { label: 'Non validé', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
-  rejected: { label: 'Non validé', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
-  pending: { label: 'En attente', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
-  active: { label: 'Active', bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-  completed: { label: 'Terminée', bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-500' },
-  paused: { label: 'En pause', bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-500' },
-};
 
 interface LastCampaignsGridProps {
   campaigns: LastCampaign[];
@@ -47,14 +41,14 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                 />
               ))
             : campaigns.map((campaign) => {
-                const statusConf = STATUS_MAP[campaign.status] || STATUS_MAP.draft;
+                // The ONE status map (CF-S1): an « À venir » campaign must not read « Non validé ».
+                const statusConf = campaignStatusUi(campaign.status);
                 const start = campaign.start_date ? new Date(campaign.start_date) : null;
                 const end = campaign.end_date ? new Date(campaign.end_date) : null;
                 const dateStr =
                   start && end
                     ? `${start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
                     : '—';
-                const isActive = campaign.status === 'active';
                 return (
                   <div
                     key={campaign.id}
@@ -127,21 +121,25 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                       >
                         Consulter
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/my-campaigns')}
-                        className="flex-1 py-2 rounded-lg bg-[#e3f7ec] text-[#66bc74] text-sm font-medium hover:bg-[#cceee0] transition-colors inline-flex items-center justify-center gap-1.5"
-                      >
-                        {isActive ? (
-                          <>
-                            <Rocket className="h-4 w-4" /> Booster
-                          </>
-                        ) : (
-                          <>
-                            <RotateCcw className="h-4 w-4" /> Reprendre
-                          </>
-                        )}
-                      </button>
+                      {/* Same rule as « Mes campagnes »: Booster on a paid campaign (à venir or
+                          active), Reprendre on a draft or a refused one, Consulter alone otherwise. */}
+                      {canBoostCampaign(campaign.status) || canResumeCampaign(campaign.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate('/my-campaigns')}
+                          className="flex-1 py-2 rounded-lg bg-[#e3f7ec] text-[#66bc74] text-sm font-medium hover:bg-[#cceee0] transition-colors inline-flex items-center justify-center gap-1.5"
+                        >
+                          {canBoostCampaign(campaign.status) ? (
+                            <>
+                              <Rocket className="h-4 w-4" /> Booster
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="h-4 w-4" /> Reprendre
+                            </>
+                          )}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 );
