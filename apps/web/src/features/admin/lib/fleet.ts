@@ -26,13 +26,13 @@ export const STATUS_META: Record<FleetStatus, StatusMeta> = {
   },
   diffuse: {
     label: 'En diffusion',
-    hint: 'Connecté, les pubs prévues passent.',
+    hint: 'Connecté, les pubs prévues passent (campagnes ou page pub d’un match).',
     chip: 'bg-green-100 text-green-800',
     dot: 'bg-green-500',
   },
   rien_prevu: {
     label: 'Rien de prévu',
-    hint: 'Connecté, aucune campagne à cette heure. Normal.',
+    hint: 'Connecté, aucune pub à cet instant (ou match entre deux pages pub). Normal.',
     chip: 'bg-gray-100 text-gray-700',
     dot: 'bg-gray-400',
   },
@@ -81,6 +81,30 @@ export const sinceLabel = (iso: string | null, now: Date): string => {
 
 const names = (s: FleetScreenWire): string => s.now.campaigns.map((c) => c.name).join(', ');
 
+const TUNIS_TIME = new Intl.DateTimeFormat('fr-FR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Africa/Tunis',
+});
+
+/** « 18:54 » — an instant on the Tunis clock. */
+export const tunisTime = (iso: string): string => TUNIS_TIME.format(new Date(iso));
+
+/**
+ * FLEET-3 — what a screen does during a match, between its ad pages: the next page, or that the
+ * pages are over, or (a venue with no event spot) that its campaigns are simply paused.
+ */
+export const matchSentence = (s: FleetScreenWire): string => {
+  if (s.match?.pod_live && s.match.pod_start) {
+    return `Match en cours : page pub de ${tunisTime(s.match.pod_start)} à l’antenne (${names(s)})`;
+  }
+  if (s.match?.next_pod_at) {
+    return `Match en cours : prochaine page pub à ${tunisTime(s.match.next_pod_at)} (${names(s)})`;
+  }
+  if (s.match?.pod_start) return 'Match en cours : les pages pub sont terminées';
+  return 'Match en cours : les campagnes sont en pause';
+};
+
 /** The one sentence a row says. */
 export const statusSentence = (s: FleetScreenWire, now: Date): string => {
   const last = s.last_proof
@@ -90,11 +114,12 @@ export const statusSentence = (s: FleetScreenWire, now: Date): string => {
     case 'diffuse':
       return `Diffuse ${names(s)} · ${last}`;
     case 'muet':
-      return `Devrait diffuser ${names(s)} · ${last}`;
+      // A match's ad page that ended without a single pass from this screen.
+      return s.match && !s.match.pod_live && s.match.pod_start
+        ? `A manqué la page pub de ${tunisTime(s.match.pod_start)} · ${last}`
+        : `Devrait diffuser ${names(s)} · ${last}`;
     case 'rien_prevu':
-      return s.match_now
-        ? 'Match en cours : les campagnes sont en pause'
-        : 'Aucune campagne à cette heure';
+      return s.match_now ? matchSentence(s) : 'Aucune campagne à cette heure';
     case 'hors_ligne_ouverture': {
       const since = s.last_seen_at
         ? `Hors ligne depuis ${sinceLabel(s.last_seen_at, now).replace('il y a ', '')}`
@@ -159,7 +184,8 @@ export const hourTone = (
   h: { hour: number; planned: number; aired: number; blackout_minutes: number },
   currentHour: number,
 ): HourTone => {
-  if (h.blackout_minutes >= 60) return 'match';
+  // A full match hour with no ad page in it; one that holds event passes is judged like any hour.
+  if (h.blackout_minutes >= 60 && h.planned === 0) return 'match';
   if (h.planned === 0) return 'idle';
   if (h.hour > currentHour) return 'future';
   if (h.hour === currentHour) return h.aired > 0 ? 'ok' : 'future';
@@ -182,5 +208,5 @@ export const HOUR_TONE_LABEL: Record<HourTone, string> = {
   missed: 'Rien n’est passé',
   future: 'À venir',
   idle: 'Rien de prévu',
-  match: 'Match (campagnes en pause)',
+  match: 'Match (aucune pub prévue)',
 };

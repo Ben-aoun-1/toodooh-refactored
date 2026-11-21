@@ -25,6 +25,7 @@ const screen = (over: Partial<FleetScreenWire> = {}): FleetScreenWire => ({
   paired_at: ago(10_000),
   open_now: true,
   match_now: false,
+  match: null,
   now: { planned_reps: 6, campaigns: [{ id: 'c1', name: 'Toodooh Test', reps: 6 }] },
   last_proof: { at: ago(4), campaign_name: 'Toodooh Test' },
   today: { planned_total: 52, planned_so_far: 45, aired: 38 },
@@ -59,6 +60,53 @@ describe('FLEET-1 — « Parc d’écrans » display', () => {
         now,
       ),
     ).toBe('Match en cours : les campagnes sont en pause');
+    // FLEET-3 — a match with ad pages: 10:30 UTC = 11:30 Tunis.
+    const spots = [{ id: 'e1', name: 'Orange', reps: 6 }];
+    const page = { pod_start: ago(36), pod_end: ago(30), pod_live: false, next_pod_at: null };
+    expect(
+      statusSentence(
+        screen({
+          status: 'rien_prevu',
+          match_now: true,
+          match: { ...page, next_pod_at: ago(-24) },
+          now: { planned_reps: 0, campaigns: spots },
+        }),
+        now,
+      ),
+    ).toBe('Match en cours : prochaine page pub à 11:54 (Orange)');
+    expect(
+      statusSentence(
+        screen({
+          status: 'rien_prevu',
+          match_now: true,
+          match: page,
+          now: { planned_reps: 0, campaigns: spots },
+        }),
+        now,
+      ),
+    ).toBe('Match en cours : les pages pub sont terminées');
+    expect(
+      statusSentence(
+        screen({
+          status: 'muet',
+          match_now: true,
+          match: page,
+          now: { planned_reps: 0, campaigns: spots },
+        }),
+        now,
+      ),
+    ).toBe('A manqué la page pub de 10:54 · dernier passage il y a 4 min');
+    expect(
+      statusSentence(
+        screen({
+          status: 'diffuse',
+          match_now: true,
+          match: { pod_start: ago(2), pod_end: ago(-4), pod_live: true, next_pod_at: ago(-18) },
+          now: { planned_reps: 16, campaigns: spots },
+        }),
+        now,
+      ),
+    ).toBe('Diffuse Orange · dernier passage il y a 4 min');
     expect(
       statusSentence(screen({ status: 'hors_ligne_ouverture', last_seen_at: ago(42) }), now),
     ).toBe('Hors ligne depuis 42 min · 6 passages prévus cette heure');
@@ -110,6 +158,9 @@ describe('FLEET-1 — « Parc d’écrans » display', () => {
     expect(hourTone(h(11, 6, 0), 11)).toBe('future');
     expect(hourTone(h(15, 3, 0), 11)).toBe('future');
     expect(hourTone(h(9, 0, 0), 11)).toBe('idle');
-    expect(hourTone(h(20, 6, 0, 60), 11)).toBe('match');
+    // A full match hour: « match » when no ad page falls in it, judged like any hour otherwise.
+    expect(hourTone(h(20, 0, 0, 60), 11)).toBe('match');
+    expect(hourTone(h(9, 16, 16, 60), 11)).toBe('ok');
+    expect(hourTone(h(9, 16, 0, 60), 11)).toBe('missed');
   });
 });

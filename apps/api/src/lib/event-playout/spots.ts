@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import { campaigns, creatives, eventAllocations, events, screenhosts } from '../../db/schema.js';
@@ -91,6 +91,7 @@ export interface ActiveEventSpot {
 }
 
 interface AiringRow {
+  screenhostId: string;
   campaignId: string;
   campaignName: string;
   creativeId: string;
@@ -139,9 +140,20 @@ const podOf = (
   );
 };
 
-const airingRows = async (screenhostId: string): Promise<AiringRow[]> =>
+/** The minutes positionings of ONE venue that hold a seat in the bloc starting at `bloc.start`. */
+const seatsOfBloc = (rows: readonly AiringRow[], bloc: StoredBloc): AiringRow[] =>
+  rows.filter(
+    (r) =>
+      r.eventMinutes !== null &&
+      parseBlocs(r.blocs).some(
+        (b) => new Date(b.start).getTime() === new Date(bloc.start).getTime(),
+      ),
+  );
+
+const airingRows = async (screenhostIds: readonly string[]): Promise<AiringRow[]> =>
   db
     .select({
+      screenhostId: eventAllocations.screenhostId,
       campaignId: campaigns.id,
       campaignName: campaigns.name,
       creativeId: creatives.id,
@@ -162,7 +174,7 @@ const airingRows = async (screenhostId: string): Promise<AiringRow[]> =>
     .innerJoin(creatives, eq(campaigns.creativeId, creatives.id))
     .where(
       and(
-        eq(eventAllocations.screenhostId, screenhostId),
+        inArray(eventAllocations.screenhostId, [...screenhostIds]),
         eq(eventAllocations.statut, 'ACCEPTE'),
         eq(campaigns.status, 'active'),
         eq(events.annule, false),
@@ -187,7 +199,7 @@ export const activeEventSpots = async (
   now: Date,
   opts: { wholeBloc?: boolean } = {},
 ): Promise<ActiveEventSpot[]> => {
-  const rows = await airingRows(screenhostId);
+  const rows = await airingRows([screenhostId]);
 
   const spots: ActiveEventSpot[] = [];
   const t = now.getTime();
@@ -216,13 +228,7 @@ export const activeEventSpots = async (
       if (opts.wholeBloc && !blocCoversInstant(bloc, now)) continue;
       // The seats of THIS bloc at this venue: every minutes positioning with an ACCEPTE
       // allocation covering the same bloc start.
-      const seatRows = rows.filter(
-        (r) =>
-          r.eventMinutes !== null &&
-          parseBlocs(r.blocs).some(
-            (b) => new Date(b.start).getTime() === new Date(bloc.start).getTime(),
-          ),
-      );
+      const seatRows = seatsOfBloc(rows, bloc);
       const pod = podOf(bloc, row.kickoffAt, seatRows, eventSeatModel(row.seatMinutes));
       if (!pod) continue;
       // The announce edge is INCLUDED: the pusher fires exactly at pod start − lead.
@@ -244,6 +250,86 @@ export const activeEventSpots = async (
     }
   }
   return spots;
+};
+
+/** One ad page (pod) of a venue: its window and every pass in it, in airing order. */
+export interface VenuePod {
+  start: Date;
+  end: Date;
+  slots: { at: Date; campaignId: string; campaignName: string }[];
+}
+
+/** The pods of ONE venue's airable rows: one per bloc (a pre-minutes positioning: its whole bloc). */
+const podsOfVenue = (rows: readonly AiringRow[]): VenuePod[] => {
+  const pods: VenuePod[] = [];
+  const seen = new Set<number>();
+  for (const row of rows) {
+    for (const bloc of parseBlocs(row.blocs)) {
+      const start = new Date(bloc.start);
+      const end = new Date(bloc.end);
+      if (row.eventMinutes === null) {
+        // EV5's spread cadence: 900 ÷ S passes an hour, evenly over the bloc.
+        const lengthMs = end.getTime() - start.getTime();
+        const n = Math.max(
+          1,
+          Math.round((eventRepsPerHour(row.durationSeconds ?? 0) * lengthMs) / 3_600_000),
+        );
+        pods.push({
+          start,
+          end,
+          slots: Array.from({ length: n }, (_, i) => ({
+            at: new Date(start.getTime() + (i * lengthMs) / n),
+            campaignId: row.campaignId,
+            campaignName: row.campaignName,
+          })),
+        });
+        continue;
+      }
+      if (seen.has(start.getTime())) continue;
+      seen.add(start.getTime());
+      const seatRows = seatsOfBloc(rows, bloc);
+      const pod = podOf(bloc, row.kickoffAt, seatRows, eventSeatModel(row.seatMinutes));
+      if (!pod) continue;
+      const names = new Map(seatRows.map((r) => [r.campaignId, r.campaignName]));
+      pods.push({
+        start: pod.start,
+        end: pod.end,
+        slots: pod.slots.map((slot) => ({
+          at: slot.at,
+          campaignId: slot.campaignId,
+          campaignName: names.get(slot.campaignId) ?? '',
+        })),
+      });
+    }
+  }
+  return pods.sort((a, b) => a.start.getTime() - b.start.getTime());
+};
+
+/**
+ * FLEET-3 — every ad page (pod) the given venues air inside [from, to), through the SAME gate and
+ * the SAME timeline as the playlist ({@link activeEventSpots}), so the « Parc d'écrans » expects
+ * exactly what the TVs were handed. Venues without an airable positioning are absent.
+ */
+export const venueEventPods = async (
+  screenhostIds: readonly string[],
+  from: Date,
+  to: Date,
+): Promise<Map<string, VenuePod[]>> => {
+  const out = new Map<string, VenuePod[]>();
+  if (screenhostIds.length === 0) return out;
+  const byVenue = new Map<string, AiringRow[]>();
+  for (const row of await airingRows(screenhostIds)) {
+    const list = byVenue.get(row.screenhostId) ?? [];
+    list.push(row);
+    byVenue.set(row.screenhostId, list);
+  }
+  for (const [venueId, rows] of byVenue) {
+    const pods = podsOfVenue(rows).filter(
+      (p) => p.end.getTime() > from.getTime() && p.start.getTime() < to.getTime(),
+    );
+    if (pods.length > 0) out.set(venueId, pods);
+  }
+  return out;
 };
 
 /**

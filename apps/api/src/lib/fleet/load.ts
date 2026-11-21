@@ -19,10 +19,12 @@ import {
   isInBlackout,
   windowsForVenue,
 } from '../event-blackout.js';
+import { venueEventPods } from '../event-playout/spots.js';
 import { airableAllocationConditions } from '../playout/active-allocations.js';
 import { isWindowActive } from '../playout/playlist.js';
 import { screenRegistry } from '../playout/registry.js';
 
+import { eventDayPlan, expectedDayPlan, podAt, podCampaigns } from './event-pods.js';
 import {
   type DeviceReport,
   type HealthIssue,
@@ -37,7 +39,8 @@ import { type FleetStatus, fleetStatus, isOpenAt } from './status.js';
 // FLEET-1 — the « Parc d'écrans » reads: every screen with its state NOW and its day so far, and
 // one screen in detail (hour by hour, campaign by campaign). Reads only; the plan comes through the
 // SAME airability rule as the playlist (airableAllocationConditions), the match windows through
-// event-blackout, the proofs from proof_of_play (VIDEO_STARTED = one pass).
+// event-blackout, the match's ad pages through event-playout/spots (FLEET-3), the proofs from
+// proof_of_play (VIDEO_STARTED = one pass).
 
 const TUNIS = 'Africa/Tunis';
 
@@ -52,6 +55,16 @@ export interface FleetScreen {
   openNow: boolean;
   /** A confirmed match holds the venue now (classic does not air). */
   matchNow: boolean;
+  /**
+   * FLEET-3 — the match's ad pages at this venue, while a match holds it: the page on air or just
+   * ended, and the next one. null outside a match.
+   */
+  match: {
+    podStart: Date | null;
+    podEnd: Date | null;
+    podLive: boolean;
+    nextPodAt: Date | null;
+  } | null;
   now: { plannedReps: number; campaigns: HourPlan['campaigns'] };
   lastProof: { at: Date; campaignName: string | null } | null;
   today: { plannedTotal: number; plannedSoFar: number; aired: number };
@@ -227,11 +240,13 @@ const assemble = async (screenRows: readonly ScreenRow[], now: Date): Promise<As
   const ctx = dayContext(now);
   const venueIds = [...new Set(screenRows.map((s) => s.venueId))];
   const screenIds = screenRows.map((s) => s.id);
-  const [byVenue, proofs, lastProofs, blackouts] = await Promise.all([
+  const dayEnd = new Date(ctx.dayStart.getTime() + 24 * 3_600_000);
+  const [byVenue, proofs, lastProofs, blackouts, podsByVenue] = await Promise.all([
     loadPlanRows(venueIds, now),
     loadTodayProofs(screenIds, ctx.dayStart),
     loadLastProofs(screenIds),
-    eventBlackouts(ctx.dayStart, new Date(ctx.dayStart.getTime() + 24 * 3_600_000)),
+    eventBlackouts(ctx.dayStart, dayEnd),
+    venueEventPods(venueIds, ctx.dayStart, dayEnd),
   ]);
   const connected = new Set(screenRegistry.connectedScreenIds());
 
@@ -241,10 +256,24 @@ const assemble = async (screenRows: readonly ScreenRow[], now: Date): Promise<As
       blackoutMinutesInHour(windows, ctx.date, h),
     );
     const matchNow = isInBlackout(windows, now);
-    const plan = dayPlan(byVenue.get(s.venueId) ?? [], ctx.date, s.openingHour, s.closingHour);
+    const classic = dayPlan(byVenue.get(s.venueId) ?? [], ctx.date, s.openingHour, s.closingHour);
+    // FLEET-3 — during a match the venue airs the match's ad pages, not its classic campaigns.
+    const pods = podsByVenue.get(s.venueId) ?? [];
+    const page = podAt(pods, now);
+    const plan = expectedDayPlan(classic, eventDayPlan(pods, ctx.date), blackoutByHour);
     const current = plan[ctx.hour];
-    const plannedRepsNow = matchNow ? 0 : (current?.reps ?? 0);
-    const runStart = plannedRepsNow > 0 ? plannedRunStart(plan, ctx.hour) : null;
+    const pageNow = page.live ? page.pod : (page.next ?? page.pod);
+    const plannedRepsNow = matchNow
+      ? page.live && page.pod
+        ? page.pod.slots.length
+        : 0
+      : (classic[ctx.hour]?.reps ?? 0);
+    const campaignsNow = matchNow
+      ? pageNow
+        ? podCampaigns(pageNow)
+        : []
+      : (classic[ctx.hour]?.campaigns ?? []);
+    const runStart = !matchNow && plannedRepsNow > 0 ? plannedRunStart(classic, ctx.hour) : null;
     const mine = proofs.filter((p) => p.screenId === s.id);
     const aired = mine.reduce((sum, p) => sum + p.n, 0);
     const plannedTotal = plan.reduce((sum, h) => sum + h.reps, 0);
@@ -263,6 +292,7 @@ const assemble = async (screenRows: readonly ScreenRow[], now: Date): Promise<As
       plannedSince: runStart === null ? null : hourStart(ctx.date, runStart),
       lastProofAt: lastProof?.at ?? null,
       openNow,
+      match: matchNow ? { pod: page.pod } : null,
     });
     return {
       screen: {
@@ -275,7 +305,15 @@ const assemble = async (screenRows: readonly ScreenRow[], now: Date): Promise<As
         pairedAt: s.pairedAt,
         openNow,
         matchNow,
-        now: { plannedReps: plannedRepsNow, campaigns: matchNow ? [] : (current?.campaigns ?? []) },
+        match: matchNow
+          ? {
+              podStart: page.pod?.start ?? null,
+              podEnd: page.pod?.end ?? null,
+              podLive: page.live,
+              nextPodAt: page.next?.start ?? null,
+            }
+          : null,
+        now: { plannedReps: plannedRepsNow, campaigns: campaignsNow },
         lastProof,
         today: { plannedTotal, plannedSoFar, aired },
         device: readDeviceReport(s.deviceReport),
