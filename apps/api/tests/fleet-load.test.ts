@@ -317,6 +317,20 @@ describe('FLEET-1 — the fleet reads (real Postgres)', () => {
       plannedToday: passes,
       airedToday: 1,
     });
+
+    // Once the match is settled the positioning is « completed »: the day keeps its page.
+    await db
+      .update(campaigns)
+      .set({ status: 'completed', updatedAt: tunis(15, 20) })
+      .where(eq(campaigns.id, eventId));
+    const after = await loadFleetScreen(w.a1, tunis(16, 0));
+    expect(after?.hours[11]).toMatchObject({ planned: passes });
+    // Closed BEFORE the page opened (a stop): the page was never handed to the TVs.
+    await db
+      .update(campaigns)
+      .set({ updatedAt: tunis(11, 0) })
+      .where(eq(campaigns.id, eventId));
+    expect((await loadFleetScreen(w.a1, tunis(16, 0)))?.hours[11]).toMatchObject({ planned: 0 });
   });
 
   it('admin only; 400 on a bad id, 404 on an unknown screen', async () => {
