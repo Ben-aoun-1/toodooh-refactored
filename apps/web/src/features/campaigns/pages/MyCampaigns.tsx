@@ -658,9 +658,11 @@ export default function MyCampaigns() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                    {/* CF-HF3 — an empty selection IS a targeting: whole network (as the list
+                        view and the dashboard say). */}
                     {campaign.selected_zones && campaign.selected_zones.length > 0
                       ? campaign.selected_zones.join(', ')
-                      : '—'}
+                      : 'Tout le réseau'}
                   </span>
                 </div>
                 {rejectReasonToShow(campaign.status, campaign.reject_reason) && (
