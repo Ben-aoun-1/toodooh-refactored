@@ -272,13 +272,14 @@ export interface VenuePod {
 const podsOfVenue = (rows: readonly AiringRow[]): VenuePod[] => {
   const pods: VenuePod[] = [];
   const seen = new Set<number>();
-  // A venue whose positionings are ALL closed (settled after the match, or stopped) aired its
-  // pages up to that moment only: a page planned after it never reached the TVs.
-  const airedUntil = rows.some((r) => r.status === 'active')
-    ? Number.POSITIVE_INFINITY
-    : Math.max(...rows.map((r) => r.campaignUpdatedAt.getTime()));
+  // A closed positioning (settled after the match, or stopped) held its seat only in the blocs
+  // that ended before it closed: after that it no longer reached the TVs, and it must not take a
+  // seat from the positionings that did.
+  const held = (r: AiringRow, bloc: StoredBloc): boolean =>
+    r.status === 'active' || r.campaignUpdatedAt.getTime() >= new Date(bloc.end).getTime();
   for (const row of rows) {
     for (const bloc of parseBlocs(row.blocs)) {
+      if (!held(row, bloc)) continue;
       const start = new Date(bloc.start);
       const end = new Date(bloc.end);
       if (row.eventMinutes === null) {
@@ -301,7 +302,10 @@ const podsOfVenue = (rows: readonly AiringRow[]): VenuePod[] => {
       }
       if (seen.has(start.getTime())) continue;
       seen.add(start.getTime());
-      const seatRows = seatsOfBloc(rows, bloc);
+      const seatRows = seatsOfBloc(
+        rows.filter((r) => held(r, bloc)),
+        bloc,
+      );
       const pod = podOf(bloc, row.kickoffAt, seatRows, eventSeatModel(row.seatMinutes));
       if (!pod) continue;
       const names = new Map(seatRows.map((r) => [r.campaignId, r.campaignName]));
@@ -316,16 +320,15 @@ const podsOfVenue = (rows: readonly AiringRow[]): VenuePod[] => {
       });
     }
   }
-  return pods
-    .filter((p) => p.end.getTime() <= airedUntil)
-    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  return pods.sort((a, b) => a.start.getTime() - b.start.getTime());
 };
 
 /**
  * FLEET-3 — every ad page (pod) the given venues air inside [from, to), through the SAME gate and
  * the SAME timeline as the playlist ({@link activeEventSpots}), so the « Parc d'écrans » expects
  * exactly what the TVs were handed — and keeps the pages of a match already settled, so the day's
- * count does not lose them. Venues without a positioning are absent.
+ * count does not lose them (a closed positioning counts in the blocs that ended before it
+ * closed). Venues without a positioning are absent.
  */
 export const venueEventPods = async (
   screenhostIds: readonly string[],
