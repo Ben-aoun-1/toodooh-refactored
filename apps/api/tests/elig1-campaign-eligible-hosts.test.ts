@@ -10,6 +10,7 @@ import {
   campaignTargeting,
   campaigns,
   creatives,
+  eventAllocations,
   events,
   screenhostAffluence,
   screenhosts,
@@ -396,5 +397,30 @@ describe('ELIG-1 — GET /api/admin/campaigns/:id/eligible-hosts (real Postgres)
       expect(reasonOf.get(open)).toBe('not_event_eligible');
     }
     expect(report.cpm_tnd).toBe((await getDispatchConfig()).eventCpmTnd);
+
+    // A venue the positioning HOLDS stays eligible even when the live ceiling no longer reaches
+    // it (here: a venue with no bloc for sale) — it was listed « exclu » while airing the spot.
+    await db.insert(eventAllocations).values({
+      campaignId: positioning?.id ?? '',
+      screenhostId: closedAtNight,
+      blocs: [
+        { start: '2027-06-10T18:00:00.000Z', end: '2027-06-10T18:20:00.000Z', impressions: 500 },
+        { start: '2027-06-10T18:20:00.000Z', end: '2027-06-10T18:40:00.000Z', impressions: 500 },
+      ],
+      impressionsTotal: 1000,
+      montantTnd: '21.000',
+      statut: 'ACCEPTE',
+    });
+    const after = (await get(positioning?.id ?? '')).json<Report>();
+    const heldRow = after.eligible.find((v) => v.id === closedAtNight);
+    expect(heldRow).toMatchObject({
+      hours: 2,
+      capacity: 1000,
+      allocation: { statut: 'ACCEPTE', impressions: 1000 },
+    });
+    expect(after.excluded.map((e) => e.id)).not.toContain(closedAtNight);
+    expect(after.totals.eligible).toBe(after.eligible.length);
+    expect(after.totals.capacity).toBe(report.totals.capacity + 1000);
+    expect(after.totals.c_max_tnd).toBeCloseTo(report.totals.c_max_tnd + 21, 2);
   });
 });
