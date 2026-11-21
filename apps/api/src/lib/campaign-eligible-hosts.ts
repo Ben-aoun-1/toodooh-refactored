@@ -34,7 +34,7 @@ import { withLiveAllocations } from './dispatch/tours/fiche-live.js';
 import type { EngineTrace } from './engine-journal/trace.js';
 import { blackoutMinutesByVenueCell } from './event-blackout.js';
 import { isEventSwitchOn } from './event-pricing/event-switch.js';
-import { computeEventCmax } from './event-pricing/pricing.js';
+import { computeAmax, computeEventCmax } from './event-pricing/pricing.js';
 import { campaignPlaysPerMinute } from './event-pricing/spot.js';
 import { venueHasInstalledScreenSql } from './installed-screen.js';
 
@@ -289,31 +289,60 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
         screenhostId: eventAllocations.screenhostId,
         statut: eventAllocations.statut,
         impressions: eventAllocations.impressionsTotal,
+        blocs: eventAllocations.blocs,
+        montantTnd: eventAllocations.montantTnd,
       })
       .from(eventAllocations)
       .where(eq(eventAllocations.campaignId, row.id));
     const allocationOf = new Map(allocations.map((a) => [a.screenhostId, a]));
-    const reached = new Set(cmax.venues.map((v) => v.screenhostId));
-
-    const eligible: EligibleHost[] = cmax.venues.map((v) => {
-      const label = labels.get(v.screenhostId);
-      const allocation = allocationOf.get(v.screenhostId);
-      return {
-        id: v.screenhostId,
-        name: v.name,
+    // A venue this positioning HOLDS is eligible by construction, even when the match has no
+    // free seat left there: the live ceiling only knows what is still for sale, so once the
+    // match fills up it no longer reaches the venues the positioning itself airs on.
+    const held = allocations.filter((a) => a.statut !== 'REFUSE');
+    const heldIds = new Set(held.map((a) => a.screenhostId));
+    const reached = new Set([...cmax.venues.map((v) => v.screenhostId), ...heldIds]);
+    const heldRows: EligibleHost[] = [];
+    for (const a of held) {
+      const label = labels.get(a.screenhostId);
+      heldRows.push({
+        id: a.screenhostId,
+        name: label?.name ?? '',
         sector: label?.sector ?? null,
         class: label?.class ?? null,
         sps: label?.sps ?? 0,
-        affluence: v.amaxPph,
-        hours: v.blocsDisponibles,
-        capacity: v.impressions,
+        affluence: await computeAmax(a.screenhostId),
+        hours: Array.isArray(a.blocs) ? a.blocs.length : 0,
+        capacity: a.impressions,
         days_available: null,
-        allocation: allocation
-          ? { statut: allocation.statut, impressions: allocation.impressions }
-          : null,
+        allocation: { statut: a.statut, impressions: a.impressions },
         share: null,
-      };
-    });
+      });
+    }
+    const heldImpressions = held.reduce((sum, a) => sum + a.impressions, 0);
+    const heldTnd = held.reduce((sum, a) => sum + Number(a.montantTnd), 0);
+
+    const free: EligibleHost[] = cmax.venues
+      .filter((v) => !heldIds.has(v.screenhostId))
+      .map((v) => {
+        const label = labels.get(v.screenhostId);
+        const allocation = allocationOf.get(v.screenhostId);
+        return {
+          id: v.screenhostId,
+          name: v.name,
+          sector: label?.sector ?? null,
+          class: label?.class ?? null,
+          sps: label?.sps ?? 0,
+          affluence: v.amaxPph,
+          hours: v.blocsDisponibles,
+          capacity: v.impressions,
+          days_available: null,
+          allocation: allocation
+            ? { statut: allocation.statut, impressions: allocation.impressions }
+            : null,
+          share: null,
+        };
+      });
+    const eligible = [...heldRows, ...free];
     const excluded: ExcludedHost[] = [...labels.values()]
       .filter((v) => !reached.has(v.id))
       .map((v) => ({
@@ -351,8 +380,9 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
           active_venues: activeVenues,
           eligible: eligible.length,
           excluded: excluded.length,
-          capacity: cmax.iMax,
-          c_max_tnd: cmax.cMaxEvtTnd,
+          // What the positioning holds, plus what the match still has for sale.
+          capacity: heldImpressions + cmax.iMax,
+          c_max_tnd: Math.round((heldTnd + cmax.cMaxEvtTnd) * 100) / 100,
         },
       },
     };
