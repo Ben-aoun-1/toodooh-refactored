@@ -11,6 +11,7 @@ import { activeEventSpots } from '../event-playout/spots.js';
 import { overlayKeyFor, overlayRegistry } from '../spot-overlay.js';
 
 import { activeAllocationsForScreenhost } from './active-allocations.js';
+import { manualBroadcastFor } from './manual-broadcast.js';
 import { type PlaylistMessage, type PlaylistSource, buildPlaylist } from './playlist.js';
 
 // Derive a screen's playlist from the SHARED airability gate (activeAllocationsForScreenhost:
@@ -88,6 +89,27 @@ export const computeScreenPlaylist = async (
       creativeType: spot.creativeType === 'photo' ? 'photo' : 'video',
       validUntil: spot.validUntil,
       ...(spot.slots ? { slots: spot.slots } : {}),
+      overlayUrl: await overlayUrlOf(spot.storageKey, spot.creativeType),
+    });
+  }
+  // OPS-BROADCAST — the operator's own ad page, if one is announced for this venue: its spots at
+  // their exact slots, exactly like a match page (lib/playout/manual-broadcast.ts).
+  const broadcast = manualBroadcastFor(screenhostId, now);
+  for (const spot of broadcast?.spots ?? []) {
+    if (sources.some((source) => source.campaignId === spot.campaignId)) continue;
+    const presigned = await storage.getPresignedUrl({ key: spot.storageKey });
+    if ('error' in presigned) continue;
+    sources.push({
+      campaignId: spot.campaignId,
+      campaignName: spot.campaignName,
+      url: presigned.url,
+      durationSeconds: spot.durationSeconds,
+      repsPerHour: 0,
+      creativeType: spot.creativeType === 'photo' ? 'photo' : 'video',
+      validUntil: broadcast?.end,
+      slots: (broadcast?.slots ?? [])
+        .filter((slot) => slot.campaignId === spot.campaignId)
+        .map((slot) => ({ at: slot.at, seconds: slot.seconds })),
       overlayUrl: await overlayUrlOf(spot.storageKey, spot.creativeType),
     });
   }

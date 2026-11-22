@@ -6,6 +6,7 @@ import { db } from '../../db/client.js';
 import { proofOfPlay, screenWsEvents, screens } from '../../db/schema.js';
 import { sanitizeDeviceReport, sanitizeStatusReport, toStored } from '../fleet/health.js';
 
+import { countManualBroadcastPlay, isManualBroadcastPlay } from './manual-broadcast.js';
 import { resolveAirableVideo } from './playlist-service.js';
 import { proofPlayedAt } from './proof-instant.js';
 import { type ScreenEventMessage } from './ws-protocol.js';
@@ -73,6 +74,16 @@ const recordProof = async (
   const playedAt = proofPlayedAt(tsMs, receivedAt);
   const resolved = await resolveAirableVideo(ctx.screenhostId, videoId, playedAt);
   if (!resolved) {
+    // OPS-BROADCAST — a play of the operator's own page: never a proof (no billing, no payout),
+    // only counted and logged.
+    if (isManualBroadcastPlay(ctx.screenhostId, videoId, playedAt)) {
+      countManualBroadcastPlay(ctx.screenId, eventType);
+      log.info(
+        { event: eventType, videoId, screenId: ctx.screenId, playedAt: playedAt.toISOString() },
+        'operator broadcast play',
+      );
+      return { playId, status: 'rejected' };
+    }
     log.warn(
       { event: eventType, videoId, screenhostId: ctx.screenhostId },
       'screen-ws: proof for a non-airable campaign ignored',

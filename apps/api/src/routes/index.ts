@@ -56,6 +56,7 @@ import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
 import { eventBoostRoutes } from './event-boost.js';
 import { eventsRoutes } from './events.js';
+import { internalBroadcastRoutes } from './internal-broadcast.js';
 import { internalRoutes } from './internal.js';
 import { meRoutes } from './me.js';
 import { notificationsRoutes } from './notifications.js';
@@ -208,6 +209,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,
   // C1 affluence ingest, Edge A agent provisioning. Guarded by WEDOOH_SYNC_KEY; 503 when unset.
   await app.register(internalRoutes);
+  await app.register(internalBroadcastRoutes);
   // (CF-19 P0) agent establishment-write routes removed — agents do NOT create places. The
   // screenhosts table (replaces establishments) is scaffolding only — no write path, read
   // endpoint, or signup capture yet (P2/P3).
