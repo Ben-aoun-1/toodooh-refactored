@@ -3,7 +3,7 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { users } from '../db/schema.js';
+import { campaigns, users } from '../db/schema.js';
 import {
   type AnalysisSections,
   type CampaignNature,
@@ -19,8 +19,10 @@ import {
   loadZoneCatalogue,
 } from '../lib/advertiser-performances.js';
 import { campaignReportFilename, renderCampaignReportPdf } from '../lib/campaign-report-pdf.js';
+import { parseDeliveryOverride } from '../lib/delivery-override.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { storage } from '../storage/s3-storage.js';
 
 // SC-P — « Mes performances » (Screencaster) reads. Session-scoped: every read starts from the
 // connected advertiser's campaigns (RG-PERF-01) — a foreign campaign id is indistinguishable from
@@ -206,6 +208,27 @@ export const advertiserPerformancesRoutes: FastifyPluginAsync = async (app) => {
       const campaign = closed.find((c) => c.id === parsed.data.id);
       if (!campaign) {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      }
+      // OPS-FULL1 — a positioning counted as fully aired may carry the operator's own report.
+      const [stored] = await db
+        .select({ deliveryOverride: campaigns.deliveryOverride })
+        .from(campaigns)
+        .where(eq(campaigns.id, campaign.id))
+        .limit(1);
+      const reportKey = parseDeliveryOverride(stored?.deliveryOverride)?.reportKey ?? null;
+      if (reportKey !== null) {
+        const file = await storage.download({ key: reportKey });
+        if (!('error' in file)) {
+          return reply
+            .status(200)
+            .header('content-type', 'application/pdf')
+            .header(
+              'content-disposition',
+              `attachment; filename="${campaignReportFilename(campaign)}"`,
+            )
+            .send(file.body);
+        }
+        request.log.warn({ campaignId: campaign.id, reportKey }, 'stored campaign report missing');
       }
       const [lines, catalogue, [advertiser]] = await Promise.all([
         loadVenueImpressionLines([campaign.id]),
