@@ -213,9 +213,26 @@ describe('OPS-BROADCAST — announce, playlist, trace (real Postgres)', () => {
     }>();
     expect(state.plays).toEqual([{ screenId: w.screenId, started: 1, ended: 0 }]);
 
+    // The operator's own list of venues wins over the scope: there and nowhere else.
+    const listed = await app.inject({
+      method: 'POST',
+      url: '/api/internal/ops/broadcast',
+      payload: {
+        campaign_ids: [w.campaignId],
+        starts_in_seconds: 60,
+        scope: 'campaign_venues',
+        venue_ids: [w.other],
+      },
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(currentManualBroadcast()?.venueIds).toEqual(new Set([w.other]));
+    expect((await computeScreenPlaylist(w.other, new Date())).videos).toHaveLength(1);
+    expect((await computeScreenPlaylist(w.held, new Date())).videos).toEqual([]);
+    const b2 = currentManualBroadcast();
+
     // Once the page has ended it leaves the playlist by itself; DELETE withdraws it at once.
     expect(
-      (await computeScreenPlaylist(w.held, new Date((b?.end.getTime() ?? 0) + 1))).videos,
+      (await computeScreenPlaylist(w.other, new Date((b2?.end.getTime() ?? 0) + 1))).videos,
     ).toEqual([]);
     expect(
       (await app.inject({ method: 'DELETE', url: '/api/internal/ops/broadcast' })).statusCode,

@@ -36,6 +36,8 @@ const bodySchema = z.object({
     .max(24 * 3600),
   /** 'campaign_venues' = the venues that held these campaigns; 'all' = every venue. */
   scope: z.enum(['campaign_venues', 'all']),
+  /** The operator's own list of venues: when given, the page airs there and nowhere else. */
+  venue_ids: z.array(z.uuid()).min(1).max(100).optional(),
 });
 
 const view = () => {
@@ -81,7 +83,12 @@ export const internalBroadcastRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'INVALID_INPUT', message: 'Validation failed' });
     }
-    const { campaign_ids: ids, starts_in_seconds: startsIn, scope } = parsed.data;
+    const {
+      campaign_ids: ids,
+      starts_in_seconds: startsIn,
+      scope,
+      venue_ids: venues,
+    } = parsed.data;
     const spots = await loadBroadcastSpots(ids);
     if (spots.length !== ids.length) {
       return reply
@@ -96,7 +103,11 @@ export const internalBroadcastRoutes: FastifyPluginAsync = async (app) => {
       end: timeline.end,
       spots,
       slots: timeline.slots,
-      venueIds: scope === 'all' ? null : await broadcastCampaignVenues(ids),
+      venueIds: venues
+        ? new Set(venues)
+        : scope === 'all'
+          ? null
+          : await broadcastCampaignVenues(ids),
     });
     const sent = await pushPlaylistToAllConnected(request.log);
     request.log.info(
