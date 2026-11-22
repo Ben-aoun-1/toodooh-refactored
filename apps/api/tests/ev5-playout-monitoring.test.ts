@@ -23,6 +23,7 @@ import {
   screens,
   users,
 } from '../src/db/schema.js';
+import { applyFullDelivery } from '../src/lib/delivery-override.js';
 import { runBlocPushTick } from '../src/lib/event-playout/bloc-pusher.js';
 import {
   measureEventDelivery,
@@ -39,6 +40,7 @@ import { computeScreenPlaylist } from '../src/lib/playout/playlist-service.js';
 import { walletBalance } from '../src/lib/recharges.js';
 import { computeSps } from '../src/lib/sps-score.js';
 import { adminEventsRoutes } from '../src/routes/admin-events.js';
+import { campaignsRoutes } from '../src/routes/campaigns.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 import { seedInstalledScreen } from './helpers/installed-screen.js';
@@ -238,6 +240,7 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
     await resetAuthTables();
     app = buildApp();
     await app.register(adminEventsRoutes);
+    await app.register(campaignsRoutes);
     await app.ready();
   });
 
@@ -593,6 +596,36 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
         .from(campaignReconciliation)
         .where(eq(campaignReconciliation.campaignId, campaignId));
       expect(Number(recon?.spendTnd)).toBe(300);
+    });
+
+    it('OPS-FULL1 — counted as fully aired, the Screencaster reads every bloc delivered', async () => {
+      const venue = await seedVenue();
+      const eventId = await seedEvent();
+      const { campaignId, advertiserId } = await seedPositioning(eventId, venue.id, {
+        montant: '300.000',
+      });
+      const first = GRID.blocs[0];
+      if (first) await seedProof(campaignId, venue.id, new Date(first.start.getTime() + 5_000));
+      await settleEventPositioning(campaignId, AFTER_WINDOW);
+      type Detail = {
+        allocations: { blocs_count: number; blocs_delivered: number; refund_tnd: number }[];
+        settlement: { delivered_tnd: number; refund_tnd: number };
+      };
+      const read = async (): Promise<Detail> =>
+        (
+          await app.inject({ method: 'GET', url: `/api/campaigns/${campaignId}/event-allocations` })
+        ).json<Detail>();
+      mockSession(advertiserId, 'advertiser');
+      const measured = await read();
+      expect(measured.allocations[0]).toMatchObject({ blocs_delivered: 1, refund_tnd: 250 });
+
+      await applyFullDelivery({ campaignId, plays: 36, hours: 4 });
+      const full = await read();
+      expect(full.allocations[0]).toMatchObject({
+        blocs_delivered: full.allocations[0]?.blocs_count,
+        refund_tnd: 0,
+      });
+      expect(full.settlement).toMatchObject({ delivered_tnd: 300, refund_tnd: 0 });
     });
 
     it('the sweep settles closed windows only', async () => {

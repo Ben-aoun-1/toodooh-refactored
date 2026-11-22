@@ -25,11 +25,13 @@ import {
   zones,
 } from '../src/db/schema.js';
 import { CAMPAIGN_REPORT_READY_TYPE } from '../src/lib/campaign-report-notification.js';
+import { applyFullDelivery, revertFullDelivery } from '../src/lib/delivery-override.js';
 import { settleEventPositioning } from '../src/lib/event-playout/settlement.js';
 import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { reconcileCampaignById } from '../src/lib/reconcile/reconcile-service.js';
 import { sectorDisplayName } from '../src/lib/report/sector-display-name.js';
 import { advertiserPerformancesRoutes } from '../src/routes/advertiser-performances.js';
+import { storage } from '../src/storage/s3-storage.js';
 
 import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 import { docText } from './helpers/doc-render-stub.js';
@@ -870,6 +872,167 @@ describe('SC-P — advertiser « Mes performances » reads (real Postgres)', () 
         venues: 1,
         budget_ht: 50, // spend (50) — paid after the refund (250)
       });
+    });
+  });
+  describe('OPS-FULL1 — a positioning counted as fully aired', () => {
+    // Two venues hold the positioning (12 000 impressions / 300 TND each, six blocs); only the
+    // first airs, and only one bloc. Measured: 2 000 impressions, 1 venue, 50 TND.
+    const seedHalfAiredPositioning = async () => {
+      const me = await seedUser();
+      const aired = await seedVenue();
+      const silent = await seedVenue();
+      const kickoff = new Date('2027-06-10T20:00:00+01:00');
+      const ends = new Date('2027-06-10T22:00:00+01:00');
+      const grid = fenetreDiffusion(kickoff, ends);
+      const [ev] = await db
+        .insert(events)
+        .values({
+          name: 'Derby',
+          type: 'sport',
+          kickoffAt: kickoff,
+          endsAt: ends,
+          source: 'official',
+        })
+        .returning();
+      const p = await seedCampaign(me, [aired.id, silent.id], {
+        name: 'Positionnement Derby',
+        status: 'active',
+        eventId: ev?.id ?? '',
+        startDate: '2027-06-10',
+        endDate: '2027-06-10',
+      });
+      await db.insert(eventAllocations).values(
+        [aired, silent].map((venue) => ({
+          campaignId: p.id,
+          screenhostId: venue.id,
+          blocs: grid.blocs.map((b) => ({
+            start: b.start.toISOString(),
+            end: b.end.toISOString(),
+            impressions: 2000,
+          })),
+          impressionsTotal: 12000,
+          montantTnd: '300.000',
+          statut: 'ACCEPTE',
+          decidedAt: new Date(),
+        })),
+      );
+      const firstBloc = grid.blocs[0];
+      if (firstBloc)
+        await seedProof(p.id, p.creativeId, aired, new Date(firstBloc.start.getTime() + 5_000));
+      await settleEventPositioning(p.id, new Date(grid.windowEnd.getTime() + 60_000));
+      return { me, p, aired, silent };
+    };
+    type HistoryRow = {
+      impressions: number;
+      venues: number;
+      budget_ht: number;
+      plays: number;
+      hours: number;
+    };
+    const history = async (): Promise<HistoryRow | undefined> =>
+      (await get(`${BASE}/campaigns`)).json<{ campaigns: HistoryRow[] }>().campaigns[0];
+
+    it('shows the booked figures to the Screencaster and leaves the venue rows as measured', async () => {
+      const { me, p, aired } = await seedHalfAiredPositioning();
+      mockSession(me);
+      expect(await history()).toMatchObject({
+        impressions: 2000,
+        venues: 1,
+        budget_ht: 50,
+        plays: 1,
+      });
+      const payoutsBefore = await db
+        .select()
+        .from(campaignScreenhostPayout)
+        .where(eq(campaignScreenhostPayout.campaignId, p.id));
+      const proofsBefore = await db
+        .select()
+        .from(proofOfPlay)
+        .where(eq(proofOfPlay.campaignId, p.id));
+
+      const result = await applyFullDelivery({ campaignId: p.id, plays: 72, hours: 8 });
+      expect(result).toEqual({ status: 'APPLIED', spendTnd: 600, impressions: 24000, venues: 2 });
+      expect(await history()).toEqual(
+        expect.objectContaining({
+          impressions: 24000,
+          venues: 2,
+          budget_ht: 600,
+          plays: 72,
+          hours: 8,
+        }),
+      );
+      // The analysis weighs BOTH venues by their booked share.
+      const analysis = (await get(`${BASE}/analysis?campaign_id=${p.id}`)).json<{
+        overview: { impressions: number; venues: number };
+        zones: { value: number }[];
+      }>();
+      expect(analysis.overview).toMatchObject({ impressions: 24000, venues: 2 });
+      expect(analysis.zones.reduce((sum, z) => sum + z.value, 0)).toBe(24000);
+
+      // The Screenhost side is not rewritten: same payout rows, same proofs.
+      expect(
+        await db
+          .select()
+          .from(campaignScreenhostPayout)
+          .where(eq(campaignScreenhostPayout.campaignId, p.id)),
+      ).toEqual(payoutsBefore);
+      expect(payoutsBefore.map((r) => r.screenhostId)).toEqual([aired.id]);
+      expect(await db.select().from(proofOfPlay).where(eq(proofOfPlay.campaignId, p.id))).toEqual(
+        proofsBefore,
+      );
+    });
+
+    it('applying twice keeps the MEASURED settlement, and the revert restores it', async () => {
+      const { me, p } = await seedHalfAiredPositioning();
+      const [measured] = await db
+        .select()
+        .from(campaignReconciliation)
+        .where(eq(campaignReconciliation.campaignId, p.id));
+      await applyFullDelivery({ campaignId: p.id, plays: 72, hours: 8 });
+      await applyFullDelivery({ campaignId: p.id, plays: 80, hours: 4 });
+      mockSession(me);
+      expect(await history()).toMatchObject({ plays: 80, hours: 4, budget_ht: 600 });
+
+      expect(await revertFullDelivery(p.id)).toBe(true);
+      const [restored] = await db
+        .select()
+        .from(campaignReconciliation)
+        .where(eq(campaignReconciliation.campaignId, p.id));
+      expect(restored).toEqual(measured);
+      expect(await history()).toMatchObject({
+        impressions: 2000,
+        venues: 1,
+        budget_ht: 50,
+        plays: 1,
+      });
+      expect(await revertFullDelivery(p.id)).toBe(false);
+    });
+
+    it('refuses a campaign that is not a settled positioning', async () => {
+      const me = await seedUser();
+      const venue = await seedVenue();
+      const classic = await seedCampaign(me, [venue.id], { name: 'Classique' });
+      expect(await applyFullDelivery({ campaignId: classic.id, plays: 1, hours: 1 })).toEqual({
+        status: 'NOT_POSITIONING',
+      });
+    });
+
+    it('serves the stored report in place of the generated one', async () => {
+      const { me, p } = await seedHalfAiredPositioning();
+      await applyFullDelivery({
+        campaignId: p.id,
+        plays: 72,
+        hours: 8,
+        reportKey: 'reports/x.pdf',
+      });
+      const download = vi
+        .spyOn(storage, 'download')
+        .mockResolvedValue({ body: Buffer.from('%PDF-stored'), contentType: 'application/pdf' });
+      mockSession(me);
+      const res = await get(`${BASE}/campaigns/${p.id}/report.pdf`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toBe('%PDF-stored');
+      expect(download).toHaveBeenCalledWith({ key: 'reports/x.pdf' });
     });
   });
 });

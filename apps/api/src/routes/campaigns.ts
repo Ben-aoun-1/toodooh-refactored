@@ -24,6 +24,7 @@ import {
   premiereDateDisponible,
   startDateViolation,
 } from '../lib/campaign-dates.js';
+import { parseDeliveryOverride } from '../lib/delivery-override.js';
 import { eventPoolDemoVenues, isDemoUser } from '../lib/demo.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { checkEventMinutes } from '../lib/event-minutes-gate.js';
@@ -786,6 +787,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         requestedBudget: campaigns.requestedBudget,
         standardCpmTnd: campaigns.standardCpmTnd,
         eventCpmTnd: campaigns.eventCpmTnd,
+        deliveryOverride: campaigns.deliveryOverride,
       })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
@@ -820,6 +822,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
     const eventId = own.eventId;
     const measured = settled && eventId ? await measureEventDelivery(own.id, eventId) : null;
+    // OPS-FULL1 — counted as fully aired: every share that held the positioning reads delivered
+    // (the measurement above stays the admin's and the venues' truth).
+    const full = settled !== undefined && parseDeliveryOverride(own.deliveryOverride) !== null;
 
     return reply.status(200).send({
       count: rows.length,
@@ -840,6 +845,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         Math.round(rows.reduce((sum, r) => sum + Number(r.montantTnd) * 1000, 0)) / 1000,
       allocations: rows.map((r) => {
         const line = measured?.venues.find((v) => v.screenhostId === r.screenhostId) ?? null;
+        const blocsCount = Array.isArray(r.blocs) ? r.blocs.length : 0;
+        const aired = full && r.statut !== 'REFUSE';
         return {
           id: r.id,
           // Operator 2026-10-09 — no venue name reaches the screencaster (Consulter = totals).
@@ -853,9 +860,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           montant_tnd: Number(r.montantTnd),
           statut: r.statut,
           // Null until the settlement runs (a live positioning shows no verdict).
-          blocs_delivered: line?.blocsDelivered ?? null,
-          delivered_tnd: line?.deliveredTnd ?? null,
-          refund_tnd: line?.refundTnd ?? null,
+          blocs_delivered: aired ? blocsCount : (line?.blocsDelivered ?? null),
+          delivered_tnd: aired ? Number(r.montantTnd) : (line?.deliveredTnd ?? null),
+          refund_tnd: aired ? 0 : (line?.refundTnd ?? null),
           attestation_negated: line?.attestationNegated ?? null,
         };
       }),

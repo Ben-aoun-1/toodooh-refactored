@@ -1,5 +1,5 @@
 import { getISODay, parseISO } from 'date-fns';
-import { and, desc, eq, inArray, count as countRows, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, count as countRows, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -9,6 +9,7 @@ import {
   campaignReconciliation,
   campaignScreenhostPayout,
   campaigns,
+  eventAllocations,
   proofOfPlay,
   screenhostAffluence,
   screenhosts,
@@ -16,6 +17,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
+import { parseDeliveryOverride } from './delivery-override.js';
 import { ttcFromHt } from './facture.js';
 import { collapseHalvesSql, inEffectSql } from './half-hour-slots.js';
 import { displayImpressionsSettled } from './impressions-display.js';
@@ -491,6 +493,25 @@ const loadDeliveringVenueCounts = async (
   return new Map(rows.map((r) => [r.campaignId, Number(r.venues)]));
 };
 
+/** OPS-FULL1 — the venues that HELD a positioning (a REFUSE share never airs), per campaign. */
+const heldAllocationSql = (campaignIds: readonly string[]) =>
+  and(
+    inArray(eventAllocations.campaignId, [...campaignIds]),
+    ne(eventAllocations.statut, 'REFUSE'),
+  );
+
+const loadHeldVenueCounts = async (
+  campaignIds: readonly string[],
+): Promise<Map<string, number>> => {
+  if (campaignIds.length === 0) return new Map();
+  const rows = await db
+    .select({ campaignId: eventAllocations.campaignId, venues: countRows() })
+    .from(eventAllocations)
+    .where(heldAllocationSql(campaignIds))
+    .groupBy(eventAllocations.campaignId);
+  return new Map(rows.map((r) => [r.campaignId, Number(r.venues)]));
+};
+
 /** The advertiser's CLOSED campaigns with their settled figures, newest clôture first. */
 export const loadClosedCampaigns = async (advertiserId: string): Promise<ClosedCampaign[]> => {
   const rows = await db
@@ -504,18 +525,23 @@ export const loadClosedCampaigns = async (advertiserId: string): Promise<ClosedC
       expectedImp: campaignReconciliation.expectedImp,
       deliveredImp: campaignReconciliation.deliveredImp,
       spendTnd: campaignReconciliation.spendTnd,
+      deliveryOverride: campaigns.deliveryOverride,
     })
     .from(campaigns)
     .innerJoin(campaignReconciliation, eq(campaignReconciliation.campaignId, campaigns.id))
     .where(eq(campaigns.advertiserId, advertiserId))
     .orderBy(desc(campaignReconciliation.reconciledAt), desc(campaigns.createdAt));
   const targets = rows.map((r) => ({ id: r.id, nature: natureOf(r.eventId) }));
-  const [diffusion, venueCounts] = await Promise.all([
+  const [diffusion, venueCounts, heldCounts] = await Promise.all([
     creditedDiffusion(targets),
     loadDeliveringVenueCounts(rows.map((r) => r.id)),
+    loadHeldVenueCounts(rows.filter((r) => r.deliveryOverride !== null).map((r) => r.id)),
   ]);
   return rows.map((r) => {
     const d = diffusion.get(r.id);
+    // OPS-FULL1 — a positioning counted as fully aired: the plays and hours come from the
+    // override (the proofs stay what the TVs sent), the venues are those that held it.
+    const full = parseDeliveryOverride(r.deliveryOverride);
     const budgetHt = round2(Number(r.spendTnd));
     return {
       id: r.id,
@@ -531,9 +557,9 @@ export const loadClosedCampaigns = async (advertiserId: string): Promise<ClosedC
         expectedImp: r.expectedImp,
         deliveredImp: r.deliveredImp,
       }),
-      hours: d?.slots.length ?? 0,
-      plays: d?.plays ?? 0,
-      venues: venueCounts.get(r.id) ?? 0,
+      hours: full ? full.hours : (d?.slots.length ?? 0),
+      plays: full ? full.plays : (d?.plays ?? 0),
+      venues: full ? (heldCounts.get(r.id) ?? 0) : (venueCounts.get(r.id) ?? 0),
     };
   });
 };
@@ -563,35 +589,67 @@ const ratiosOf = (r: {
   };
 };
 
-/** Per-venue delivered impressions + the venue attributes the sections group by. */
+const venueAttributes = {
+  sectorName: businessSectors.name,
+  venueClass: screenhosts.class,
+  zoneId: screenhosts.zoneId,
+  zoneName: zones.name,
+  genderFemalePct: screenhosts.genderFemalePct,
+  genderMalePct: screenhosts.genderMalePct,
+  age17To30Pct: screenhosts.age17To30Pct,
+  age31To45Pct: screenhosts.age31To45Pct,
+  age46PlusPct: screenhosts.age46PlusPct,
+};
+
+/**
+ * Per-venue delivered impressions + the venue attributes the sections group by. A positioning
+ * counted as fully aired (OPS-FULL1) reads its BOOKED shares instead of the payouts: the payouts
+ * are the venues' money rows and keep what really aired.
+ */
 export const loadVenueImpressionLines = async (
   campaignIds: readonly string[],
 ): Promise<VenueImpressionLine[]> => {
   if (campaignIds.length === 0) return [];
-  const rows = await db
-    .select({
-      campaignId: campaignScreenhostPayout.campaignId,
-      screenhostId: campaignScreenhostPayout.screenhostId,
-      deliveredImp: campaignScreenhostPayout.deliveredImp,
-      sectorName: businessSectors.name,
-      venueClass: screenhosts.class,
-      zoneId: screenhosts.zoneId,
-      zoneName: zones.name,
-      genderFemalePct: screenhosts.genderFemalePct,
-      genderMalePct: screenhosts.genderMalePct,
-      age17To30Pct: screenhosts.age17To30Pct,
-      age31To45Pct: screenhosts.age31To45Pct,
-      age46PlusPct: screenhosts.age46PlusPct,
-    })
-    .from(campaignScreenhostPayout)
-    .innerJoin(screenhosts, eq(screenhosts.id, campaignScreenhostPayout.screenhostId))
-    .leftJoin(businessSectors, eq(businessSectors.id, screenhosts.businessSectorId))
-    .leftJoin(zones, eq(zones.id, screenhosts.zoneId))
-    .where(inArray(campaignScreenhostPayout.campaignId, [...campaignIds]));
-  return rows.map((r) => ({
+  const overridden = await db
+    .select({ id: campaigns.id })
+    .from(campaigns)
+    .where(and(inArray(campaigns.id, [...campaignIds]), isNotNull(campaigns.deliveryOverride)));
+  const fullIds = overridden.map((r) => r.id);
+  const measuredIds = campaignIds.filter((id) => !fullIds.includes(id));
+  const measured =
+    measuredIds.length === 0
+      ? []
+      : await db
+          .select({
+            campaignId: campaignScreenhostPayout.campaignId,
+            screenhostId: campaignScreenhostPayout.screenhostId,
+            impressions: campaignScreenhostPayout.deliveredImp,
+            ...venueAttributes,
+          })
+          .from(campaignScreenhostPayout)
+          .innerJoin(screenhosts, eq(screenhosts.id, campaignScreenhostPayout.screenhostId))
+          .leftJoin(businessSectors, eq(businessSectors.id, screenhosts.businessSectorId))
+          .leftJoin(zones, eq(zones.id, screenhosts.zoneId))
+          .where(inArray(campaignScreenhostPayout.campaignId, measuredIds));
+  const booked =
+    fullIds.length === 0
+      ? []
+      : await db
+          .select({
+            campaignId: eventAllocations.campaignId,
+            screenhostId: eventAllocations.screenhostId,
+            impressions: eventAllocations.impressionsTotal,
+            ...venueAttributes,
+          })
+          .from(eventAllocations)
+          .innerJoin(screenhosts, eq(screenhosts.id, eventAllocations.screenhostId))
+          .leftJoin(businessSectors, eq(businessSectors.id, screenhosts.businessSectorId))
+          .leftJoin(zones, eq(zones.id, screenhosts.zoneId))
+          .where(heldAllocationSql(fullIds));
+  return [...measured, ...booked].map((r) => ({
     campaignId: r.campaignId,
     screenhostId: r.screenhostId,
-    impressions: r.deliveredImp,
+    impressions: r.impressions,
     category: r.sectorName === null ? null : sectorDisplayName(r.sectorName),
     venueClass: r.venueClass,
     zoneId: r.zoneId,

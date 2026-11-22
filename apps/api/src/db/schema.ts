@@ -1607,6 +1607,11 @@ export const campaigns = pgTable(
     stoppedBy: uuid('stopped_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     stopReason: text('stop_reason'),
     originalEndDate: date('original_end_date'),
+    /**
+     * OPS-FULL1 (mig 0116) — the operator counts this positioning as fully aired for its
+     * Screencaster (lib/delivery-override.ts parses it). NULL = the real, measured result.
+     */
+    deliveryOverride: jsonb('delivery_override').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
