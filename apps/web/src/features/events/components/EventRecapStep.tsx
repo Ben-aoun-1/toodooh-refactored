@@ -8,7 +8,7 @@ import { minutesStartAtMax } from '@/features/campaigns/lib/slider-start';
 import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
 import { tndLabel } from '@/lib/money';
 
-import { formatEventDate, formatEventHours } from '../lib/event-display';
+import { eventDateText, eventHoursText } from '../lib/event-display';
 import {
   clampEventMinutes,
   eventMinutesPrice,
@@ -108,8 +108,8 @@ export default function EventRecapStep({
               <>
                 <p className="text-sm text-pitch-grey">Fenêtre de diffusion</p>
                 <p className="mt-1 text-base font-medium text-pitch-ink">
-                  {formatEventDate(event.kickoff_at)} ·{' '}
-                  {formatEventHours(event.fenetre.window_start, event.fenetre.window_end)}
+                  {eventDateText(event)} ·{' '}
+                  {eventHoursText(event, event.fenetre.window_start, event.fenetre.window_end)}
                 </p>
                 <p className="mt-1 text-xs text-amber-700">
                   1 h avant le match, pendant, 1 h après : la fenêtre suit le coup d’envoi.

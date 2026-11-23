@@ -16,7 +16,7 @@ import {
 } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
-import { matchesByEvent } from '../lib/event-catalogue.js';
+import { eventUnconfirmed, matchesByEvent } from '../lib/event-catalogue.js';
 import { upsertEventAttestation } from '../lib/event-playout/attestation.js';
 import {
   MAX_EXTENSION_MINUTES,
@@ -25,6 +25,7 @@ import {
 } from '../lib/event-playout/extend.js';
 import {
   loadEvent,
+  notifyEventConfirmed,
   remapEventPositionings,
   voidEventPositionings,
 } from '../lib/event-playout/reschedule.js';
@@ -353,13 +354,19 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
           ? await tx.update(events).set(patch).where(eq(events.id, params.data.id)).returning()
           : [row];
       if (next && body.matches) await replaceMatches(tx, next.id, body.matches);
+      // Operator 23/11 — confirming a match sold « à confirmer »: its slots move onto the real
+      // window without a « reporté » notice (nothing was postponed, and no owner was asked yet);
+      // its Screencasters are told the real kick-off instead.
+      const confirming = next !== undefined && eventUnconfirmed(row) && !eventUnconfirmed(next);
       if (next && datesMoved) {
         await remapEventPositionings(
           tx,
           { id: next.id, name: next.name, kickoffAt: next.kickoffAt, endsAt: next.endsAt },
           { kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+          { notify: !confirming },
         );
       }
+      if (next && confirming) await notifyEventConfirmed(tx, next);
       return next;
     });
     if (!updated) return sendNotFound(reply);

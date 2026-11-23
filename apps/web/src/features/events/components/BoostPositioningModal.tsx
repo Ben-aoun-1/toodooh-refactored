@@ -14,7 +14,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { tndLabel } from '@/lib/money';
 
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
-import { formatEventDate, formatEventHours } from '../lib/event-display';
+import { eventDateText, eventHoursText } from '../lib/event-display';
 import { eventMinutesImpressions, eventMinutesPrice, minutesLabel } from '../lib/event-minutes';
 
 // EV6 (flow §7) — the POSITIONING booster: ONE axis, ZONES ONLY. The spot, the categories and the
@@ -164,8 +164,8 @@ export default function BoostPositioningModal({ campaign, onClose }: BoostPositi
           {event && (
             <p className="flex items-center gap-1.5 text-sm text-[#5C5C5C]">
               <CalendarClock className="h-4 w-4 shrink-0" />
-              {formatEventDate(event.kickoff_at)} ·{' '}
-              {formatEventHours(event.fenetre.window_start, event.fenetre.window_end)}
+              {eventDateText(event)} ·{' '}
+              {eventHoursText(event, event.fenetre.window_start, event.fenetre.window_end)}
             </p>
           )}
           <div className="flex gap-2 rounded-lg bg-slate-50 p-3">

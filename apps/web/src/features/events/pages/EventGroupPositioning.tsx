@@ -80,7 +80,7 @@ export default function EventGroupPositioning() {
       campaignId: id,
       title: event ? cardTitle(event) : (c?.name ?? 'Match'),
       subtitle: event
-        ? `${dateLine(event)}${event.time_tbc ? '' : `, ${hourLabel(event.kickoff_at)}`}`
+        ? `${dateLine(event)}${event.time_tbc || event.date_tbc ? '' : `, ${hourLabel(event.kickoff_at)}`}`
         : '',
     };
   });

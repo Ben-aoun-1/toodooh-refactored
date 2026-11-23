@@ -68,7 +68,7 @@ export const eventView = (row: EventRow, now: Date, matches: MatchWire[] = []) =
     qualification_pending: row.qualificationPending,
     date_label: row.dateLabel,
     matches,
-    /** B1 — false while the date/time is « à confirmer » (or the match is over/annulé). */
+    /** False once the match is over or annulé; a match « à confirmer » is positionable. */
     positionable: positioningRefusal(row, now) === null,
     kickoff_at: row.kickoffAt.toISOString(),
     ends_at: row.endsAt.toISOString(),
@@ -232,8 +232,7 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     const [row] = await db.select().from(events).where(eq(events.id, parsed.data.id)).limit(1);
     if (!row)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Événement introuvable.' });
-    // EVT-CAT2 B1 — annulé, terminé, or a date/time still « à confirmer » refuses (ONE rule,
-    // lib/event-catalogue).
+    // Annulé or terminé refuses (ONE rule, lib/event-catalogue).
     const refusal = positioningRefusal(row, new Date());
     if (refusal) {
       return reply.status(409).send({ ...refusal, statusCode: 409, requestId: request.id });

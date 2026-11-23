@@ -3,8 +3,10 @@ import { Calendar, Radio } from 'lucide-react';
 import {
   STATUT_LABELS,
   WINDOW_LINE,
-  formatEventDate,
-  formatEventHours,
+  eventDateText,
+  eventHoursText,
+  isUnconfirmed,
+  UNCONFIRMED_NOTE,
 } from '../../lib/event-display';
 import { kickoffClock } from '../../lib/positioning-display';
 import { SUGGESTED_MATCH_BADGE, suggestedPeriodLine } from '../../lib/suggest-match';
@@ -32,7 +34,7 @@ export default function MatchTicket({ event, campaignName }: MatchTicketProps) {
         {STATUT_LABELS[event.statut]}
       </span>
       <span className="text-3xl font-semibold tracking-wide text-pitch-ink">
-        {event.time_tbc ? 'À confirmer' : kickoffClock(event.kickoff_at)}
+        {isUnconfirmed(event) ? 'À confirmer' : kickoffClock(event.kickoff_at)}
       </span>
       <span className="text-xs uppercase tracking-[0.06em] text-pitch-deep">Coup d’envoi</span>
     </>
@@ -53,11 +55,11 @@ export default function MatchTicket({ event, campaignName }: MatchTicketProps) {
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <span className="flex items-center gap-1.5 text-sm text-pitch-wash">
             <Calendar className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {formatEventDate(event.kickoff_at)}
+            {eventDateText(event)}
           </span>
           <span aria-hidden="true" className="h-3.5 w-px bg-white/25" />
           <span className="text-sm text-pitch-wash">
-            {formatEventHours(event.kickoff_at, event.ends_at)}
+            {eventHoursText(event, event.kickoff_at, event.ends_at)}
           </span>
           <span aria-hidden="true" className="h-3.5 w-px bg-white/25" />
           <span className="flex items-center gap-1.5 text-sm text-pitch-wash">
@@ -65,6 +67,11 @@ export default function MatchTicket({ event, campaignName }: MatchTicketProps) {
             {WINDOW_LINE}
           </span>
         </div>
+      )}
+      {event && isUnconfirmed(event) && (
+        <p className="mt-3 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-pitch-wash">
+          {UNCONFIRMED_NOTE}
+        </p>
       )}
       {/* SUGG-2 — a suggested match's period is the screencaster's own (Youssef's v9 mockup). */}
       {event?.source === 'suggested' && (

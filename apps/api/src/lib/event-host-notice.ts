@@ -28,6 +28,11 @@ import { loadOwnerSharePcts, ownerShareTnd } from './owner-share.js';
 // window never aired and settlement refunds it, as before. 'auto' and 'withheld' rows written
 // before 15/11 stay as they are.
 //
+// Operator 23/11/2026 — a match still « à confirmer » (day or time) is sold, but its owners are
+// asked NOTHING while it is: every share waits, whatever the provisional kick-off says, and the
+// sweep skips the match. Once the Admin confirms it, the sweep asks 24 h before the real kick-off
+// (at once when that is already under 24 h away).
+//
 // The amounts are the OWNER's share (lib/owner-share), the figure the popup shows (ruling 2A).
 // ONE home: every event placement (lib/event-dispatch) and the sweep below go through it.
 
@@ -83,7 +88,10 @@ export const placementNotice = (input: {
   kickoffAt: Date;
   stance: VenueMatchStance;
   origin: ShareOrigin;
+  /** False while the match's day or time is « à confirmer »: nobody is asked yet. */
+  confirmed?: boolean;
 }): PlacementNotice => {
+  if (input.confirmed === false) return 'wait';
   if (input.now.getTime() < groupedNoticeAt(input.kickoffAt).getTime()) return 'wait';
   if (input.origin === 'redispatch' && input.stance === 'accepted') return 'auto';
   return 'single';
@@ -155,6 +163,12 @@ export const noticeNewEventShares = async (
   if (input.shares.length === 0) return;
   const now = input.now ?? new Date();
   const pcts = await loadOwnerSharePcts();
+  const [flags] = await executor
+    .select({ dateTbc: events.dateTbc, timeTbc: events.timeTbc })
+    .from(events)
+    .where(eq(events.id, input.event.id))
+    .limit(1);
+  const confirmed = flags === undefined || !(flags.dateTbc || flags.timeTbc);
   const stances = await stanceByVenue(
     executor,
     input.event.id,
@@ -170,6 +184,7 @@ export const noticeNewEventShares = async (
       kickoffAt: input.event.kickoffAt,
       stance: stances.get(share.screenhostId) ?? 'open',
       origin: input.origin,
+      confirmed,
     });
     if (notice === 'wait') continue;
     await executor
@@ -214,7 +229,7 @@ export interface GroupedNoticeOutcome {
 }
 
 /**
- * The sweep: for every match whose notice time has come and which has not ended, each venue's
+ * The sweep: for every CONFIRMED match whose notice time has come and which has not ended, each venue's
  * waiting shares are asked together — one « Soir de match » notice to the owner, whatever the
  * total (Mariem 15/11). Each venue is handled in its own transaction, its waiting rows
  * locked and re-read, so two sweeps never notify twice.
@@ -235,6 +250,9 @@ export const runEventGroupedNotices = async (
         notDemoEventAllocationSql(),
         notStoppedCampaignSql(),
         eq(events.annule, false),
+        // A provisional kick-off asks nobody: the match is confirmed first.
+        eq(events.dateTbc, false),
+        eq(events.timeTbc, false),
         lte(events.kickoffAt, new Date(now.getTime() + EVENT_NOTICE_LEAD_MS)),
         gt(events.endsAt, now),
       ),

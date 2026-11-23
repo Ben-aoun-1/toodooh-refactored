@@ -2979,9 +2979,9 @@ export const events = pgTable(
     /** « À la une »: 'hero' (the big card) or 'pinned' (the cards under it); NULL = by month. */
     featured: text('featured'),
     /**
-     * B1 — a match whose date or kickoff time is not confirmed is LISTED with its badge but not
-     * positionable: kickoff_at then holds the provisional instant (pricing and the blocs need
-     * one), and nothing can be bought on it until the admin confirms.
+     * A match whose date or kickoff time is not confirmed: kickoff_at holds the provisional
+     * instant (pricing and the blocs need one). Since 23/11/2026 it is SOLD like any other; its
+     * Screenhosts are asked at the confirmation, which moves the slots onto the real window.
      */
     dateTbc: boolean('date_tbc').notNull().default(false),
     timeTbc: boolean('time_tbc').notNull().default(false),

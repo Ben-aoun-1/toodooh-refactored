@@ -79,9 +79,16 @@ export const matchesByEvent = async (
 
 export type PositionRefusal = { error: string; message: string };
 
+/** A match whose day or kickoff time is still « à confirmer »: kickoff_at is provisional. */
+export const eventUnconfirmed = (row: { dateTbc: boolean; timeTbc: boolean }): boolean =>
+  row.dateTbc || row.timeTbc;
+
 /**
- * Why this match cannot be positioned now, or null when it can. B1 — a date or kickoff time
- * still « à confirmer » blocks it: pricing and the blocs would rest on a provisional instant.
+ * Why this match cannot be positioned now, or null when it can. Operator 23/11/2026 — a match
+ * still « à confirmer » (day, time or opponent) IS sold: the positioning is placed on the
+ * provisional instant, its Screenhosts are asked only once the match is confirmed
+ * (lib/event-host-notice), and the confirmation moves the slots onto the real window
+ * (lib/event-playout/reschedule). B1's refusal (EVENT_NOT_CONFIRMED) is gone.
  */
 export const positioningRefusal = (row: EventRow, now: Date): PositionRefusal | null => {
   if (row.annule) return { error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' };
@@ -89,13 +96,6 @@ export const positioningRefusal = (row: EventRow, now: Date): PositionRefusal | 
     return {
       error: 'EVENT_TERMINE',
       message: 'Cet événement est terminé — le positionnement n’est plus possible.',
-    };
-  }
-  if (row.dateTbc || row.timeTbc) {
-    return {
-      error: 'EVENT_NOT_CONFIRMED',
-      message:
-        'La date ou l’horaire de ce match n’est pas encore confirmé — le positionnement ouvrira à la confirmation.',
     };
   }
   return null;

@@ -65,4 +65,11 @@ describe('windowHours', () => {
   it('prints the diffusion window in Tunis hours', () => {
     expect(windowHours(event('a', '2026-12-01T20:00:00.000Z'))).toBe('20h00 – 0h00');
   });
+
+  it('a match « à confirmer » stands in the row, without provisional hours (operator 23/11)', () => {
+    const tbc = event('t', '2026-12-01T20:00:00.000Z', { time_tbc: true, positionable: true });
+    expect(dashboardEventCards([tbc])[0]).toEqual({ kind: 'match', event: tbc });
+    expect(windowHours(tbc)).toBe('Horaire à confirmer');
+    expect(windowHours({ ...tbc, time_tbc: false, date_tbc: true })).toBe('Horaire à confirmer');
+  });
 });

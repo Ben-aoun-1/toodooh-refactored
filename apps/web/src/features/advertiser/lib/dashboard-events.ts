@@ -1,4 +1,5 @@
 import { hourLabel } from '@/features/events/lib/event-catalogue';
+import { HOURS_TBC_LABEL, isUnconfirmed } from '@/features/events/lib/event-display';
 import type { EventItemView } from '@/features/events/services/events.api';
 
 // The Screencaster dashboard's « Événements à venir » row (Mariem's Figma capture): which cards
@@ -12,7 +13,7 @@ export type DashboardEventCard =
   | { kind: 'ramadan' }
   | { kind: 'catalogue' };
 
-/** A match the Screencaster can position on now: official, not started, date and hour known. */
+/** A match the Screencaster can position on now: official and not started (« à confirmer » too). */
 const isOpenMatch = (e: EventItemView): boolean =>
   e.source === 'official' && e.statut === 'a_venir' && e.positionable !== false;
 
@@ -33,8 +34,12 @@ export function dashboardEventCards(catalogue: readonly EventItemView[]): Dashbo
   ];
 }
 
-/** « 20h00 – 0h00 » — the diffusion window of a match, as the capture prints its hours. */
+/**
+ * « 20h00 – 0h00 » — the diffusion window of a match, as the capture prints its hours; a match
+ * still « à confirmer » has no hours to print.
+ */
 export function windowHours(e: EventItemView): string {
+  if (isUnconfirmed(e)) return HOURS_TBC_LABEL;
   const end = hourLabel(e.fenetre.window_end).replace(/^00h/, '0h');
   return `${hourLabel(e.fenetre.window_start)} – ${end}`;
 }
