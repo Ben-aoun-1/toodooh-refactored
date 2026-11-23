@@ -5,6 +5,10 @@
    and the list scrolls to the top of that area (the prototype kept 76 px for its sticky bar). */
 .rsx {
   min-height: calc(100vh - 64px);
+  /* The containing block of the page's absolutely-positioned bits (the visually-hidden labels and
+     checkboxes): without it they hang off the document, far below the shell's own scroller, and
+     the whole window scrolls into white space. */
+  position: relative;
 }
 .rsx section {
   scroll-margin-top: 16px;

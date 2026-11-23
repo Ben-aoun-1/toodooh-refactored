@@ -975,7 +975,12 @@
   position: fixed;
   left: 50%;
   bottom: 24px;
-  transform: translate(-50%, 140%);
+  /* Hidden IN the viewport (faded, a few pixels down): parked below it, the bar made the whole
+     document scroll into white space. */
+  transform: translate(-50%, 16px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   z-index: 40;
   display: flex;
   flex-wrap: wrap;
@@ -991,6 +996,9 @@
 }
 .rsx .dock.show {
   transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 .rsx .dock b {
   font-weight: 500;
