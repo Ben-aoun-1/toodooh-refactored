@@ -179,26 +179,28 @@ describe('« Réseau Screenhosts » — a Screencaster’s excluded venues', () 
     expect(after.venues).toHaveLength(v.in.length);
   });
 
-  it('« Parcs TV » — an owner with two venues in the network is a park; excluding it is excluding its locations', async () => {
+  it('« Parcs TV » — every Screenhost is a park; an owner with two venues is one park with two locations', async () => {
     const v = await seedMatrix(await eventSector());
     const advertiser = await seedApprovedOwner({ role: 'advertiser' });
-    expect(await parksFor(advertiser)).toEqual([]);
+    // Each venue of the fixture has its own owner: one park each.
+    expect(await parksFor(advertiser)).toHaveLength(v.in.length);
 
     const brand = await seedApprovedOwner({ role: 'fleet_owner', businessName: 'Enseigne Test' });
     const two = v.in.slice(0, 2);
     await db.update(screenhosts).set({ ownerId: brand }).where(inArray(screenhosts.id, two));
 
     const parks = await parksFor(advertiser);
-    expect(parks).toHaveLength(1);
-    expect(parks[0]?.name).toBe('Enseigne Test');
-    expect(parks[0]?.locations.map((l) => l.screenhost_id).sort()).toEqual([...two].sort());
-    expect(parks[0]?.locations.every((l) => !l.excluded)).toBe(true);
+    expect(parks).toHaveLength(v.in.length - 1);
+    const brandPark = parks.find((p) => p.id === brand);
+    expect(brandPark?.name).toBe('Enseigne Test');
+    expect(brandPark?.locations.map((l) => l.screenhost_id).sort()).toEqual([...two].sort());
+    expect(brandPark?.locations.every((l) => !l.excluded)).toBe(true);
 
     await excludeVenues(advertiser, two);
     const after = await parksFor(advertiser);
-    expect(after[0]?.locations.every((l) => l.excluded)).toBe(true);
-    // The third venue has its own owner: one location is not a park.
-    expect(after).toHaveLength(1);
+    expect(after.find((p) => p.id === brand)?.locations.every((l) => l.excluded)).toBe(true);
+    // The other Screenhost's park is untouched.
+    expect(after.filter((p) => p.id !== brand).every((p) => !p.locations[0]?.excluded)).toBe(true);
   });
 });
 

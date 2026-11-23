@@ -55,7 +55,7 @@ export interface NetworkParkLocation {
   excluded: boolean;
 }
 
-/** « Parcs TV » — one brand present in several locations: an owner with two venues or more. */
+/** « Parcs TV » — a Screenhost's park: an owner and every venue he has in the network. */
 export interface NetworkPark {
   id: string;
   name: string;
@@ -70,8 +70,8 @@ export interface NetworkPark {
   locations: NetworkParkLocation[];
 }
 
-/** A park needs at least this many locations in the Screencaster's network. */
-export const PARK_MIN_LOCATIONS = 2;
+/** Every Screenhost is a park (ruling 2026-11-23): one location is enough. */
+export const PARK_MIN_LOCATIONS = 1;
 
 export interface NetworkView {
   persons_per_month: number | null;
@@ -284,10 +284,11 @@ export const meanAgeBands = (
 };
 
 /**
- * « Parcs TV » — the parks of the Screencaster's network: every owner with PARK_MIN_LOCATIONS
- * venues or more in it, under the owner's business name. A park's profile is its locations':
+ * « Parcs TV » — the parks of the Screencaster's network: every Screenhost (owner) with his
+ * venues in it, under the owner's business name (ruling 2026-11-23: all Screenhosts show, not
+ * only the owners with several venues). A park's profile is its locations':
  * the category and CSP most of them share, the mean of their audience splits. There is no park
- * table: a park exists the day an owner has a second venue in the network.
+ * table: an owner with several venues is one park with several locations.
  */
 export const parksFor = async (advertiserId: string): Promise<NetworkPark[]> => {
   const { venues } = await loadNetwork(advertiserId);

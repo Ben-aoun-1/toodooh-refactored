@@ -11,7 +11,7 @@ import { requireAuth, requireRole } from '../middleware/require-auth.js';
 //   DELETE /api/network/exclusions/:id        « Réintégrer »
 //   GET    /api/network/parks                 the parks (one brand, several locations)
 // The list applies to him alone and to the campaigns he has not validated yet; the engine side
-// is lib/caster-exclusions.ts. A park is an owner with two venues or more in the network
+// is lib/caster-exclusions.ts. A park is a Screenhost (owner) with his venues in the network
 // (lib/network.ts parksFor — no table); with none the page says « Bientôt disponible ».
 // Excluding a park is excluding each of its locations through the same POST.
 
