@@ -1,0 +1,165 @@
+/* RESEAU-1 — what the prototype wrote as inline `style="…"`, set from its script, or did not have
+   to handle (the app's shell, real data), as named classes. Loaded AFTER network.css: same scope. */
+
+/* The page lives inside the advertiser shell: it fills the content area under the 64 px top bar,
+   and the list scrolls to the top of that area (the prototype kept 76 px for its sticky bar). */
+.rsx {
+  min-height: calc(100vh - 64px);
+}
+.rsx section {
+  scroll-margin-top: 16px;
+}
+/* svg is outside the revert rule: undo Tailwind's preflight (display:block) on icons. */
+.rsx svg {
+  display: inline;
+  vertical-align: baseline;
+}
+
+/* Inline styles of the prototype. */
+.rsx .rsx-catrows {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.rsx .dlg p.rsx-note {
+  font-size: 13px;
+}
+
+/* Portrait: the prototype's per-category colours (icon tile, then bar). */
+.rsx .catrow .ic.kC {
+  background: #e3f1ea;
+  color: #204b43;
+}
+.rsx .catrow .bar i.kC {
+  background: #204b43;
+}
+.rsx .catrow .ic.kR {
+  background: #eef0ff;
+  color: #3c3f9e;
+}
+.rsx .catrow .bar i.kR {
+  background: #5b5fd6;
+}
+.rsx .catrow .ic.kS {
+  background: #0d2b1f;
+  color: #76e6ab;
+}
+.rsx .catrow .bar i.kS {
+  background: #0d2b1f;
+}
+.rsx .catrow .ic.kM {
+  background: #e3f6ee;
+  color: #1d9e75;
+}
+.rsx .catrow .bar i.kM {
+  background: #1d9e75;
+}
+.rsx .catrow .ic.kP {
+  background: #eef0ff;
+  color: #3c3f9e;
+}
+.rsx .catrow .bar i.kP {
+  background: #3c3f9e;
+}
+.rsx .catrow .ic.kA {
+  background: #eef3f0;
+  color: #4f5f58;
+}
+.rsx .catrow .bar i.kA {
+  background: #7fa79a;
+}
+
+/* Bars start empty; useNetworkMotion grows them to their data-w / data-h. */
+.rsx .catrow .bar i {
+  width: 0;
+}
+.rsx .csp i,
+.rsx .ages i {
+  height: 0;
+}
+.rsx .split i:first-child {
+  width: 0;
+  transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rsx .split i:first-child {
+    transition: none;
+  }
+}
+/* The CSP bars are coloured by CSP, not by position: a network without « Premium » keeps the
+   prototype's colour for the two others. */
+.rsx .csp div:nth-child(n) i {
+  background: var(--plant);
+}
+.rsx .csp div.k-premium i {
+  background: var(--deep);
+}
+.rsx .csp div.k-populaire i {
+  background: #7fa79a;
+}
+/* The age bands come from the data: as many columns as bands (the prototype has four). */
+.rsx .ages.rsx-ages-1 {
+  grid-template-columns: repeat(1, 1fr);
+}
+.rsx .ages.rsx-ages-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.rsx .ages.rsx-ages-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.rsx .ages.rsx-ages-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+.rsx .ages.rsx-ages-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+/* A tile the real data cannot fill prints « – » where its figures would be. */
+.rsx .rsx-nodata {
+  margin-top: auto;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 30px;
+  letter-spacing: -0.03em;
+  opacity: 0.55;
+}
+
+/* Map legend: the prototype's three region colours, and a neutral one for any other region. */
+.rsx .legend i.rg-ariana {
+  background: #76e6ab;
+}
+.rsx .legend i.rg-tunis {
+  background: #ffffff;
+}
+.rsx .legend i.rg-benarous {
+  background: #9195f8;
+}
+.rsx .legend i.rg-other {
+  background: #c5d6cd;
+}
+
+/* « Bientôt disponible » (Parcs TV before the first park) — the hero's own « mine » block. */
+.rsx .mine.rsx-soon strong {
+  display: block;
+  font-size: 22px;
+}
+.rsx .mine.rsx-soon p {
+  margin: 6px 0 0;
+  color: #c5d6cd;
+  font-size: 14px;
+}
+
+/* Loading / error block. */
+.rsx .empty .rsx-state {
+  margin: 0;
+}
+.rsx .empty .mini {
+  margin-top: 14px;
+}
+
+/* A request is on its way. */
+.rsx .btn:disabled,
+.rsx .mini:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

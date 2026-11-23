@@ -38,6 +38,8 @@ const MyCart = lazy(() => import('@/features/cart/pages/MyCart'));
 const AdvertiserPerformances = lazy(
   () => import('@/features/advertiser/pages/AdvertiserPerformances'),
 );
+const NetworkScreenhosts = lazy(() => import('@/features/network/pages/NetworkScreenhosts'));
+const NetworkParks = lazy(() => import('@/features/network/pages/NetworkParks'));
 const OwnerDashboard = lazy(() => import('@/features/screenhost/pages/OwnerDashboard'));
 const Login = lazy(() => import('@/features/auth/pages/Login'));
 const SignUp = lazy(() => import('@/features/auth/pages/SignUp'));
@@ -437,6 +439,27 @@ export default function App() {
                 <AdvertiserRoute>
                   <AdvertiserLayout>
                     <AdvertiserDashboard />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            {/* RESEAU-1 — the Screenhost network and the TV parks, with their exclusions. */}
+            <Route
+              path="/reseau"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <NetworkScreenhosts />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/parcs-tv"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <NetworkParks />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }
