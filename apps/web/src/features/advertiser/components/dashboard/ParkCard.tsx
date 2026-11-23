@@ -44,7 +44,7 @@ export default function ParkCard({ park }: { park: NetworkPark }) {
         )}
         <Link
           to={PARKS_PATH}
-          className="mt-auto inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-brand-deep px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-deep/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+          className="mt-auto inline-flex min-h-[40px] w-full items-center justify-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-brand-deep transition-colors hover:bg-brand-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-deep"
         >
           Diffuser sur ce parc
         </Link>

@@ -90,4 +90,4 @@ export default function DashboardEventCard({
 
 /** The dark full-width action of the capture (« Je me positionne »). */
 export const EVENT_CARD_ACTION_CLASS =
-  'inline-flex min-h-[40px] w-full items-center justify-center gap-2 rounded-lg bg-brand-deep px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-deep/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500';
+  'inline-flex min-h-[40px] w-full items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 text-sm font-semibold text-brand-deep transition-colors hover:bg-brand-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-deep disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500';
