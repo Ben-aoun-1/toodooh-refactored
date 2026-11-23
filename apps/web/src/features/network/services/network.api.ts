@@ -53,6 +53,8 @@ export interface NetworkPark {
   male_pct: number | null;
   female_pct: number | null;
   dominant_age: string | null;
+  /** The mean age split of the park's locations (absent on an older API). */
+  age_bands?: NetworkAgeBand[] | null;
   logo_url: string | null;
   locations: NetworkParkLocation[];
 }

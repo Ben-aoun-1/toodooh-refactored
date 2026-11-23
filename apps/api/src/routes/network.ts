@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { excludeVenues, reintegrateVenues } from '../lib/caster-exclusions.js';
-import { networkFor, networkVenueIds } from '../lib/network.js';
+import { networkFor, networkVenueIds, parksFor } from '../lib/network.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
 // Mariem 17/11/2026 — « Réseau Screenhosts » and « Parcs TV » of a Screencaster:
@@ -11,9 +11,9 @@ import { requireAuth, requireRole } from '../middleware/require-auth.js';
 //   DELETE /api/network/exclusions/:id        « Réintégrer »
 //   GET    /api/network/parks                 the parks (one brand, several locations)
 // The list applies to him alone and to the campaigns he has not validated yet; the engine side
-// is lib/caster-exclusions.ts. No park exists yet (no table): the read answers an empty list and
-// the page says « Bientôt disponible ». Excluding a park is excluding each of its locations
-// through the same POST.
+// is lib/caster-exclusions.ts. A park is an owner with two venues or more in the network
+// (lib/network.ts parksFor — no table); with none the page says « Bientôt disponible ».
+// Excluding a park is excluding each of its locations through the same POST.
 
 const advertiserGuard = { preHandler: [requireAuth, requireRole('advertiser')] };
 
@@ -29,9 +29,10 @@ export const networkRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(await networkFor(request.user.id));
   });
 
-  app.get('/api/network/parks', advertiserGuard, async (_request, reply) =>
-    reply.status(200).send({ parks: [] }),
-  );
+  app.get('/api/network/parks', advertiserGuard, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'UNAUTHORIZED' });
+    return reply.status(200).send({ parks: await parksFor(request.user.id) });
+  });
 
   app.post('/api/network/exclusions', advertiserGuard, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'UNAUTHORIZED' });

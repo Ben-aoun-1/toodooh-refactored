@@ -6,6 +6,7 @@ import {
   governorates,
   screenhostAffluenceHourly,
   screenhosts,
+  users,
 } from '../db/schema.js';
 
 import { ownerApprovedSql } from './approved-owner.js';
@@ -43,6 +44,34 @@ export interface NetworkVenue {
   logo_url: string | null;
   excluded: boolean;
 }
+
+export interface NetworkParkLocation {
+  screenhost_id: string;
+  name: string;
+  quartier: string | null;
+  region: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  excluded: boolean;
+}
+
+/** « Parcs TV » — one brand present in several locations: an owner with two venues or more. */
+export interface NetworkPark {
+  id: string;
+  name: string;
+  category: NetworkCategory;
+  category_label: string;
+  csp: 'premium' | 'moyen' | 'populaire' | null;
+  male_pct: number | null;
+  female_pct: number | null;
+  dominant_age: string | null;
+  age_bands: NetworkAgeBand[] | null;
+  logo_url: string | null;
+  locations: NetworkParkLocation[];
+}
+
+/** A park needs at least this many locations in the Screencaster's network. */
+export const PARK_MIN_LOCATIONS = 2;
 
 export interface NetworkView {
   persons_per_month: number | null;
@@ -103,8 +132,12 @@ const numOrNull = (v: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** The Screencaster's network: every venue his campaigns can use, the excluded ones flagged. */
-export const networkFor = async (advertiserId: string): Promise<NetworkView> => {
+type OwnedVenue = NetworkVenue & { ownerId: string | null; ownerName: string | null };
+
+/** The network with each venue's owner (the parks are grouped on it). */
+const loadNetwork = async (
+  advertiserId: string,
+): Promise<{ persons_per_month: number | null; venues: OwnedVenue[] }> => {
   const demo = (await isDemoUser(db, advertiserId)) ? await demoVenueIds(db) : null;
   const rows = await db
     .select({
@@ -124,10 +157,14 @@ export const networkFor = async (advertiserId: string): Promise<NetworkView> => 
       latitude: screenhosts.latitude,
       longitude: screenhosts.longitude,
       demoOnly: screenhosts.demoOnly,
+      ownerId: screenhosts.ownerId,
+      ownerBusiness: users.businessName,
+      ownerContact: users.contactName,
     })
     .from(screenhosts)
     .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
     .leftJoin(governorates, eq(screenhosts.governorateId, governorates.id))
+    .leftJoin(users, eq(screenhosts.ownerId, users.id))
     .where(
       and(
         eq(screenhosts.isActive, true),
@@ -192,9 +229,102 @@ export const networkFor = async (advertiserId: string): Promise<NetworkView> => 
         longitude: numOrNull(r.longitude),
         logo_url: logos.get(r.id)?.url ?? null,
         excluded: excluded.has(r.id),
+        ownerId: r.ownerId,
+        ownerName: r.ownerBusiness ?? r.ownerContact,
       };
     }),
   };
+};
+
+/** The Screencaster's network: every venue his campaigns can use, the excluded ones flagged. */
+export const networkFor = async (advertiserId: string): Promise<NetworkView> => {
+  const { persons_per_month, venues } = await loadNetwork(advertiserId);
+  return {
+    persons_per_month,
+    venues: venues.map((v) => {
+      const venue: NetworkVenue & { ownerId?: string | null; ownerName?: string | null } = { ...v };
+      delete venue.ownerId;
+      delete venue.ownerName;
+      return venue;
+    }),
+  };
+};
+
+/** The value most venues share (the first one met on a tie); null when none has one. */
+export const mostCommon = <T>(values: readonly (T | null)[]): T | null => {
+  const counts = new Map<T, number>();
+  for (const v of values) if (v !== null) counts.set(v, (counts.get(v) ?? 0) + 1);
+  let best: T | null = null;
+  let bestCount = 0;
+  for (const [v, n] of counts) {
+    if (n > bestCount) {
+      best = v;
+      bestCount = n;
+    }
+  }
+  return best;
+};
+
+const meanOrNull = (values: readonly (number | null)[]): number | null => {
+  const known = values.flatMap((v) => (v === null ? [] : [v]));
+  return known.length === 0 ? null : Math.round(known.reduce((a, b) => a + b, 0) / known.length);
+};
+
+/** The mean age split of the venues that have one, band by band (labels of the first split). */
+export const meanAgeBands = (
+  splits: readonly (readonly NetworkAgeBand[] | null)[],
+): NetworkAgeBand[] | null => {
+  const known = splits.flatMap((s) => (s === null ? [] : [s]));
+  const labels = known[0]?.map((b) => b.label);
+  if (!labels) return null;
+  return labels.map((label) => ({
+    label,
+    pct: meanOrNull(known.map((s) => s.find((b) => b.label === label)?.pct ?? null)) ?? 0,
+  }));
+};
+
+/**
+ * « Parcs TV » — the parks of the Screencaster's network: every owner with PARK_MIN_LOCATIONS
+ * venues or more in it, under the owner's business name. A park's profile is its locations':
+ * the category and CSP most of them share, the mean of their audience splits. There is no park
+ * table: a park exists the day an owner has a second venue in the network.
+ */
+export const parksFor = async (advertiserId: string): Promise<NetworkPark[]> => {
+  const { venues } = await loadNetwork(advertiserId);
+  const byOwner = new Map<string, OwnedVenue[]>();
+  for (const v of venues) {
+    if (v.ownerId === null) continue;
+    byOwner.set(v.ownerId, [...(byOwner.get(v.ownerId) ?? []), v]);
+  }
+  return [...byOwner.entries()]
+    .filter(([, list]) => list.length >= PARK_MIN_LOCATIONS)
+    .map(([ownerId, list]) => {
+      const category = mostCommon(list.map((v) => v.category)) ?? 'autre';
+      const bands = meanAgeBands(list.map((v) => v.age_bands));
+      return {
+        id: ownerId,
+        name: list[0]?.ownerName ?? list[0]?.name ?? 'Parc',
+        category,
+        category_label:
+          list.find((v) => v.category === category)?.category_label ?? 'Établissement',
+        csp: mostCommon(list.map((v) => v.csp)),
+        male_pct: meanOrNull(list.map((v) => v.male_pct)),
+        female_pct: meanOrNull(list.map((v) => v.female_pct)),
+        dominant_age: dominantAge(bands),
+        age_bands: bands,
+        logo_url: list.find((v) => v.logo_url !== null)?.logo_url ?? null,
+        locations: list.map((v) => ({
+          screenhost_id: v.id,
+          name: v.name,
+          quartier: v.quartier,
+          region: v.region,
+          latitude: v.latitude,
+          longitude: v.longitude,
+          excluded: v.excluded,
+        })),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 };
 
 /** The ids among `screenhostIds` that belong to the Screencaster's network (excludable by him). */

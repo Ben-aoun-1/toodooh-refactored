@@ -132,7 +132,7 @@ export function parkEntries(parks: readonly NetworkPark[]): NetworkEntry[] {
       malePct: p.male_pct,
       femalePct: p.female_pct,
       dominantAge: clean(p.dominant_age),
-      ageBands: null,
+      ageBands: p.age_bands && p.age_bands.length > 0 ? p.age_bands : null,
       spots,
       excluded: spots.length > 0 && spots.every((s) => s.excluded),
     };

@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
-import { campaigns, casterVenueExclusions } from '../src/db/schema.js';
+import { campaigns, casterVenueExclusions, screenhosts } from '../src/db/schema.js';
 import { campaignEligibleHosts } from '../src/lib/campaign-eligible-hosts.js';
 import {
   casterExcludedVenues,
@@ -18,8 +18,10 @@ import {
   dominantAge,
   networkAgeBands,
   networkCategory,
+  mostCommon,
   networkFor,
   networkVenueIds,
+  parksFor,
 } from '../src/lib/network.js';
 
 import { seedApprovedOwner } from './helpers/approved-owner.js';
@@ -176,9 +178,36 @@ describe('« Réseau Screenhosts » — a Screencaster’s excluded venues', () 
     expect(after.venues.filter((x) => x.excluded).map((x) => x.id)).toEqual([venue]);
     expect(after.venues).toHaveLength(v.in.length);
   });
+
+  it('« Parcs TV » — an owner with two venues in the network is a park; excluding it is excluding its locations', async () => {
+    const v = await seedMatrix(await eventSector());
+    const advertiser = await seedApprovedOwner({ role: 'advertiser' });
+    expect(await parksFor(advertiser)).toEqual([]);
+
+    const brand = await seedApprovedOwner({ role: 'fleet_owner', businessName: 'Enseigne Test' });
+    const two = v.in.slice(0, 2);
+    await db.update(screenhosts).set({ ownerId: brand }).where(inArray(screenhosts.id, two));
+
+    const parks = await parksFor(advertiser);
+    expect(parks).toHaveLength(1);
+    expect(parks[0]?.name).toBe('Enseigne Test');
+    expect(parks[0]?.locations.map((l) => l.screenhost_id).sort()).toEqual([...two].sort());
+    expect(parks[0]?.locations.every((l) => !l.excluded)).toBe(true);
+
+    await excludeVenues(advertiser, two);
+    const after = await parksFor(advertiser);
+    expect(after[0]?.locations.every((l) => l.excluded)).toBe(true);
+    // The third venue has its own owner: one location is not a park.
+    expect(after).toHaveLength(1);
+  });
 });
 
 describe('« Réseau Screenhosts » — what a venue card prints', () => {
+  it('the value most venues share; null when none has one', () => {
+    expect(mostCommon(['moyen', 'premium', 'moyen', null])).toBe('moyen');
+    expect(mostCommon([null, null])).toBeNull();
+  });
+
   it('the three families come from the sector name', () => {
     expect(networkCategory('Café')).toBe('cafe');
     expect(networkCategory('Salon de thé')).toBe('cafe');
