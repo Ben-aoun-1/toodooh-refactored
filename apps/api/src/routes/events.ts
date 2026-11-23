@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { type EventRow, events } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { casterExcludedVenuesNow } from '../lib/caster-exclusions.js';
 import { eventPoolDemoVenuesForUser } from '../lib/demo.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import {
@@ -326,7 +327,8 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     const result = await computeEventCmax(
       { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt, seatMinutes: row.seatMinutes },
       eventCpm,
-      new Set(),
+      // « Réseau Screenhosts » — the caller's own network: the venues he removed are not his.
+      request.user ? await casterExcludedVenuesNow(db, request.user.id) : new Set(),
       1,
       request.user ? await eventPoolDemoVenuesForUser(db, request.user.id) : null,
     );

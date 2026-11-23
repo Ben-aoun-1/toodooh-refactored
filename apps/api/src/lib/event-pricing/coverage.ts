@@ -32,6 +32,8 @@ export interface CoverageVenue {
 export const eventCoverageVenues = async (
   eventId: string,
   demoVenues: ReadonlySet<string> | null = null,
+  /** « Réseau Screenhosts » — the venues the Screencaster removed (lib/caster-exclusions.ts). */
+  casterExcluded: ReadonlySet<string> = new Set(),
 ): Promise<CoverageVenue[]> => {
   const [event] = await db
     .select({
@@ -44,7 +46,7 @@ export const eventCoverageVenues = async (
     .where(eq(events.id, eventId))
     .limit(1);
   if (!event) return [];
-  const pool = await eventEligibleVenues(event, new Set(), demoVenues);
+  const pool = await eventEligibleVenues(event, casterExcluded, demoVenues);
   if (pool.length === 0) return [];
   return db
     .select({

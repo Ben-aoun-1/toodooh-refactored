@@ -64,6 +64,7 @@ import { internalBroadcastRoutes } from './internal-broadcast.js';
 import { internalRoutes } from './internal.js';
 import { logoRoutes } from './logos.js';
 import { meRoutes } from './me.js';
+import { networkRoutes } from './network.js';
 import { notificationsRoutes } from './notifications.js';
 import { ownerStatementsRoutes } from './owner-statements.js';
 import { passwordRoutes } from './password.js';
@@ -237,6 +238,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(predefinedZonesRoutes);
   // CF-Z1 — the NEW zones read (wizard); distinct from the legacy predefined_zones CRUD above.
   await app.register(zonesRoutes);
+  await app.register(networkRoutes);
   // Public reference-data reads (no auth) — register last; they add no preHandler.
   await app.register(referenceRoutes);
 };

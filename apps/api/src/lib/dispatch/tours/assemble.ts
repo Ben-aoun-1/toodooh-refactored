@@ -10,6 +10,7 @@ import {
   screenhosts,
 } from '../../../db/schema.js';
 import { ownerApprovedSql } from '../../approved-owner.js';
+import { casterExcludedVenues } from '../../caster-exclusions.js';
 import { demoVenueIds, isDemoCampaign } from '../../demo.js';
 import { NOOP_TRACE, type EngineTrace } from '../../engine-journal/trace.js';
 import { blackoutMinutesInHour, eventBlackouts, windowsForVenue } from '../../event-blackout.js';
@@ -143,6 +144,8 @@ export const assembleToursPool = async (
     lines,
     zoneIds,
     excluded: new Set(opts.excludeScreenhostIds ?? []),
+    // « Réseau Screenhosts » — the venues the campaign's Screencaster removed from his network.
+    casterExcluded: await casterExcludedVenues(executor, campaign.id),
     frozenVenues,
     demoVenues,
   };

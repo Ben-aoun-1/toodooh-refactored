@@ -2,6 +2,7 @@ import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import { campaigns, eventAllocations, hourReservations, notifications } from '../../db/schema.js';
+import { casterExcludedVenues, withCasterExclusions } from '../caster-exclusions.js';
 import { demoEventPlacements, demoEventStart, demoEventStartDate } from '../demo-event.js';
 import { demoDelayMinutes, eventPoolDemoVenues } from '../demo.js';
 import {
@@ -296,7 +297,8 @@ export const runEventDispatch = async (
     );
   }
 
-  const pool = await assembleEventPool(event);
+  // « Réseau Screenhosts » — the venues its Screencaster removed from his network stay out.
+  const pool = await assembleEventPool(event, await casterExcludedVenues(db, positioning.id));
   const fill = fillEventBlocs(pool, positioning.requestedBudget, cpmEvtTnd);
   if (fill.status === 'NMAX_EXCEEDED') return { status: 'NMAX_EXCEEDED', nMax: fill.nMax };
   if (fill.status === 'NO_POOL') return { status: 'NO_POOL' };
@@ -433,7 +435,7 @@ const runEventMinutesDispatch = async (
     const { minutes } = await computeEventCmax(
       event,
       cpmEvtTnd,
-      new Set(),
+      await casterExcludedVenues(tx, positioning.id),
       await campaignPlaysPerMinute(positioning.id, tx),
       demoVenues,
     );
@@ -552,7 +554,7 @@ export const runEventRefusalCascade = async (
     const { minutes } = await computeEventCmax(
       event,
       cpmEvtTnd,
-      exclude,
+      await withCasterExclusions(executor, positioning.id, exclude),
       await campaignPlaysPerMinute(positioning.id, executor),
     );
     const model = eventSeatModel(event.seatMinutes);
@@ -570,7 +572,10 @@ export const runEventRefusalCascade = async (
     return { status: count < refused.seats ? 'PARTIAL' : 'REPLACED', allocationIds: ids };
   }
 
-  const pool = await assembleEventPool(event, exclude);
+  const pool = await assembleEventPool(
+    event,
+    await withCasterExclusions(executor, positioning.id, exclude),
+  );
   const refusedValueTnd = Math.round(refused.impressionsTotal * cpmEvtTnd) / 1000;
   // N_max is a VALIDATION gate, not a repair gate: the cascade re-places with no venue cap
   // (blocking a refusal over N_max would wedge the owner's decision).

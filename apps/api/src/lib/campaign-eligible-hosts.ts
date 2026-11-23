@@ -19,6 +19,7 @@ import {
   liveToursDetail,
   toursFiche,
 } from './campaign-eligible-hosts-tours.js';
+import { casterExcludedVenues } from './caster-exclusions.js';
 import { eventPoolDemoVenues } from './demo.js';
 import {
   campaignCpmRates,
@@ -82,6 +83,7 @@ export type ExclusionReason =
   | 'no_installed_screen'
   | 'not_demo_venue'
   | 'not_in_frozen_week'
+  | 'caster_excluded'
   // DISP-TOURS — the tours pool's own reasons (lib/dispatch/tours/assemble.ts).
   | 'no_typical_week'
   | 'no_usable_hour';
@@ -152,6 +154,7 @@ const KNOWN_REASONS = new Set<string>([
   'no_installed_screen',
   'not_demo_venue',
   'not_in_frozen_week',
+  'caster_excluded',
 ]);
 
 /** An in-memory journal: listens to the pool's own `venue_excluded` events, writes nothing. */
@@ -280,7 +283,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
     const cmax = await computeEventCmax(
       event,
       rates.eventCpmTnd,
-      new Set(),
+      await casterExcludedVenues(db, row.id),
       await campaignPlaysPerMinute(row.id),
       await eventPoolDemoVenues(db, row.id),
     );

@@ -1300,6 +1300,30 @@ export const logos = pgTable(
 
 export type Logo = typeof logos.$inferSelect;
 
+// Mariem 17/11/2026 — « Réseau Screenhosts » : the venues a Screencaster removed from HIS network.
+// One row = one exclusion period, open while reintegrated_at is NULL; closed rows are history the
+// engine reads for campaigns validated meanwhile (lib/caster-exclusions.ts — the one home).
+export const casterVenueExclusions = pgTable(
+  'caster_venue_exclusions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    advertiserId: uuid('advertiser_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    excludedAt: timestamp('excluded_at', { withTimezone: true }).notNull().defaultNow(),
+    reintegratedAt: timestamp('reintegrated_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('caster_venue_exclusions_open_uq')
+      .on(table.advertiserId, table.screenhostId)
+      .where(sql`${table.reintegratedAt} IS NULL`),
+    index('caster_venue_exclusions_advertiser_idx').on(table.advertiserId),
+  ],
+);
+
 // Mariem 12/11/2026 (Agent Screenhost spec VF §11) — a qualification fiche: the agent's answers,
 // the proposed result computed at sending, and the manager's final decision (taken in the Hub).
 export type AgentChecklistStatus = 'draft' | 'sent' | 'validated' | 'refused';
