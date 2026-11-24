@@ -12,6 +12,7 @@ import {
 } from '../db/schema.js';
 import { ownerApprovedSql } from '../lib/approved-owner.js';
 import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
+import { casterExcludedVenues } from '../lib/caster-exclusions.js';
 import { demoVenueIds, eventPoolDemoVenues, isDemoCampaign } from '../lib/demo.js';
 import {
   broadcastableHours,
@@ -180,7 +181,11 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         .status(200)
         .send(
           coverageBody(
-            await eventCoverageVenues(campaign.eventId, await eventPoolDemoVenues(db, campaign.id)),
+            await eventCoverageVenues(
+              campaign.eventId,
+              await eventPoolDemoVenues(db, campaign.id),
+              await casterExcludedVenues(db, campaign.id),
+            ),
           ),
         );
     }
@@ -223,7 +228,12 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
     // DEMO-1 / DEMO-2 (ruled Q1 A) — a demo screencaster's map shows only the demo venues (the
     // ticked real ones and the demo screenhosts); nobody else ever sees a demo screenhost.
     const demoSet = (await isDemoCampaign(db, campaign.id)) ? await demoVenueIds(db) : null;
-    const visible = venues.filter((v) => (demoSet ? demoSet.has(v.id) : !v.demoOnly));
+    // « Réseau Screenhosts » — the venues the campaign's Screencaster removed from his network
+    // are not on his map either (the pool's own rule, lib/caster-exclusions.ts).
+    const casterExcluded = await casterExcludedVenues(db, campaign.id);
+    const visible = venues.filter(
+      (v) => (demoSet ? demoSet.has(v.id) : !v.demoOnly) && !casterExcluded.has(v.id),
+    );
 
     const zoneRows = await db
       .select({ zoneId: campaignZones.zoneId })

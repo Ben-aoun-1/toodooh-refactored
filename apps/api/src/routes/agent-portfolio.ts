@@ -52,6 +52,7 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
       status: string;
       attached_at: string;
       attention: string[];
+      category: string | null;
     }[];
     if (sh) {
       const view = await shAgentCampaigns(id, now);
@@ -62,6 +63,7 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
         status: a.status,
         attached_at: a.attached_at,
         attention: a.attention,
+        category: a.category,
       }));
     } else {
       const view = await agentCampaigns(id, now);
@@ -72,6 +74,7 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
         status: a.status,
         attached_at: a.attached_at,
         attention: [],
+        category: null,
       }));
     }
     const counted = (status: string) =>
@@ -115,7 +118,14 @@ export const agentPortfolioRoutes: FastifyPluginAsync = async (app) => {
       rank: await agentRank(id, role, now),
       recent_affiliates: affiliates
         .slice(0, 8)
-        .map((a) => ({ id: a.id, name: a.name, attention: a.attention.length })),
+        // AGENT-VF — the tile under each name reads the category, else the status.
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          attention: a.attention.length,
+          category: a.category,
+          status: a.status,
+        })),
       current_campaigns: campaignsView
         .filter((c) => live(c.status))
         .sort((a, b) =>

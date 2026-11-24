@@ -5,8 +5,11 @@ import {
   STATUT_LABELS,
   SUGGESTED_BADGE,
   WINDOW_LINE,
+  eventDateText,
+  eventHoursText,
   formatEventDate,
   formatEventHours,
+  isUnconfirmed,
   validateSuggestForm,
 } from './event-display';
 
@@ -52,5 +55,30 @@ describe('validateSuggestForm — the four required fields (server-mirrored Fren
     const errors = validateSuggestForm({ ...valid, [field]: '   ' });
     expect(errors[field]).toBe(message);
     expect(Object.keys(errors)).toEqual([field]);
+  });
+});
+
+// Operator 23/11/2026 — a match « à confirmer » is sold; its provisional instant is never printed.
+describe('a match whose day or time is not confirmed', () => {
+  const kickoff = '2027-03-12T19:00:00.000Z';
+  const ends = '2027-03-12T21:00:00.000Z';
+
+  it('is unconfirmed on either flag', () => {
+    expect(isUnconfirmed({})).toBe(false);
+    expect(isUnconfirmed({ date_tbc: false, time_tbc: false })).toBe(false);
+    expect(isUnconfirmed({ date_tbc: true })).toBe(true);
+    expect(isUnconfirmed({ time_tbc: true })).toBe(true);
+  });
+
+  it('prints the day unless the day itself is to confirm', () => {
+    expect(eventDateText({ kickoff_at: kickoff })).toBe('12 mars 2027');
+    expect(eventDateText({ kickoff_at: kickoff, time_tbc: true })).toBe('12 mars 2027');
+    expect(eventDateText({ kickoff_at: kickoff, date_tbc: true })).toBe('Date à confirmer');
+  });
+
+  it('never prints provisional hours', () => {
+    expect(eventHoursText({}, kickoff, ends)).toBe('20h00 - 22h00');
+    expect(eventHoursText({ time_tbc: true }, kickoff, ends)).toBe('Horaire à confirmer');
+    expect(eventHoursText({ date_tbc: true }, kickoff, ends)).toBe('Horaire à confirmer');
   });
 });

@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
+  type AllocationDecider,
   type DispatchAcceptation,
   campaignDispatchAllocation,
   campaignDispatchPlan,
@@ -23,10 +24,27 @@ import { createEngineTrace } from './engine-journal/trace.js';
 // owns), the row is taken FOR UPDATE, a REFUSE is definitive, and a refusal on a campaign that
 // has not started yet runs the E3 cascade in the same transaction. What stays with the caller:
 // the HTTP mapping, the post-commit SPS recompute and the playlist re-push.
+//
+// Agent spec VF §10 + operator 2026-11-14 (« an acceptance should be final ») — the FIRST answer
+// decides, whoever gives it (the Host, its agent, the admin for the Host): an ACCEPTE can no
+// longer be turned into a REFUSE, and a second actor's answer is turned away even when it says
+// the same thing (`already_answered`). The same actor repeating its own answer stays an
+// idempotent no-op. The author is stored on the row (decided_by, migration 0109).
+
+/** The 409 message of a second answer (spec §10, verbatim). */
+export const OFFER_ALREADY_ANSWERED = 'Cette offre a déjà reçu une réponse';
+
+export interface DecisionActor {
+  kind: AllocationDecider;
+  /** The user who answers (the agent, the admin); the owner's own id for the Host. */
+  userId: string | null;
+}
 
 export type AllocationDecisionOutcome =
   | { kind: 'not_found' }
   | { kind: 'refused_final' }
+  /** Someone already answered (an acceptance is final; a second actor never overrides). */
+  | { kind: 'already_answered'; statut: DispatchAcceptation; by: AllocationDecider | null }
   | {
       kind: 'ok';
       id: string;
@@ -43,8 +61,12 @@ export const decideAllocation = async (input: {
   allocationId: string;
   ownerId: string;
   statut: DispatchAcceptation;
+  /** Who answers; the Host itself when omitted. */
+  actor?: DecisionActor;
+  now?: Date;
 }): Promise<AllocationDecisionOutcome> => {
   const { allocationId, ownerId, statut } = input;
+  const actor: DecisionActor = input.actor ?? { kind: 'owner', userId: ownerId };
   const cascadeTrace: { current: ReturnType<typeof createEngineTrace> | null } = { current: null };
   const outcome = await db
     .transaction(async (tx): Promise<AllocationDecisionOutcome> => {
@@ -84,6 +106,11 @@ export const decideAllocation = async (input: {
       // DISP-TOURS Q1 — a reservation is not proposed until its spot is validated: nothing to
       // decide (indistinguishable from a missing one).
       if (current === 'RESERVE') return { kind: 'not_found' };
+      // A row answered before migration 0109 carries no author: it is the Host's.
+      const by = row.allocation.decidedBy ?? (current === 'EN_ATTENTE' ? null : 'owner');
+      if (current !== 'EN_ATTENTE' && by !== actor.kind) {
+        return { kind: 'already_answered', statut: current, by };
+      }
       if (current === statut) {
         return {
           kind: 'ok',
@@ -96,10 +123,16 @@ export const decideAllocation = async (input: {
         };
       }
       if (current === 'REFUSE') return { kind: 'refused_final' };
+      if (current === 'ACCEPTE') return { kind: 'already_answered', statut: current, by };
 
       await tx
         .update(campaignDispatchAllocation)
-        .set({ statutAcceptation: statut })
+        .set({
+          statutAcceptation: statut,
+          decidedBy: actor.kind,
+          decidedByUserId: actor.userId,
+          decidedAt: input.now ?? new Date(),
+        })
         .where(eq(campaignDispatchAllocation.id, row.allocation.id));
 
       if (
@@ -157,6 +190,7 @@ export const decideAllocation = async (input: {
               startDate: row.campaignStart,
               endDate: row.campaignEnd,
             },
+            ...(input.now ? { now: input.now } : {}),
           },
           trace,
         );

@@ -24,6 +24,8 @@ export const SUGGESTED_BADGE = 'Suggéré par un annonceur';
 
 /** The positioning CTA — LIVE since EV3 (the « Bientôt disponible » placeholder retired). */
 export const POSITIONNE_CTA = 'Je me positionne';
+/** The same button on a match that is over or annulé. */
+export const CLOSED_CTA = 'Positionnement clos';
 
 const TUNIS = 'Africa/Tunis';
 
@@ -44,6 +46,31 @@ export function formatEventHours(kickoffIso: string, endsIso: string): string {
       .toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: TUNIS })
       .replace(':', 'h');
   return `${fmt(kickoffIso)} - ${fmt(endsIso)}`;
+}
+
+// Operator 23/11/2026 — a match still « à confirmer » is sold like any other: its kickoff_at is a
+// PROVISIONAL instant, so no screen prints it as a fact. ONE home for what stands in its place.
+type ConfirmationFlags = { date_tbc?: boolean; time_tbc?: boolean };
+
+/** The match's day or kick-off time is not confirmed yet. */
+export const isUnconfirmed = (e: ConfirmationFlags): boolean =>
+  e.date_tbc === true || e.time_tbc === true;
+
+export const DATE_TBC_LABEL = 'Date à confirmer';
+export const HOURS_TBC_LABEL = 'Horaire à confirmer';
+
+/** What the Screencaster reads before buying a match whose day or time is not confirmed. */
+export const UNCONFIRMED_NOTE =
+  'La date ou l’horaire de ce match reste à confirmer. Vos créneaux se placeront automatiquement sur la fenêtre de diffusion dès la confirmation, sans action de votre part.';
+
+/** The match's day, or « Date à confirmer ». */
+export function eventDateText(e: ConfirmationFlags & { kickoff_at: string }): string {
+  return e.date_tbc === true ? DATE_TBC_LABEL : formatEventDate(e.kickoff_at);
+}
+
+/** An interval of the match in Tunis hours, or « Horaire à confirmer ». */
+export function eventHoursText(e: ConfirmationFlags, startIso: string, endIso: string): string {
+  return isUnconfirmed(e) ? HOURS_TBC_LABEL : formatEventHours(startIso, endIso);
 }
 
 export type SuggestFormErrors = Partial<Record<keyof SuggestMatchInput, string>>;

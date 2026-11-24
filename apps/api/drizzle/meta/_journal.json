@@ -778,6 +778,55 @@
       "when": 1795382265000,
       "tag": "0116_campaign_delivery_override",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1795390000000,
+      "tag": "0109_allocation_decided_by",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1795400000000,
+      "tag": "0110_agent_appointment_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1795410000000,
+      "tag": "0111_logos",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1795420000000,
+      "tag": "0112_agent_checklists",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1795430000000,
+      "tag": "0113_event_allocation_decided_by",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1795440000000,
+      "tag": "0114_cta_scan_visitor",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1795460000000,
+      "tag": "0117_caster_venue_exclusions",
+      "breakpoints": true
     }
   ]
 }

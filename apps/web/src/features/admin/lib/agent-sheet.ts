@@ -45,17 +45,18 @@ export interface AgentSheetPayload {
 const PHONE_RE = /^\+[1-9]\d{6,14}$/;
 const TAX_RE = /^[A-Za-z0-9/]{7,20}$/;
 
-/** The sheet → the api fields, or the first French error. */
+/**
+ * The sheet → the api fields, or the first French error. The rules are the same for both agent
+ * roles since the tax number became optional (spec VF §15 / §10); `_role` stays in the signature
+ * for the callers.
+ */
 export function agentSheetPayload(
   form: AgentSheetForm,
-  role: 'screenhost_agent' | 'screencast_agent',
+  _role: 'screenhost_agent' | 'screencast_agent',
 ): { ok: true; value: AgentSheetPayload } | { ok: false; error: string } {
   const phone = form.phone.replace(/\s/g, '');
   if (!PHONE_RE.test(phone)) return { ok: false, error: 'Téléphone invalide (ex. +21612345678).' };
   const tax = form.tax_number.trim();
-  if (role === 'screencast_agent' && !tax) {
-    return { ok: false, error: 'Le matricule fiscal est obligatoire pour un Agent Screencaster.' };
-  }
   if (tax && !TAX_RE.test(tax)) return { ok: false, error: 'Matricule fiscal invalide.' };
   for (const [key, label] of [
     ['street_address', 'L’adresse'],
@@ -134,3 +135,28 @@ export const affiliationWindowLabel = (start: string | null, end: string | null)
 /** Only a live affiliation takes hub actions; an ended or excluded one is history. */
 export const affiliationIsLive = (status: keyof typeof AFFILIATION_STATUS_FR) =>
   status === 'en_cours' || status === 'en_attente_activation';
+
+// Spec VF §15 / §10 (Mariem 12/11/2026) — the agent's identity card, both sides, is mandatory at
+// creation: an image or a PDF, 5 MB at most (the api's own limits, lib/user-documents).
+export const CIN_ACCEPT = 'image/png,image/jpeg,application/pdf';
+const CIN_MIME = new Set(CIN_ACCEPT.split(','));
+export const CIN_MAX_BYTES = 5 * 1024 * 1024;
+
+export interface CinSide {
+  type: string;
+  size: number;
+}
+
+/** The first French problem with the two sides, or null when both can be sent. */
+export function cinProblem(recto: CinSide | null, verso: CinSide | null): string | null {
+  for (const [side, label] of [
+    [recto, 'recto'],
+    [verso, 'verso'],
+  ] as const) {
+    if (!side) return `La CIN ${label} est obligatoire.`;
+    if (!CIN_MIME.has(side.type))
+      return `CIN ${label} : choisissez une image (PNG, JPEG) ou un PDF.`;
+    if (side.size > CIN_MAX_BYTES) return `CIN ${label} : le fichier dépasse 5 Mo.`;
+  }
+  return null;
+}

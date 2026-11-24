@@ -38,6 +38,8 @@ const MyCart = lazy(() => import('@/features/cart/pages/MyCart'));
 const AdvertiserPerformances = lazy(
   () => import('@/features/advertiser/pages/AdvertiserPerformances'),
 );
+const NetworkScreenhosts = lazy(() => import('@/features/network/pages/NetworkScreenhosts'));
+const NetworkParks = lazy(() => import('@/features/network/pages/NetworkParks'));
 const OwnerDashboard = lazy(() => import('@/features/screenhost/pages/OwnerDashboard'));
 const Login = lazy(() => import('@/features/auth/pages/Login'));
 const SignUp = lazy(() => import('@/features/auth/pages/SignUp'));
@@ -64,6 +66,11 @@ const AgentSettings = lazy(() => import('@/features/agent/pages/AgentSettings'))
 const AgentCampaigns = lazy(() => import('@/features/agent/pages/AgentCampaigns'));
 const AgentAffiliates = lazy(() => import('@/features/agent/pages/AgentAffiliates'));
 const AgentCalendar = lazy(() => import('@/features/agent/pages/AgentCalendar'));
+const AgentRevenues = lazy(() => import('@/features/agent/pages/AgentRevenues'));
+const AgentFaq = lazy(() => import('@/features/agent/pages/AgentFaq'));
+const AgentSensors = lazy(() => import('@/features/agent/pages/AgentSensors'));
+const AgentChecklist = lazy(() => import('@/features/agent/pages/AgentChecklist'));
+const AgentAssignSensors = lazy(() => import('@/features/agent/pages/AgentAssignSensors'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
 const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'));
@@ -92,6 +99,8 @@ const SimulatorPage = lazy(() => import('@/features/admin/pages/SimulatorPage'))
 const DemoManagement = lazy(() => import('@/features/admin/pages/DemoManagement'));
 // AGT-1 — the admin « Agents » page.
 const AgentsManagement = lazy(() => import('@/features/admin/pages/AgentsManagement'));
+const LogoManagement = lazy(() => import('@/features/admin/pages/LogoManagement'));
+const ChecklistManagement = lazy(() => import('@/features/admin/pages/ChecklistManagement'));
 
 // Client React Query unique pour toute l'application (config : voir D-Q).
 const queryClient = createQueryClient();
@@ -367,6 +376,46 @@ export default function App() {
               }
             />
             <Route
+              path="/agent/faq"
+              element={
+                <AgentRoute>
+                  <AgentFaq />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/checklist"
+              element={
+                <AgentRoute>
+                  <AgentChecklist />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/capteurs"
+              element={
+                <AgentRoute>
+                  <AgentSensors />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/capteurs/assigner"
+              element={
+                <AgentRoute>
+                  <AgentAssignSensors />
+                </AgentRoute>
+              }
+            />
+            <Route
+              path="/agent/revenus"
+              element={
+                <AgentRoute>
+                  <AgentRevenues />
+                </AgentRoute>
+              }
+            />
+            <Route
               path="/agent/affilies"
               element={
                 <AgentRoute>
@@ -390,6 +439,27 @@ export default function App() {
                 <AdvertiserRoute>
                   <AdvertiserLayout>
                     <AdvertiserDashboard />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            {/* RESEAU-1 — the Screenhost network and the TV parks, with their exclusions. */}
+            <Route
+              path="/reseau"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <NetworkScreenhosts />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/parcs-tv"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <NetworkParks />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }
@@ -770,6 +840,22 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <DemoManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-logos"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <LogoManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-checklists"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <ChecklistManagement />
                 </AdminRoute>
               }
             />

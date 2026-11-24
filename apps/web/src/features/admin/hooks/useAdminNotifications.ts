@@ -51,6 +51,8 @@ export const actionFor = (n: ApiNotification): AdminNotificationItem['action'] =
   if (n.type === 'admin_allocation_refused') {
     return { label: 'Consulter', path: '/admin-campaigns' };
   }
+  if (n.type === 'admin_logo_pending') return { label: 'Traiter', path: '/admin-logos' };
+  if (n.type === 'admin_agent_appointment') return { label: 'Consulter', path: '/admin-agents' };
   if (n.type === 'admin_support_message') return { label: 'Traiter', path: '/admin-support' };
   return null;
 };

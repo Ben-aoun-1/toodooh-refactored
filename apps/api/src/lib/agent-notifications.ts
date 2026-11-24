@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
@@ -47,6 +47,24 @@ export const noticeLink = (type: string, link: string | null): string | null =>
   DEFAULT_LINKS[type] ??
   (type.startsWith('agent_appointment') ? '/agent/calendrier' : null);
 
+/**
+ * AGENT-VF (spec VF §13 / §9) — the notices that are emailed to a NON-agent too: the affiliate
+ * told of an agent's rendez-vous request, and the Toodooh team told of each step.
+ */
+export const EMAILED_FOR_EVERYONE = [
+  'appointment_agent_request',
+  'admin_agent_appointment',
+] as const;
+
+/** The page the email's button opens, by the recipient's role. */
+export const emailPath = (type: string, link: string | null, role: string): string => {
+  if (role === 'screenhost_agent' || role === 'screencast_agent') {
+    return noticeLink(type, link) ?? '/agent';
+  }
+  if (role === 'admin' || role === 'superadmin') return '/admin-agents';
+  return role === 'advertiser' ? '/dashboard?rdv=1' : '/owner-dashboard?rdv=1';
+};
+
 const allowed = (
   category: NoticeCategory,
   prefs: { notifyNewsUpdates: boolean; notifyRemindersEvents: boolean },
@@ -66,7 +84,15 @@ export const runAgentNoticeEmailTick = async (
     .select({ n: notifications, user: users })
     .from(notifications)
     .innerJoin(users, eq(users.id, notifications.userId))
-    .where(and(isNull(notifications.emailedAt), inArray(users.role, [...AGENT_ROLES])))
+    .where(
+      and(
+        isNull(notifications.emailedAt),
+        or(
+          inArray(users.role, [...AGENT_ROLES]),
+          inArray(notifications.type, [...EMAILED_FOR_EVERYONE]),
+        ),
+      ),
+    )
     .orderBy(asc(notifications.createdAt))
     .limit(100);
   let sent = 0;
@@ -82,7 +108,7 @@ export const runAgentNoticeEmailTick = async (
       skipped += 1;
       continue;
     }
-    const url = `${env.WEB_ORIGIN}${noticeLink(n.type, n.link) ?? '/agent'}`;
+    const url = `${env.WEB_ORIGIN}${emailPath(n.type, n.link, user.role)}`;
     const name = userLabel(user);
     const result = await sender.send({
       to: user.email,

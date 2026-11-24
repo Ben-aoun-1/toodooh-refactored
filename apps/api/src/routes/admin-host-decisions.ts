@@ -13,7 +13,7 @@ import {
   users,
 } from '../db/schema.js';
 import { afterClassicDecision, afterEventDecision } from '../lib/allocation-decision-effects.js';
-import { decideAllocation } from '../lib/allocation-decision.js';
+import { OFFER_ALREADY_ANSWERED, decideAllocation } from '../lib/allocation-decision.js';
 import { decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { loadOwnerSharePcts, ownerShareTnd } from '../lib/owner-share.js';
 import { userLabel } from '../lib/user-label.js';
@@ -85,6 +85,7 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
                 screenhostName: screenhosts.name,
                 statut: eventAllocations.statut,
                 decidedAt: eventAllocations.decidedAt,
+                decidedBy: eventAllocations.decidedBy,
                 montantTnd: eventAllocations.montantTnd,
                 owner,
               })
@@ -101,6 +102,8 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
                 screenhostId: screenhosts.id,
                 screenhostName: screenhosts.name,
                 statut: campaignDispatchAllocation.statutAcceptation,
+                decidedAt: campaignDispatchAllocation.decidedAt,
+                decidedBy: campaignDispatchAllocation.decidedBy,
                 revenu: campaignDispatchAllocation.revenuPrevisionnel,
                 owner,
               })
@@ -116,7 +119,6 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
           ).map((r) => ({
             ...r,
             kind: 'campaign' as const,
-            decidedAt: null,
             value: Number(r.revenu),
           }));
     return reply.status(200).send({
@@ -131,6 +133,8 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
         owner_label: r.owner?.id ? userLabel(r.owner) : null,
         statut: r.statut,
         decided_at: r.statut === 'EN_ATTENTE' ? null : r.decidedAt,
+        // Mariem 16/11 — « le traçage doit être clair »: who answered (system = no answer in time).
+        decided_by: r.statut === 'EN_ATTENTE' ? null : r.decidedBy,
         owner_share_tnd: ownerShareTnd(r.value, pcts),
       })),
     });
@@ -183,8 +187,18 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
     }
     const outcome =
       kind === 'campaign'
-        ? await decideAllocation({ allocationId: id, ownerId: target.ownerId, statut })
-        : await decideEventAllocation({ allocationId: id, ownerId: target.ownerId, statut });
+        ? await decideAllocation({
+            allocationId: id,
+            ownerId: target.ownerId,
+            statut,
+            actor: { kind: 'admin', userId: adminId },
+          })
+        : await decideEventAllocation({
+            allocationId: id,
+            ownerId: target.ownerId,
+            statut,
+            actor: { kind: 'admin', userId: adminId },
+          });
     if (outcome.kind === 'not_found') {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Allocation introuvable.' });
     }
@@ -193,6 +207,11 @@ export const adminHostDecisionRoutes: FastifyPluginAsync = async (app) => {
         error: 'CONFLICT',
         message: 'Ce Host a déjà refusé : le refus est définitif.',
       });
+    }
+    // Agent spec VF §10 + operator 2026-11-14 — the first answer is final, for the admin too
+    // (stopping the campaign stays the way out of an acceptance).
+    if (outcome.kind === 'already_answered') {
+      return reply.status(409).send({ error: 'ALREADY_ANSWERED', message: OFFER_ALREADY_ANSWERED });
     }
     if (kind === 'campaign') {
       await afterClassicDecision(outcome.screenhostId, statut, outcome.changed, request.log);

@@ -4,13 +4,16 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { db } from '../db/client.js';
 import { campaigns, ctaScans } from '../db/schema.js';
+import { env } from '../env.js';
 import { clientIp } from '../lib/client-ip.js';
+import { visitorHash } from '../lib/qr-scans.js';
 import { isCtaCode } from '../lib/spot-cta.js';
 
 // QR-CTA1 — GET /q/:code: where a spot's QR code leads. Counts the scan, then sends the viewer on
 // to the screencaster's link. Public by design (anyone in the venue scans it). A scan is counted
 // only while the campaign is on air or over (a screencaster testing their own draft's QR does not
-// inflate the figure), and nothing about the viewer is stored — only the instant. Rate-limited per
+// inflate the figure), and nothing about the viewer is stored — only the instant and, since
+// QR-SCAN1, an opaque key that changes every day (lib/qr-scans.ts) for « personnes uniques ». Rate-limited per
 // visitor so one phone cannot pump the count; an unknown code lands on the home page.
 // nginx routes /q/ to the api (infra/nginx/toodooh.conf).
 
@@ -40,7 +43,13 @@ export const ctaRedirectRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
     if (!campaign?.ctaUrl) return reply.redirect('/', 302);
     if (COUNTED_STATUSES.has(campaign.status)) {
-      await db.insert(ctaScans).values({ campaignId: campaign.id });
+      const scannedAt = new Date();
+      const ua = request.headers['user-agent'] ?? '';
+      await db.insert(ctaScans).values({
+        campaignId: campaign.id,
+        scannedAt,
+        visitorHash: visitorHash(env.AUTH_SECRET, scannedAt, clientIp(request), ua),
+      });
     }
     return reply.redirect(campaign.ctaUrl, 302);
   });

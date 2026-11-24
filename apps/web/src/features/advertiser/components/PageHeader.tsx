@@ -6,6 +6,7 @@ import headerCampagnesIcon from '@/assets/header/campagnes.png';
 import headerFinanceIcon from '@/assets/header/finance.png';
 import headerParamsIcon from '@/assets/header/params.png';
 import { isEventsBrowsePath } from '@/features/events/lib/events-home';
+import { NETWORK_TITLES } from '@/features/network/lib/network-paths';
 
 import AdvertiserNotificationsBell from './AdvertiserNotificationsBell';
 
@@ -113,6 +114,12 @@ export default function PageHeader({
               <p className="text-xs text-gray-500 truncate hidden sm:block">
                 Suivez l&apos;impact de vos campagnes, campagne par campagne ou sur une période
               </p>
+            </div>
+          ) : NETWORK_TITLES[pathname] ? (
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                {NETWORK_TITLES[pathname]}
+              </h1>
             </div>
           ) : pathname === '/profile' ? (
             <>

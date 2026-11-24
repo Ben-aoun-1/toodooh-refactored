@@ -42,6 +42,13 @@ export const useAgentAppointments = () =>
     refetchInterval: 15_000,
   });
 
+/** AGENT-VF — what « Prendre un rendez-vous » offers the agent (affiliates, places, subjects). */
+export const useAgentRdvOptions = () =>
+  useQuery({
+    queryKey: appointmentKeys.agentOptions(),
+    queryFn: () => appointmentsService.agentOptions(),
+  });
+
 export function useAppointmentMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
   const queryClient = useQueryClient();
   return useMutation({

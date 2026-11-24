@@ -27,6 +27,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 registerLocale('fr', fr);
 import campagneIcon from '@/assets/sidebar/campagnes.png';
 import PageHeader from '@/components/PageHeader';
+import CampaignOwnLogo from '@/features/advertiser/components/CampaignOwnLogo';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import BoostCampaignModal from '@/features/campaigns/components/BoostCampaignModal';
 import CampaignCtaScans from '@/features/campaigns/components/CampaignCtaScans';
@@ -640,6 +641,8 @@ export default function MyCampaigns() {
                 key={campaign.id}
                 className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col"
               >
+                {/* The Screencaster's logo, when he set one (as on the Agent's cards). */}
+                <CampaignOwnLogo />
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <h3 className="text-base font-semibold text-gray-900 truncate flex-1">
                     {campaign.name}

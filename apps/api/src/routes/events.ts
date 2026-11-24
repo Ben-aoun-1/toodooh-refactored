@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { type EventRow, events } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { casterExcludedVenuesNow } from '../lib/caster-exclusions.js';
 import { eventPoolDemoVenuesForUser } from '../lib/demo.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import {
@@ -67,7 +68,7 @@ export const eventView = (row: EventRow, now: Date, matches: MatchWire[] = []) =
     qualification_pending: row.qualificationPending,
     date_label: row.dateLabel,
     matches,
-    /** B1 — false while the date/time is « à confirmer » (or the match is over/annulé). */
+    /** False once the match is over or annulé; a match « à confirmer » is positionable. */
     positionable: positioningRefusal(row, now) === null,
     kickoff_at: row.kickoffAt.toISOString(),
     ends_at: row.endsAt.toISOString(),
@@ -231,8 +232,7 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     const [row] = await db.select().from(events).where(eq(events.id, parsed.data.id)).limit(1);
     if (!row)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Événement introuvable.' });
-    // EVT-CAT2 B1 — annulé, terminé, or a date/time still « à confirmer » refuses (ONE rule,
-    // lib/event-catalogue).
+    // Annulé or terminé refuses (ONE rule, lib/event-catalogue).
     const refusal = positioningRefusal(row, new Date());
     if (refusal) {
       return reply.status(409).send({ ...refusal, statusCode: 409, requestId: request.id });
@@ -326,7 +326,8 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
     const result = await computeEventCmax(
       { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt, seatMinutes: row.seatMinutes },
       eventCpm,
-      new Set(),
+      // « Réseau Screenhosts » — the caller's own network: the venues he removed are not his.
+      request.user ? await casterExcludedVenuesNow(db, request.user.id) : new Set(),
       1,
       request.user ? await eventPoolDemoVenuesForUser(db, request.user.id) : null,
     );

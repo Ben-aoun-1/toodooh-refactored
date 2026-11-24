@@ -6,4 +6,5 @@ export const appointmentKeys = {
   mine: () => [...appointmentKeys.all, 'mine'] as const,
   agentCalendar: (month: string) => [...appointmentKeys.all, 'agent-calendar', month] as const,
   agentList: () => [...appointmentKeys.all, 'agent-list'] as const,
+  agentOptions: () => [...appointmentKeys.all, 'agent-options'] as const,
 };

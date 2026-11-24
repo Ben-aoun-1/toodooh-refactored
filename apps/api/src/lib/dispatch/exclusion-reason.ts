@@ -15,6 +15,8 @@ import {
 //   no_installed_screen — MAP-TV1: nor until it has a TV that ever ran (lib/installed-screen.ts);
 //   excluded           — the caller removed it (the cascade's refusers, redispatch's defaulters
 //                        and dead screens);
+//   caster_excluded    — « Réseau Screenhosts » (Mariem 17/11): the campaign's Screencaster removed
+//                        the venue from his network (lib/caster-exclusions.ts);
 //   not_demo_venue     — DEMO-1 (ruled Q2 A): a demo screencaster's campaign airs only on the
 //                        venues the admin opened to demos (demo_screenhosts);
 //   not_in_frozen_week — TW-SNAP (ruled Q2 B): the campaign's typical week was frozen at cart add
@@ -35,6 +37,7 @@ export type PoolExclusionReason =
   | 'owner_not_approved'
   | 'no_installed_screen'
   | 'excluded'
+  | 'caster_excluded'
   | 'not_demo_venue'
   | 'not_in_frozen_week'
   | 'hours_missing'
@@ -61,6 +64,8 @@ export interface PoolFilterContext {
   lines: readonly TargetingLineLite[];
   zoneIds: readonly string[];
   excluded: ReadonlySet<string>;
+  /** The venues the campaign's Screencaster removed from his network (lib/caster-exclusions.ts). */
+  casterExcluded?: ReadonlySet<string>;
   /** TW-SNAP — the venues of the campaign's frozen typical week; null = no freeze (live week). */
   frozenVenues?: ReadonlySet<string> | null;
   /** DEMO-1 — the demo venues when the campaign is a demo screencaster's; null = not a demo. */
@@ -80,6 +85,7 @@ export const poolExclusionReason = (
     if (!sh.installedScreen) return 'no_installed_screen';
   }
   if (ctx.excluded.has(sh.id)) return 'excluded';
+  if (ctx.casterExcluded?.has(sh.id)) return 'caster_excluded';
   if (ctx.demoVenues && !ctx.demoVenues.has(sh.id)) return 'not_demo_venue';
   if (ctx.frozenVenues && !ctx.frozenVenues.has(sh.id)) return 'not_in_frozen_week';
   if (broadcastableHours(sh.openingHour, sh.closingHour).length === 0) return 'hours_missing';

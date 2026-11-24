@@ -10,6 +10,7 @@ import { agentPayouts, agents, users } from '../db/schema.js';
 import { agentRibState } from '../lib/agent-sheet.js';
 import {
   MONTH_RE,
+  agentTransactions,
   agentWallet,
   markAgentPayoutPaid,
   prepareAgentPayouts,
@@ -70,6 +71,11 @@ export const agentWalletRoutes: FastifyPluginAsync = async (app) => {
       payouts: payouts.map(payoutView),
     });
   });
+
+  // GET /api/agent/transactions — « Mes revenus »: one row per campaign with an acquired amount.
+  app.get('/api/agent/transactions', agentGuard, async (request, reply) =>
+    reply.status(200).send({ transactions: await agentTransactions(request.user?.id ?? '') }),
+  );
 
   // POST /api/agent/payouts/:id/invoice (multipart PDF) — the Screencaster agent's invoice for
   // a payout still in preparation; a new upload replaces the previous one.

@@ -15,6 +15,7 @@ import {
 } from '../src/db/schema.js';
 import { agentCampaignStatus, variationPct } from '../src/lib/agent-portfolio.js';
 import { agentPortfolioRoutes } from '../src/routes/agent-portfolio.js';
+import { agentWalletRoutes } from '../src/routes/agent-wallet.js';
 
 import { seedLiveAffiliation } from './helpers/agent-affiliation.js';
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -180,6 +181,7 @@ describe('AGT-4 — the Screencaster agent portfolio', () => {
 
     const app = Fastify({ logger: false });
     await app.register(agentPortfolioRoutes);
+    await app.register(agentWalletRoutes);
     vi.spyOn(auth.api, 'getSession').mockResolvedValue({
       session: {},
       user: { id: agent, role: 'screencast_agent', status: 'approved' },
@@ -192,6 +194,7 @@ describe('AGT-4 — the Screencaster agent portfolio', () => {
         impressions: number;
         revenue_tnd: number;
         forecast_tnd: number;
+        to_earn_tnd: number;
         affiliate_name: string;
       }[];
     }>().campaigns;
@@ -201,11 +204,15 @@ describe('AGT-4 — the Screencaster agent portfolio', () => {
       impressions: 10000,
       revenue_tnd: 0,
       forecast_tnd: 4.5,
+      // AGENT-VF — « À gagner » is what is still only forecast…
+      to_earn_tnd: 4.5,
       affiliate_name: 'Pâtisserie Lina',
     });
     expect(list.find((c) => c.name === 'Été')).toMatchObject({
       status: 'terminee',
       revenue_tnd: 4.5,
+      // … and nothing once the line is acquired.
+      to_earn_tnd: 0,
     });
 
     const dash = (await app.inject({ method: 'GET', url: '/api/agent/dashboard' })).json<{
@@ -220,7 +227,18 @@ describe('AGT-4 — the Screencaster agent portfolio', () => {
     expect(dash.impressions_total).toBe(list.reduce((s, c) => s + c.impressions, 0));
     expect(dash).toMatchObject({ affiliates_active: 1, rank: 1 });
     expect(dash.current_campaigns.map((c) => c.name)).toEqual(['Ramadan']);
-    expect(dash.recent_affiliates).toEqual([{ id: sc, name: 'Pâtisserie Lina', attention: 0 }]);
+    expect(dash.recent_affiliates).toEqual([
+      { id: sc, name: 'Pâtisserie Lina', attention: 0, category: null, status: 'en_cours' },
+    ]);
+
+    // AGENT-VF — « Mes revenus » lists the acquired campaign only, and adds up to the wallet.
+    const tx = (await app.inject({ method: 'GET', url: '/api/agent/transactions' })).json<{
+      transactions: { campaign_name: string; party_name: string; amount_tnd: number }[];
+    }>().transactions;
+    expect(tx).toMatchObject([
+      { campaign_name: 'Été', party_name: 'Pâtisserie Lina', amount_tnd: 4.5 },
+    ]);
+    expect(tx.reduce((s, t) => s + t.amount_tnd, 0)).toBe(dash.wallet.cumulative_tnd);
 
     const affs = (await app.inject({ method: 'GET', url: '/api/agent/affiliates' })).json<{
       affiliates: { revenue_tnd: number; impressions: number }[];

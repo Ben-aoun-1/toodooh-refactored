@@ -50,6 +50,8 @@ export const STORAGE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   recharges: ['document_key', 'bon_key', 'signed_bon_key'],
   monthly_invoices: ['pdf_key'],
   screenhost_factures: ['pdf_key', 'signed_file_key'],
+  // Agent specs VF « Logos » — a venue's or a Screencaster's logos go with it.
+  logos: ['storage_key'],
 };
 
 /** D2 A — the financial records archived before deletion (rows as JSON). */
@@ -75,6 +77,8 @@ export const ARCHIVE_FILE_COLUMNS: Readonly<Record<string, readonly string[]>> =
   recharges: ['document_key', 'bon_key', 'signed_bon_key'],
   monthly_invoices: ['pdf_key'],
   screenhost_factures: ['pdf_key', 'signed_file_key'],
+  // Agent specs VF « Logos » — a venue's or a Screencaster's logos go with it.
+  logos: ['storage_key'],
   agent_payouts: ['invoice_key'],
 };
 

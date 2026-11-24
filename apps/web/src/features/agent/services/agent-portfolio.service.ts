@@ -18,6 +18,8 @@ export interface AgentCampaign {
   impressions: number;
   revenue_tnd: number;
   forecast_tnd: number;
+  /** « À gagner »: what is still only forecast. */
+  to_earn_tnd: number;
 }
 
 export interface AgentAffiliate {
@@ -38,6 +40,15 @@ export interface AgentWallet {
   balance_tnd: number;
   forecast_tnd: number;
   unprepared_tnd: number;
+}
+
+/** « Mes revenus » — one campaign whose amount is acquired. */
+export interface AgentTransaction {
+  campaign_id: string;
+  campaign_name: string;
+  party_name: string;
+  credited_at: string;
+  amount_tnd: number;
 }
 
 export interface AgentPayout {
@@ -66,6 +77,8 @@ export interface ShAgentCampaign {
   impressions: number;
   revenue_tnd: number;
   forecast_tnd: number;
+  /** « À gagner »: what is still only forecast. */
+  to_earn_tnd: number;
 }
 
 export interface ShAffiliate {
@@ -139,7 +152,13 @@ export interface AgentDashboard {
   impressions_total: number;
   impressions_variation_pct: number | null;
   rank: number | null;
-  recent_affiliates: { id: string; name: string; attention: number }[];
+  recent_affiliates: {
+    id: string;
+    name: string;
+    attention: number;
+    category: string | null;
+    status: 'en_attente_activation' | 'en_cours' | 'terminee';
+  }[];
   current_campaigns: (AgentCampaign | ShAgentCampaign)[];
 }
 
@@ -167,6 +186,9 @@ export const agentPortfolioService = {
   },
   wallet(): Promise<AgentWallet & { invoice_required: boolean; payouts: AgentPayout[] }> {
     return apiClient.get('/agent/wallet');
+  },
+  transactions(): Promise<{ transactions: AgentTransaction[] }> {
+    return apiClient.get('/agent/transactions');
   },
   uploadInvoice(payoutId: string, file: File): Promise<AgentPayout> {
     const form = new FormData();

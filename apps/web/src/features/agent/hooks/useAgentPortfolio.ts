@@ -34,6 +34,13 @@ export const useAgentWallet = (enabled = true) =>
     enabled,
   });
 
+export const useAgentTransactions = () =>
+  useQuery({
+    queryKey: agentKeys.transactions(),
+    queryFn: () => agentPortfolioService.transactions(),
+    refetchOnMount: 'always',
+  });
+
 export const useUploadPayoutInvoice = () => {
   const queryClient = useQueryClient();
   return useMutation({

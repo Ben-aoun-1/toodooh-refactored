@@ -272,7 +272,7 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect(outcome).toMatchObject({ campaignId, locked: 1, frozen: 0 });
     const after = await planAllocations();
     // The silent Host's proposal is withdrawn, its trace kept (Mariem 16/11).
-    expect(after.of(A)).toMatchObject({ statutAcceptation: 'REFUSE' });
+    expect(after.of(A)).toMatchObject({ statutAcceptation: 'REFUSE', decidedBy: 'system' });
     const b = after.of(B);
     expect(b?.statutAcceptation).toBe('ACCEPTE'); // accepted at once, whatever the amount
     expect(b?.creneaux.length ?? 0).toBeGreaterThan(bBefore);
@@ -317,7 +317,7 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     const [outcome] = await runCampaignPrelaunchTick(FREEZE);
     expect(outcome).toMatchObject({ locked: 0, frozen: 1, final: { told: true } });
     const after = await planAllocations();
-    expect(after.of(C)).toMatchObject({ statutAcceptation: 'REFUSE' });
+    expect(after.of(C)).toMatchObject({ statutAcceptation: 'REFUSE', decidedBy: 'system' });
     expect(after.rows.filter((r) => r.statutAcceptation === 'ACCEPTE')).toHaveLength(1);
     expect(after.rows.some((r) => r.statutAcceptation === 'EN_ATTENTE')).toBe(false);
     const row = await campaignRow();
@@ -359,6 +359,7 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect(outcome).toMatchObject({ locked: 1 });
     expect((await planAllocations()).of(A)).toMatchObject({
       statutAcceptation: 'REFUSE',
+      decidedBy: 'system',
     });
   });
 
@@ -375,6 +376,7 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
     expect(outcome).toMatchObject({ frozen: 1 });
     expect((await planAllocations()).of(C)).toMatchObject({
       statutAcceptation: 'REFUSE',
+      decidedBy: 'system',
     });
   });
 
@@ -566,7 +568,7 @@ describe('Mariem 13/11 — the pre-launch lock and freeze of a tours campaign (r
       }),
     );
     const after = await planAllocations();
-    // Still withdrawn (REFUSE): never re-proposed as a « new » Host.
-    expect(after.of(A)).toMatchObject({ statutAcceptation: 'REFUSE' });
+    // Still the system's withdrawal: never re-proposed as a « new » Host.
+    expect(after.of(A)).toMatchObject({ statutAcceptation: 'REFUSE', decidedBy: 'system' });
   });
 });

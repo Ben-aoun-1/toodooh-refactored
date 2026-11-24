@@ -35,6 +35,10 @@ export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath
     // NOTIF-D2 — the bell opens the popup in place (Mariem 05/11: the « Soir de match » one for a
     // match notice); this path is only the fallback.
     return { actionLabel: 'Consulter', actionPath: '/owner-dashboard' };
+  // AGENT-VF (spec VF §13) — the agent's rendez-vous request opens « Prendre rendez-vous », where
+  // the Screenhost accepts it or proposes another slot.
+  if (n.type === 'appointment_agent_request')
+    return { actionLabel: 'Répondre', actionPath: '/owner-dashboard?rdv=1' };
   if (n.type === 'monthly_report_ready')
     return { actionLabel: 'Consulter', actionPath: '/owner-performance' };
   // REV2 — every facture notification lands on « Mes factures ». THREE types, ONE destination:

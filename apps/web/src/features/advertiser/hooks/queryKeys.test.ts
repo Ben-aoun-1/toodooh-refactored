@@ -22,6 +22,8 @@ describe('advertiserKeys', () => {
     expect(advertiserKeys.lastCampaigns('u1', 5)).toEqual(['advertiser', 'lastCampaigns', 'u1', 5]);
     expect(advertiserKeys.featuredEvents(3)).toEqual(['advertiser', 'featuredEvents', 3]);
     expect(advertiserKeys.profile('u1')).toEqual(['advertiser', 'profile', 'u1']);
+    expect(advertiserKeys.profileLogo('u1')).toEqual(['advertiser', 'profileLogo', 'u1']);
+    expect(advertiserKeys.networkParks()).toEqual(['advertiser', 'networkParks']);
   });
 
   it('distinguishes keys by their args so caches stay isolated', () => {

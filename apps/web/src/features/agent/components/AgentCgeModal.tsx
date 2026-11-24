@@ -10,15 +10,14 @@ import { getErrorMessage } from '@/lib/errors';
 
 /**
  * AGT-1b (agent specs v1.0 §2) — the blocking « Conditions Générales d'Engagement » modal: full
- * screen, cannot be closed; the text (readable and downloadable), the « J'accepte » box and
- * « Accéder à mon Dashboard » (inactive until checked). The only other action is « Se
+ * screen, cannot be closed; the text (readable and downloadable) and the button « J'accepte les CGE »
+ * (spec VF §15 / §10: the button is the acceptance). The only other action is « Se
  * déconnecter ». The server refuses every agent data route meanwhile (403 CGE_REQUIRED).
  */
 export function AgentCgeModal({ cgeId, version }: { cgeId: string; version: string }) {
   const accept = useAcceptCge();
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
-  const [checked, setChecked] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,15 +76,6 @@ export function AgentCgeModal({ cgeId, version }: { cgeId: string; version: stri
             Télécharger
           </a>
         )}
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
-            className="h-4 w-4 accent-brand-primary"
-          />
-          J’accepte les Conditions Générales d’Engagement
-        </label>
         <div className="ml-auto flex gap-3">
           <button
             type="button"
@@ -97,10 +87,10 @@ export function AgentCgeModal({ cgeId, version }: { cgeId: string; version: stri
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={!checked || accept.isPending}
+            disabled={accept.isPending}
             className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-brand-deep disabled:opacity-50"
           >
-            Accéder à mon Dashboard
+            J’accepte les CGE
           </button>
         </div>
       </footer>

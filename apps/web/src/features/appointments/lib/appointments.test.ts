@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest';
 import type { AppointmentView } from '../services/appointments.service';
 
 import {
+  QUARTERS,
+  affiliateCanAnswer,
+  affiliateCanAnswerRequest,
+  agentCanAcceptSlot,
+  agentCanAnswer,
   blockedHoursOf,
+  hourLabel,
+  parseQuarter,
+  rdvRequestReady,
+  statusLabel,
   dayState,
   freeHours,
   monthCells,
@@ -26,6 +35,10 @@ const view = (over: Partial<AppointmentView>): AppointmentView => ({
   venue_name: null,
   venue_address: null,
   cancelled_by: null,
+  initiated_by: 'affilie',
+  minute: 0,
+  proposed_minute: null,
+  place: null,
   ...over,
 });
 
@@ -87,5 +100,45 @@ describe('AGT-HOUR1 — agent hours', () => {
     expect(blockedHoursOf('2026-10-21', view)).toEqual([10, 14]);
     expect(blockedHoursOf('2026-10-20', view)).toEqual(view.slot_hours);
     expect(blockedHoursOf('2026-10-22', view)).toEqual([]);
+  });
+});
+
+// AGENT-VF (spec VF §13 / §9) — the agent's own request: the roles are inverted.
+describe('agent-initiated rendez-vous', () => {
+  const mine = view({ initiated_by: 'agent', minute: 30 });
+  const back = view({ initiated_by: 'agent', status: 'nouvel_horaire' });
+
+  it('each side answers only what waits for it', () => {
+    expect(agentCanAnswer(mine)).toBe(false);
+    expect(affiliateCanAnswerRequest(mine)).toBe(true);
+    expect(agentCanAcceptSlot(back)).toBe(true);
+    expect(affiliateCanAnswer(back)).toBe(false);
+    // The affiliate's own request keeps its rules.
+    expect(agentCanAnswer(view({}))).toBe(true);
+    expect(affiliateCanAnswerRequest(view({}))).toBe(false);
+    expect(affiliateCanAnswer(view({ status: 'nouvel_horaire' }))).toBe(true);
+    expect(agentCanAcceptSlot(view({ status: 'nouvel_horaire' }))).toBe(false);
+  });
+
+  it('the agent reads « En attente de réponse » on his own pending request', () => {
+    expect(statusLabel(mine)).toBe('En attente de réponse');
+    expect(statusLabel(view({}))).toBe('En attente');
+    expect(statusLabel(back)).toBe('Nouvel horaire proposé');
+    expect(hourLabel(9, 30)).toBe('09h30');
+    expect(hourLabel(9)).toBe('09h00');
+  });
+
+  it('a time is a quarter-hour; the request needs every mandatory field', () => {
+    expect(parseQuarter('14:45')).toEqual({ hour: 14, minute: 45 });
+    expect(parseQuarter('14:50')).toBeNull();
+    expect(parseQuarter('')).toBeNull();
+    expect(QUARTERS).toHaveLength(96);
+    expect(QUARTERS[5]).toBe('01:15');
+    const f = { target: 't', day: '2026-11-20', time: '10:15', subject: 'Point de suivi' };
+    expect(rdvRequestReady(f, '2026-11-15')).toBe(true);
+    expect(rdvRequestReady({ ...f, day: '2026-11-14' }, '2026-11-15')).toBe(false);
+    expect(rdvRequestReady({ ...f, subject: '' }, '2026-11-15')).toBe(false);
+    expect(rdvRequestReady({ ...f, time: '10:20' }, '2026-11-15')).toBe(false);
+    expect(rdvRequestReady({ ...f, target: '' }, '2026-11-15')).toBe(false);
   });
 });

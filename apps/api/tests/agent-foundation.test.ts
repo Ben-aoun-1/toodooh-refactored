@@ -113,6 +113,8 @@ describe('AGT-1 — agent foundation (real Postgres)', () => {
     governorate_id: governorateId,
     covered_zone: 'Grand Tunis',
     certified_at: '2026-10-01',
+    cin_recto: { key: 'agent-cin/r', filename: 'r.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
+    cin_verso: { key: 'agent-cin/v', filename: 'v.jpg', mime_type: 'image/jpeg', size_bytes: 10 },
     ...over,
   });
 
@@ -139,11 +141,12 @@ describe('AGT-1 — agent foundation (real Postgres)', () => {
     return res;
   };
 
-  it('creates an agent with its full sheet; the tax number is required for a Screencaster agent', async () => {
+  // Spec VF §15 / §10 (Mariem 12/11/2026): the tax number became optional for both agent roles.
+  it('creates an agent with its full sheet; the tax number is optional for both roles', async () => {
     const missing = await createAgent({ covered_zone: undefined });
     expect(missing.statusCode).toBe(400);
-    const noTax = await createAgent({ tax_number: undefined });
-    expect(noTax.statusCode).toBe(400);
+    const noTax = await createAgent({ tax_number: undefined, email: 'sc-notax@example.com' });
+    expect(noTax.statusCode).toBe(201);
     const shNoTax = await createAgent({ role: 'screenhost_agent', tax_number: undefined });
     expect(shNoTax.statusCode).toBe(201);
     const id = shNoTax.json<{ account: { id: string } }>().account.id;

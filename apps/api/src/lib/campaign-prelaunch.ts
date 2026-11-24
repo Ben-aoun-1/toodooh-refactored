@@ -68,6 +68,9 @@ export const hostPrelaunchStep = (
   return null;
 };
 
+/** Mariem 16/11 — the trace of a Host withdrawn for not answering: kept, never re-proposed. */
+export const NO_ANSWER_DECIDER = 'system' as const;
+
 export interface PrelaunchOutcome {
   campaignId: string;
   locked: number;
@@ -122,11 +125,16 @@ const runCampaign = async (
       const locked = due.filter((d) => d.step === 'lock');
       const frozen = due.filter((d) => d.step === 'freeze');
       // Mariem 16/11 — « il n'a fait aucune action »: the proposal is withdrawn but its row stays
-      // (REFUSE; the engine journal records it as « Sans réponse ») so the admin can trace it and it is never proposed again.
+      // (REFUSE, decided by the system) so the admin can trace it and it is never proposed again.
       for (const d of [...locked, ...frozen]) {
         await tx
           .update(campaignDispatchAllocation)
-          .set({ statutAcceptation: 'REFUSE' })
+          .set({
+            statutAcceptation: 'REFUSE',
+            decidedBy: NO_ANSWER_DECIDER,
+            decidedByUserId: null,
+            decidedAt: now,
+          })
           .where(eq(campaignDispatchAllocation.id, d.a.id));
         trace.event(
           'refusal_received',

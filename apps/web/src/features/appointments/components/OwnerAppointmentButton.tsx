@@ -1,7 +1,8 @@
 import { CalendarPlus } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { useReferent } from '../hooks/useAppointments';
+import { useRdvFlag } from '../hooks/useRdvFlag';
 
 import { AffiliateAppointmentModal } from './AffiliateAppointmentModal';
 
@@ -13,6 +14,8 @@ import { AffiliateAppointmentModal } from './AffiliateAppointmentModal';
 export function OwnerAppointmentButton() {
   const referent = useReferent();
   const [open, setOpen] = useState(false);
+  // The agent's rendez-vous request (bell « Répondre », email button) opens the window.
+  useRdvFlag(useCallback(() => setOpen(true), []));
   const data = referent.data;
   if (!data?.agent) return null;
   return (

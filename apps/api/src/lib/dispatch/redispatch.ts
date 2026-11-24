@@ -3,15 +3,16 @@ import { and, eq, inArray, isNotNull, max } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import {
-  type DispatchCreneau,
-  type RedispatchMissedFrom,
-  type RedispatchPlacedTo,
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignRedispatchRounds,
+  type DispatchCreneau,
+  NO_DECISION,
   notifications,
-  screens,
+  type RedispatchMissedFrom,
+  type RedispatchPlacedTo,
   screenhosts,
+  screens,
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
 import { acceptDemoAllocations, isDemoCampaign } from '../demo.js';
@@ -385,6 +386,7 @@ export const runRedispatchRound = async (
               revenuPrevisionnel: String(round4((totalAi * cpm) / 1000)),
               creneaux: mergedCreneaux,
               statutAcceptation: 'EN_ATTENTE',
+              ...NO_DECISION,
             })
             .where(eq(campaignDispatchAllocation.id, existing.id));
           placedTo.push({ screenhost_id: ret.id, added_fact: ret.ai, merged: true });

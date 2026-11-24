@@ -25,6 +25,8 @@ import { ModalProvider, useModal } from '@/contexts/ModalContext';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import CartWidget from '@/features/cart/components/CartWidget';
 import { EVENTS_PATHS } from '@/features/events/lib/events-home';
+import { ParcsNavIcon, ReseauNavIcon } from '@/features/network/components/NetworkIcons';
+import { NETWORK_PATHS } from '@/features/network/lib/network-paths';
 
 import PageHeader from './PageHeader';
 import SidebarNavItem from './SidebarNavItem';
@@ -127,6 +129,24 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
             label="Mes campagnes"
             activeIcon={campagneIconActive}
             inactiveIcon={campagneIcon}
+            expanded={sidebarExpanded}
+            disabled={isDisabled}
+            onNavigate={() => setIsMenuOpen(false)}
+          />
+          {/* RESEAU-1 — the network pages, between « Mes campagnes » and « Événements » as in
+              the prototype's menu, with its two icons. */}
+          <SidebarNavItem
+            path={NETWORK_PATHS.reseau}
+            label="Réseau Screenhosts"
+            icon={<ReseauNavIcon className="h-5 w-5 flex-shrink-0" />}
+            expanded={sidebarExpanded}
+            disabled={isDisabled}
+            onNavigate={() => setIsMenuOpen(false)}
+          />
+          <SidebarNavItem
+            path={NETWORK_PATHS.parcs}
+            label="Parcs TV"
+            icon={<ParcsNavIcon className="h-5 w-5 flex-shrink-0" />}
             expanded={sidebarExpanded}
             disabled={isDisabled}
             onNavigate={() => setIsMenuOpen(false)}

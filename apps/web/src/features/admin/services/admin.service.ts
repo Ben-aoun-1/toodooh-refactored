@@ -3,6 +3,7 @@ import {
   AgentAccount,
   CreateInternalAccountInput,
   InternalAccount,
+  StagedCin,
 } from '@/features/admin/types/admin';
 import { apiClient } from '@/lib/api-client';
 
@@ -22,6 +23,13 @@ export const adminService = {
       input,
     );
     return account;
+  },
+
+  /** Spec VF §15 — store one side of a future agent's CIN; the creation then names it. */
+  stageAgentCin(file: File): Promise<StagedCin> {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.postForm<StagedCin>('/admin/agent-cin', form);
   },
 
   async getAdmins(): Promise<AdminAccount[]> {

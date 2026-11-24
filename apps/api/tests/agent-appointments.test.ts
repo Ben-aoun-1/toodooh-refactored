@@ -164,7 +164,7 @@ describe('AGT-5 — agent appointments (real Postgres)', () => {
       confirmed_kept: [DAY],
     });
     expect((await appointmentsOf('agent', s.agent, NOW))[0]?.status).toBe('confirme');
-    expect(await cancelAppointment('affilie', s.a, id)).toEqual({ ok: true });
+    expect(await cancelAppointment('affilie', s.a, id)).toMatchObject({ ok: true });
     await setAvailability(s.agent, [DAY], true, NOW);
     expect(
       (
@@ -197,13 +197,20 @@ describe('AGT-5 — agent appointments (real Postgres)', () => {
     expect(cal.unavailable).toEqual([]);
     expect(cal.unavailableHours.map((h) => h.hour).sort((x, y) => x - y)).toEqual([10, 14, 15]);
 
-    // Blocking the rest of the day makes it ONE whole-day row; freeing 9 h leaves 8 hours.
+    // AGENT-VF — an agent blocks any hour of the day (0 h to 23 h). Blocking the nine bookable
+    // hours is no longer « the whole day »: only the 24 hours make ONE whole-day row.
     await setAvailability(s.agent, [DAY], false, NOW, [9, 11, 12, 13, 16, 17]);
+    expect(await db.$count(agentUnavailableDays)).toBe(0);
+    expect(await db.$count(agentUnavailableHours)).toBe(9);
+    await setAvailability(s.agent, [DAY], false, NOW, [0, 23]);
+    expect(await db.$count(agentUnavailableHours)).toBe(11);
+    await setAvailability(s.agent, [DAY], false, NOW);
     expect(await db.$count(agentUnavailableDays)).toBe(1);
     expect(await db.$count(agentUnavailableHours)).toBe(0);
+    // Freeing 9 h of a blocked day leaves its 23 other hours.
     await setAvailability(s.agent, [DAY], true, NOW, [9]);
     expect(await db.$count(agentUnavailableDays)).toBe(0);
-    expect(await db.$count(agentUnavailableHours)).toBe(8);
+    expect(await db.$count(agentUnavailableHours)).toBe(23);
     // Freeing every hour leaves nothing.
     await setAvailability(s.agent, [DAY], true, NOW);
     expect(await db.$count(agentUnavailableHours)).toBe(0);

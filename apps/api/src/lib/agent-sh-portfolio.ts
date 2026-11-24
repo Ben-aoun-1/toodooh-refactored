@@ -48,6 +48,8 @@ export interface ShAgentCampaignView {
   impressions: number;
   revenue_tnd: number;
   forecast_tnd: number;
+  /** AGENT-VF — « À gagner »: what is still only forecast (never an acquired amount). */
+  to_earn_tnd: number;
 }
 
 /** The agent's portfolio venues (an excluded or reassigned one is gone). */
@@ -164,6 +166,11 @@ export const shAgentCampaigns = async (
         own
           .filter((l) => l.status !== 'annulee')
           .reduce((s, l) => s + Number(l.status === 'acquise' ? l.acquiredTnd : l.forecastTnd), 0),
+      ),
+      to_earn_tnd: round4(
+        own
+          .filter((l) => l.status === 'previsionnel')
+          .reduce((s, l) => s + Number(l.forecastTnd ?? 0), 0),
       ),
     });
   }
