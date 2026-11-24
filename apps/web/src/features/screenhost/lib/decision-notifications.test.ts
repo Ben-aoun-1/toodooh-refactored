@@ -5,6 +5,7 @@ import type { PendingEventAllocation } from '@/features/screenhost/services/scre
 
 import {
   DECISION_NOTIFICATION_TYPE,
+  agentAnswerMention,
   opensCampaignPopup,
   campaignDurationDays,
   decisionTarget,
@@ -192,5 +193,15 @@ describe('Mariem 16/11 — answered-for-you notices open the campaign popup, rea
       expect(opensCampaignPopup({ kind, campaignId: null })).toBe(false);
     }
     expect(opensCampaignPopup({ kind: 'monthly_report_ready', campaignId: 'c1' })).toBe(false);
+  });
+
+  it('the popup names who answered: the agent or the Toodooh team', () => {
+    expect(agentAnswerMention([{ statut_acceptation: 'ACCEPTE', decided_by: 'admin' }])).toBe(
+      'Acceptée par l’équipe Toodooh',
+    );
+    expect(agentAnswerMention([{ statut_acceptation: 'REFUSE', decided_by: 'agent' }])).toBe(
+      'Refusée par votre agent',
+    );
+    expect(agentAnswerMention([{ statut_acceptation: 'ACCEPTE', decided_by: 'owner' }])).toBeNull();
   });
 });

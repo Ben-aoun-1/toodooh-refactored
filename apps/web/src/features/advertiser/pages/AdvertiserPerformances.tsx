@@ -13,6 +13,7 @@ import { HistorySection } from '../components/performances/HistorySection';
 import { LastReportCard } from '../components/performances/LastReportCard';
 import { LiveCampaignsSection } from '../components/performances/LiveCampaignsSection';
 import { OpportunitiesSection } from '../components/performances/OpportunitiesSection';
+import { QrScansSection } from '../components/performances/QrScansSection';
 import { WaitingCard } from '../components/performances/shared';
 import {
   useAnalysis,
@@ -249,6 +250,12 @@ export default function AdvertiserPerformances() {
                     }
                   >
                     <AnalysisSections analysis={analysisQ.data} />
+                    {analysisQ.data.qr ? (
+                      <QrScansSection
+                        qr={analysisQ.data.qr}
+                        single={analysisQ.data.mode === 'campaign'}
+                      />
+                    ) : null}
                   </div>
                 ) : (
                   <div className="mb-[64px] flex items-center justify-center gap-2 py-16 text-perf-mist">

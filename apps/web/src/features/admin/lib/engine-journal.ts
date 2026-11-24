@@ -88,6 +88,8 @@ export const EXCLUSION_REASON_LABELS: Record<string, string> = {
   not_in_frozen_week: 'absent de la semaine type gelée',
   // DEMO-1 (operator ruling Q2 A, 2026-10-12) — a demo campaign airs only on the demo venues.
   not_demo_venue: 'hors des établissements de démo',
+  // « Réseau Screenhosts » (Mariem 17/11) — the Screencaster removed the venue from his network.
+  caster_excluded: 'exclu par le Screencaster',
 };
 
 /** The refusal reasons a rolled-back run can carry (fallback: the raw reason). */

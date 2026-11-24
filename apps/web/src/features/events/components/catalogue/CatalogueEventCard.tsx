@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 
 import { usePositionner } from '../../hooks/useEvents';
 import { cardBadge, cardTitle, dateLine, kickoffLine, roundLine } from '../../lib/event-catalogue';
+import { CLOSED_CTA, POSITIONNE_CTA } from '../../lib/event-display';
 import type { EventItemView } from '../../services/events.api';
 
 import EventPoster from './EventPoster';
@@ -25,8 +26,9 @@ interface CatalogueEventCardProps {
  * EVT-CAT2 — one card of the new « Événements » page (Youssef's validated design): the poster,
  * the title (the event name as typed) + competition/round, the catégorie, the date, the diffusion
  * window, the stadium and the description (ruling 2026-10-08: every admin field shows), its badge,
- * « Ajouter à ma sélection » and the direct « Je me positionne ». B1 — a match « à confirmer » is shown but can be neither selected nor
- * positioned.
+ * « Ajouter à ma sélection » and the direct « Je me positionne ». Operator 23/11 — a match
+ * « à confirmer » (day, time or opponent) is selected and positioned like any other; only a
+ * finished or annulé match is closed.
  */
 export default function CatalogueEventCard({
   event,
@@ -109,11 +111,6 @@ export default function CatalogueEventCard({
               disabled={!positionable}
               aria-pressed={selected}
               aria-label={`${selected ? 'Retirer' : 'Ajouter'} ${title} ${selected ? 'de' : 'à'} ma sélection`}
-              title={
-                positionable
-                  ? undefined
-                  : 'Disponible dès la confirmation de la date et de l’horaire'
-              }
               className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-[1.5px] text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 selected
                   ? 'border-[#1D9E75] bg-[#E6F7EE] text-[#0E6B4E]'
@@ -133,7 +130,7 @@ export default function CatalogueEventCard({
             }`}
           >
             {positionner.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {positionable ? 'Je me positionne' : 'Bientôt disponible'}
+            {positionable ? POSITIONNE_CTA : CLOSED_CTA}
           </button>
         </div>
       </div>

@@ -49,7 +49,7 @@ export interface EventItemView {
   qualification_pending?: boolean;
   date_label?: string | null;
   matches?: MatchView[];
-  /** B1 — false while the date/time is « à confirmer » (or the match is over/annulé). */
+  /** False once the match is over or annulé; a match « à confirmer » is positionable. */
   positionable?: boolean;
   fenetre: {
     window_start: string;

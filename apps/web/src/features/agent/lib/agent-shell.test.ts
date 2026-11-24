@@ -8,7 +8,9 @@ import {
   onboardingStepCopy,
   passwordCriteria,
   passwordStrength,
+  settingsEntryOf,
   settingsTabOf,
+  settingsTabOfEntry,
 } from './agent-shell';
 
 const PAGES = ['dashboard', 'campaigns', 'calendar', 'affiliates', 'settings'] as const;
@@ -48,7 +50,7 @@ describe('AGT-1b — agent shell literals', () => {
       {
         label: 'Téléverser mon RIB',
         status: 'En attente de validation',
-        tab: 'legal',
+        tab: 'rib',
       },
     );
     expect(onboardingStepCopy({ key: 'info', done: false, mandatory: true }).tab).toBe('profil');
@@ -59,6 +61,11 @@ describe('AGT-1b — agent shell literals', () => {
   it('settings tab from the query string; password rule', () => {
     expect(settingsTabOf('legal')).toBe('legal');
     expect(settingsTabOf('nope')).toBe('profil');
+    // AGENT-VF — the RIB and the CGE have their own entry, under their tab.
+    expect(settingsEntryOf('rib')).toBe('rib');
+    expect(settingsTabOfEntry('rib')).toBe('legal');
+    expect(settingsTabOfEntry(settingsEntryOf('cge'))).toBe('securite');
+    expect(settingsEntryOf('nope')).toBe('profil');
     expect(passwordCriteria('Abcdefghi1')).toEqual({ length: true, upper: true, digit: true });
     expect(passwordStrength('abc')).toBe(0);
   });

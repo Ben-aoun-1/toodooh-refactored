@@ -7,6 +7,7 @@ import {
   showsAppointmentActions,
   sortNotifications,
   unreadCount,
+  vfNotifKind,
 } from './agent-notifications';
 
 const n = (over: Partial<AgentNotification>): AgentNotification => ({
@@ -48,5 +49,13 @@ describe('AGT-6 — the agent bell', () => {
     expect(showsAppointmentActions(req)).toBe(true);
     expect(showsAppointmentActions({ ...req, appointment_status: 'confirme' })).toBe(false);
     expect(showsAppointmentActions({ ...req, type: 'agent_appointment_reminder' })).toBe(false);
+  });
+
+  it('gives each notification the icon family of the prototype', () => {
+    expect(vfNotifKind('agent_attention')).toBe('att');
+    expect(vfNotifKind('agent_appointment_requested')).toBe('rdv');
+    expect(vfNotifKind('agent_offer_shared')).toBe('offer');
+    expect(vfNotifKind('agent_campaign_accepted')).toBe('camp');
+    expect(vfNotifKind('agent_payout_done')).toBe('camp');
   });
 });

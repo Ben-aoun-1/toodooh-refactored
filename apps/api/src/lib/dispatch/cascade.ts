@@ -1,9 +1,10 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import {
-  type CampaignDispatchPlan,
   campaignDispatchAllocation,
+  type CampaignDispatchPlan,
   campaignDispatchPlan,
+  NO_DECISION,
   notifications,
   screenhosts,
 } from '../../db/schema.js';
@@ -196,6 +197,7 @@ export const runRefusalCascade = async (
           revenuPrevisionnel: String((totalAi * cpm) / 1000),
           creneaux: buildCreneaux(p.days, p.slots, rI, p.blackoutByCell),
           statutAcceptation: 'EN_ATTENTE',
+          ...NO_DECISION,
         })
         .where(eq(campaignDispatchAllocation.id, existing.id));
       updatedAllocations += 1;

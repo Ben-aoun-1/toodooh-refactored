@@ -1,7 +1,8 @@
 import BalanceCard from '@/features/advertiser/components/dashboard/BalanceCard';
-import EventsEntryCard from '@/features/advertiser/components/dashboard/EventsEntryCard';
+import DashboardEventsRow from '@/features/advertiser/components/dashboard/DashboardEventsRow';
 import GettingStartedSection from '@/features/advertiser/components/dashboard/GettingStartedSection';
 import LastCampaignsGrid from '@/features/advertiser/components/dashboard/LastCampaignsGrid';
+import ParksSection from '@/features/advertiser/components/dashboard/ParksSection';
 import StatsGrid from '@/features/advertiser/components/dashboard/StatsGrid';
 import { useDashboardStats } from '@/features/advertiser/hooks/useDashboardStats';
 import { useLastCampaigns } from '@/features/advertiser/hooks/useLastCampaigns';
@@ -34,42 +35,47 @@ export default function AdvertiserDashboard() {
   const hideGettingStartedBlock =
     hasRegistrationDocument && availableBalanceTnd > 0 && totalCreatedCampaignsCount > 0;
 
+  // The order of Mariem's Figma capture: balance, events, counters, parks, campaigns, first steps.
+  const statsFailed = (
+    // GREEN2 (the INV-1 rule) — a failed stats read renders as an ERROR, never zeros-as-truth.
+    <div className="rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-10 text-center">
+      <p className="text-sm font-medium text-rose-600">
+        Impossible de charger votre solde et vos statistiques pour le moment.
+      </p>
+      <button
+        type="button"
+        onClick={refetchStats}
+        className="mt-4 rounded-full border border-rose-300 bg-white px-5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+      >
+        Réessayer
+      </button>
+    </div>
+  );
+
   return (
     <div className="w-full space-y-8">
-      {/* GREEN2 (the INV-1 rule) — a failed stats read renders as an ERROR, never zeros-as-truth. */}
       {statsError ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-10 text-center">
-          <p className="text-sm font-medium text-rose-600">
-            Impossible de charger votre solde et vos statistiques pour le moment.
-          </p>
-          <button
-            type="button"
-            onClick={refetchStats}
-            className="mt-4 rounded-full border border-rose-300 bg-white px-5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-          >
-            Réessayer
-          </button>
-        </div>
+        statsFailed
       ) : (
-        <>
-          <BalanceCard
-            balance={stats.balance}
-            balanceTotal={stats.balanceTotal}
-            loading={loadingStats}
-            isDisabled={isDisabled}
-          />
-          <StatsGrid
-            campaignsDiffused={stats.campaignsDiffused}
-            totalViews={stats.totalViews}
-            totalDurationSeconds={stats.totalDurationSeconds}
-            totalBudget={stats.totalBudget}
-            loading={loadingStats}
-          />
-        </>
+        <BalanceCard
+          balance={stats.balance}
+          balanceTotal={stats.balanceTotal}
+          loading={loadingStats}
+          isDisabled={isDisabled}
+        />
       )}
+      <DashboardEventsRow />
+      {!statsError && (
+        <StatsGrid
+          campaignsDiffused={stats.campaignsDiffused}
+          totalViews={stats.totalViews}
+          totalDurationSeconds={stats.totalDurationSeconds}
+          totalBudget={stats.totalBudget}
+          loading={loadingStats}
+        />
+      )}
+      <ParksSection />
       <LastCampaignsGrid campaigns={lastCampaigns} loading={loadingLastCampaigns} />
-      {/* EV3 (voie 2) — the Événements entry tile. */}
-      <EventsEntryCard />
       {!hideGettingStartedBlock && (
         <GettingStartedSection
           hasRegistrationDocument={hasRegistrationDocument}

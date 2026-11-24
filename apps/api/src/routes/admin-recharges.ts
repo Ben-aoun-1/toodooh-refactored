@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { type Recharge, notifications, recharges, users } from '../db/schema.js';
+import { noticeAffiliateRecharged } from '../lib/agent-commissions.js';
 import { advertiserRechargeNotification } from '../lib/recharge-notifications.js';
 import {
   adminRechargeView,
@@ -145,6 +146,10 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       const [current] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
       return sendNotPending(reply, request, current ?? existing);
     }
+    // Spec VF §11 — the Screencaster's agent is told of the recharge (never blocks the credit).
+    await noticeAffiliateRecharged(existing.advertiserId).catch((err: unknown) =>
+      request.log.warn({ err, rechargeId: id }, 'agent recharge notice failed'),
+    );
     return reply.status(200).send(decided);
   });
 

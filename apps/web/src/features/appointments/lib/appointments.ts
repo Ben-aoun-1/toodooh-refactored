@@ -103,8 +103,12 @@ export const freeHours = (
       new Date(`${day}T${String(h).padStart(2, '0')}:00:00+01:00`) > now,
   );
 
-export const hourLabel = (h: number) => `${String(h).padStart(2, '0')}h00`;
+export const hourLabel = (h: number, minute = 0) =>
+  `${String(h).padStart(2, '0')}h${String(minute).padStart(2, '0')}`;
 export const dayLabel = (day: string) => day.split('-').reverse().join('/');
+
+const slotKey = (r: { day: string; hour: number; minute?: number }) =>
+  `${r.day}${String(r.hour).padStart(2, '0')}${String(r.minute ?? 0).padStart(2, '0')}`;
 
 /** « À venir » = still live (or confirmed ahead); « Passés » = over, cancelled or expired. */
 export const splitAppointments = (rows: AppointmentView[]) => {
@@ -112,15 +116,60 @@ export const splitAppointments = (rows: AppointmentView[]) => {
     .filter(
       (r) => r.status === 'en_attente' || r.status === 'nouvel_horaire' || r.status === 'confirme',
     )
-    .sort((a, b) => `${a.day}${a.hour}`.localeCompare(`${b.day}${b.hour}`));
+    .sort((a, b) => slotKey(a).localeCompare(slotKey(b)));
   const past = rows.filter((r) => !upcoming.includes(r));
   return { upcoming, past };
 };
 
-/** The agent can act on a request only while it waits for him. */
-export const agentCanAnswer = (r: { status: AppointmentStatus }) => r.status === 'en_attente';
-/** The affiliate answers only a counter-proposal. */
-export const affiliateCanAnswer = (r: { status: AppointmentStatus }) =>
-  r.status === 'nouvel_horaire';
+type Directed = { status: AppointmentStatus; initiated_by?: 'affilie' | 'agent' };
+const byAgent = (r: Directed) => r.initiated_by === 'agent';
+
+/** The agent can act on an affiliate's request only while it waits for him. */
+export const agentCanAnswer = (r: Directed) => r.status === 'en_attente' && !byAgent(r);
+/** The affiliate answers only the agent's counter-proposal to his own request. */
+export const affiliateCanAnswer = (r: Directed) => r.status === 'nouvel_horaire' && !byAgent(r);
+
+// AGENT-VF (spec VF §13 / §9) — the agent's own request, the roles inverted.
+/** The affiliate accepts the agent's request or proposes another slot. */
+export const affiliateCanAnswerRequest = (r: Directed) => r.status === 'en_attente' && byAgent(r);
+/** The agent accepts the slot his affiliate proposed back. */
+export const agentCanAcceptSlot = (r: Directed) => r.status === 'nouvel_horaire' && byAgent(r);
+
+/** The status as each side reads it: the agent's own pending request « waits for an answer ». */
+export const statusLabel = (r: Directed): string =>
+  r.status === 'en_attente' && byAgent(r)
+    ? 'En attente de réponse'
+    : APPOINTMENT_STATUS_FR[r.status];
+
+export const PLACE_FR: Record<'sur_place' | 'telephone' | 'visio', string> = {
+  sur_place: 'Sur place',
+  telephone: 'Par téléphone',
+  visio: 'En visio',
+};
+
+/** « HH:MM » from a time input → the hour and the quarter-hour, or null when it is not on a quarter. */
+export const parseQuarter = (value: string): { hour: number; minute: number } | null => {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  if (!m) return null;
+  const minute = Number(m[2]);
+  return minute % 15 === 0 ? { hour: Number(m[1]), minute } : null;
+};
+
+/** Whether the agent's request can be sent: every mandatory field, today or later, on a quarter. */
+export const rdvRequestReady = (
+  f: { target: string; day: string; time: string; subject: string },
+  today: string,
+): boolean =>
+  f.target !== '' &&
+  f.day !== '' &&
+  f.day >= today &&
+  f.subject !== '' &&
+  parseQuarter(f.time) !== null;
+
+/** The 96 quarter-hours of a day, « HH:MM ». */
+export const QUARTERS: readonly string[] = Array.from({ length: 96 }, (_, i) => {
+  const h = String(Math.floor(i / 4)).padStart(2, '0');
+  return `${h}:${String((i % 4) * 15).padStart(2, '0')}`;
+});
 export const canCancel = (r: { status: AppointmentStatus }) =>
   r.status === 'en_attente' || r.status === 'nouvel_horaire' || r.status === 'confirme';

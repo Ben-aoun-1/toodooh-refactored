@@ -10,6 +10,7 @@ import {
   adminPaymentReference,
   isValidAdminPaymentAmount,
 } from '../lib/admin-payment.js';
+import { noticeAffiliateRecharged } from '../lib/agent-commissions.js';
 import { isUniqueViolation, walletSpendable } from '../lib/recharges.js';
 import {
   adjustmentNotification,
@@ -187,6 +188,10 @@ export const adminWalletRoutes: FastifyPluginAsync = async (app) => {
         .status(500)
         .send({ error: 'INTERNAL_ERROR', message: 'Payment record write failed.' });
     }
+    // Spec VF §11 — the Screencaster's agent is told of the recharge, as for any confirmed one.
+    await noticeAffiliateRecharged(target.id).catch((err: unknown) =>
+      request.log.warn({ err, rechargeId: row?.id }, 'agent recharge notice failed'),
+    );
     return reply.status(201).send({
       id: row.id,
       reference: row.reference,

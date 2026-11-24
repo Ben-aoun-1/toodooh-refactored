@@ -59,6 +59,7 @@ describe('label coverage — every emitted event_type has a French label', () =>
       'no_installed_screen',
       'not_in_frozen_week',
       'not_demo_venue',
+      'caster_excluded',
     ]) {
       expect(EXCLUSION_REASON_LABELS[reason]).toBeTruthy();
     }

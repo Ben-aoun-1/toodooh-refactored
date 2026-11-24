@@ -3,9 +3,17 @@ import { fr } from 'date-fns/locale';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
-import { agentCommissionLines, agentPayouts, agents, notifications, users } from '../db/schema.js';
+import {
+  agentCommissionLines,
+  agentPayouts,
+  agents,
+  campaigns,
+  notifications,
+  users,
+} from '../db/schema.js';
 
 import { agentRibState } from './agent-sheet.js';
+import { userLabel } from './user-label.js';
 
 // AGT-3 (agent specs v1.0 §10 « Versements », rulings Q3 A + Q5 A) — the agent wallet and its
 // monthly payouts, one home.
@@ -136,4 +144,58 @@ export const markAgentPayoutPaid = async (
     return true;
   });
   return done ? { ok: true } : { ok: false, error: 'ALREADY_PAID' };
+};
+
+export interface AgentTransaction {
+  campaign_id: string;
+  campaign_name: string;
+  /** The advertiser of the campaign (for a Screencaster agent: his affiliated Screencaster). */
+  party_name: string;
+  /** The day the amount was credited (the latest line of the campaign). */
+  credited_at: string;
+  amount_tnd: number;
+}
+
+/**
+ * AGENT-VF (spec VF « Page Mes revenus ») — « Transactions »: one row per campaign whose
+ * commission is ACQUIRED, with the final amount. A forecast never appears here; it lives in
+ * « Mes campagnes » until the campaign is settled. The rows add up to « Revenus cumulés ».
+ */
+export const agentTransactions = async (agentUserId: string): Promise<AgentTransaction[]> => {
+  const rows = await db
+    .select({ line: agentCommissionLines, campaign: campaigns, advertiser: users })
+    .from(agentCommissionLines)
+    .innerJoin(campaigns, eq(campaigns.id, agentCommissionLines.campaignId))
+    .innerJoin(users, eq(users.id, campaigns.advertiserId))
+    .where(
+      and(
+        eq(agentCommissionLines.agentUserId, agentUserId),
+        eq(agentCommissionLines.status, 'acquise'),
+      ),
+    );
+  const byCampaign = new Map<string, AgentTransaction & { at: Date }>();
+  for (const { line, campaign, advertiser } of rows) {
+    const at = line.acquiredAt ?? line.updatedAt;
+    const cur = byCampaign.get(campaign.id);
+    if (cur) {
+      cur.amount_tnd += Number(line.acquiredTnd ?? 0);
+      if (at > cur.at) cur.at = at;
+    } else {
+      byCampaign.set(campaign.id, {
+        campaign_id: campaign.id,
+        campaign_name: campaign.name,
+        party_name: userLabel(advertiser),
+        credited_at: '',
+        amount_tnd: Number(line.acquiredTnd ?? 0),
+        at,
+      });
+    }
+  }
+  return [...byCampaign.values()]
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .map(({ at, ...t }) => ({
+      ...t,
+      credited_at: at.toISOString(),
+      amount_tnd: Math.round(t.amount_tnd * 1e4) / 1e4,
+    }));
 };

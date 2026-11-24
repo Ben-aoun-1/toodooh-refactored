@@ -65,6 +65,18 @@ describe('the match-night notice rules (pure)', () => {
     ).toBe('single');
   });
 
+  it('nobody is asked while the match is « à confirmer », however close its provisional kick-off', () => {
+    for (const now of [EARLY, LATE]) {
+      for (const origin of ['booking', 'redispatch'] as const) {
+        for (const stance of ['open', 'accepted', 'refused'] as const) {
+          expect(
+            placementNotice({ now, kickoffAt: KICKOFF, stance, origin, confirmed: false }),
+          ).toBe('wait');
+        }
+      }
+    }
+  });
+
   it('a late share is always proposed to the owner, whatever its amount (Mariem 15/11)', () => {
     for (const stance of ['open', 'accepted', 'refused'] as const) {
       expect(placementNotice({ now: LATE, kickoffAt: KICKOFF, stance, origin: 'booking' })).toBe(
@@ -290,6 +302,33 @@ describe('the match-night notices (real Postgres)', () => {
       });
       expect((await shareOf(id))?.notice).toBeNull();
       expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
+    });
+
+    it('a match « à confirmer »: a late share waits, then the sweep asks once it is confirmed', async () => {
+      const venue = await seedVenue();
+      const eventId = await seedMatch({ timeTbc: true });
+      const p = await seedPositioning(eventId);
+      const montant = montantForShare(15);
+      const id = await seedShare(p.id, venue.id, montant);
+      await noticeNewEventShares(db, {
+        positioning: p,
+        event: { id: eventId, kickoffAt: KICKOFF },
+        shares: [
+          { allocationId: id, screenhostId: venue.id, ownerId: venue.ownerId, montantTnd: montant },
+        ],
+        origin: 'booking',
+        now: LATE,
+      });
+      expect((await shareOf(id))?.notice).toBeNull();
+      // The provisional notice time has come: still nobody is asked.
+      expect(await runEventGroupedNotices(LATE)).toHaveLength(0);
+      expect(await notificationsOf(venue.ownerId)).toHaveLength(0);
+
+      await db.update(events).set({ timeTbc: false }).where(eq(events.id, eventId));
+      expect(await runEventGroupedNotices(LATE)).toHaveLength(1);
+      expect((await shareOf(id))?.notice).toBe('grouped');
+      const notifs = await notificationsOf(venue.ownerId);
+      expect(notifs.map((n) => n.type)).toEqual([EVENT_MATCH_NOTICE_TYPE]);
     });
 
     it('late: proposed alone, at once, with the per-campaign notification', async () => {

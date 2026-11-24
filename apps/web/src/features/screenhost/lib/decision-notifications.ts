@@ -194,6 +194,31 @@ export const eventDecisionRevenueTnd = (proposals: readonly { montant_tnd: numbe
 
 /** The popup's label for the campaign type chip (operator 2026-10-12: « Particuliers »). */
 export const DECISION_TYPE_LABEL = 'Particuliers';
+
+/**
+ * Agent spec VF §10 — the offer's popup when the Host's agent answered first: no buttons, and
+ * this mention. Mariem 16/11 — the same when the Toodooh team answered for the Host. Null when
+ * the Host (or nobody) answered.
+ */
+export const agentAnswerMention = (
+  allocations: readonly Pick<
+    OwnerCampaign['allocations'][number],
+    'statut_acceptation' | 'decided_by'
+  >[],
+): string | null => {
+  for (const [by, who] of [
+    ['agent', 'votre agent'],
+    ['admin', 'l’équipe Toodooh'],
+  ] as const) {
+    const rows = allocations.filter((a) => a.decided_by === by);
+    if (rows.length === 0) continue;
+    return rows.some((a) => a.statut_acceptation === 'ACCEPTE')
+      ? `Acceptée par ${who}`
+      : `Refusée par ${who}`;
+  }
+  return null;
+};
+
 /**
  * Mariem 16/11 — notices about a campaign already answered (accepted or refused for the Host by
  * the Toodooh team or the agent, or « Bonne nouvelle » hours added to an accepted one): « Consulter »

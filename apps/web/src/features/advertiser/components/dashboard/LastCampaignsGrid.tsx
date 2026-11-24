@@ -2,6 +2,7 @@ import { Calendar, Banknote, MapPin, Rocket, RotateCcw, TrendingUp } from 'lucid
 import { useNavigate } from 'react-router-dom';
 
 import statIcon5 from '@/assets/stats/5.png';
+import CampaignOwnLogo from '@/features/advertiser/components/CampaignOwnLogo';
 import type { LastCampaign } from '@/features/advertiser/hooks/useLastCampaigns';
 import CampaignPrevues from '@/features/campaigns/components/CampaignPrevues';
 import { canBoostCampaign } from '@/features/campaigns/lib/boost-rules';
@@ -54,6 +55,8 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                     key={campaign.id}
                     className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col"
                   >
+                    {/* The Screencaster's logo, when he set one (as on the Agent's cards). */}
+                    <CampaignOwnLogo />
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <h3 className="text-base font-semibold text-gray-900 truncate flex-1">
                         {campaign.name}

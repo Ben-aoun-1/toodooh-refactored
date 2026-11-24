@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,7 @@ import {
   agents,
   governorates,
   type NewUser,
+  userDocuments,
   users,
   verifications,
 } from '../src/db/schema.js';
@@ -79,6 +80,18 @@ const VALID = {
   governorate_id: '', // set in beforeEach (a seeded governorate)
   covered_zone: 'Grand Tunis',
   certified_at: '2026-10-01',
+  cin_recto: {
+    key: 'agent-cin/recto',
+    filename: 'recto.jpg',
+    mime_type: 'image/jpeg',
+    size_bytes: 1200,
+  },
+  cin_verso: {
+    key: 'agent-cin/verso',
+    filename: 'verso.pdf',
+    mime_type: 'application/pdf',
+    size_bytes: 900,
+  },
 };
 
 describe('POST /api/admin/accounts (real Postgres)', () => {
@@ -516,5 +529,41 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json<{ account: { role: string } }>().account.role).toBe('admin');
+  });
+
+  // Spec VF §15 / §10 (Mariem 12/11/2026) — CIN recto and verso mandatory, tax number optional.
+  it('an agent needs both CIN sides; they become his cin documents (1 = recto, 2 = verso)', async () => {
+    mockSession(superId);
+    const missing = await create({ ...VALID, cin_verso: undefined, email: 'nocin@example.com' });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json().fields).toEqual([
+      {
+        field: 'cin_verso',
+        reason: 'La CIN recto et la CIN verso sont obligatoires pour un agent.',
+      },
+    ]);
+    const foreign = await create({
+      ...VALID,
+      email: 'badkey@example.com',
+      cin_recto: { ...VALID.cin_recto, key: 'cin/someone-else/doc' },
+    });
+    expect(foreign.statusCode).toBe(400);
+
+    const ok = await create({
+      ...VALID,
+      tax_number: undefined,
+      email: 'sc-notax@example.com',
+      role: 'screencast_agent',
+    });
+    expect(ok.statusCode).toBe(201);
+    const docs = await db
+      .select()
+      .from(userDocuments)
+      .where(eq(userDocuments.userId, ok.json().account.id))
+      .orderBy(asc(userDocuments.position));
+    expect(docs.map((d) => [d.category, d.position, d.storageKey, d.mimeType])).toEqual([
+      ['cin', 1, 'agent-cin/recto', 'image/jpeg'],
+      ['cin', 2, 'agent-cin/verso', 'application/pdf'],
+    ]);
   });
 });

@@ -1,3 +1,5 @@
+import { fr } from 'date-fns/locale';
+import { formatInTimeZone } from 'date-fns-tz';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
@@ -45,6 +47,13 @@ export const eventReportedAdvertiserBody = (matchName: string): string =>
   `Le match ${matchName} a été reporté. Votre positionnement et ses créneaux ont été recalculés sur la nouvelle fenêtre de diffusion.`;
 export const eventReportedOwnerBody = (matchName: string): string =>
   `Le match ${matchName} a été reporté. Vos créneaux de diffusion ont été recalculés sur la nouvelle fenêtre — votre acceptation reste valable.`;
+
+// Operator 23/11/2026 — a match sold while « à confirmer »: when the Admin confirms it, its
+// Screencasters are told the real kick-off (the slots moved with it, silently — nothing was
+// « reporté »); the owners were never asked, their « Soir de match » notice comes 24 h before.
+export const EVENT_CONFIRMED_TITLE = 'Horaire du match confirmé';
+export const eventConfirmedAdvertiserBody = (matchName: string, kickoffAt: Date): string =>
+  `Le match ${matchName} est confirmé : coup d’envoi le ${formatInTimeZone(kickoffAt, 'Africa/Tunis', "d MMMM yyyy 'à' HH'h'mm", { locale: fr })}. Vos créneaux sont placés sur cette fenêtre de diffusion, sans action de votre part.`;
 
 export const EVENT_CANCELLED_TITLE = 'Événement annulé';
 export const eventCancelledAdvertiserBody = (matchName: string, refundTnd: number): string =>
@@ -178,6 +187,37 @@ export const remapEventPositionings = async (
   }
 
   return { positionings: positionings.length, allocations: allocations.length };
+};
+
+/**
+ * Tell every Screencaster with a live positioning that the match is confirmed, with its real
+ * kick-off. Returns how many were told.
+ */
+export const notifyEventConfirmed = async (
+  tx: Parameters<Parameters<(typeof db)['transaction']>[0]>[0],
+  event: { id: string; name: string; kickoffAt: Date },
+): Promise<number> => {
+  const positionings = await tx
+    .select({ id: campaigns.id, advertiserId: campaigns.advertiserId })
+    .from(campaigns)
+    .where(
+      and(
+        eq(campaigns.eventId, event.id),
+        inArray(campaigns.status, [...LIVE_STATUSES]),
+        notDemoCampaignSql(),
+      ),
+    );
+  if (positionings.length === 0) return 0;
+  await tx.insert(notifications).values(
+    positionings.map((p) => ({
+      userId: p.advertiserId,
+      type: 'event_confirmed',
+      title: EVENT_CONFIRMED_TITLE,
+      body: eventConfirmedAdvertiserBody(event.name, event.kickoffAt),
+      campaignId: p.id,
+    })),
+  );
+  return positionings.length;
 };
 
 export interface EventCancellationCounts {

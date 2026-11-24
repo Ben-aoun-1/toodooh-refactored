@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { campaigns, creatives, eventAllocations, events, screenhosts } from '../db/schema.js';
+import { noticeHostAnsweredEvent } from '../lib/agent-event-offers.js';
 import { notStoppedCampaignSql } from '../lib/campaign-stopped.js';
 import { EVENT_ACCEPT_REMINDER, decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { groupedNoticeAt, ownsVenue, pendingGroupedShareIds } from '../lib/event-host-notice.js';
@@ -139,9 +140,19 @@ export const screenhostEventMatchRoutes: FastifyPluginAsync = async (app) => {
     // The spots the notice asked about and still awaiting an answer — the popup's list (the set
     // is fixed once the notice is sent: a later share is proposed alone).
     let decided = 0;
+    let first: string | null = null;
     for (const allocationId of await pendingGroupedShareIds(eventId, screenhostId)) {
       const outcome = await decideEventAllocation({ allocationId, ownerId: userId, statut });
-      if (outcome.kind === 'ok' && outcome.changed) decided += 1;
+      if (outcome.kind === 'ok' && outcome.changed) {
+        decided += 1;
+        first ??= allocationId;
+      }
+    }
+    // The venue's agent, if any, is told once for the match (Mariem 15/11).
+    if (first) {
+      await noticeHostAnsweredEvent(first, statut === 'ACCEPTE').catch((err: unknown) =>
+        request.log.warn({ err }, 'agent notice after a host match answer failed'),
+      );
     }
     // The per-spot route's re-pushes (FRESH-1 / EVT-STOP), once for the whole match.
     if (decided > 0 && statut === 'ACCEPTE') {

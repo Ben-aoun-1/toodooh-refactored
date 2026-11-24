@@ -22,6 +22,7 @@ export type ExclusionReason =
   | 'no_installed_screen'
   | 'not_demo_venue'
   | 'not_in_frozen_week'
+  | 'caster_excluded'
   // DISP-TOURS — the tours pool's own reasons.
   | 'no_typical_week'
   | 'no_usable_hour';
@@ -148,6 +149,8 @@ export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
   not_in_frozen_week: 'Arrivé après la mise au panier (semaine type gelée)',
   // DEMO-1 (operator ruling Q2 A, 2026-10-12) — a demo campaign airs only on the demo venues.
   not_demo_venue: 'Hors des établissements de démo',
+  // « Réseau Screenhosts » (Mariem 17/11) — the Screencaster removed the venue from his network.
+  caster_excluded: 'Exclu par le Screencaster',
   // DISP-TOURS — no measured affluence yet / every hour unavailable, closed, full or held.
   no_typical_week: 'Pas encore de semaine type (aucune affluence mesurée)',
   no_usable_hour: 'Aucune heure libre sur la période (indisponible, fermé ou complet)',

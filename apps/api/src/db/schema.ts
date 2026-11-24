@@ -1198,6 +1198,8 @@ export type AgentAppointmentStatus =
   | 'annule'
   | 'expire';
 
+export type AgentAppointmentPlace = 'sur_place' | 'telephone' | 'visio';
+
 // One appointment between an agent and an affiliate (a Screencaster, or a Screenhost owner for
 // one venue). A slot (agent, day, hour) held by a live request is unique; « Passé » is derived.
 export const agentAppointments = pgTable(
@@ -1219,6 +1221,13 @@ export const agentAppointments = pgTable(
     proposedDay: date('proposed_day'),
     proposedHour: integer('proposed_hour'),
     cancelledBy: text('cancelled_by').$type<'agent' | 'affilie'>(),
+    // AGENT-VF (spec VF §13 / §9) — who asked. An agent's own request carries a quarter-hour, a
+    // place and a free subject; the affiliate's counter-proposal adds proposedMinute.
+    initiatedBy: text('initiated_by').$type<'affilie' | 'agent'>().notNull().default('affilie'),
+    minute: integer('minute').notNull().default(0),
+    proposedMinute: integer('proposed_minute'),
+    place: text('place').$type<AgentAppointmentPlace>(),
+    subject: text('subject'),
     reminderSentAt: timestamp('reminder_sent_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1234,10 +1243,139 @@ export const agentAppointments = pgTable(
       sql`${table.status} in ('en_attente', 'nouvel_horaire', 'confirme', 'annule', 'expire')`,
     ),
     check('agent_appointments_hour', sql`${table.hour} between 0 and 23`),
+    check('agent_appointments_initiated_by', sql`${table.initiatedBy} in ('affilie', 'agent')`),
+    check(
+      'agent_appointments_minute',
+      sql`${table.minute} in (0, 15, 30, 45) AND (${table.proposedMinute} IS NULL OR ${table.proposedMinute} in (0, 15, 30, 45))`,
+    ),
+    check(
+      'agent_appointments_place',
+      sql`${table.place} IS NULL OR ${table.place} in ('sur_place', 'telephone', 'visio')`,
+    ),
   ],
 );
 
 export type AgentAppointment = typeof agentAppointments.$inferSelect;
+
+// Mariem 12/11/2026 (agent specs VF « Logos ») — the logo of a venue (Screenhost) or of an account
+// (Screencaster). One validated and one pending row per subject (partial unique indexes); an
+// agent's upload is 'en_attente' until an admin decides; a replaced row is kept as 'remplace'.
+export type LogoStatus = 'en_attente' | 'valide' | 'refuse' | 'remplace';
+
+export const logos = pgTable(
+  'logos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    subjectKind: text('subject_kind').$type<'screenhost' | 'advertiser'>().notNull(),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    storageKey: text('storage_key').notNull(),
+    contentType: text('content_type').notNull(),
+    status: text('status').$type<LogoStatus>().notNull(),
+    uploadedBy: uuid('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
+    uploadedByRole: text('uploaded_by_role').$type<'agent' | 'owner' | 'admin'>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    refusalReason: text('refusal_reason'),
+  },
+  (table) => [
+    uniqueIndex('logos_screenhost_live_uq')
+      .on(table.screenhostId, table.status)
+      .where(
+        sql`${table.screenhostId} IS NOT NULL AND ${table.status} in ('en_attente', 'valide')`,
+      ),
+    uniqueIndex('logos_user_live_uq')
+      .on(table.userId, table.status)
+      .where(sql`${table.userId} IS NOT NULL AND ${table.status} in ('en_attente', 'valide')`),
+    index('logos_status_idx').on(table.status),
+    check(
+      'logos_subject',
+      sql`(${table.subjectKind} = 'screenhost' AND ${table.screenhostId} IS NOT NULL AND ${table.userId} IS NULL) OR (${table.subjectKind} = 'advertiser' AND ${table.userId} IS NOT NULL AND ${table.screenhostId} IS NULL)`,
+    ),
+    check('logos_status', sql`${table.status} in ('en_attente', 'valide', 'refuse', 'remplace')`),
+    check('logos_uploaded_by_role', sql`${table.uploadedByRole} in ('agent', 'owner', 'admin')`),
+  ],
+);
+
+export type Logo = typeof logos.$inferSelect;
+
+// Mariem 17/11/2026 — « Réseau Screenhosts » : the venues a Screencaster removed from HIS network.
+// One row = one exclusion period, open while reintegrated_at is NULL; closed rows are history the
+// engine reads for campaigns validated meanwhile (lib/caster-exclusions.ts — the one home).
+export const casterVenueExclusions = pgTable(
+  'caster_venue_exclusions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    advertiserId: uuid('advertiser_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    excludedAt: timestamp('excluded_at', { withTimezone: true }).notNull().defaultNow(),
+    reintegratedAt: timestamp('reintegrated_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('caster_venue_exclusions_open_uq')
+      .on(table.advertiserId, table.screenhostId)
+      .where(sql`${table.reintegratedAt} IS NULL`),
+    index('caster_venue_exclusions_advertiser_idx').on(table.advertiserId),
+  ],
+);
+
+// Mariem 12/11/2026 (Agent Screenhost spec VF §11) — a qualification fiche: the agent's answers,
+// the proposed result computed at sending, and the manager's final decision (taken in the Hub).
+export type AgentChecklistStatus = 'draft' | 'sent' | 'validated' | 'refused';
+
+export interface ChecklistResultDetail {
+  motifs: string[];
+  cond: string[];
+  verif: string[];
+  sig: string[];
+}
+
+export const agentChecklists = pgTable(
+  'agent_checklists',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    agentUserId: uuid('agent_user_id').references(() => users.id, { onDelete: 'set null' }),
+    agentName: text('agent_name'),
+    agentCode: text('agent_code'),
+    status: text('status').$type<AgentChecklistStatus>().notNull().default('draft'),
+    answers: jsonb('answers').$type<Record<string, string | string[]>>().notNull().default({}),
+    wifiPasswordEncrypted: text('wifi_password_encrypted'),
+    name: text('name'),
+    category: text('category'),
+    governorate: text('governorate'),
+    delegation: text('delegation'),
+    agentOpinion: text('agent_opinion').$type<'oui' | 'non'>(),
+    result: text('result').$type<'elig' | 'non' | 'inc'>(),
+    resultDetail: jsonb('result_detail').$type<ChecklistResultDetail>(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decidedByHubUserId: integer('decided_by_hub_user_id'),
+    decidedByName: text('decided_by_name'),
+    managerComment: text('manager_comment'),
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('agent_checklists_agent_idx').on(table.agentUserId),
+    index('agent_checklists_status_idx').on(table.status),
+    check(
+      'agent_checklists_status',
+      sql`${table.status} in ('draft', 'sent', 'validated', 'refused')`,
+    ),
+    check(
+      'agent_checklists_result',
+      sql`${table.result} IS NULL OR ${table.result} in ('elig', 'non', 'inc')`,
+    ),
+  ],
+);
+
+export type AgentChecklist = typeof agentChecklists.$inferSelect;
 
 // AGT-7 (Agent Screenhost spec v1.0 §6 « Suivi de mes Screenhosts ») — one row per venue and day,
 // computed by the daily follow-up job from the engine's sources. The score and its four rates
@@ -2060,6 +2198,13 @@ export interface DispatchCreneau {
   blackoutMin?: number;
 }
 
+/** Who answered a classic offer (agent spec VF §10). */
+// 'system' (Mariem 16/11) — no answer by the Host's deadline: withdrawn by lib/campaign-prelaunch.ts.
+export type AllocationDecider = 'owner' | 'agent' | 'admin' | 'system';
+
+/** The decision columns of a row that returns to EN_ATTENTE (a re-consent): nobody answered. */
+export const NO_DECISION = { decidedBy: null, decidedByUserId: null, decidedAt: null } as const;
+
 export const campaignDispatchAllocation = pgTable(
   'campaign_dispatch_allocation',
   {
@@ -2077,6 +2222,13 @@ export const campaignDispatchAllocation = pgTable(
     // Mariem 13/11 (migration 0108) — proposed after its own start − 6 h lock (a pre-launch
     // redispatch): only the start − 5 min freeze withdraws it (lib/campaign-prelaunch.ts).
     lateProposal: boolean('late_proposal').notNull().default(false),
+    // Agent spec VF §10 (migration 0109) — who answered: the first answer decides and is final.
+    // NULL = not answered (or answered before 0109); a re-consent clears the three.
+    decidedBy: text('decided_by').$type<AllocationDecider>(),
+    decidedByUserId: uuid('decided_by_user_id').references((): AnyPgColumn => users.id, {
+      onDelete: 'set null',
+    }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
     creneaux: jsonb('creneaux').$type<DispatchCreneau[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -2832,9 +2984,9 @@ export const events = pgTable(
     /** « À la une »: 'hero' (the big card) or 'pinned' (the cards under it); NULL = by month. */
     featured: text('featured'),
     /**
-     * B1 — a match whose date or kickoff time is not confirmed is LISTED with its badge but not
-     * positionable: kickoff_at then holds the provisional instant (pricing and the blocs need
-     * one), and nothing can be bought on it until the admin confirms.
+     * A match whose date or kickoff time is not confirmed: kickoff_at holds the provisional
+     * instant (pricing and the blocs need one). Since 23/11/2026 it is SOLD like any other; its
+     * Screenhosts are asked at the confirmation, which moves the slots onto the real window.
      */
     dateTbc: boolean('date_tbc').notNull().default(false),
     timeTbc: boolean('time_tbc').notNull().default(false),
@@ -3014,9 +3166,15 @@ export const eventAllocations = pgTable(
      * Mariem 05/11 (mig 0106) — how the owner is asked about this share (lib/event-host-notice):
      * NULL = waits for the match's grouped notice (kick-off − 24 h), 'grouped', 'single' (the
      * default: proposed alone, as before), 'auto' (accepted on the owner's behalf) or
-     * 'withheld' (never asked).
+     * 'withheld' (never asked). Since Mariem 15/11 only a re-placement onto a venue that accepted
+     * the match is 'auto'; 'withheld' is no longer written.
      */
     notice: text('notice').default('single'),
+    /** Mariem 15/11 (mig 0113) — who answered: the owner, his agent or an admin (NULL = owner's). */
+    decidedBy: text('decided_by').$type<AllocationDecider>(),
+    decidedByUserId: uuid('decided_by_user_id').references((): AnyPgColumn => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -3205,6 +3363,8 @@ export const ctaScans = pgTable(
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
     scannedAt: timestamp('scanned_at', { withTimezone: true }).notNull().defaultNow(),
+    // QR-SCAN1 — opaque per-day visitor key (lib/qr-scans.ts); null on rows before migration 0114.
+    visitorHash: text('visitor_hash'),
   },
   (t) => [index('cta_scans_campaign_scanned_idx').on(t.campaignId, t.scannedAt)],
 );

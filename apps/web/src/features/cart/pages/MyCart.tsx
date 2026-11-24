@@ -16,7 +16,7 @@ import { cartReasonFr, parseCartConfirmFailure } from '@/features/cart/lib/cart-
 import { shownQuotes } from '@/features/cart/lib/cart-quote';
 import { confirmSuccessMessage } from '@/features/cart/lib/confirm-outcome';
 import EventSuggestionsBlock from '@/features/events/components/EventSuggestionsBlock';
-import { formatEventHours } from '@/features/events/lib/event-display';
+import { DATE_TBC_LABEL, eventHoursText } from '@/features/events/lib/event-display';
 import { splitCartSections } from '@/features/events/lib/event-positioning';
 import { POSITIONING_RESUME_STATE } from '@/features/events/lib/positioning-resume';
 import { getErrorMessage } from '@/lib/errors';
@@ -244,12 +244,13 @@ export default function MyCart() {
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-gray-500">
-                        {formatUiDate(item.start_date)}
+                        {item.event?.date_tbc ? DATE_TBC_LABEL : formatUiDate(item.start_date)}
                         {item.event && (
                           <>
                             <span className="mx-2 text-gray-300">|</span>
                             Fenêtre :{' '}
-                            {formatEventHours(
+                            {eventHoursText(
+                              item.event,
                               item.event.fenetre.window_start,
                               item.event.fenetre.window_end,
                             )}

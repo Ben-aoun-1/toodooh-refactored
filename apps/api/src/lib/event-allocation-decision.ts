@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { campaigns, eventAllocations, events, screenhosts } from '../db/schema.js';
 
+import { type DecisionActor } from './allocation-decision.js';
 import { notStoppedCampaignSql } from './campaign-stopped.js';
 import { notDemoEventAllocationSql } from './demo.js';
 import { campaignCpmRates } from './dispatch/config.js';
@@ -21,6 +22,8 @@ export const EVENT_ACCEPT_REMINDER =
 export type EventDecisionOutcome =
   | { kind: 'not_found' }
   | { kind: 'refused_final' }
+  /** Someone else already answered: the first answer is final (operator 14/11, Mariem 15/11). */
+  | { kind: 'already_answered' }
   | {
       kind: 'ok';
       id: string;
@@ -35,8 +38,11 @@ export const decideEventAllocation = async (input: {
   statut: 'ACCEPTE' | 'REFUSE';
   /** The instant stamped on the decision — the simulator passes its virtual clock. */
   now?: Date;
+  /** Who answers for the owner (his agent, an admin); the owner himself by default. */
+  actor?: DecisionActor;
 }): Promise<EventDecisionOutcome> => {
   const { allocationId, ownerId, statut } = input;
+  const actor: DecisionActor = input.actor ?? { kind: 'owner', userId: ownerId };
   return db.transaction(async (tx): Promise<EventDecisionOutcome> => {
     const [row] = await tx
       .select({
@@ -76,6 +82,9 @@ export const decideEventAllocation = async (input: {
     if (!row) return { kind: 'not_found' };
 
     const current = row.allocation.statut;
+    // The first answer is final, whoever gives it (an answer before mig 0113 is the owner's).
+    const by = row.allocation.decidedBy ?? (current === 'EN_ATTENTE' ? null : 'owner');
+    if (current !== 'EN_ATTENTE' && by !== actor.kind) return { kind: 'already_answered' };
     if (current === statut) {
       return {
         kind: 'ok',
@@ -86,10 +95,16 @@ export const decideEventAllocation = async (input: {
       };
     }
     if (current === 'REFUSE') return { kind: 'refused_final' };
+    if (current === 'ACCEPTE') return { kind: 'already_answered' };
 
     await tx
       .update(eventAllocations)
-      .set({ statut, decidedAt: input.now ?? new Date() })
+      .set({
+        statut,
+        decidedAt: input.now ?? new Date(),
+        decidedBy: actor.kind,
+        decidedByUserId: actor.userId,
+      })
       .where(eq(eventAllocations.id, row.allocation.id));
 
     if (statut === 'REFUSE') {

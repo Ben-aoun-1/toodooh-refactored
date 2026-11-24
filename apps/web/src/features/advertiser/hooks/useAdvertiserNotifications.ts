@@ -57,6 +57,11 @@ export const actionFor = (n: ApiNotification): AdvertiserNotificationItem['actio
   if (n.type === 'campaign_draft_reminder' || n.type === 'campaign_draft_expiry') {
     return { label: 'Consulter', path: '/my-campaigns?status=draft' };
   }
+  // AGENT-VF (spec VF §9) — the agent's rendez-vous request opens « Prendre rendez-vous », where
+  // the Screencaster accepts it or proposes another slot.
+  if (n.type === 'appointment_agent_request') {
+    return { label: 'Répondre', path: '/dashboard?rdv=1' };
+  }
   if (n.type === 'campaign_cart_expiry') {
     return { label: 'Consulter', path: '/my-cart' };
   }

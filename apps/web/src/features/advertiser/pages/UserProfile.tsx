@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import ProfileLogoEditor from '@/features/advertiser/components/ProfileLogoEditor';
 import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserProfile,
@@ -100,6 +101,7 @@ export default function UserProfile() {
           onChanged={() => void invalidateProfile()}
         />
       }
+      logoSlot={<ProfileLogoEditor />}
       fields={{ companySize: 'company', zone: false }}
       copy={{
         remindersText: 'Recevez des rappels pour vos événements, échéances et rendez-vous à venir.',

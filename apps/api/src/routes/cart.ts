@@ -9,6 +9,7 @@ import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { isBelowCampaignMinimum } from '../lib/campaign-budget.js';
 import { type CampaignCmax, computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
+import { casterExcludedVenues } from '../lib/caster-exclusions.js';
 import { demoAirsAt, demoDelayMinutes, demoVenueIds, isDemoUser } from '../lib/demo.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { toursEngineOn, usesToursEngine } from '../lib/dispatch/engine-switch.js';
@@ -149,6 +150,7 @@ const cartGateVerdict = async (row: GateRow, rule: CartRule): Promise<GateVerdic
       campaignCpmRates(c).eventCpmTnd,
       await positioningPlaysPerMinute(c.creativeId),
       rule.demo ? await demoVenueIds(db) : null,
+      await casterExcludedVenues(db, c.id),
     );
     if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') return refused('MISSING_CREATIVE');
     if (!verdict.ok)

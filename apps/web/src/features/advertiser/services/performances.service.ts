@@ -35,6 +35,20 @@ export interface LiveCampaignWire {
   audience: number | null;
   plays: number;
   venues: number;
+  /** QR-SCAN1 — scans of the spot's QR code so far; null = the campaign has no QR code. */
+  qr_scans: number | null;
+}
+
+/** QR-SCAN1 — the QR code's scans over the analysed campaigns (only those with a QR code). */
+export interface QrScansWire {
+  campaign_count: number;
+  scans: number;
+  /** A person counts once per day. */
+  unique_visitors: number;
+  per_1000_impressions: number | null;
+  by_day: { date: string; scans: number }[];
+  /** 24 rows, hour 0 to 23 (Tunis). */
+  by_hour: { hour: number; scans: number }[];
 }
 
 export interface ShareWire {
@@ -68,6 +82,8 @@ export interface AnalysisWire {
     age: ShareWire[];
   } | null;
   zones: (ShareWire & { zone_id: string | null })[];
+  /** QR-SCAN1 — null when none of the analysed campaigns carries a QR code. */
+  qr: QrScansWire | null;
 }
 
 export interface FootprintWire {

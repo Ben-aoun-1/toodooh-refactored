@@ -4,6 +4,7 @@ import { db } from '../db/client.js';
 import { events } from '../db/schema.js';
 
 import { deriveICible } from './activation-service.js';
+import { casterExcludedVenues } from './caster-exclusions.js';
 import { eventPoolDemoVenues } from './demo.js';
 import {
   campaignCpmRates,
@@ -221,7 +222,7 @@ const eventEstimate = async (
     const { minutes } = await computeEventCmax(
       { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
       cpm,
-      new Set(),
+      await casterExcludedVenues(db, c.id),
       await campaignPlaysPerMinute(c.id),
       await eventPoolDemoVenues(db, c.id),
     );
@@ -241,12 +242,10 @@ const eventEstimate = async (
 
   const budget = budgetOf(c, budgetOverride);
   if (budget === null) return { status: 'NO_BUDGET' };
-  const pool = await assembleEventPool({
-    id: ev.id,
-    kickoffAt: ev.kickoffAt,
-    endsAt: ev.endsAt,
-    seatMinutes: ev.seatMinutes,
-  });
+  const pool = await assembleEventPool(
+    { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
+    await casterExcludedVenues(db, c.id),
+  );
   const fill = fillEventBlocs(pool, budget, cpm);
   if (fill.status === 'NO_POOL') return { status: 'NO_ELIGIBLE' };
   // D7 — reaching I_cible would need more venues than N_max: the real validation refuses.

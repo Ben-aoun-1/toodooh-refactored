@@ -24,6 +24,7 @@ import {
   premiereDateDisponible,
   startDateViolation,
 } from '../lib/campaign-dates.js';
+import { casterExcludedVenues } from '../lib/caster-exclusions.js';
 import { parseDeliveryOverride } from '../lib/delivery-override.js';
 import { eventPoolDemoVenues, isDemoUser } from '../lib/demo.js';
 import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
@@ -561,6 +562,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           campaignCpmRates(existing).eventCpmTnd,
           await positioningPlaysPerMinute(creativeId ?? null),
           await eventPoolDemoVenues(db, existing.id),
+          await casterExcludedVenues(db, existing.id),
         );
         if (!verdict.ok && verdict.reason === 'EVENT_ANNULE') {
           return reply
@@ -707,7 +709,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       const evCmax = await computeEventCmax(
         { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
         campaignCpmRates(row).eventCpmTnd,
-        new Set(),
+        await casterExcludedVenues(db, row.id),
         (await positioningPlaysPerMinute(row.creativeId)) ?? 1,
         await eventPoolDemoVenues(db, row.id),
       );
@@ -990,6 +992,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         campaignCpmRates(existing).eventCpmTnd,
         await positioningPlaysPerMinute(existing.creativeId),
         await eventPoolDemoVenues(db, existing.id),
+        await casterExcludedVenues(db, existing.id),
       );
       if (!verdict.ok && verdict.reason === 'SPOT_REQUIRED') {
         return reply.status(400).send({

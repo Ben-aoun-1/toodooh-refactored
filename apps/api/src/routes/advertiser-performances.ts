@@ -20,6 +20,12 @@ import {
 } from '../lib/advertiser-performances.js';
 import { campaignReportFilename, renderCampaignReportPdf } from '../lib/campaign-report-pdf.js';
 import { parseDeliveryOverride } from '../lib/delivery-override.js';
+import {
+  type QrScanSummary,
+  loadQrCampaignIds,
+  loadScanRows,
+  qrScanSummaryFor,
+} from '../lib/qr-scans.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -67,7 +73,19 @@ const campaignView = (c: ClosedCampaign) => ({
 
 const shareView = (r: ShareRow) => ({ key: r.key, label: r.label, value: r.value, pct: r.pct });
 
-const liveView = (c: LiveCampaign) => ({
+const qrView = (q: (QrScanSummary & { campaignCount: number }) | null) =>
+  q === null
+    ? null
+    : {
+        campaign_count: q.campaignCount,
+        scans: q.scans,
+        unique_visitors: q.uniqueVisitors,
+        per_1000_impressions: q.per1000Impressions,
+        by_day: q.byDay,
+        by_hour: q.byHour,
+      };
+
+const liveView = (c: LiveCampaign, scans: number | null) => ({
   id: c.id,
   name: c.name,
   nature: c.nature,
@@ -75,6 +93,8 @@ const liveView = (c: LiveCampaign) => ({
   audience: c.audience,
   plays: c.plays,
   venues: c.venues,
+  /** QR-SCAN1 — scans of the spot's QR code so far; null = the campaign has no QR code. */
+  qr_scans: scans,
 });
 
 const sectionsView = (s: AnalysisSections) => ({
@@ -127,7 +147,13 @@ export const advertiserPerformancesRoutes: FastifyPluginAsync = async (app) => {
     const userId = request.user?.id;
     if (!userId) return sendUnauthenticated(reply);
     const live = await loadLiveCampaigns(userId);
-    return reply.status(200).send({ campaigns: live.map(liveView) });
+    const ids = live.map((c) => c.id);
+    const [qrIds, scans] = await Promise.all([loadQrCampaignIds(ids), loadScanRows(ids)]);
+    return reply.status(200).send({
+      campaigns: live.map((c) =>
+        liveView(c, qrIds.has(c.id) ? (scans.get(c.id)?.length ?? 0) : null),
+      ),
+    });
   });
 
   // GET /api/advertiser/performances/footprint — epic 5: cumulative series over the clôtures.
@@ -181,9 +207,10 @@ export const advertiserPerformancesRoutes: FastifyPluginAsync = async (app) => {
           closedInPeriod(c.closedOn, q.from ?? null, q.to ?? null) && matchesNature(c, q.nature),
       );
     }
-    const [lines, catalogue] = await Promise.all([
+    const [lines, catalogue, qr] = await Promise.all([
       loadVenueImpressionLines(scoped.map((c) => c.id)),
       loadZoneCatalogue(),
+      qrScanSummaryFor(scoped),
     ]);
     const sections = buildAnalysis(scoped, lines, catalogue);
     return reply.status(200).send({
@@ -191,6 +218,7 @@ export const advertiserPerformancesRoutes: FastifyPluginAsync = async (app) => {
       period: q.campaign_id ? null : { from: q.from ?? null, to: q.to ?? null },
       nature: q.campaign_id ? scoped[0]?.nature : q.nature,
       ...sectionsView(sections),
+      qr: qrView(qr),
     });
   });
 
@@ -230,9 +258,10 @@ export const advertiserPerformancesRoutes: FastifyPluginAsync = async (app) => {
         }
         request.log.warn({ campaignId: campaign.id, reportKey }, 'stored campaign report missing');
       }
-      const [lines, catalogue, [advertiser]] = await Promise.all([
+      const [lines, catalogue, qr, [advertiser]] = await Promise.all([
         loadVenueImpressionLines([campaign.id]),
         loadZoneCatalogue(),
+        qrScanSummaryFor([campaign]),
         db
           .select({ businessName: users.businessName, contactName: users.contactName })
           .from(users)
@@ -243,6 +272,7 @@ export const advertiserPerformancesRoutes: FastifyPluginAsync = async (app) => {
       const pdf = await renderCampaignReportPdf({
         campaign,
         sections,
+        qr,
         advertiserName: advertiser?.businessName ?? advertiser?.contactName ?? '',
         generatedAt: new Date(),
       });

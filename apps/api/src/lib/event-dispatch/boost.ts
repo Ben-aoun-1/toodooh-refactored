@@ -11,6 +11,7 @@ import {
   zones,
 } from '../../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND, isBelowCampaignMinimum } from '../campaign-budget.js';
+import { casterExcludedVenues, withCasterExclusions } from '../caster-exclusions.js';
 import { isDemoCampaign } from '../demo.js';
 import { campaignCpmRates } from '../dispatch/config.js';
 import {
@@ -183,7 +184,7 @@ const complementaryCeiling = async (
       seatMinutes: loaded.event.seatMinutes,
     },
     campaignCpmRates(loaded.campaign).eventCpmTnd,
-    new Set(),
+    await casterExcludedVenues(db, loaded.campaign.id),
     await campaignPlaysPerMinute(loaded.campaign.id),
   );
   // EVT-MIN1 ruling A1 — this positioning predates the minutes model: its ceiling stays EV2's
@@ -216,7 +217,7 @@ const addedPerimeter = async (
       endsAt: loaded.event.endsAt,
       seatMinutes: loaded.event.seatMinutes,
     },
-    new Set(held.map((h) => h.screenhostId)),
+    await withCasterExclusions(db, loaded.campaign.id, new Set(held.map((h) => h.screenhostId))),
   );
   if (pool.length === 0) return [];
   const inAddedZones = await db
@@ -256,7 +257,7 @@ const addedPerimeterMinutes = async (
       seatMinutes: loaded.event.seatMinutes,
     },
     campaignCpmRates(loaded.campaign).eventCpmTnd,
-    new Set(held.map((h) => h.screenhostId)),
+    await withCasterExclusions(db, loaded.campaign.id, new Set(held.map((h) => h.screenhostId))),
     await campaignPlaysPerMinute(loaded.campaign.id),
   );
   if (minutes.length === 0) return [];

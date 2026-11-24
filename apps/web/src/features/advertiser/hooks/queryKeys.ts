@@ -30,6 +30,12 @@ export const advertiserKeys = {
 
   profile: (userId: string) => [...advertiserKeys.all, 'profile', userId] as const,
 
+  /** The Screencaster's own logo (profile « Logo » block + his campaign cards). */
+  profileLogo: (userId: string) => [...advertiserKeys.all, 'profileLogo', userId] as const,
+
+  /** The TV parks of the network (the dashboard's « même enseigne » section). */
+  networkParks: () => [...advertiserKeys.all, 'networkParks'] as const,
+
   /** The advertiser notification-bell feed (Commit 8 — D5). */
   notifications: (userId: string) => [...advertiserKeys.all, 'notifications', userId] as const,
   // SC-P — « Mes performances » (Screencaster): four reads, session-scoped, keyed per user.

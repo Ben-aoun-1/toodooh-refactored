@@ -56,8 +56,8 @@ interface EventCatalogueFieldsProps {
 
 /**
  * EVT-CAT2 — what the new « Événements » card shows: the competition and round, the stadium,
- * « À la une » (big card or pinned), what is still « à confirmer » (B1: such a match is listed but
- * cannot be bought until confirmed — the date/time above then hold a provisional instant), and
+ * « À la une » (big card or pinned), what is still « à confirmer » (operator 23/11: such a match is sold
+ * on the provisional instant typed above, and confirming it moves the bought slots), and
  * the MATCHES — one, or several for an evening (« Soirée Ligue des champions »). An opponent left
  * empty shows « Adversaire après tirage ».
  */
@@ -131,8 +131,10 @@ export default function EventCatalogueFields({
       </div>
       {(value.dateTbc || value.timeTbc) && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Tant que le jour ou l’horaire est à confirmer, le match est affiché mais ne peut pas être
-          acheté. Les dates saisies plus haut servent de date provisoire.
+          Le match est en vente avec une date provisoire : celle saisie plus haut. Choisissez un
+          jour et une heure plausibles, car le prix et les Screenhosts retenus en dépendent. Les
+          Screenhosts ne sont sollicités qu’à la confirmation ; décochez alors ces cases et corrigez
+          la date, les créneaux achetés suivent automatiquement.
         </p>
       )}
       {field(

@@ -26,6 +26,7 @@ const row = (over: Partial<AgentCampaign>): AgentCampaign => ({
   impressions: 100,
   revenue_tnd: 0,
   forecast_tnd: 0,
+  to_earn_tnd: 0,
   ...over,
 });
 
@@ -78,6 +79,7 @@ describe('AGT-7 — the Screenhost agent views', () => {
       impressions: 15,
       revenue_tnd: 1,
       forecast_tnd: 2,
+      to_earn_tnd: 0,
     };
     expect(cardModel(sh)).toMatchObject({
       avatar_name: 'Pâtisserie Lina',

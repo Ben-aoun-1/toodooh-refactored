@@ -10,18 +10,11 @@ import {
   useAvailability,
   useMyAppointments,
 } from '../hooks/useAppointments';
-import {
-  affiliateCanAnswer,
-  canCancel,
-  dayLabel,
-  freeHours,
-  hourLabel,
-  splitAppointments,
-} from '../lib/appointments';
+import { freeHours, hourLabel, splitAppointments } from '../lib/appointments';
 import { type Referent, appointmentsService } from '../services/appointments.service';
 
-import { AppointmentStatusBadge } from './AppointmentStatusBadge';
 import { MonthCalendar } from './MonthCalendar';
+import { MyRequestRow } from './MyRequestRow';
 
 type ReferentAgent = NonNullable<Referent['agent']>;
 
@@ -52,10 +45,6 @@ export function AffiliateAppointmentModal({
     (b: { objective_id: string; day: string; hour: number; message: string | null }) =>
       appointmentsService.request(b),
   );
-  const respond = useAppointmentMutation((v: { id: string; accept: boolean }) =>
-    appointmentsService.respond(v.id, v.accept),
-  );
-  const cancel = useAppointmentMutation((id: string) => appointmentsService.cancelMine(id));
   const live = splitAppointments(mine.data?.appointments ?? []).upcoming;
   const hours = day ? freeHours(day, referent.slot_hours, availability.data?.taken ?? [], now) : [];
   const name = [referent.agent.first_name, referent.agent.last_name].filter(Boolean).join(' ');
@@ -114,60 +103,7 @@ export function AffiliateAppointmentModal({
           <div className="mt-4 space-y-2">
             <p className="text-sm font-semibold">Mes demandes</p>
             {live.map((a) => (
-              <div key={a.id} className="rounded-lg border p-3 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span>
-                    {dayLabel(a.day)} à {hourLabel(a.hour)}
-                    {a.objective ? ` — ${a.objective}` : ''}
-                  </span>
-                  <AppointmentStatusBadge status={a.status} />
-                </div>
-                {affiliateCanAnswer(a) && a.proposed_day && a.proposed_hour !== null && (
-                  <p className="mt-1 text-gray-600">
-                    Nouvel horaire proposé : le {dayLabel(a.proposed_day)} à{' '}
-                    {hourLabel(a.proposed_hour)}
-                  </p>
-                )}
-                <div className="mt-2 flex gap-2">
-                  {affiliateCanAnswer(a) && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void run(
-                            respond.mutateAsync({ id: a.id, accept: true }),
-                            'Rendez-vous confirmé',
-                          )
-                        }
-                        className="rounded-lg bg-brand-primary px-3 py-1 text-xs font-medium text-brand-deep"
-                      >
-                        Accepter
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void run(
-                            respond.mutateAsync({ id: a.id, accept: false }),
-                            'Nouvel horaire décliné',
-                          )
-                        }
-                        className="rounded-lg border px-3 py-1 text-xs"
-                      >
-                        Décliner
-                      </button>
-                    </>
-                  )}
-                  {canCancel(a) && !affiliateCanAnswer(a) && (
-                    <button
-                      type="button"
-                      onClick={() => void run(cancel.mutateAsync(a.id), 'Rendez-vous annulé')}
-                      className="rounded-lg border border-red-200 px-3 py-1 text-xs text-red-700"
-                    >
-                      Annuler
-                    </button>
-                  )}
-                </div>
-              </div>
+              <MyRequestRow key={a.id} appointment={a} today={today} />
             ))}
           </div>
         )}

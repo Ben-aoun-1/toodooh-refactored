@@ -20,6 +20,7 @@ import {
 } from '../db/schema.js';
 
 import { agentCommissionPct } from './agent-sheet.js';
+import { tunisDateOf } from './campaign-dates.js';
 import { isDemoCampaign } from './demo.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { proofInstantSql } from './playout/proof-instant.js';
@@ -198,6 +199,48 @@ const recentOffer = async (campaignId: string, screenhostId: string | null): Pro
   return times.some((t) => t >= since);
 };
 
+/** « 99,792 TND » — an amount in a notice, up to 3 decimals. */
+export const noticeTnd = (n: number): string =>
+  `${n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} TND`;
+
+/** Whether « À gagner » changed by at least a millime (the smallest amount shown). */
+export const toEarnMoved = (before: number, next: number): boolean =>
+  Math.abs(next - before) >= 0.001;
+
+const campaignNameOf = async (campaignId: string): Promise<string> => {
+  const [c] = await db
+    .select({ name: campaigns.name })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    .limit(1);
+  return c?.name ?? 'Campagne';
+};
+
+const venueNameOf = async (screenhostId: string): Promise<string | null> => {
+  const [v] = await db
+    .select({ name: screenhosts.name })
+    .from(screenhosts)
+    .where(eq(screenhosts.id, screenhostId))
+    .limit(1);
+  return v?.name ?? null;
+};
+
+/**
+ * Spec VF §11 (Agent Screencaster) — « {Screencaster} a rechargé son portefeuille Toodooh »: told
+ * to the Screencaster's agent while the affiliation runs. No action, no revenue.
+ */
+export const noticeAffiliateRecharged = async (advertiserId: string, now: Date = new Date()) => {
+  const live = await liveScAffiliation(advertiserId, tunisDateOf(now));
+  if (!live || live.affiliation.status !== 'en_cours') return;
+  await db.insert(notifications).values({
+    userId: live.affiliation.agentUserId,
+    type: 'agent_affiliate_recharged',
+    title: `${await userLabelById(advertiserId)} a rechargé son portefeuille Toodooh`,
+    body: 'Aucune action requise. Votre revenu vient des campagnes que votre Screencaster lance.',
+    link: '/agent/affilies',
+  });
+};
+
 /** Write (or revive) one forecast line, keeping the rate frozen on an existing line. */
 const upsertForecast = async (
   existing: AgentCommissionLine | undefined,
@@ -209,18 +252,37 @@ const upsertForecast = async (
   const a = live.affiliation;
   if (existing) {
     if (existing.status === 'acquise') return;
+    const next = round4((valueTnd * Number(existing.ratePct)) / 100);
     await db
       .update(agentCommissionLines)
       .set({
         status: 'previsionnel',
-        forecastTnd: String(round4((valueTnd * Number(existing.ratePct)) / 100)),
+        forecastTnd: String(next),
         affiliationId: a.id,
         updatedAt: new Date(),
       })
       .where(eq(agentCommissionLines.id, existing.id));
+    // Spec VF §16 « Redispatching ou ajustement : montant À gagner mis à jour » — a live forecast
+    // that moved (a redispatch, a boost, the pre-launch freeze) is announced with both amounts.
+    const before = Number(existing.forecastTnd ?? 0);
+    if (existing.status === 'previsionnel' && toEarnMoved(before, next)) {
+      const [name, venue] = await Promise.all([
+        campaignNameOf(campaignId),
+        screenhostId ? venueNameOf(screenhostId) : Promise.resolve(null),
+      ]);
+      await db.insert(notifications).values({
+        userId: a.agentUserId,
+        type: 'agent_to_earn_updated',
+        title: `Montant à gagner mis à jour : ${name}`,
+        body: `${venue ? `${venue} : ` : ''}${noticeTnd(next)} au lieu de ${noticeTnd(before)}.`,
+        campaignId,
+        link: '/agent/campagnes',
+      });
+    }
     return;
   }
   const rate = await agentCommissionPct(a.agentUserId, a.agentRole);
+  const forecast = round4((valueTnd * rate) / 100);
   const inserted = await db
     .insert(agentCommissionLines)
     .values({
@@ -230,7 +292,7 @@ const upsertForecast = async (
       screenhostId,
       affiliationId: a.id,
       ratePct: String(rate),
-      forecastTnd: String(round4((valueTnd * rate) / 100)),
+      forecastTnd: String(forecast),
     })
     .onConflictDoNothing()
     .returning({ id: agentCommissionLines.id });
@@ -240,17 +302,16 @@ const upsertForecast = async (
   // Only a FRESH launch / acceptance is announced: the first sync after deploy writes lines for
   // campaigns already running, and those must not notify (or email) anyone.
   const fresh = inserted.length > 0 && (await recentOffer(campaignId, screenhostId));
+  // Spec VF §16 / §11 — the notice says what the agent will receive (« à la clôture » for a
+  // Screenhost agent, Mariem's wording; the engine credits at settlement).
+  const campaignName = fresh ? await campaignNameOf(campaignId) : '';
   if (fresh && screenhostId !== null) {
-    const [v] = await db
-      .select({ name: screenhosts.name })
-      .from(screenhosts)
-      .where(eq(screenhosts.id, screenhostId))
-      .limit(1);
+    const venue = await venueNameOf(screenhostId);
     await db.insert(notifications).values({
       userId: a.agentUserId,
       type: 'agent_campaign_accepted',
-      title: `Nouvelle campagne acceptée par ${v?.name ?? 'un Screenhost affilié'}`,
-      body: 'Consultez le détail de la campagne dans « Mes campagnes affiliées ».',
+      title: `Nouvelle campagne acceptée par ${venue ?? 'un Screenhost affilié'}`,
+      body: `${campaignName} : vous allez recevoir ${noticeTnd(forecast)} à la clôture, si la diffusion se déroule comme prévu.`,
       campaignId,
       link: '/agent/campagnes',
     });
@@ -266,7 +327,7 @@ const upsertForecast = async (
       userId: a.agentUserId,
       type: 'agent_campaign_launched',
       title: `Nouvelle campagne lancée par ${name}`,
-      body: 'Consultez le détail de la campagne dans « Mes campagnes affiliées ».',
+      body: `${campaignName} : vous allez recevoir ${noticeTnd(forecast)}, si la diffusion se déroule comme prévu.`,
       campaignId,
       link: '/agent/campagnes',
     });

@@ -1,17 +1,23 @@
-import type { AgentSheetForm } from '@/features/admin/lib/agent-sheet';
+import { type AgentSheetForm, CIN_ACCEPT } from '@/features/admin/lib/agent-sheet';
 import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
+
+export interface AgentCinFiles {
+  recto: File | null;
+  verso: File | null;
+}
 
 interface Props {
   value: AgentSheetForm;
   onChange: (next: AgentSheetForm) => void;
-  role: 'screenhost_agent' | 'screencast_agent';
+  cin: AgentCinFiles;
+  onCin: (next: AgentCinFiles) => void;
 }
 
 const INPUT =
   'w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent';
 
 /** AGT-1 — the agent sheet fields of « Créer rôle » (agent specs v1.0 §2). */
-export function AgentSheetFields({ value, onChange, role }: Props) {
+export function AgentSheetFields({ value, onChange, cin, onCin }: Props) {
   const governorates = useGovernorates();
   const set = (key: keyof AgentSheetForm) => (e: { target: { value: string } }) =>
     onChange({ ...value, [key]: e.target.value });
@@ -42,10 +48,7 @@ export function AgentSheetFields({ value, onChange, role }: Props) {
       <p className="text-sm font-semibold text-gray-800">Fiche agent</p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {field('phone', 'Téléphone', { placeholder: '+21612345678', required: true })}
-        {field('tax_number', 'Matricule fiscal', {
-          placeholder: '1234567ABC000',
-          required: role === 'screencast_agent',
-        })}
+        {field('tax_number', 'Matricule fiscal (facultatif)', { placeholder: '1234567ABC000' })}
         {field('street_address', 'Adresse', { required: true })}
         {field('city', 'Ville', { required: true })}
         {field('postal_code', 'Code postal', { placeholder: '1000', required: true })}
@@ -72,6 +75,28 @@ export function AgentSheetFields({ value, onChange, role }: Props) {
         {field('commission_pct', 'Taux de commission (%)', {
           placeholder: 'Vide = taux par défaut du moteur',
         })}
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {(['recto', 'verso'] as const).map((side) => (
+          <div key={side}>
+            <label
+              className="block text-sm font-medium text-gray-700 mb-2"
+              htmlFor={`agent-cin-${side}`}
+            >
+              CIN {side} *
+            </label>
+            <input
+              id={`agent-cin-${side}`}
+              type="file"
+              accept={CIN_ACCEPT}
+              onChange={(e) => onCin({ ...cin, [side]: e.target.files?.[0] ?? null })}
+              className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-primary/15 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-deep"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              {cin[side] ? cin[side].name : 'Image (PNG, JPEG) ou PDF, 5 Mo maximum.'}
+            </p>
+          </div>
+        ))}
       </div>
       <p className="text-xs text-gray-500">
         Le taux n’est jamais affiché à l’agent. Une révision ne touche que les commissions

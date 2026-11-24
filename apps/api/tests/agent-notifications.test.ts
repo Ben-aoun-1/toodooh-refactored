@@ -15,7 +15,7 @@ import {
   users,
 } from '../src/db/schema.js';
 import type { EmailSender } from '../src/email/sender.js';
-import { syncAgentCommissions } from '../src/lib/agent-commissions.js';
+import { noticeAffiliateRecharged, syncAgentCommissions } from '../src/lib/agent-commissions.js';
 import {
   noticeCategory,
   publishAgentNews,
@@ -166,6 +166,31 @@ describe('AGT-6 — agent notifications (real Postgres)', () => {
     expect(notes.map((n) => [n.type, n.title, n.campaignId])).toEqual([
       ['agent_campaign_launched', 'Nouvelle campagne lancée par Pâtisserie Lina', c?.id],
     ]);
+    // Spec VF §11 — the notice says what the agent will receive.
+    expect(notes[0]?.body).toMatch(
+      /^Ramadan : vous allez recevoir [\d,]+ TND, si la diffusion se déroule comme prévu\.$/,
+    );
+    // Spec VF §16 « Redispatching ou ajustement » — the forecast moves: one notice, both amounts.
+    await db
+      .update(campaignDispatchAllocation)
+      .set({ revenuPrevisionnel: '30' })
+      .where(eq(campaignDispatchAllocation.planId, plan?.id ?? ''));
+    await syncAgentCommissions(c?.id ?? '');
+    await syncAgentCommissions(c?.id ?? '');
+    const after = await db.select().from(notifications).where(eq(notifications.userId, agent));
+    const moved = after.filter((n) => n.type === 'agent_to_earn_updated');
+    expect(moved).toHaveLength(1);
+    expect(moved[0]?.title).toBe('Montant à gagner mis à jour : Ramadan');
+    expect(moved[0]?.body).toMatch(/^[\d,]+ TND au lieu de [\d,]+ TND\.$/);
+    // Spec VF §11 — a recharge of the affiliated Screencaster is announced, a stranger's is not.
+    await noticeAffiliateRecharged(sc, new Date('2026-11-02T10:00:00Z'));
+    await noticeAffiliateRecharged(owner, new Date('2026-11-02T10:00:00Z'));
+    const recharged = (
+      await db.select().from(notifications).where(eq(notifications.userId, agent))
+    ).filter((n) => n.type === 'agent_affiliate_recharged');
+    expect(recharged.map((n) => n.title)).toEqual([
+      'Pâtisserie Lina a rechargé son portefeuille Toodooh',
+    ]);
 
     // A campaign dispatched long ago (the first sync after deploy) announces nothing.
     const [old] = await db
@@ -194,8 +219,11 @@ describe('AGT-6 — agent notifications (real Postgres)', () => {
       creneaux: [{ date: '2026-11-01', hour: 10, reps: 10, impressions: 1000 }],
     });
     await syncAgentCommissions(old?.id ?? '');
+    // Still one launch notice (plus the update and the recharge notices written above).
     expect(
-      await db.select().from(notifications).where(eq(notifications.userId, agent)),
+      (await db.select().from(notifications).where(eq(notifications.userId, agent))).filter(
+        (n) => n.type === 'agent_campaign_launched',
+      ),
     ).toHaveLength(1);
   });
 

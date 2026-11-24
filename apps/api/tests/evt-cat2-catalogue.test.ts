@@ -4,7 +4,22 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, campaigns, eventMatches, events, teams, users } from '../src/db/schema.js';
+import {
+  type NewUser,
+  campaigns,
+  eventAllocations,
+  eventMatches,
+  events,
+  notifications,
+  screenhosts,
+  teams,
+  users,
+} from '../src/db/schema.js';
+import {
+  EVENT_CONFIRMED_TITLE,
+  eventConfirmedAdvertiserBody,
+} from '../src/lib/event-playout/reschedule.js';
+import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { adminEventsRoutes } from '../src/routes/admin-events.js';
 import { adminTeamsRoutes } from '../src/routes/admin-teams.js';
 import { eventsRoutes } from '../src/routes/events.js';
@@ -16,7 +31,8 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 //  - admins manage TEAMS (name, national/club, #RRGGBB colours, OPTIONAL logo) and give an event
 //    its card facts + matches (one, or three for a « Soirée Ligue des champions »);
 //  - the advertiser catalogue carries them, and `positionable`;
-//  - B1: a match whose date or time is « à confirmer » is listed but NOT positionable;
+//  - operator 23/11: a match whose date or time is « à confirmer » is sold like any other, and
+//    its confirmation moves the slots and tells the Screencaster (B1's refusal is gone);
 //  - « Je me positionne sur ces N événements » creates N drafts in one transaction, or none.
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -221,7 +237,7 @@ describe('EVT-CAT2 — teams, matches and the new catalogue (real Postgres)', ()
         time_tbc: true,
         qualification_pending: true,
         date_label: 'Entre le 27 et le 29 novembre 2026',
-        positionable: false,
+        positionable: true,
       });
       expect((pending?.['matches'] as { away: unknown }[])[0]?.away).toBeNull();
 
@@ -256,27 +272,113 @@ describe('EVT-CAT2 — teams, matches and the new catalogue (real Postgres)', ()
       return row?.id ?? '';
     };
 
-    it('a match « à confirmer » refuses the single positionner (EVENT_NOT_CONFIRMED)', async () => {
-      const id = await seedEvent({ dateTbc: true });
-      as('advertiser');
-      const res = await app.inject({ method: 'POST', url: `/api/events/${id}/positionner` });
-      expect(res.statusCode).toBe(409);
-      expect(res.json()).toMatchObject({ error: 'EVENT_NOT_CONFIRMED' });
+    it('a match « à confirmer » is positionable like any other (operator 23/11)', async () => {
+      for (const over of [{ dateTbc: true }, { timeTbc: true }, { qualificationPending: true }]) {
+        const id = await seedEvent(over);
+        as('advertiser');
+        const res = await app.inject({ method: 'POST', url: `/api/events/${id}/positionner` });
+        expect(res.statusCode).toBe(201);
+        expect(res.json()).toMatchObject({ event_id: id, status: 'draft' });
+      }
+      const list = await app.inject({ method: 'GET', url: '/api/events' });
+      expect(list.statusCode).toBe(200);
+      const tbc = (
+        list.json() as { events: { time_tbc: boolean; positionable: boolean }[] }
+      ).events.filter((e) => e.time_tbc);
+      expect(tbc.length).toBeGreaterThan(0);
+      expect(tbc.every((e) => e.positionable)).toBe(true);
+    });
+
+    it('confirming a sold match moves its slots to the real window and tells the Screencaster', async () => {
+      const id = await seedEvent({ timeTbc: true });
+      const ownerId = await seedUser({ role: 'individual_owner' });
+      const [venue] = await db
+        .insert(screenhosts)
+        .values({ name: `Confirm Venue ${Math.random().toString(16).slice(2, 8)}`, ownerId })
+        .returning();
+      const [positioning] = await db
+        .insert(campaigns)
+        .values({
+          advertiserId: advId,
+          name: 'Positionnement à confirmer',
+          campaignType: 'event',
+          status: 'upcoming',
+          startDate: '2027-01-01',
+          endDate: '2027-01-01',
+          eventId: id,
+        })
+        .returning();
+      const provisional = fenetreDiffusion(new Date(KICKOFF), new Date(ENDS)).blocs[1];
+      if (!venue || !positioning || !provisional) throw new Error('seed failed');
+      const [share] = await db
+        .insert(eventAllocations)
+        .values({
+          campaignId: positioning.id,
+          screenhostId: venue.id,
+          blocs: [
+            {
+              start: provisional.start.toISOString(),
+              end: provisional.end.toISOString(),
+              impressions: 600,
+            },
+          ],
+          impressionsTotal: 600,
+          montantTnd: '30.000',
+          statut: 'EN_ATTENTE',
+          notice: null,
+        })
+        .returning();
+
+      const realKickoff = new Date(new Date(KICKOFF).getTime() - 5 * 60 * 60 * 1000);
+      const realEnds = new Date(new Date(ENDS).getTime() - 5 * 60 * 60 * 1000);
+      as('admin');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/admin/events/${id}`,
+        payload: {
+          kickoff_at: realKickoff.toISOString(),
+          ends_at: realEnds.toISOString(),
+          time_tbc: false,
+        },
+      });
+      expect(res.statusCode).toBe(200);
+
+      // The same slot (2nd pre-match bloc) of the real window.
+      const real = fenetreDiffusion(realKickoff, realEnds).blocs[1];
+      const [moved] = await db
+        .select()
+        .from(eventAllocations)
+        .where(eq(eventAllocations.id, share?.id ?? ''));
+      expect(moved?.blocs).toEqual([
+        { start: real?.start.toISOString(), end: real?.end.toISOString(), impressions: 600 },
+      ]);
+      // The Screencaster learns the real kick-off; nothing was « reporté »; no owner is told.
+      const told = await db.select().from(notifications).where(eq(notifications.userId, advId));
+      expect(told.map((n) => n.type)).toEqual(['event_confirmed']);
+      expect(told[0]?.title).toBe(EVENT_CONFIRMED_TITLE);
+      const [match] = await db.select().from(events).where(eq(events.id, id));
+      expect(told[0]?.body).toBe(eventConfirmedAdvertiserBody(match?.name ?? '', realKickoff));
+      expect(told[0]?.body).toContain('coup d’envoi le 10 mars 2027 à 15h00');
+      expect(told[0]?.campaignId).toBe(positioning.id);
+      expect(
+        await db.select().from(notifications).where(eq(notifications.userId, ownerId)),
+      ).toHaveLength(0);
     });
 
     it('positionner-multiple creates one draft per match, or NONE when one is not positionable', async () => {
       const a = await seedEvent();
       const b = await seedEvent();
       const tbc = await seedEvent({ timeTbc: true });
+      const annule = await seedEvent({ annule: true });
       as('advertiser');
 
       const refused = await app.inject({
         method: 'POST',
         url: '/api/events/positionner-multiple',
-        payload: { event_ids: [a, tbc] },
+        payload: { event_ids: [a, tbc, annule] },
       });
       expect(refused.statusCode).toBe(409);
-      expect(refused.json()).toMatchObject({ error: 'EVENT_NOT_CONFIRMED', event_id: tbc });
+      expect(refused.json()).toMatchObject({ error: 'EVENT_ANNULE', event_id: annule });
       expect(
         await db.select().from(campaigns).where(eq(campaigns.advertiserId, advId)),
       ).toHaveLength(0);

@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { ReferentGate } from '@/features/appointments/components/ReferentGate';
+import { useRdvFlag } from '@/features/appointments/hooks/useRdvFlag';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import SupportModal from '@/features/support/components/SupportModal';
 import {
@@ -70,6 +71,8 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const closeLogout = useCallback(() => setLogoutOpen(false), []);
   const closeSupport = useCallback(() => setSupportOpen(false), []);
   const closeAppointment = useCallback(() => setAppointmentOpen(false), []);
+  // The agent's rendez-vous request: `?rdv=1` opens « Prendre rendez-vous » (hooks/useRdvFlag).
+  useRdvFlag(openAppointment);
 
   const handleLogout = async () => {
     try {

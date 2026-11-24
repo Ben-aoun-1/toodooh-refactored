@@ -27,6 +27,8 @@ export const checkEventMinutes = async (
   playsPerMinute: number | null,
   /** DEMO-3 — a demo screencaster's pool (lib/demo.ts eventPoolDemoVenues); null = the network. */
   demoVenues: ReadonlySet<string> | null = null,
+  /** « Réseau Screenhosts » — the venues the Screencaster removed (lib/caster-exclusions.ts). */
+  casterExcluded: ReadonlySet<string> = new Set(),
 ): Promise<EventMinutesVerdict> => {
   const [ev] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!ev || ev.annule) return { ok: false, reason: 'EVENT_ANNULE' };
@@ -34,7 +36,7 @@ export const checkEventMinutes = async (
   const cmax = await computeEventCmax(
     { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt, seatMinutes: ev.seatMinutes },
     cpmEvtTnd,
-    new Set(),
+    casterExcluded,
     playsPerMinute,
     demoVenues,
   );

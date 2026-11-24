@@ -128,6 +128,9 @@ interface ProfileSettingsProps {
   /** SCR-DECL1 — owner-only per-venue declared screens / rooms, shown under « Informations sur
    *  l'entreprise » where the Figma puts « Nombre d'écrans » / « Nombre de salles ». */
   screensSlot?: ReactNode;
+  /** The role's working « Logo » block (the Screencaster's own logo editor); without it the
+   *  « Bientôt disponible » placeholder stays. */
+  logoSlot?: ReactNode;
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -209,6 +212,7 @@ export default function ProfileSettings({
   hoursSlot,
   hoursSubLabel,
   screensSlot,
+  logoSlot,
 }: ProfileSettingsProps) {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabId>('responsable');
@@ -643,31 +647,33 @@ export default function ProfileSettings({
           <div className="flex-1 min-w-0 bg-white overflow-hidden">
             {entrepriseSub === 'informations' && (
               <form onSubmit={handleSaveEntreprise} className="p-6 space-y-6">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-1">Téléchargez votre logo</p>
-                  <p className="text-xs text-gray-500 mb-3">Min 400×400px, PNG ou JPEG</p>
-                  <div className="flex items-start gap-4">
-                    <div className="w-24 h-24 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      <Building2 className="h-10 w-10 text-gray-300" />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {/* Logo upload/remove disabled (no backend logo storage yet). */}
-                      <div className="flex gap-2 flex-wrap">
-                        <span className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed opacity-60">
-                          Changer
-                        </span>
-                        <button
-                          type="button"
-                          disabled
-                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 bg-white cursor-not-allowed opacity-60"
-                        >
-                          Supprimer
-                        </button>
+                {logoSlot ?? (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Téléchargez votre logo</p>
+                    <p className="text-xs text-gray-500 mb-3">Min 400×400px, PNG ou JPEG</p>
+                    <div className="flex items-start gap-4">
+                      <div className="w-24 h-24 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <Building2 className="h-10 w-10 text-gray-300" />
                       </div>
-                      <p className="text-xs text-gray-400">Bientôt disponible</p>
+                      <div className="flex flex-col gap-2">
+                        {/* Logo upload/remove disabled (no backend logo storage yet). */}
+                        <div className="flex gap-2 flex-wrap">
+                          <span className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed opacity-60">
+                            Changer
+                          </span>
+                          <button
+                            type="button"
+                            disabled
+                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 bg-white cursor-not-allowed opacity-60"
+                          >
+                            Supprimer
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-400">Bientôt disponible</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>

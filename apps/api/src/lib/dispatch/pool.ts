@@ -14,6 +14,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { ownerApprovedSql } from '../approved-owner.js';
+import { casterExcludedVenues } from '../caster-exclusions.js';
 import { demoVenueIds, isDemoCampaign } from '../demo.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { blackoutMinutesInHour, eventBlackouts, windowsForVenue } from '../event-blackout.js';
@@ -141,7 +142,17 @@ export const assemblePool = async (
   const demoVenues = (await isDemoCampaign(executor, campaign.id))
     ? await demoVenueIds(executor)
     : null;
-  const filterContext = { lines, zoneIds: campaignZoneIds, excluded, frozenVenues, demoVenues };
+  // « Réseau Screenhosts » — the venues this campaign's Screencaster removed from his network
+  // (his list at validation; the current one while it is a draft).
+  const casterExcluded = await casterExcludedVenues(executor, campaign.id);
+  const filterContext = {
+    lines,
+    zoneIds: campaignZoneIds,
+    excluded,
+    casterExcluded,
+    frozenVenues,
+    demoVenues,
+  };
   const verdicts = activeRows.map((sh) => ({ sh, reason: poolExclusionReason(sh, filterContext) }));
   const candidates = verdicts.flatMap(({ sh, reason }) => (reason === null ? [sh] : []));
 
